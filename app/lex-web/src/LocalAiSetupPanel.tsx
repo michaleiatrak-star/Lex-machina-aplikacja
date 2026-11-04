@@ -725,6 +725,68 @@ function TranscriptionAccelerationSection({ admin, modelInstalled }: { admin: bo
   );
 }
 
+type ChatTurnsSummary = {
+  file: string;
+  turns: number;
+  paths: Array<{
+    path: string;
+    modelKind: "local" | "api" | "account";
+    turns: number;
+    errors: number;
+    blocked: number;
+    p50Ms: number;
+    p95Ms: number;
+    maxMs: number;
+    phasesP50Ms: Partial<Record<"PREPARE" | "ROUTING" | "SKILLS" | "MODEL" | "VERIFY" | "RESTORE", number>>;
+  }>;
+};
+
+const PHASE_SHORT: Record<string, string> = {
+  PREPARE: "anonimizacja",
+  ROUTING: "routing",
+  SKILLS: "skille",
+  MODEL: "model",
+  VERIFY: "weryfikacja",
+  RESTORE: "przywrócenie"
+};
+
+/** "local · pisma-procesowe-v3: 12 tur, mediana 41 s, 95% do 78 s, błędy 1 (model 36 s, anonimizacja 3 s)". */
+export function chatPathLine(row: ChatTurnsSummary["paths"][number]): string {
+  const sec = (ms: number) => (ms / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const kind = row.modelKind === "local" ? "lokalny" : row.modelKind === "account" ? "konto" : "API";
+  const phases = Object.entries(row.phasesP50Ms)
+    .filter(([, ms]) => (ms ?? 0) >= 500)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([phase, ms]) => `${PHASE_SHORT[phase] ?? phase} ${sec(ms ?? 0)} s`)
+    .join(", ");
+  return (
+    `${kind} · ${row.path}: ${row.turns} tur, mediana ${sec(row.p50Ms)} s, 95% do ${sec(row.p95Ms)} s` +
+    (row.errors ? `, błędy ${row.errors}` : "") +
+    (row.blocked ? `, zablokowane ${row.blocked}` : "") +
+    (phases ? ` (${phases})` : "")
+  );
+}
+
+/** Developer mode: times of the chat paths on this computer (no text of the messages). */
+function ChatTurnsSection() {
+  const developer = useDeveloperMode();
+  const [data, setData] = useState<ChatTurnsSummary | null>(null);
+  useEffect(() => {
+    if (!developer) return;
+    request<ChatTurnsSummary>("/api/diagnostics/chat-turns").then(setData, () => setData(null));
+  }, [developer]);
+  if (!developer || !data) return null;
+  return (
+    <div className="local-ai-facts">
+      <strong>
+        Czas czatu na tym komputerze
+        <InfoTip>Ostatnie {data.turns} tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik: {data.file}</InfoTip>
+      </strong>
+      {data.paths.length === 0 ? <small>Brak zapisanych tur.</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
+    </div>
+  );
+}
+
 type TranscriptionStatus = {
   modelId: string;
   label: string;
@@ -1661,6 +1723,7 @@ export function LocalAiSetupPanel({
         <TranscriptionSection admin={user.appRole === "ADMIN"} />
 
         <OcrAccelerationSection admin={user.appRole === "ADMIN"} />
+        {user.appRole === "ADMIN" ? <ChatTurnsSection /> : null}
 
         {message ? <p className="local-ai-message">{message}</p> : null}
 
