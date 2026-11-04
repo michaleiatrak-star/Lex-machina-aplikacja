@@ -76,6 +76,13 @@ describe("uprawnienia do spraw: wyszukiwanie i sortowanie", () => {
     expect(searchAndSortCases(cases, "nic takiego", "name-asc")).toEqual([]);
   });
 
+  it("zawęża do spraw utworzonych w zakresie dat (włącznie, dowolny koniec otwarty)", () => {
+    expect(names(searchAndSortCases(cases, "", "created-asc", { from: "2026-03-01", to: "2026-04-30" }))).toEqual(["Żukowski przeciwko ZUS", "Sprawa 9"]);
+    expect(names(searchAndSortCases(cases, "", "created-asc", { from: "2026-04-01", to: "" }))).toEqual(["Sprawa 9", "Apelacja Kowalski"]);
+    expect(names(searchAndSortCases(cases, "", "created-asc", { from: "", to: "2026-01-31" }))).toEqual(["sprawa 10"]);
+    expect(names(searchAndSortCases(cases, "sprawa", "name-asc", { from: "2026-02-01", to: "" }))).toEqual(["Sprawa 9"]);
+  });
+
   it("wybrana sprawa zostaje na liście przypisania, choć wyszukiwanie jej nie obejmuje", () => {
     expect(quickCaseOptions(cases, "apelacja", "name-asc", "c1").map((entry) => entry.caseId)).toEqual(["c1", "c2"]);
     expect(quickCaseOptions(cases, "apelacja", "name-asc", "").map((entry) => entry.caseId)).toEqual(["c2"]);

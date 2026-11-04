@@ -78,10 +78,28 @@ export const CASE_SORT_LABELS: Record<CaseSort, string> = {
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pl");
 
 /** Cases matching the search (name, case id, a member's name or login), in the chosen order. */
-export function searchAndSortCases(cases: readonly CaseAccessOverviewItem[], query: string, sort: CaseSort): CaseAccessOverviewItem[] {
+export type CaseDateRange = { from: string; to: string };
+
+// The day of an ISO time on this computer (yyyy-mm-dd), as the date fields show it.
+function localDay(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function searchAndSortCases(
+  cases: readonly CaseAccessOverviewItem[],
+  query: string,
+  sort: CaseSort,
+  // Cases created between these days (inclusive); an empty end is open.
+  range: CaseDateRange = { from: "", to: "" }
+): CaseAccessOverviewItem[] {
   const words = fold(query).split(/\s+/u).filter(Boolean);
   const name = (item: CaseAccessOverviewItem) => item.displayName || item.caseId;
   const matches = cases.filter((item) => {
+    if (range.from || range.to) {
+      const day = item.createdAt ? localDay(item.createdAt) : "";
+      if (!day || (range.from && day < range.from) || (range.to && day > range.to)) return false;
+    }
     if (!words.length) return true;
     const haystack = fold([name(item), item.caseId, ...item.members.flatMap((member) => [member.displayName, member.loginName])].join(" "));
     return words.every((word) => haystack.includes(word));
@@ -102,8 +120,8 @@ export function searchAndSortCases(cases: readonly CaseAccessOverviewItem[], que
 }
 
 /** The quick assignment's case list: the search and order above it; the chosen case stays listed. */
-export function quickCaseOptions(cases: CaseAccessOverviewItem[], query: string, sort: CaseSort, selected: string): CaseAccessOverviewItem[] {
-  const options = searchAndSortCases(assignableCases(cases), query, sort);
+export function quickCaseOptions(cases: CaseAccessOverviewItem[], query: string, sort: CaseSort, selected: string, range?: CaseDateRange): CaseAccessOverviewItem[] {
+  const options = searchAndSortCases(assignableCases(cases), query, sort, range);
   const chosen = selected && !options.some((item) => item.caseId === selected) ? cases.find((item) => item.caseId === selected) : undefined;
   return chosen ? [chosen, ...options] : options;
 }
@@ -144,6 +162,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   const [userFilter, setUserFilter] = useState("");
   const [caseQuery, setCaseQuery] = useState("");
   const [caseSort, setCaseSort] = useState<CaseSort>("name-asc");
+  const [caseRange, setCaseRange] = useState<CaseDateRange>({ from: "", to: "" });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -170,7 +189,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
     void reload().catch((failure) => setError(errorText(failure)));
   }, [reload]);
 
-  const shown = useMemo(() => searchAndSortCases(cases, caseQuery, caseSort), [cases, caseQuery, caseSort]);
+  const shown = useMemo(() => searchAndSortCases(cases, caseQuery, caseSort, caseRange), [cases, caseQuery, caseSort, caseRange]);
   const visible = useMemo(() => {
     if (!userFilter) return { member: shown, other: [] as CaseAccessOverviewItem[] };
     return splitCasesForUser(shown, userFilter);
@@ -513,6 +532,14 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           />
         </label>
         <label>
+          Utworzone od
+          <input type="date" value={caseRange.from} max={caseRange.to || undefined} onChange={(event) => setCaseRange({ ...caseRange, from: event.target.value })} />
+        </label>
+        <label>
+          do
+          <input type="date" value={caseRange.to} min={caseRange.from || undefined} onChange={(event) => setCaseRange({ ...caseRange, to: event.target.value })} />
+        </label>
+        <label>
           Sortowanie
           <select value={caseSort} onChange={(event) => setCaseSort(event.target.value as CaseSort)}>
             {(Object.keys(CASE_SORT_LABELS) as CaseSort[]).map((key) => (
@@ -552,7 +579,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           onChange={(event) => setQuick({ ...quick, caseId: event.target.value })}
         >
           <option value="">Sprawa…</option>
-          {quickCaseOptions(cases, caseQuery, caseSort, quick.caseId).map((item) => {
+          {quickCaseOptions(cases, caseQuery, caseSort, quick.caseId, caseRange).map((item) => {
             const member = item.members.find((m) => m.userId === quick.userId);
             return (
               <option key={item.caseId} value={item.caseId}>
@@ -630,7 +657,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       ) : shown.length ? (
         shown.map((item) => renderCase(item, false))
       ) : (
-        <p className="field-help">{cases.length ? "Brak spraw pasujących do wyszukiwania." : "Brak spraw."}</p>
+        <p className="field-help">{cases.length ? "Brak spraw pasujących do wyszukiwania lub zakresu dat." : "Brak spraw."}</p>
       )}
     </section>
   );
