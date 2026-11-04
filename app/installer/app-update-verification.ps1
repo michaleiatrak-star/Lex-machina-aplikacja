@@ -132,3 +132,30 @@ function Assert-InstallerProductVersion(
 
   return $actual
 }
+
+# Copies and removals of the installed application go through robocopy: the backup folder
+# adds about 70 characters to paths already deep in node_modules, and Copy-Item and
+# Remove-Item of Windows PowerShell 5.1 stop at 260 (0.1.62 -> 0.1.63 aborted on
+# ...\@ai-sdk\provider\src\embedding-model-middleware\v3\embedding-model-v3-middleware.ts).
+function Copy-TreeLong([string]$Source, [string]$Destination) {
+  New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+  # No 2>&1: in Windows PowerShell 5.1 with ErrorActionPreference Stop a redirected stderr line
+  # of a native program is thrown as an error (robocopy reports on stdout).
+  $output = & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NP /NFL /NDL /NJH /NJS
+  # robocopy: 0-7 = copied (with or without extra files), 8 and more = failure.
+  if ($LASTEXITCODE -ge 8) {
+    throw "UPDATE_COPY_FAILED:${LASTEXITCODE}:${Source} -> ${Destination} :: $((@($output) | Select-Object -Last 3) -join ' | ')"
+  }
+}
+
+function Remove-TreeLong([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+  $empty = Join-Path ([IO.Path]::GetTempPath()) ("lex-empty-" + [Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Force -Path $empty | Out-Null
+  try {
+    & robocopy.exe $empty $Path /MIR /R:2 /W:1 /NP /NFL /NDL /NJH /NJS | Out-Null
+  } finally {
+    Remove-Item -LiteralPath $empty -Force -ErrorAction SilentlyContinue
+  }
+  Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+}

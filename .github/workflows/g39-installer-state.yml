@@ -11,6 +11,7 @@ on:
       - "app/installer/app-update-transaction.ps1"
       - "app/installer/app-update-verification.ps1"
       - "app/installer/app-update-verification-selftest.ps1"
+      - "app/installer/app-update-long-path-selftest.ps1"
       - "app/installer/sign-windows-artifact.ps1"
       - "app/installer/sign-windows-artifact-selftest.ps1"
       - "app/installer/polish-nsis-language-selftest.ps1"
@@ -68,6 +69,11 @@ jobs:
       - name: G39F application update verification policy
         shell: pwsh
         run: ./app/installer/app-update-verification-selftest.ps1
+
+      # The update runner is Windows PowerShell 5.1: its Copy-Item stops at 260 characters.
+      - name: Application update backup on long paths (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./app/installer/app-update-long-path-selftest.ps1
 
       - name: G39J Authenticode fail-closed policy
         shell: pwsh
