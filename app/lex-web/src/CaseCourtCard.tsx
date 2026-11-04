@@ -236,6 +236,7 @@ function WokandaCheckView({
             strona sądu
           </a>
         </small>
+        {check.note ? <p className="field-help">{check.note}</p> : null}
         {check.state === "NOT_FOUND" ? (
           <p className="field-help">Na wokandzie nie ma terminów tej sprawy (wokanda pokazuje zwykle najbliższe posiedzenia jawne).</p>
         ) : (

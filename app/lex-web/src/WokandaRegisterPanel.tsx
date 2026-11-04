@@ -10,6 +10,15 @@ const GROUPS: Array<{ status: WokandaStatus; title: string; help: string }> = [
   { status: "UNREACHABLE", title: "Strona sądu nie odpowiada", help: "Brak połączenia albo błąd strony przy ostatnim sprawdzeniu." }
 ];
 
+const SYSTEM_LABEL: Record<NonNullable<WokandaCourtInfo["system"]>, string> = {
+  MS_PORTAL: "portal sądów (wyszukiwarka po sygnaturze)",
+  CMS_FORM: "e-Wokanda BIP (formularz)",
+  GET_FORM: "wyszukiwarka po sygnaturze",
+  POST_FORM: "wyszukiwarka po sygnaturze",
+  DRUPAL_VIEW: "e-Wokanda okręgu (widok z filtrem sygnatury)",
+  LIST: "jedna lista bez wyszukiwarki"
+};
+
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** Courts of a status matching the search, by name. */
@@ -98,7 +107,7 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
                   <span>
                     <strong>{court.nazwa}</strong>
                     <small>
-                      {[WOKANDA_STATUS_LABEL[court.status], court.powod, court.zrodlo === "TEN_KOMPUTER" ? `sprawdzono z tego komputera ${court.sprawdzono ? new Date(court.sprawdzono).toLocaleString("pl-PL") : ""}` : "stan z wydania"]
+                      {[WOKANDA_STATUS_LABEL[court.status], court.system ? SYSTEM_LABEL[court.system] : "", court.powod, court.zrodlo === "TEN_KOMPUTER" ? `sprawdzono z tego komputera ${court.sprawdzono ? new Date(court.sprawdzono).toLocaleString("pl-PL") : ""}` : "stan z wydania"]
                         .filter(Boolean)
                         .join(" · ")}
                     </small>

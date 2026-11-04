@@ -4816,6 +4816,7 @@ export type WokandaCourtInfo = {
   nazwa: string;
   domena: string;
   status: WokandaStatus;
+  system?: "MS_PORTAL" | "CMS_FORM" | "GET_FORM" | "POST_FORM" | "DRUPAL_VIEW" | "LIST";
   url?: string;
   powod?: string;
   sprawdzono?: string;
@@ -4836,7 +4837,7 @@ export type WokandaHearing = {
 };
 
 export type WokandaCheck =
-  | { state: "FOUND" | "NOT_FOUND"; court: string; signature: string; searchUrl: string; hearings: WokandaHearing[]; checkedAt: string }
+  | { state: "FOUND" | "NOT_FOUND"; court: string; signature: string; searchUrl: string; hearings: WokandaHearing[]; checkedAt: string; note?: string }
   | {
       state: "BROWSER_ONLY" | "NO_WOKANDA" | "UNREACHABLE";
       court: string;

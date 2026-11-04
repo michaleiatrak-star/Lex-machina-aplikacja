@@ -12,12 +12,18 @@ import { WOKANDA_REGISTER } from "./wokanda-registry-data.js";
 
 export type WokandaStatus = "PORTAL" | "BROWSER" | "NONE" | "UNREACHABLE";
 
+// How a readable wokanda searches by signature (app/courts/probe_wokanda.py search_system).
+export type WokandaSystem = "MS_PORTAL" | "CMS_FORM" | "GET_FORM" | "POST_FORM" | "DRUPAL_VIEW" | "LIST";
+
 export type WokandaCourt = {
   nazwa: string;
   domena: string;
   status: WokandaStatus;
   url?: string;
   powod?: string;
+  system?: WokandaSystem;
+  // CMS_FORM: the signature field of its search form ("pole315").
+  pole?: string;
 };
 
 export type WokandaRegister = { sprawdzono: string; sady: WokandaCourt[] };
@@ -36,7 +42,16 @@ export type WokandaHearing = {
 };
 
 export type WokandaResult =
-  | { state: "FOUND" | "NOT_FOUND"; court: string; signature: string; searchUrl: string; hearings: WokandaHearing[]; checkedAt: string }
+  | {
+      state: "FOUND" | "NOT_FOUND";
+      court: string;
+      signature: string;
+      searchUrl: string;
+      hearings: WokandaHearing[];
+      checkedAt: string;
+      // The court's wokanda is one list without a search: only the hearings on it were checked.
+      note?: string;
+    }
   // The court's wokanda needs a browser, or the court publishes none: its address to open.
   | {
       state: "BROWSER_ONLY" | "NO_WOKANDA" | "UNREACHABLE";
@@ -50,7 +65,11 @@ export type WokandaResult =
       verification?: { domain: string; url: string; savedSession: boolean };
     };
 
-export type FetchText = (url: string, headers?: Record<string, string>) => Promise<{ status: number; url: string; text: string }>;
+export type FetchText = (
+  url: string,
+  headers?: Record<string, string>,
+  init?: { method: "POST"; body: string }
+) => Promise<{ status: number; url: string; text: string }>;
 
 export const WOKANDA_USER_AGENT = "LexMachina (wokanda; zapytanie uzytkownika o jego sprawe)";
 const TIMEOUT_MS = 20_000;
@@ -59,8 +78,13 @@ const MAX_HEARINGS = 10;
 // application does not get past it and gives the address instead.
 const GUARD = /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge/iu;
 
-export const defaultFetchText: FetchText = async (url, headers = {}) => {
-  const response = await fetch(url, { headers: { "user-agent": WOKANDA_USER_AGENT, ...headers }, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "follow" });
+export const defaultFetchText: FetchText = async (url, headers = {}, init) => {
+  const response = await fetch(url, {
+    headers: { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    redirect: "follow",
+    ...(init ? { method: init.method, body: init.body } : {})
+  });
   const text = await response.text();
   return { status: response.status, url: response.url || url, text: text.slice(0, 1_000_000) };
 };
@@ -202,7 +226,170 @@ export function parsePortalDetails(html: string): Partial<Pick<WokandaHearing, "
   };
 }
 
-const sameSignature = (a: string, b: string) => a.replace(/\s+/gu, " ").trim().toLowerCase() === b.replace(/\s+/gu, " ").trim().toLowerCase();
+// --- Other wokanda systems: tables with a header row, or labelled records ------------------
+
+function cells(row: string, tag: "td" | "th" | "t[hd]"): string[] {
+  return [...row.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag === "t[hd]" ? "t[hd]" : tag}>`, "giu"))].map((match) => plain(match[1]!));
+}
+
+const COLUMN: Array<[keyof WokandaHearing, RegExp]> = [
+  ["sygnatura", /^sygn/u],
+  ["godzina", /^godz/u],
+  ["data", /^data|^termin/u],
+  ["sala", /^sala/u],
+  ["wydzial", /^wydz/u],
+  ["przewodniczacy", /^przewodn|^sedzi|^sklad/u],
+  ["status", /^status|^komunikat|^uwagi/u]
+];
+
+const foldLabel = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l").toLowerCase().trim();
+
+/** "04.11.2026", "2026-11-04 09:15", "2026-11-05 09:00:00" -> date and time. */
+export function wokandaDateTime(value: string): { data: string; godzina: string } | null {
+  const iso = /(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/u.exec(value);
+  const pl = /(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/u.exec(value);
+  if (iso) return { data: `${iso[1]}-${iso[2]}-${iso[3]}`, godzina: iso[4] ? `${iso[4].padStart(2, "0")}:${iso[5]}` : "" };
+  if (pl) return { data: `${pl[3]}-${pl[2]!.padStart(2, "0")}-${pl[1]!.padStart(2, "0")}`, godzina: pl[4] ? `${pl[4].padStart(2, "0")}:${pl[5]}` : "" };
+  return null;
+}
+
+/** Hearings of every table whose header names a signature and a date (any column order). */
+export function parseTableHearings(html: string, pageUrl: string): WokandaHearing[] {
+  const root = /^https?:\/\/[^/]+/u.exec(pageUrl)?.[0] ?? "";
+  const out: WokandaHearing[] = [];
+  for (const table of html.match(/<table\b[\s\S]*?<\/table>/giu) ?? []) {
+    const rows = table.match(/<tr\b[\s\S]*?<\/tr>/giu) ?? [];
+    const headerRow = rows.find((row) => /<th\b/iu.test(row));
+    if (!headerRow) continue;
+    const columns = cells(headerRow, "th").map((label) => COLUMN.find(([, pattern]) => pattern.test(foldLabel(label)))?.[0] ?? null);
+    if (!columns.includes("sygnatura") || !columns.includes("data")) continue;
+    for (const row of rows) {
+      if (row === headerRow) continue;
+      const values = cells(row, "td");
+      if (values.length < 2) continue;
+      const record: Partial<Record<keyof WokandaHearing, string>> = {};
+      columns.forEach((column, index) => {
+        if (column && values[index] !== undefined) record[column] = values[index]!;
+      });
+      const when = wokandaDateTime(record.data ?? "");
+      if (!record.sygnatura || !when) continue;
+      const link = /href="([^"]+)"/u.exec(row)?.[1];
+      out.push({
+        sygnatura: record.sygnatura.replace(/\s+/gu, " ").trim(),
+        wydzial: record.wydzial ?? "",
+        data: when.data,
+        godzina: (record.godzina ? wokandaDateTime(`2000-01-01 ${record.godzina}`)?.godzina : "") || when.godzina,
+        sala: record.sala ?? "",
+        status: record.status ?? "",
+        ...(record.przewodniczacy ? { przewodniczacy: record.przewodniczacy } : {}),
+        url: link ? (link.startsWith("http") ? link : `${root}/${link.replace(/^\//u, "")}`) : pageUrl
+      });
+    }
+  }
+  return out;
+}
+
+/** One hearing per table of label rows ("<th>Sygnatura</th><td>V RC 631/2026</td>"). */
+export function parseVerticalHearings(html: string, pageUrl: string): WokandaHearing[] {
+  const out: WokandaHearing[] = [];
+  for (const table of html.match(/<table\b[\s\S]*?<\/table>/giu) ?? []) {
+    const record: Partial<Record<keyof WokandaHearing, string>> = {};
+    for (const row of table.match(/<tr\b[\s\S]*?<\/tr>/giu) ?? []) {
+      const label = cells(row, "th")[0];
+      const value = cells(row, "td")[0];
+      const column = label ? COLUMN.find(([, pattern]) => pattern.test(foldLabel(label)))?.[0] : undefined;
+      if (column && value !== undefined) record[column] = value;
+    }
+    const when = wokandaDateTime(`${record.data ?? ""} ${record.godzina ?? ""}`);
+    if (!record.sygnatura || !when) continue;
+    out.push({
+      sygnatura: record.sygnatura.replace(/\s+/gu, " ").trim(),
+      wydzial: record.wydzial ?? "",
+      data: when.data,
+      godzina: when.godzina,
+      sala: record.sala ?? "",
+      status: record.status ?? "",
+      ...(record.przewodniczacy ? { przewodniczacy: record.przewodniczacy } : {}),
+      url: pageUrl
+    });
+  }
+  return out;
+}
+
+/** Hearings written as labelled records ("Sygnatura sprawy: … Data: … Sala: … Godzina: …"). */
+export function parseLabeledHearings(html: string, pageUrl: string): WokandaHearing[] {
+  const text = plain(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gu, " "));
+  const labels = "Sygnatura sprawy|Wydział|Data|Sala|Godzina|Przewodniczący|Skład|Status";
+  return text
+    .split(/(?=Sygnatura sprawy:)/u)
+    .slice(1)
+    .map((block) => {
+      const get = (label: string) => new RegExp(`${label}:\\s*(.*?)\\s*(?=(?:${labels}):|więcej|$)`, "u").exec(block)?.[1]?.trim() ?? "";
+      const when = wokandaDateTime(`${get("Data")} ${get("Godzina")}`);
+      const przewodniczacy = get("Przewodniczący");
+      return when
+        ? { sygnatura: get("Sygnatura sprawy"), wydzial: get("Wydział"), data: when.data, godzina: when.godzina, sala: get("Sala"), status: get("Status"), ...(przewodniczacy ? { przewodniczacy } : {}), url: pageUrl }
+        : null;
+    })
+    .filter((hearing): hearing is WokandaHearing => Boolean(hearing?.sygnatura));
+}
+
+/** The request of one system's search by signature (CMS_FORM reads its form first). */
+async function otherSystemPage(court: WokandaCourt, signature: string, fetchPage: FetchText): Promise<{ status: number; url: string; text: string; searchUrl: string }> {
+  const url = court.url ?? `https://${court.domena}/wokanda`;
+  const form = (fields: Record<string, string>) => new URLSearchParams(fields).toString();
+  switch (court.system) {
+    case "CMS_FORM": {
+      // The form's own fields (names change between courts and versions): the signature in
+      // the "Sygnatura" field, the rest empty, the default sort and page size.
+      const page = await fetchPage(url);
+      const formHtml = /<form\b[^>]*id="form_search\d+"[\s\S]*?<\/form>/u.exec(page.text)?.[0] ?? "";
+      const field = court.pole && formHtml.includes(`name="${court.pole}"`) ? court.pole : /name="(pole\d+)"/u.exec(formHtml)?.[1];
+      if (!field) return { ...page, searchUrl: url };
+      const fields: Record<string, string> = {};
+      for (const match of formHtml.matchAll(/<input\b[^>]*name="([^"]+)"[^>]*>/gu)) {
+        if (/type="(?:checkbox|submit)"/u.test(match[0])) continue;
+        fields[match[1]!] = /value="([^"]*)"/u.exec(match[0])?.[1] ?? "";
+      }
+      for (const match of formHtml.matchAll(/<select\b[^>]*name="([^"]+)"[\s\S]*?<\/select>/gu)) {
+        const options = match[0].match(/<option\b[^>]*>/gu) ?? [];
+        const chosen = options.find((option) => /\sselected\b/u.test(option)) ?? options[0] ?? "";
+        fields[match[1]!] = /value="([^"]*)"/u.exec(chosen)?.[1] ?? "";
+      }
+      fields[field] = signature;
+      const action = /<form\b[^>]*action="([^"]+)"/u.exec(formHtml)?.[1] ?? url;
+      const target = action.startsWith("http") ? action : `${/^https?:\/\/[^/]+/u.exec(page.url)?.[0] ?? ""}${action.startsWith("/") ? "" : "/"}${action}`;
+      return { ...(await fetchPage(target, {}, { method: "POST", body: form(fields) })), searchUrl: url };
+    }
+    case "GET_FORM": {
+      const searchUrl = `${url}${url.includes("?") ? "&" : "?"}${form({ sygnatura: signature, wydzial: "", data: "", szukaj: "" })}`;
+      return { ...(await fetchPage(searchUrl)), searchUrl };
+    }
+    case "POST_FORM":
+      return { ...(await fetchPage(url, {}, { method: "POST", body: form({ akcja: "szukaj", sygnatura: signature }) })), searchUrl: url };
+    case "DRUPAL_VIEW": {
+      const searchUrl = `${url}${url.includes("?") ? "&" : "?"}${form({ field_sygnatura_value: signature })}`;
+      return { ...(await fetchPage(searchUrl)), searchUrl };
+    }
+    default:
+      return { ...(await fetchPage(url)), searchUrl: url };
+  }
+}
+
+/**
+ * The same case: repertory, number and year equal (a 2- or 4-digit year), the department too
+ * when both name it. Some wokandy list "K 151/2026" for "II K 151/26".
+ */
+export function sameSignature(a: string, b: string): boolean {
+  const parts = (value: string) => {
+    const match = /^(?:([IVXL]{1,6})\s+)?([0-9]?[A-Za-z][A-Za-z]{0,5}(?:-[A-Za-z]+)?)\s+(\d{1,6})\/(\d{2}|\d{4})$/u.exec(value.normalize("NFKC").replace(/\s+/gu, " ").trim());
+    return match ? { wydzial: match[1] ?? "", repertorium: match[2]!.toLowerCase(), numer: String(Number(match[3])), rok: match[4]!.length === 2 ? `20${match[4]}` : match[4]! } : null;
+  };
+  const x = parts(a);
+  const y = parts(b);
+  if (!x || !y) return a.replace(/\s+/gu, " ").trim().toLowerCase() === b.replace(/\s+/gu, " ").trim().toLowerCase();
+  return x.repertorium === y.repertorium && x.numer === y.numer && x.rok === y.rok && (!x.wydzial || !y.wydzial || x.wydzial === y.wydzial);
+}
 
 /** The hearings of one case (court and signature) from the court's wokanda. */
 export async function checkWokanda(
@@ -231,9 +418,35 @@ export async function checkWokanda(
       ...(verifiable ? { verification: verification(false) } : {})
     };
   }
-  const fetchPage: FetchText = session ? (url) => fetchText(url, session) : fetchText;
+  const fetchPage: FetchText = session ? (url, headers, init) => fetchText(url, { ...headers, ...session }, init) : fetchText;
   const parsed = parseCommonSignature(signature);
   if (!parsed) return { ...base, state: "UNREACHABLE", reason: "Sygnatura nie ma postaci sądu powszechnego (np. XI C 1768/26)." };
+  const wanted = signature.replace(/^sygn\.?\s*(?:akt)?\s*:?\s*/iu, "");
+  if (court.system && court.system !== "MS_PORTAL") {
+    try {
+      const page = await otherSystemPage(court, wanted, fetchPage);
+      if (GUARD.test(page.text)) return { ...base, state: "BROWSER_ONLY", url: page.searchUrl, reason: "Strona sądu wymaga teraz weryfikacji przeglądarki: otwórz wokandę w przeglądarce." };
+      if (page.status !== 200) return { ...base, state: "UNREACHABLE", url: page.searchUrl, reason: `Strona sądu odpowiedziała kodem ${page.status}.` };
+      const seen = new Set<string>();
+      const hearings = [...parseTableHearings(page.text, page.url), ...parseVerticalHearings(page.text, page.url), ...parseLabeledHearings(page.text, page.url)]
+        .filter((hearing) => sameSignature(hearing.sygnatura, wanted))
+        .filter((hearing) => {
+          const key = `${hearing.data} ${hearing.godzina} ${hearing.sala}`;
+          return seen.has(key) ? false : (seen.add(key), true);
+        })
+        .sort((a, b) => `${a.data} ${a.godzina}`.localeCompare(`${b.data} ${b.godzina}`))
+        .slice(0, MAX_HEARINGS);
+      return {
+        ...base,
+        state: hearings.length ? "FOUND" : "NOT_FOUND",
+        searchUrl: page.searchUrl,
+        hearings,
+        ...(court.system === "LIST" ? { note: "Wokanda tego sądu to jedna lista bez wyszukiwarki: sprawdzono tylko terminy, które są na niej teraz." } : {})
+      };
+    } catch (error) {
+      return { ...base, state: "UNREACHABLE", url: court.url ?? `https://${court.domena}`, reason: `Strona sądu nie odpowiedziała (${error instanceof Error ? error.name : "błąd"}).` };
+    }
+  }
   const searchUrl = portalSearchUrl(court.url ?? `https://${court.domena}/wokanda`, parsed);
   let page: Awaited<ReturnType<FetchText>>;
   try {
@@ -251,7 +464,7 @@ export async function checkWokanda(
     };
   }
   if (page.status !== 200) return { ...base, state: "UNREACHABLE", url: searchUrl, reason: `Strona sądu odpowiedziała kodem ${page.status}.` };
-  const listed = parsePortalResults(page.text, page.url).filter((hearing) => sameSignature(hearing.sygnatura, signature.replace(/^sygn\.?\s*(?:akt)?\s*:?\s*/iu, "")));
+  const listed = parsePortalResults(page.text, page.url).filter((hearing) => sameSignature(hearing.sygnatura, wanted));
   const hearings: WokandaHearing[] = [];
   for (const hearing of listed.slice(0, MAX_HEARINGS)) {
     try {
@@ -267,9 +480,12 @@ export async function checkWokanda(
 
 /** One court's wokanda checked again (developer settings): its page, one request. */
 export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchText = defaultFetchText): Promise<WokandaCourt> {
-  const url = court.status === "PORTAL" || !court.url ? `https://${court.domena}/wokanda` : court.url;
+  const other = court.system && court.system !== "MS_PORTAL";
+  const url = (court.status === "PORTAL" && !other) || !court.url ? `https://${court.domena}/wokanda` : court.url;
   try {
     const page = await fetchText(url);
+    // Another system that answers without a guard keeps its way of searching.
+    if (other && page.status === 200 && !GUARD.test(page.text)) return { ...court, url: court.url ?? url };
     if (page.status === 200 && page.text.includes('name="nrspr"') && page.text.includes('value="cases"')) return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: page.url };
     if (GUARD.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: "weryfikacja przeglądarki" };
     if (page.status === 200 && /wokand/iu.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: court.powod ?? "inny system wokandy" };

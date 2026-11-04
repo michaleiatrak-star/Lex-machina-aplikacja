@@ -5,8 +5,8 @@ For every court of the court base (app/lex-runtime/src/courts/court-base-data.ts
 its /wokanda page (and to its home page when there is none), with the application's own
 User-Agent; nothing is bypassed. Each court gets one status:
 
-  PORTAL      the Ministry's court portal: search by signature (index.php?p=cases), readable by
-              the application on the user's request;
+  PORTAL      a search by signature the application reads on the user's request: the
+              Ministry's court portal or one of the other systems (see search_system);
   BROWSER     a wokanda exists but only for a browser: verification of the browser (JavaScript),
               reCAPTCHA, or another system; the application gives its address;
   NONE        the court's site names no wokanda;
@@ -72,6 +72,67 @@ def absolute(base: str, href: str) -> str:
     return root + (href if href.startswith("/") else "/" + href)
 
 
+FORM = re.compile(r"(?s)<form\b([^>]*)>(.*?)</form>", re.I)
+IFRAME = re.compile(r'<iframe[^>]*src="([^"]+)"', re.I)
+
+
+def attr(tag: str, name: str) -> str:
+    match = re.search(rf'{name}\s*=\s*"([^"]*)"', tag, re.I)
+    return match.group(1) if match else ""
+
+
+def search_system(page_url: str, body: str) -> dict | None:
+    """How this page searches the wokanda by signature, when it does without a guard.
+
+    MS_PORTAL   the Ministry's court portal (index.php?p=cases);
+    CMS_FORM    the CMS of courts of Lublin and Radom regions: POST form "form_searchNN" with
+                a "poleNNN" signature field, answered by a redirect to the results;
+    GET_FORM    a GET form with a "sygnatura" field (Łomża);
+    POST_FORM   a POST form with a "sygnatura" field (Sąd Apelacyjny w Białymstoku);
+    DRUPAL_VIEW a view filtered by "field_sygnatura_value" (e-wokanda of the Rzeszów region);
+    LIST        a page that lists the hearings in one table, without a search.
+    """
+    if 'name="nrspr"' in body:
+        return {"system": "MS_PORTAL", "url": page_url}
+    for head, inner in FORM.findall(body):
+        action = absolute(page_url, attr(head, "action") or page_url) if attr(head, "action") else page_url
+        method = (attr(head, "method") or "get").lower()
+        if re.search(r'id="form_search\d+"', head) and re.search(r'name="pole\d+"', inner) and re.search(r"Sygnatura", inner):
+            field = re.search(r'name="(pole\d+)"', inner).group(1)
+            return {"system": "CMS_FORM", "url": action, "pole": field}
+        if 'name="field_sygnatura_value"' in inner:
+            return {"system": "DRUPAL_VIEW", "url": action}
+        if 'name="sygnatura"' in inner:
+            return {"system": "POST_FORM" if method == "post" else "GET_FORM", "url": action}
+    if re.search(r"<th[^>]*>\s*Sygnatura", body, re.I) and re.search(r"<td", body):
+        return {"system": "LIST", "url": page_url}
+    return None
+
+
+def explore(urls: list[str]) -> tuple[dict | None, str | None]:
+    """The first page among these (and the frames they embed) that searches by signature."""
+    seen: set[str] = set()
+    queue = list(urls)
+    guard = None
+    while queue and len(seen) < 6:
+        url = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        status, final, body = get(url)
+        if VERIFICATION.search(body):
+            guard = final
+            continue
+        if status != 200:
+            continue
+        found = search_system(final, body)
+        if found:
+            return found, None
+        queue[:0] = [absolute(final, src) for src in IFRAME.findall(body) if "okand" in src.lower() or src.endswith(".php")]
+        queue += [absolute(final, href) for href in WOKANDA_LINK.findall(body) if "nawokandzie" not in href and "kwartalnik" not in href and "rozprawy-zdalne" not in href]
+    return None, guard
+
+
 def probe(court: dict) -> dict:
     domain = court["domena"]
     result = {"nazwa": court["nazwa"], "domena": domain}
@@ -80,20 +141,27 @@ def probe(court: dict) -> dict:
     last = ""
     for base in (f"https://{domain}", f"https://www.{domain}"):
         status, url, body = get(base + "/wokanda")
-        if status == 200 and 'name="nrspr"' in body and 'value="cases"' in body:
-            return {**result, "status": "PORTAL", "url": url}
         if VERIFICATION.search(body):
             return {**result, "status": "BROWSER", "url": url, "powod": "weryfikacja przeglądarki"}
+        if status == 200:
+            found = search_system(url, body)
+            if found:
+                return {**result, "status": "PORTAL", **found}
         home_status, home_url, home = get(base + "/")
         if VERIFICATION.search(home):
             return {**result, "status": "BROWSER", "url": home_url, "powod": "weryfikacja przeglądarki"}
         if home_status == 200:
-            links = [absolute(home_url, href) for href in WOKANDA_LINK.findall(home) if "nawokandzie" not in href and "kwartalnik" not in href]
+            links = [absolute(home_url, href) for href in WOKANDA_LINK.findall(home) if "nawokandzie" not in href and "kwartalnik" not in href and "rozprawy-zdalne" not in href]
             if status == 200 and "okand" in body:
                 links.insert(0, url)
-            if links:
-                return {**result, "status": "BROWSER", "url": links[0], "powod": "inny system wokandy"}
-            return {**result, "status": "NONE", "url": home_url}
+            if not links:
+                return {**result, "status": "NONE", "url": home_url}
+            found, guard = explore(links)
+            if found:
+                return {**result, "status": "PORTAL", **found}
+            if guard:
+                return {**result, "status": "BROWSER", "url": guard, "powod": "weryfikacja przeglądarki"}
+            return {**result, "status": "BROWSER", "url": links[0], "powod": "inny system wokandy"}
         last = f"HTTP {home_status or status}" if (home_status or status) else body or "brak odpowiedzi"
     return {**result, "status": "UNREACHABLE", "powod": last}
 

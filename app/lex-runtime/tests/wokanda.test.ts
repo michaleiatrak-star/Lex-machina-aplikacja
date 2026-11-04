@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkWokanda, clearWokandaSessions, parseCommonSignature, probeWokandaSession, parsePortalDetails, parsePortalResults, portalSearchUrl, recheckWokandaCourt, wokandaCourt, wokandaRegister, type FetchText } from "../src/courts/wokanda.js";
+import { checkWokanda, clearWokandaSessions, parseCommonSignature, probeWokandaSession, sameSignature, parsePortalDetails, parsePortalResults, portalSearchUrl, recheckWokandaCourt, wokandaCourt, wokandaRegister, type FetchText } from "../src/courts/wokanda.js";
 import { COURT_BASE } from "../src/courts/court-base-data.js";
 
 // Pages of the Ministry's court portal (Sąd Okręgowy w Krakowie, 2026-11-04), judges' names
@@ -118,5 +118,59 @@ describe("wokanda: browser verification passed by the user (as sn.pl)", () => {
     const result = await checkWokanda(other.nazwa, "I C 1/26");
     expect(result).toMatchObject({ state: "BROWSER_ONLY", url: other.url });
     expect("verification" in result).toBe(false);
+  });
+});
+
+describe("wokanda: other systems (probed and read live 2026-11-04: 30 of 35 courts)", () => {
+  const fixture = (name: string) => fs.readFileSync(path.join(FIXTURES, name), "utf8");
+  const court = (system: string, url: string, extra: Record<string, string> = {}) => ({ nazwa: "Sąd Rejonowy w Testowie", domena: "testowo.sr.gov.pl", status: "PORTAL" as const, system: system as never, url, ...extra });
+
+  it("the same case whether a wokanda names the department and a 2- or 4-digit year or not", () => {
+    expect(sameSignature("II K 151/26", "K 151/2026")).toBe(true);
+    expect(sameSignature("V RC 631/26", "V RC 631/2026")).toBe(true);
+    expect(sameSignature("II K 151/26", "III K 151/26")).toBe(false);
+    expect(sameSignature("II K 151/26", "II Kp 151/26")).toBe(false);
+    expect(sameSignature("I C 9/26", "I C 09/26")).toBe(true);
+  });
+
+  it("CMS form: reads its own fields, posts the signature, reads the results table", async () => {
+    const asked: Array<{ url: string; body?: string }> = [];
+    const site: FetchText = async (url, _headers, init) => {
+      asked.push({ url, ...(init ? { body: init.body } : {}) });
+      return { status: 200, url, text: fixture("cms-form.html") };
+    };
+    const result = await checkWokanda("x", "I C 595/25", site, () => new Date(), () => court("CMS_FORM", "https://testowo.sr.gov.pl/srp/e-wokanda/70,e-Wokanda.html", { pole: "pole573" }));
+    expect(result).toMatchObject({ state: "FOUND", hearings: [{ data: "2026-11-02", godzina: "09:15", sala: "VII Partyzantów 6A", przewodniczacy: "SSR Jan Testowy" }] });
+    const body = new URLSearchParams(asked[1]!.body);
+    expect(asked[1]!.url).toBe("https://testowo.sr.gov.pl/srp/e-wokanda/70,e-Wokanda.html");
+    expect(body.get("pole573")).toBe("I C 595/25");
+    expect(body.get("pid")).toBe("2");
+    expect(body.has("archiwum")).toBe(false);
+  });
+
+  it("Drupal view, labelled records, label tables and a plain list", async () => {
+    const one = async (system: string, url: string, name: string, signature: string) =>
+      checkWokanda("x", signature, async (asked) => ({ status: 200, url: asked, text: fixture(name) }), () => new Date(), () => court(system, url));
+    expect(await one("DRUPAL_VIEW", "https://e-wokanda.example.gov.pl/wokanda_so", "drupal-view.html", "IV U 1478/24")).toMatchObject({
+      state: "FOUND",
+      searchUrl: "https://e-wokanda.example.gov.pl/wokanda_so?field_sygnatura_value=IV+U+1478%2F24",
+      hearings: [{ data: "2026-11-04", godzina: "09:00", sala: "32", przewodniczacy: "Anna Testowa" }]
+    });
+    expect(await one("POST_FORM", "https://testowo.sa.gov.pl/e-wokanda", "labeled.html", "I ACa 804/25")).toMatchObject({
+      state: "FOUND",
+      hearings: [{ sygnatura: "I ACa 804/25", data: "2026-11-03", godzina: "08:30", sala: "Sala II", wydzial: "I Wydział Cywilny" }]
+    });
+    expect(await one("LIST", "https://testowo.sr.gov.pl/e-wokanda", "vertical.html", "V RC 631/26")).toMatchObject({
+      state: "FOUND",
+      hearings: [{ data: "2026-11-04", godzina: "08:30", sala: "7", wydzial: "V Wydział Rodzinny i Nieletnich" }]
+    });
+    const list = await one("LIST", "https://testowo.sr.gov.pl/wokanda_.php", "list.html", "II K 151/26");
+    expect(list).toMatchObject({ state: "FOUND", hearings: [{ sygnatura: "K 151/2026", data: "2026-06-30", godzina: "08:00" }] });
+    expect(list.state === "FOUND" && list.note).toMatch(/bez wyszukiwarki/u);
+  });
+
+  it("the register knows each system of the probed courts", () => {
+    const systems = new Set(wokandaRegister().sady.map((item) => item.system).filter(Boolean));
+    for (const system of ["MS_PORTAL", "CMS_FORM", "GET_FORM", "POST_FORM", "DRUPAL_VIEW", "LIST"]) expect(systems.has(system as never)).toBe(true);
   });
 });
