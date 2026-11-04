@@ -1,5 +1,6 @@
 import type { TranscriptionModelManager } from "../transcription.js";
 import type { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
+import { ChatTurnJournal } from "../chat-turn-journal.js";
 import type { TranscriptionAccelerationManager } from "../transcription-acceleration.js";
 import type { Express, Request, Response } from "express";
 import {
@@ -98,6 +99,12 @@ export function registerMaintenanceRoutes(
     ocrAcceleration,
     transcriptionAcceleration
   } = dependencies;
+
+  // Times of the chat turns on this computer by path and stage (chat-turn-journal.ts): no text.
+  app.get("/api/diagnostics/chat-turns", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    res.json(new ChatTurnJournal().summary());
+  });
 
   // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.
   if (ocrAcceleration) {
