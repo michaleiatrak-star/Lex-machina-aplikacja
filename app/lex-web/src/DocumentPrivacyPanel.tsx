@@ -7,6 +7,7 @@ import {
   ApiError,
   correctDocument,
   detectDocument,
+  editDocumentPage,
   finalizeDocument,
   keepAllDirectives,
   reviewDocument,
@@ -23,6 +24,7 @@ import { documentFailure, type DocumentFailure } from "./document-errors.js";
 import type { DocumentDropOutcome } from "./document-drop-queue.js";
 import { PrivacyPreview } from "./PrivacyPreview.js";
 import { InfoTip } from "./InfoTip";
+import { replaceOcrLine } from "./ocr-line-fix.js";
 
 /**
  * Whether a read file needs the preview: personal or health data found, a doubtful OCR line,
@@ -194,6 +196,46 @@ export function DocumentPrivacyPanel({
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [batchDrafts, setBatchDrafts] =
     useState<DocumentPrivacyDraft[]>([]);
+  // Doubtful OCR lines corrected straight in the batch list, by file, page and line.
+  const [batchLineFixes, setBatchLineFixes] = useState<Record<string, string>>({});
+  const [batchLineSaving, setBatchLineSaving] = useState<string | null>(null);
+
+  /** One doubtful line of a batch file corrected in place: the page text is saved at once. */
+  async function saveBatchLineFix(draft: DocumentPrivacyDraft, line: { page: number; line: number; text: string }, key: string): Promise<void> {
+    const corrected = (batchLineFixes[key] ?? line.text).trim();
+    const pageText = draft.review.pages.find((page) => page.page === line.page)?.text ?? "";
+    const next = replaceOcrLine(pageText, line, corrected);
+    if (next === null) {
+      setError("Tej linii nie ma w tekście strony (np. pieczęć): popraw ją w podglądzie pliku przez „Popraw tekst strony”.");
+      return;
+    }
+    setBatchLineSaving(key);
+    setError("");
+    try {
+      const result = await editDocumentPage(caseId, draft.review.documentId, line.page, next);
+      setBatchDrafts((current) =>
+        current.map((item) =>
+          item.review.documentId === draft.review.documentId
+            ? {
+                ...item,
+                review: {
+                  ...item.review,
+                  pages: item.review.pages.map((page) => (page.page === line.page ? result.page : page)),
+                  suggestions: [...item.review.suggestions.filter((suggestion) => suggestion.page !== line.page), ...result.suggestions]
+                },
+                // Offsets of the old text no longer apply on that page.
+                directives: item.directives.filter((directive) => directive.page !== line.page)
+              }
+            : item
+        )
+      );
+      setBatchLineFixes((current) => Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)));
+    } catch (failure) {
+      setError(`Nie udało się zapisać poprawki linii: ${failure instanceof Error ? failure.message : String(failure)}`);
+    } finally {
+      setBatchLineSaving(null);
+    }
+  }
   const [finalizedBatch, setFinalizedBatch] =
     useState<FinalizedBatchItem[]>([]);
   const [archiveUpload, setArchiveUpload] =
@@ -833,12 +875,44 @@ export function DocumentPrivacyPanel({
                 {draft.review.pages.some((page) => page.review?.length) ? (
                   <div className="privacy-preview-todo">
                     <strong>Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem</strong>
-                    <small>Popraw: „Wróć do podglądu tego pliku”, potem „Popraw tekst strony”.</small>
+                    <small>Popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony); większe zmiany: podgląd pliku i „Popraw tekst strony”.</small>
                     <ul>
                       {draft.review.pages.flatMap((page) =>
-                        (page.review ?? []).map((line, index) => (
-                          <li key={`${page.page}-${index}`}>s. {page.page} · „{line.text}”</li>
-                        ))
+                        (page.review ?? []).map((line, index) => {
+                          const key = `${draft.review.documentId}:${page.page}:${line.line}:${index}`;
+                          const value = batchLineFixes[key] ?? line.text;
+                          const stamp = line.reason === "STAMP";
+                          return (
+                            <li key={`${page.page}-${index}`}>
+                              <span>s. {page.page} · {stamp ? "pieczęć · " : ""}„{line.text}”</span>
+                              {stamp ? null : (
+                                <span className="privacy-preview-line-fix">
+                                  <input
+                                    type="text"
+                                    lang="pl"
+                                    aria-label={`Poprawka linii: ${line.text}`}
+                                    value={value}
+                                    disabled={batchLineSaving !== null}
+                                    onChange={(event) => setBatchLineFixes((current) => ({ ...current, [key]: event.target.value }))}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void saveBatchLineFix(draft, { page: page.page, line: line.line, text: line.text }, key);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={batchLineSaving !== null || value.trim() === line.text}
+                                    onClick={() => void saveBatchLineFix(draft, { page: page.page, line: line.line, text: line.text }, key)}
+                                  >
+                                    {batchLineSaving === key ? "Zapisuję…" : "Zapisz"}
+                                  </button>
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })
                       )}
                     </ul>
                   </div>

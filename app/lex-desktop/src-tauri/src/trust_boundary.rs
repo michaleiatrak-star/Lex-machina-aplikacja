@@ -1488,6 +1488,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/vision-ocr"
         | "/api/local-models/transcription"
         | "/api/local-models/ocr-acceleration"
+        | "/api/diagnostics/chat-turns"
         | "/api/local-models/transcription-acceleration"
         | "/api/skills/update/status"
         | "/api/guide/state"
@@ -2287,6 +2288,7 @@ mod tests {
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/measure"));
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/remove"));
         assert!(!route_allowed("GET", "/api/local-models/ocr-acceleration/measure"));
+        assert!(route_allowed("GET", "/api/diagnostics/chat-turns"));
         assert!(route_allowed("GET", "/api/local-models/transcription-acceleration"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/install"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/measure"));

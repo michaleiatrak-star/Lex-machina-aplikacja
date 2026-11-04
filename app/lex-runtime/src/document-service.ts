@@ -638,7 +638,9 @@ implements DocumentService {
     // "z lokalnym AI": the text model is started right before the detection of personal data.
     private readonly startTextModels?: () => Promise<void>,
     // Recordings (audio, video): the local speech-to-text model writes the text.
-    private readonly transcriber?: RecordingTranscriber
+    private readonly transcriber?: RecordingTranscriber,
+    // The vision step holds the local text model exclusively (LocalModelRuntime.withExclusiveModel).
+    private readonly exclusiveTextModels?: <T>(fn: () => Promise<T>, fallback: () => T) => Promise<T>
   ) {}
 
   /**
@@ -1260,42 +1262,53 @@ implements DocumentService {
       return source;
     }
     if (!this.visionReader) return source;
-    // The text model is started again only for the detection of personal data.
-    if (this.stopTextModels) {
-      try {
-        await this.stopTextModels();
-      } catch (error) {
-        process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+    const visionReader = this.visionReader;
+    const run = async (): Promise<DocumentIngestionResult> => {
+      // The text model is started again only for the detection of personal data.
+      if (this.stopTextModels) {
+        try {
+          await this.stopTextModels();
+        } catch (error) {
+          process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+        }
       }
-    }
-    const session = this.visionReader();
-    if (!session) return source;
-    if (!enoughMemoryForVision(session.modelBytes)) {
-      process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
-      onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
-      return source;
-    }
-    let pages: IngestedPage[];
-    try {
-      pages = await correctWithVision(
-        source.pages,
-        session.readLine,
-        (words) => morphology.knownWords!(words),
-        (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" })
-      );
-    } catch (error) {
-      process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
-      return source;
-    } finally {
-      session.stop();
-    }
-    if (pages.every((page, index) => page === source.pages[index])) return source;
-    return {
-      ...source,
-      pages,
-      sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
-      chunks: chunkDocumentPages(pages, this.maxChunkChars)
+      const session = visionReader();
+      if (!session) return source;
+      if (!enoughMemoryForVision(session.modelBytes)) {
+        process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
+        onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
+        return source;
+      }
+      let pages: IngestedPage[];
+      try {
+        pages = await correctWithVision(
+          source.pages,
+          session.readLine,
+          (words) => morphology.knownWords!(words),
+          (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" })
+        );
+      } catch (error) {
+        process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+        return source;
+      } finally {
+        session.stop();
+      }
+      if (pages.every((page, index) => page === source.pages[index])) return source;
+      return {
+        ...source,
+        pages,
+        sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+        chunks: chunkDocumentPages(pages, this.maxChunkChars)
+      };
     };
+    // Held exclusively: running chat answers on the local model end first, new ones wait for
+    // the vision step instead of losing the model in the middle of an answer.
+    return this.exclusiveTextModels
+      ? this.exclusiveTextModels(run, () => {
+          process.stderr.write("VISION_OCR_SKIPPED:CHAT_ANSWER_RUNNING\n");
+          return source;
+        })
+      : run();
   }
 
   /** Lines to check against the scan (handwriting, stamps): marked in the text and listed. */

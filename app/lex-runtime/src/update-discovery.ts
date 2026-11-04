@@ -1,5 +1,5 @@
 export const CURRENT_APPLICATION_VERSION =
-  "0.1.65";
+  "0.1.66";
 
 export type UpdateAvailability =
   | "NO_RELEASE"
@@ -253,7 +253,8 @@ implements UpdateDiscovery {
           headers: {
             Accept: "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28"
-          }
+          },
+          signal: AbortSignal.timeout(30_000)
         }
       );
       if (!response.ok) {

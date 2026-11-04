@@ -579,6 +579,7 @@ describe("AiSdkProviderAdapter", () => {
     );
 
     const localModels = {
+      withGeneration: <T>(fn: () => Promise<T>) => fn(),
       ensureRunning:
         vi.fn(
           async () => ({
@@ -704,6 +705,7 @@ describe("AiSdkProviderAdapter", () => {
     );
 
     const localModels = {
+      withGeneration: <T>(fn: () => Promise<T>) => fn(),
       ensureRunning:
         vi.fn(
           async () => ({

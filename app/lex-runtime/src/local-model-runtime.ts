@@ -2648,6 +2648,82 @@ export class LocalModelRuntime {
     }
   }
 
+  // Chat answers on the local model (shared) and the vision step that stops it (exclusive).
+  // Before, the vision step of a document read in the background stopped the model in the
+  // middle of a chat answer, and a chat message started it again under the vision model.
+  private generations = 0;
+  private exclusive = false;
+  private readonly lockWaiters: Array<() => void> = [];
+
+  private wakeLockWaiters(): void {
+    for (const wake of this.lockWaiters.splice(0)) wake();
+  }
+
+  /** One chat answer on the local model: waits while the vision step holds the model. */
+  async withGeneration<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.exclusive) await new Promise<void>((resolve) => this.lockWaiters.push(resolve));
+    this.generations += 1;
+    this.lastUsedAt = Date.now();
+    try {
+      return await fn();
+    } finally {
+      this.generations -= 1;
+      this.lastUsedAt = Date.now();
+      this.wakeLockWaiters();
+    }
+  }
+
+  // The memory of the model (on the card about 10-11 GB of 12 for Bielik with 32k context) is
+  // given back when it is not used: before, a model once started stayed loaded until the app
+  // closed, and OCR on the card ran in what was left. It starts again on the next answer.
+  private lastUsedAt = Date.now();
+
+  /** Whether the model is loaded and has not answered for at least `idleMs`. */
+  idleFor(idleMs: number, now: number = Date.now()): boolean {
+    return this.child !== null && !this.startup && this.generations === 0 && !this.exclusive && now - this.lastUsedAt >= idleMs;
+  }
+
+  /** Stops a loaded model that has been idle for `idleMs` (memory for OCR, other programs). */
+  async releaseIfIdle(idleMs: number, reason: string): Promise<boolean> {
+    if (this.external || !this.idleFor(idleMs)) return false;
+    process.stderr.write(`LOCAL_MODEL_RELEASED:${reason}:idle=${Math.round((Date.now() - this.lastUsedAt) / 1000)}s\n`);
+    await this.stop();
+    return true;
+  }
+
+  /** Whether the model is in memory now (for the OCR statistics). */
+  get resident(): boolean {
+    return this.child !== null;
+  }
+
+  /**
+   * The vision step: waits for running chat answers, holds new ones back until it ends. An
+   * answer still running after `maxWaitMs` (a tool of that answer may be reading this very
+   * document) gives `fallback()` instead: no deadlock, the step is skipped.
+   */
+  async withExclusiveModel<T>(fn: () => Promise<T>, fallback: () => T, maxWaitMs = 120_000): Promise<T> {
+    while (this.exclusive) await new Promise<void>((resolve) => this.lockWaiters.push(resolve));
+    this.exclusive = true;
+    try {
+      const deadline = Date.now() + maxWaitMs;
+      while (this.generations > 0) {
+        const left = deadline - Date.now();
+        if (left <= 0) return fallback();
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, left);
+          this.lockWaiters.push(() => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
+      }
+      return await fn();
+    } finally {
+      this.exclusive = false;
+      this.wakeLockWaiters();
+    }
+  }
+
   async stop(): Promise<void> {
     if (this.external) return;
     const child = this.child;
