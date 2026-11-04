@@ -11,6 +11,7 @@ import type {
 import type {
   OcrPageResult
 } from "../document-ingestion.js";
+import type { OcrAccelEnvironment } from "./ocr-acceleration.js";
 
 export type LocalPaddleImageOcrOptions = {
   python?: string;
@@ -19,6 +20,8 @@ export type LocalPaddleImageOcrOptions = {
   timeoutMs?: number;
   // Line images for the local vision model; asked for only when the model is installed.
   lineCrops?: () => boolean;
+  // The graphics card when it is on here (ocr-acceleration.ts), as for PDF scans.
+  acceleration?: () => OcrAccelEnvironment | null;
 };
 
 function defaultWorkerPath(): string {
@@ -46,6 +49,7 @@ implements ImageOcrEngine {
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
   private readonly lineCrops: () => boolean;
+  private readonly acceleration: () => OcrAccelEnvironment | null;
 
   constructor(
     options: LocalPaddleImageOcrOptions = {}
@@ -66,6 +70,7 @@ implements ImageOcrEngine {
     this.timeoutMs =
       options.timeoutMs ?? 10 * 60 * 1000;
     this.lineCrops = options.lineCrops ?? (() => false);
+    this.acceleration = options.acceleration ?? (() => null);
   }
 
   async recognizeImage(
@@ -84,6 +89,7 @@ implements ImageOcrEngine {
       "result.json"
     );
 
+    const acceleration = this.acceleration();
     try {
       await writeFile(input, data);
       const args = [
@@ -116,7 +122,10 @@ implements ImageOcrEngine {
             stdio: ["ignore", "ignore", "pipe"],
             env: {
               ...process.env,
-              PYTHONUNBUFFERED: "1"
+              PYTHONUNBUFFERED: "1",
+              // Photos and image scans on the card too: before, the worker got no card
+              // settings and read every image on the processor.
+              ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
             }
           }
         );
