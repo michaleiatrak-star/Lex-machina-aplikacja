@@ -110,6 +110,21 @@ fn start_log_tail(text: &str) -> String {
     flat[start..].to_string()
 }
 
+/// The plain form of a verbatim Windows path (`\\?\C:\x` -> `C:\x`, `\\?\UNC\s\x` ->
+/// `\\s\x`): Tauri's resource directory comes verbatim, and Windows PowerShell 5.1 then has a
+/// `$PSScriptRoot` its own `Join-Path` rejects; the update stopped before its first line.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn plain_windows_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest);
+    }
+    path.to_path_buf()
+}
+
 fn valid_update_receipt_token(token: &str) -> bool {
     if token.len() < 16
         || token.len() > 180
@@ -582,15 +597,15 @@ fn configure_runner<'a>(
         .arg("-WindowStyle")
         .arg("Hidden")
         .arg("-File")
-        .arg(runner)
+        .arg(plain_windows_path(runner))
         .arg("-ReceiptPath")
-        .arg(receipt)
+        .arg(plain_windows_path(receipt))
         .arg("-RuntimeRoot")
-        .arg(runtime_root)
+        .arg(plain_windows_path(runtime_root))
         .arg("-InstallRoot")
-        .arg(install_root)
+        .arg(plain_windows_path(install_root))
         .arg("-AppExecutable")
-        .arg(executable)
+        .arg(plain_windows_path(executable))
         .arg("-ParentPid")
         .arg(std::process::id().to_string())
 }
@@ -669,6 +684,7 @@ mod tests {
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
+        plain_windows_path,
         start_log_tail,
         update_log_dir,
         update_staging_root,
@@ -703,6 +719,16 @@ mod tests {
         assert_eq!(pkg_from_receipt(&staging, token).unwrap_err(), "APPLICATION_UPDATE_RECEIPT_INVALID");
         assert_eq!(pkg_from_receipt(&staging, "../x.json").unwrap_err(), "APPLICATION_UPDATE_RECEIPT_TOKEN_INVALID");
         std::fs::remove_dir_all(&staging).unwrap();
+    }
+
+    #[test]
+    fn plain_windows_path_drops_the_verbatim_prefix() {
+        assert_eq!(
+            plain_windows_path(Path::new(r"\\?\C:\Users\Mi\AppData\Local\Lex Machina\runtime\bootstrap\x.ps1")),
+            PathBuf::from(r"C:\Users\Mi\AppData\Local\Lex Machina\runtime\bootstrap\x.ps1")
+        );
+        assert_eq!(plain_windows_path(Path::new(r"\\?\UNC\srv\share\a")), PathBuf::from(r"\\srv\share\a"));
+        assert_eq!(plain_windows_path(Path::new(r"C:\plain")), PathBuf::from(r"C:\plain"));
     }
 
     #[test]
