@@ -390,7 +390,9 @@ export class LocalVisionLineReader {
   constructor(
     private readonly executable: string,
     private readonly model: InstalledVisionModel,
-    private readonly options: { gpuOffload?: boolean; threads?: number; startTimeoutMs?: number } = {}
+    // readTimeoutMs: one line, the first one with the model's warm-up. Without it a server that
+    // never answers held the document step, and with it the paused background OCR, for good.
+    private readonly options: { gpuOffload?: boolean; threads?: number; startTimeoutMs?: number; readTimeoutMs?: number } = {}
   ) {}
 
   /** Bytes of both model files: the memory the server takes beyond its buffers. */
@@ -435,23 +437,32 @@ export class LocalVisionLineReader {
 
   readonly readLine: ReadLine = async (jpegBase64, ocrText) => {
     await this.start();
-    const response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
-              { type: "text", text: PROMPT.replace("{ocr}", ocrText) }
-            ]
-          }
-        ],
-        temperature: 0,
-        max_tokens: 200
-      })
-    });
+    const timeoutMs = this.options.readTimeoutMs ?? 120_000;
+    let response: Response;
+    try {
+      response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
+        signal: AbortSignal.timeout(timeoutMs),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
+                { type: "text", text: PROMPT.replace("{ocr}", ocrText) }
+              ]
+            }
+          ],
+          temperature: 0,
+          max_tokens: 200
+        })
+      });
+    } catch (error) {
+      // The step stops here (correctWithVision does not catch): the document keeps its OCR reading.
+      this.stop();
+      throw new Error((error as { name?: string }).name === "TimeoutError" ? `VISION_MODEL_TIMEOUT:${timeoutMs}` : `VISION_MODEL_FAILED:${String(error).slice(0, 200)}`);
+    }
     if (!response.ok) throw new Error(`VISION_MODEL_FAILED:${response.status}`);
     const body = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const text = body.choices?.[0]?.message?.content ?? "";
