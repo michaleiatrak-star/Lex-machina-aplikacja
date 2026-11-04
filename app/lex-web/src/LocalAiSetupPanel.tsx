@@ -413,7 +413,18 @@ type OcrAccelStatus = {
     reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
   } | null;
   auto: boolean;
-  lastRun: { at: string; loadSeconds: number; pageSeconds: number[]; threads: number | null; mkldnn: boolean; mkldnnError?: string | null; accel: string | null; workers: number } | null;
+  lastRun: {
+    at: string;
+    loadSeconds: number;
+    pageSeconds: number[];
+    threads: number | null;
+    mkldnn: boolean;
+    mkldnnError?: string | null;
+    accel: string | null;
+    workers: number;
+    pages?: number;
+    wallSeconds?: number;
+  } | null;
   error?: string;
 };
 
@@ -437,6 +448,16 @@ export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): stri
   const pages = run.pageSeconds.length;
   const average = pages ? run.pageSeconds.reduce((sum, value) => sum + value, 0) / pages : 0;
   const engine = run.accel ? `karta (${run.accel.replace("ExecutionProvider", "")})` : `procesor${run.mkldnn ? " z oneDNN" : " BEZ oneDNN (wolny tryb)"}`;
+  // The whole document: what the user waited per page; per process it is longer when several
+  // processes read pages at once.
+  if (run.pages && run.wallSeconds) {
+    return (
+      `Ostatni OCR: ${run.pages} str. w ${number(run.wallSeconds)} s, ${number(run.wallSeconds / run.pages)} s/str. dokumentu` +
+      (run.workers > 1 ? ` (${run.workers} procesy naraz, w każdym ${number(average)} s/str.)` : "") +
+      ` (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}${run.threads ? `, ${run.threads} wątków` : ""}.` +
+      (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
+    );
+  }
   return (
     `Ostatni OCR: ${pages} str., ${number(average)} s/str. (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}` +
     `${run.threads ? `, ${run.threads} wątków` : ""}${run.workers > 1 ? `, ${run.workers} procesy` : ""}.` +
