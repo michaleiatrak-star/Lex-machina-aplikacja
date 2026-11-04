@@ -723,6 +723,15 @@ export async function startLocalServer(options?: {
   // The measurement reads without the vision model's line images, like any plain OCR.
   const benchmarkOcr = new LocalPaddleOcrEngine();
   ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);
+  // The card is set up by the app itself, once: a few minutes after the start (not to slow
+  // the first minutes of work); the 6-hourly check only retries a failed attempt.
+  const autoOcrAcceleration = () => {
+    ocrAcceleration.autoSetup().catch((error: unknown) => {
+      process.stderr.write(`OCR_ACCEL_AUTO_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+    });
+  };
+  setTimeout(autoOcrAcceleration, 3 * 60_000).unref();
+  setInterval(autoOcrAcceleration, 6 * 60 * 60_000).unref();
   const documentService =
     new LocalPrivateDocumentService(
       new CompleteDocumentIngestor(
