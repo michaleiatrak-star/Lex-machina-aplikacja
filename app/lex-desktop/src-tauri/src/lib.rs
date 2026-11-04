@@ -386,6 +386,76 @@ async fn sn_verification_close(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Weryfikacja wokandy sądu (jak sn.pl): użytkownik sam przechodzi weryfikację przeglądarki
+// w oknie strony sądu; aplikacja odczytuje tylko ciasteczka tej sesji i przekazuje je runtime.
+// Okno zostaje w domenie tego sądu (sądy powszechne: *.sa|so|sr.gov.pl); strona nie ma IPC.
+const WOKANDA_VERIFICATION_LABEL: &str = "wokanda-verification";
+
+fn court_host(host: &str) -> Option<String> {
+    let bare = host.strip_prefix("www.").unwrap_or(host).to_ascii_lowercase();
+    let mut parts = bare.rsplitn(4, '.');
+    let (gov_pl_pl, gov, level, name) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    let valid_name = !name.is_empty()
+        && name.len() <= 63
+        && name.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    (gov_pl_pl == "pl" && gov == "gov" && matches!(level, "sa" | "so" | "sr") && valid_name).then_some(bare)
+}
+
+fn wokanda_court_url(raw: &str) -> Result<tauri::Url, String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|_| "WOKANDA_VERIFICATION_URL_INVALID".to_string())?;
+    if url.scheme() != "https" || url.host_str().and_then(court_host).is_none() {
+        return Err("WOKANDA_VERIFICATION_URL_INVALID".to_string());
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+async fn wokanda_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let target = wokanda_court_url(&url)?;
+    let court = target.host_str().and_then(court_host).unwrap_or_default();
+    if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        WOKANDA_VERIFICATION_LABEL,
+        tauri::WebviewUrl::External(target),
+    )
+    .title("Weryfikacja wokandy sadu - przejdz weryfikacje, sprawdzenie ponowi sie samo")
+    .inner_size(1000.0, 760.0)
+    .on_navigation(move |next| {
+        next.scheme() == "https" && next.host_str().and_then(court_host).as_deref() == Some(court.as_str())
+    })
+    .build()
+    .map_err(|error| format!("WOKANDA_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    Ok(())
+}
+
+// Ciasteczka okna sądu dla adresu tego sądu, jako nagłówek Cookie (bez zamykania okna).
+#[tauri::command]
+async fn wokanda_verification_cookies(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    let target = wokanda_court_url(&url)?;
+    let window = app
+        .get_webview_window(WOKANDA_VERIFICATION_LABEL)
+        .ok_or_else(|| "WOKANDA_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let cookies = window
+        .cookies_for_url(target)
+        .map_err(|_| "WOKANDA_VERIFICATION_COOKIES_FAILED".to_string())?;
+    Ok(cookie_header(
+        cookies.iter().map(|cookie| (cookie.name(), cookie.value())),
+    ))
+}
+
+#[tauri::command]
+async fn wokanda_verification_close(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn open_workspace_file(token: String) -> Result<(), String> {
     let target = authorized_workspace_open_path(&token)?;
@@ -631,6 +701,9 @@ pub fn run() {
                 sn_verification_cookies,
                 sn_verification_finish,
                 sn_verification_close,
+                wokanda_verification_open,
+                wokanda_verification_cookies,
+                wokanda_verification_close,
                 runtime_start_status,
                 runtime_repair
             ]
@@ -794,6 +867,18 @@ mod tests {
         assert!(!is_allowed_external_url("http://example.com"));
         assert!(!is_allowed_external_url("file:///C:/secret.txt"));
         assert!(!is_allowed_external_url("https://example.com\r\nX-Test: 1"));
+    }
+
+    #[test]
+    fn wokanda_verification_stays_on_a_common_court() {
+        assert_eq!(court_host("www.krakow.so.gov.pl").as_deref(), Some("krakow.so.gov.pl"));
+        assert_eq!(court_host("bielsko-biala.sr.gov.pl").as_deref(), Some("bielsko-biala.sr.gov.pl"));
+        assert!(court_host("krakow.so.gov.pl.example.com").is_none());
+        assert!(court_host("so.gov.pl").is_none());
+        assert!(court_host("evil.gov.pl").is_none());
+        assert!(wokanda_court_url("https://olsztyn.so.gov.pl/wokanda").is_ok());
+        assert!(wokanda_court_url("http://olsztyn.so.gov.pl/wokanda").is_err());
+        assert!(wokanda_court_url("https://www.sn.pl/").is_err());
     }
 
     #[test]

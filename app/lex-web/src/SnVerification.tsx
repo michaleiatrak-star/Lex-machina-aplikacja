@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, apiBase, attemptSnSessionOnServer, closeSnProxyWindow, isDesktopShell, openSnProxyWindow, probeSnSession, saveSnSession, snProxyWindowStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
-function desktopInvoke():
+export function desktopInvoke():
   | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
   | null {
   if (!isDesktopShell()) return null;
