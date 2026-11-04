@@ -6,7 +6,8 @@ import type {
   ModelPackEntry
 } from "./model-pack-verifier.js";
 import {
-  compareVersions
+  compareVersions,
+  CURRENT_APPLICATION_VERSION
 } from "./update-discovery.js";
 import {
   installedVisionModel,
@@ -194,6 +195,8 @@ export type LocalHardwareProfile = {
     LocalBackendPreference | null;
   gpuCandidateDetected: boolean;
   gpuOffloadEnabled: boolean;
+  // Why the model is on the processor although a card was detected (last start on the card).
+  gpuFailure?: { at: string; error: string; appVersion: string } | null;
   detectedAt: string;
 };
 
@@ -299,7 +302,7 @@ export function parseLocalAiProgressLine(
   };
 }
 
-type LocalAiConfig = {
+export type LocalAiConfig = {
   schemaVersion: number;
   configuredAt: string;
   applicationVersion?: string;
@@ -330,6 +333,11 @@ type LocalAiConfig = {
       LocalBackendId | null;
     fallbackExecutable?:
       string | null;
+    // After a failed start on the card (AUTO): the card's engine kept for one more try per
+    // application version, and why it failed.
+    gpuExecutable?: string | null;
+    gpuFailure?: { at: string; error: string; appVersion: string } | null;
+    gpuRetriedVersion?: string | null;
     bind: "127.0.0.1";
   };
   network: {
@@ -1240,6 +1248,7 @@ export class LocalModelRuntime {
         selectionMode,
       gpuCandidateDetected,
       gpuOffloadEnabled,
+      gpuFailure: config?.engine.gpuFailure ?? null,
       detectedAt:
         new Date().toISOString()
     };
@@ -2590,6 +2599,40 @@ export class LocalModelRuntime {
       return this.publicDescriptor(spec, config);
     }
 
+    const gpuRetry = this.gpuRetryConfig(config);
+    if (gpuRetry) {
+      await this.stop();
+      this.activeModelId = canonical;
+      this.startup = this.launch(gpuRetry);
+      try {
+        await this.startup;
+        this.writeConfig(gpuRetry);
+        const qualification = this.readQualification();
+        if (qualification && normalizeModelId(qualification.modelId) === canonical) {
+          this.writeQualification({ ...qualification, backend: "VULKAN_X64" });
+        }
+        return this.publicDescriptor(spec, gpuRetry);
+      } catch (error) {
+        await this.stop();
+        config = {
+          ...config,
+          engine: {
+            ...config.engine,
+            gpuExecutable: gpuRetry.engine.executable,
+            gpuFailure: {
+              at: new Date().toISOString(),
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+              appVersion: CURRENT_APPLICATION_VERSION
+            },
+            gpuRetriedVersion: CURRENT_APPLICATION_VERSION
+          }
+        };
+        this.writeConfig(config);
+      } finally {
+        this.startup = null;
+      }
+    }
+
     await this.stop();
     this.assertConfiguredComponents(config);
     this.activeModelId = canonical;
@@ -3827,7 +3870,8 @@ export class LocalModelRuntime {
   }
 
   private cpuFallbackConfig(
-    config: LocalAiConfig
+    config: LocalAiConfig,
+    error?: unknown
   ): LocalAiConfig | null {
     if (
       config.engine
@@ -3863,7 +3907,47 @@ export class LocalModelRuntime {
         gpuOffload: false,
         executable:
           config.engine
-            .fallbackExecutable
+            .fallbackExecutable,
+        gpuExecutable: config.engine.executable,
+        gpuFailure: {
+          at: new Date().toISOString(),
+          error: (error instanceof Error ? error.message : String(error ?? "UNKNOWN")).slice(0, 300),
+          appVersion: CURRENT_APPLICATION_VERSION
+        },
+        gpuRetriedVersion: CURRENT_APPLICATION_VERSION
+      }
+    };
+  }
+
+  /**
+   * AUTO on the processor with a graphics card present: the card's engine once more per
+   * application version. A start on the card that once failed (driver, card busy, an older
+   * engine) used to leave the model, and the vision OCR that shares its engine, on the processor
+   * for good, with no reason kept.
+   */
+  gpuRetryConfig(config: LocalAiConfig, gpuDetected: () => boolean = () => this.hardwareProfile().gpuCandidateDetected): LocalAiConfig | null {
+    if (process.env.LEX_LOCAL_GPU_RETRY === "off") return null;
+    if (config.engine.selectionMode !== "AUTO" || configBackend(config) !== "CPU_X64_PORTABLE") return null;
+    if (config.engine.gpuRetriedVersion === CURRENT_APPLICATION_VERSION) return null;
+    const cpuExecutable = config.engine.executable;
+    const gpuExecutable =
+      config.engine.gpuExecutable ??
+      cpuExecutable.replace(/([\\/])CPU_X64_PORTABLE([\\/])(llama-server(?:\.exe)?)$/u, "$1VULKAN_X64$2$3");
+    if (!gpuExecutable || gpuExecutable === cpuExecutable || !fs.existsSync(gpuExecutable) || !fs.existsSync(cpuExecutable)) return null;
+    if (!gpuDetected()) return null;
+    return {
+      ...config,
+      configuredAt: new Date().toISOString(),
+      engine: {
+        ...config.engine,
+        backend: "VULKAN_X64",
+        gpuOffload: true,
+        executable: gpuExecutable,
+        fallbackBackend: "CPU_X64_PORTABLE",
+        fallbackExecutable: cpuExecutable,
+        gpuExecutable: null,
+        gpuFailure: null,
+        gpuRetriedVersion: CURRENT_APPLICATION_VERSION
       }
     };
   }
@@ -3880,7 +3964,8 @@ export class LocalModelRuntime {
     } catch (error) {
       const fallback =
         this.cpuFallbackConfig(
-          config
+          config,
+          error
         );
       if (!fallback) {
         throw error;

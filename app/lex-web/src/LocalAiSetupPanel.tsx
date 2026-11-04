@@ -118,6 +118,7 @@ type LocalRuntimeStatus = {
       BackendPreference | null;
     gpuCandidateDetected: boolean;
     gpuOffloadEnabled: boolean;
+    gpuFailure?: { at: string; error: string; appVersion: string } | null;
     detectedAt: string;
   };
 };
@@ -1471,6 +1472,9 @@ export function LocalAiSetupPanel({
                       : data.runtime.hardware.gpuCandidateDetected
                         ? " · GPU wykryte, ale niepotwierdzone jako aktywne"
                         : ""}
+                    {!data.runtime.hardware.gpuOffloadEnabled && data.runtime.hardware.gpuFailure
+                      ? ` · ostatni start na karcie (wersja ${data.runtime.hardware.gpuFailure.appVersion}) nie powiódł się: ${data.runtime.hardware.gpuFailure.error}; kolejna próba po aktualizacji aplikacji`
+                      : ""}
                   </span>
                   {data.runtime.qualification &&
                   data.runtime.qualification.modelId === selected.id ? (
