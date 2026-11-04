@@ -33,7 +33,14 @@ const ROUTER = "# LEX MACHINA — MODEL ROUTER AUTO";
 const CIVIL = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
 const CRIMINAL = "dr-03-prawo-karne-wykroczenia-egzekucja";
 
-type Call = Pick<ProviderStreamParams, "systemPrompt" | "systemPromptCachePrefix" | "systemPromptSharedPrefix" | "promptCacheTtl"> & { tools: number; last: string };
+type Call = {
+  systemPrompt: string;
+  systemPromptCachePrefix: number | undefined;
+  systemPromptSharedPrefix: number | undefined;
+  promptCacheTtl: ProviderStreamParams["promptCacheTtl"] | undefined;
+  tools: number;
+  last: string;
+};
 const calls: Call[] = [];
 let app: express.Express;
 let authorization = "";
