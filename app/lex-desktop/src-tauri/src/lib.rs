@@ -691,6 +691,7 @@ mod tests {
         valid_update_receipt_token,
         valid_workspace_open_token,
     };
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn pkg_from_receipt_opens_only_the_hashed_package_named_by_the_receipt() {
