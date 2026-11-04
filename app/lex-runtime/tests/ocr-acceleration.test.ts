@@ -222,3 +222,33 @@ describe("OCR na karcie graficznej: tryb automatyczny", () => {
     }
   });
 });
+
+describe("statystyka OCR: cały dokument z kilku procesów", () => {
+  it("strony wszystkich przebiegów, czas od startu do ostatniej strony, liczba procesów", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-merge-"));
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+const pages = arg("--pages").split(",").map(Number);
+process.stderr.write("LEX_OCR_STATS " + JSON.stringify({ loadSeconds: pages[0] === 1 ? 3 : 4, pageSeconds: pages.map(() => 0.05), threads: 7, mkldnn: true, accel: "DmlExecutionProvider" }) + "\\n");
+setTimeout(() => fs.writeFileSync(arg("--output"), JSON.stringify(pages.map((page) => ({ page, text: "x" })))), 60);
+`
+    );
+    const previous = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = dir;
+    try {
+      await new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, workers: 2 }).recognizePages(new Uint8Array([37]), [1, 2, 3, 4]);
+      const run = lastOcrRunStats()!;
+      expect(run).toMatchObject({ pages: 4, workers: 2, loadSeconds: 4, threads: 7, accel: "DmlExecutionProvider" });
+      expect(run.pageSeconds).toHaveLength(4);
+      expect(run.wallSeconds).toBeGreaterThan(0);
+    } finally {
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

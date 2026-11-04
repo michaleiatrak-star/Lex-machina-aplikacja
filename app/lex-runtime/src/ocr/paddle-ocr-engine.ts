@@ -39,7 +39,28 @@ export type OcrRunStats = {
   mkldnnError: string | null;
   accel: string | null;
   workers: number;
+  // The whole document (all passes of all workers): pages and time from start to the last page.
+  // pageSeconds is the time of one process per page: with several processes the pages are read
+  // at once, so wallSeconds / pages is what the user waits per page.
+  pages?: number;
+  wallSeconds?: number;
 };
+
+/** The passes of one document as one run: every worker's pages, the time the user waited. */
+export function mergeOcrRunStats(parts: OcrRunStats[], pages: number, wallSeconds: number, workers: number): OcrRunStats {
+  return {
+    at: parts.at(-1)!.at,
+    loadSeconds: Math.max(...parts.map((part) => part.loadSeconds)),
+    pageSeconds: parts.flatMap((part) => part.pageSeconds).slice(0, 500),
+    threads: parts[0]!.threads,
+    mkldnn: parts.every((part) => part.mkldnn),
+    mkldnnError: parts.find((part) => part.mkldnnError)?.mkldnnError ?? null,
+    accel: parts.find((part) => part.accel)?.accel ?? null,
+    workers,
+    pages,
+    wallSeconds: Math.round(wallSeconds * 10) / 10
+  };
+}
 
 let lastOcrRun: OcrRunStats | null = null;
 
@@ -194,6 +215,8 @@ implements OcrEngine {
     usage: AccelUsage
   ): Promise<OcrPageResult[]> {
     if (pages.length === 0) return [];
+    const started = performance.now();
+    const collected: OcrRunStats[] = [];
 
     const tempRoot = await mkdtemp(
       path.join(os.tmpdir(), "lex-paddle-ocr-")
@@ -270,7 +293,8 @@ implements OcrEngine {
             threads,
             acceleration,
             usage,
-            workers
+            workers,
+            collected
           );
           draining = draining.then(drain);
           await draining;
@@ -278,6 +302,7 @@ implements OcrEngine {
       };
       await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, lane));
       await draining;
+      if (collected.length > 0) lastOcrRun = mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers);
 
       const requested = new Set(pages);
       const seen = new Set<number>();
@@ -317,7 +342,8 @@ implements OcrEngine {
     threads?: string,
     acceleration: OcrAccelEnvironment | null = null,
     usage?: AccelUsage,
-    workerCount?: number
+    workerCount?: number,
+    collect?: OcrRunStats[]
   ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
@@ -408,7 +434,10 @@ implements OcrEngine {
         clearInterval(timer);
         // From the whole output: a line can arrive split across two chunks.
         const stats = parseOcrStats(stderr, workerCount ?? 1);
-        if (stats) lastOcrRun = stats;
+        if (stats) {
+          lastOcrRun = stats;
+          collect?.push(stats);
+        }
         writeOcrRunLog(pages, code, stderr);
         if (code === 0) resolve();
         else {
