@@ -144,7 +144,7 @@ function Copy-TreeLong([string]$Source, [string]$Destination) {
   $output = & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NP /NFL /NDL /NJH /NJS
   # robocopy: 0-7 = copied (with or without extra files), 8 and more = failure.
   if ($LASTEXITCODE -ge 8) {
-    throw "UPDATE_COPY_FAILED:$LASTEXITCODE:$Source -> $Destination :: $((@($output) | Select-Object -Last 3) -join ' | ')"
+    throw "UPDATE_COPY_FAILED:${LASTEXITCODE}:${Source} -> ${Destination} :: $((@($output) | Select-Object -Last 3) -join ' | ')"
   }
 }
 
