@@ -754,6 +754,7 @@ pub fn run() {
 mod tests {
     use super::{
         cookie_header,
+        court_host,
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
@@ -763,6 +764,7 @@ mod tests {
         update_staging_root,
         valid_update_receipt_token,
         valid_workspace_open_token,
+        wokanda_court_url,
     };
     use std::path::{Path, PathBuf};
 
