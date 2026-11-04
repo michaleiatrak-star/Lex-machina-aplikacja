@@ -15,6 +15,7 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
@@ -1063,6 +1064,35 @@ export async function startLocalServer(options?: {
 // The parent at start (the desktop app); an orphan is re-parented, on macOS and Linux
 // to launchd/init (pid 1).
 const PARENT_AT_START = process.ppid;
+
+/** Where the runtime notes what nearly or did end it (no case text: the error and its stack). */
+export function runtimeCrashLogPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.LOCALAPPDATA
+    ? path.join(env.LOCALAPPDATA, "LexMachina", "runtime-crash.log")
+    : path.join(os.tmpdir(), "LexMachina-runtime-crash.log");
+}
+
+function noteRuntimeFault(kind: string, error: unknown): void {
+  const detail = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ""}` : String(error);
+  const line = `--- ${new Date().toISOString()} ${kind}\n${detail.slice(0, 4000)}\n`;
+  process.stderr.write(`RUNTIME_${kind}:${detail.split("\n")[0]?.slice(0, 300)}\n`);
+  try {
+    const file = runtimeCrashLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const previous = fs.existsSync(file) ? fs.readFileSync(file, "utf8").slice(-60_000) : "";
+    fs.writeFileSync(file, previous + line);
+  } catch {
+    // The note never adds a second failure.
+  }
+}
+
+export function installRuntimeCrashGuards(): void {
+  process.on("unhandledRejection", (reason) => noteRuntimeFault("UNHANDLED_REJECTION", reason));
+  process.on("uncaughtException", (error) => {
+    noteRuntimeFault("UNCAUGHT_EXCEPTION", error);
+    process.exit(70);
+  });
+}
 export function desktopParentGone(ppid = process.ppid, platform = process.platform): boolean {
   return ppid !== PARENT_AT_START || (platform !== "win32" && ppid === 1);
 }
@@ -1072,6 +1102,11 @@ if (
   path.resolve(fileURLToPath(import.meta.url)) ===
     path.resolve(process.argv[1])
 ) {
+  // One rejected promise nobody awaited (a background task, a timer) ended the whole runtime
+  // on Node 24: chat, OCR and transcription stopped at once and the app showed no server.
+  // It is logged and the runtime goes on; an uncaught exception still ends it (its state is
+  // unknown) and the desktop sidecar starts it again.
+  installRuntimeCrashGuards();
   const server = await startLocalServer();
   process.stdout.write(
     `Lex Machina runtime listening on http://${server.host}:${server.port}\n`
