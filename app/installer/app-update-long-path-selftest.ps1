@@ -38,3 +38,5 @@ try {
   Remove-TreeLong $root
 }
 Write-Host "Application update backup on long paths self-test: PASS ($($copied.Length) characters, PowerShell $($PSVersionTable.PSVersion))"
+# robocopy leaves 1 ("files copied") in $LASTEXITCODE, which would become the exit code.
+exit 0
