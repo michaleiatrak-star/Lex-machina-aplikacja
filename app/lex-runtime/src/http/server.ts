@@ -360,6 +360,9 @@ function resolveAccountSkillRoot(
   }
 }
 
+// A text model idle this long gives the card to OCR (ms).
+const LOCAL_MODEL_OCR_RELEASE_IDLE_MS = 60_000;
+
 export async function startLocalServer(options?: {
   host?: string;
   port?: number;
@@ -719,10 +722,25 @@ export async function startLocalServer(options?: {
     new LegalDocumentAstGenerator(
       sessionExecutor
     );
+  // OCR on the card: a text model idle for a minute gives the card back first (the next answer
+  // starts it again); during a series of documents, when it answers every few seconds, it stays.
+  const ocrCardEnvironment = () => {
+    const environment = ocrAcceleration.environment();
+    if (environment) void localModels.releaseIfIdle(LOCAL_MODEL_OCR_RELEASE_IDLE_MS, "OCR");
+    return environment;
+  };
   const caseOcrEngine = new LocalPaddleOcrEngine({
     lineCrops: () => localModels.visionOcr() !== null,
-    acceleration: () => ocrAcceleration.environment()
+    acceleration: ocrCardEnvironment,
+    textModelResident: () => localModels.resident
   });
+  // After a series of documents or a conversation: the model's memory back after a quiet while.
+  const idleMinutes = Number(process.env.LEX_LOCAL_MODEL_IDLE_MINUTES ?? "5");
+  if (Number.isFinite(idleMinutes) && idleMinutes > 0) {
+    setInterval(() => {
+      void localModels.releaseIfIdle(idleMinutes * 60_000, "IDLE");
+    }, 60_000).unref();
+  }
   // The measurement reads without the vision model's line images, like any plain OCR.
   const benchmarkOcr = new LocalPaddleOcrEngine();
   ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);

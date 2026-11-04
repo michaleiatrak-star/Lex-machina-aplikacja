@@ -25,6 +25,8 @@ export type LocalPaddleOcrOptions = {
   workers?: number;
   // The graphics card (ocr-acceleration.ts): its worker environment while it is on.
   acceleration?: () => OcrAccelEnvironment | null;
+  // Whether a local text model holds memory (on the card) while this document is read.
+  textModelResident?: () => boolean;
 };
 
 type AccelUsage = { used: boolean; failed: boolean };
@@ -44,6 +46,8 @@ export type OcrRunStats = {
   // at once, so wallSeconds / pages is what the user waits per page.
   pages?: number;
   wallSeconds?: number;
+  // A local text model was loaded when the document finished: it shares the card with OCR.
+  textModelResident?: boolean;
 };
 
 /** The passes of one document as one run: every worker's pages, the time the user waited. */
@@ -158,6 +162,7 @@ implements OcrEngine {
   private readonly lineCrops: () => boolean;
   private readonly workers: number | undefined;
   private readonly acceleration: () => OcrAccelEnvironment | null;
+  private readonly textModelResident: () => boolean;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -181,6 +186,7 @@ implements OcrEngine {
     this.lineCrops = options.lineCrops ?? (() => false);
     this.workers = options.workers;
     this.acceleration = options.acceleration ?? (() => null);
+    this.textModelResident = options.textModelResident ?? (() => false);
   }
 
   async recognizePages(
@@ -302,7 +308,9 @@ implements OcrEngine {
       };
       await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, lane));
       await draining;
-      if (collected.length > 0) lastOcrRun = mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers);
+      if (collected.length > 0) {
+        lastOcrRun = { ...mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers), textModelResident: this.textModelResident() };
+      }
 
       const requested = new Set(pages);
       const seen = new Set<number>();
