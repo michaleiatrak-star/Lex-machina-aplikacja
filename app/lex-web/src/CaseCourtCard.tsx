@@ -261,19 +261,21 @@ function WokandaCheckView({
       </div>
     );
   }
-  if (check.verification) {
+  // Narrowed by hand: the application build (tsc -b) does not narrow the union by the return above.
+  const blocked = check as Extract<WokandaCheck, { reason: string }>;
+  if (blocked.verification) {
     return (
       <div className="case-court-result" role="status">
-        <WokandaVerification verification={check.verification} onVerified={onVerified} />
+        <WokandaVerification verification={blocked.verification} onVerified={onVerified} />
       </div>
     );
   }
   return (
     <div className="case-court-result" role="status">
       <p className="field-help">
-        {check.reason}{" "}
-        {check.url ? (
-          <a href={check.url} target="_blank" rel="noreferrer">
+        {blocked.reason}{" "}
+        {blocked.url ? (
+          <a href={blocked.url} target="_blank" rel="noreferrer">
             Otwórz wokandę sądu
           </a>
         ) : null}
