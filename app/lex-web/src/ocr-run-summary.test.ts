@@ -22,3 +22,11 @@ describe("OCR: procesor czy karta — zdanie dla użytkownika", () => {
     expect(ocrAccelHeadline({ ...base, installed: true, benchmark: bench })).toMatch(/procesor jest szybszy|szybszy od karty/u);
   });
 });
+
+describe("ostatni OCR: cały dokument", () => {
+  it("2 procesy naraz: czas dokumentu na stronę, czas procesu osobno", () => {
+    expect(
+      ocrRunSummary({ at: "", loadSeconds: 3.1, pageSeconds: Array(54).fill(3.1), threads: 14, mkldnn: true, accel: "DmlExecutionProvider", workers: 2, pages: 54, wallSeconds: 88.4 })
+    ).toBe("Ostatni OCR: 54 str. w 88,4 s, 1,6 s/str. dokumentu (2 procesy naraz, w każdym 3,1 s/str.) (wczytanie modeli 3,1 s), karta (Dml), 14 wątków.");
+  });
+});
