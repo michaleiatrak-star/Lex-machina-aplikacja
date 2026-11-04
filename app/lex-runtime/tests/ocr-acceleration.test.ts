@@ -13,6 +13,7 @@ import {
   type OcrAccelEnvironment
 } from "../src/ocr/ocr-acceleration.js";
 import { lastOcrRunStats, LocalPaddleOcrEngine, parseOcrStats } from "../src/ocr/paddle-ocr-engine.js";
+import { documentWork } from "../src/document-work.js";
 
 let dir = "";
 afterEach(async () => {
@@ -167,6 +168,56 @@ setTimeout(() => {
     } finally {
       if (previous === undefined) delete process.env.LOCALAPPDATA;
       else process.env.LOCALAPPDATA = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("OCR na karcie graficznej: tryb automatyczny", () => {
+  it("bez przycisku: pobiera i mierzy raz; przerwany przez pracę użytkownika ponawia po godzinie; brak sieci po dobie", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-auto-"));
+    try {
+      const models = OCR_ACCEL_MODELS.map((file) => {
+        const content = `auto:${file.filename}`;
+        return { ...file, content, bytes: content.length, sha256: createHash("sha256").update(content).digest("hex") };
+      });
+      OCR_ACCEL_MODELS.splice(0, OCR_ACCEL_MODELS.length, ...models);
+      const fixture = path.join(dir, "bench.pdf");
+      fs.writeFileSync(fixture, "%PDF-1.7");
+      const served = new Map(models.map((file) => [file.url, file.content]));
+      let online = false;
+      const fetchImpl = async (url: string) =>
+        online
+          ? { ok: true, status: 200, body: (async function* () { yield new TextEncoder().encode(served.get(url)!); })() }
+          : { ok: false, status: 503, body: null };
+      const manager = new OcrAccelerationManager(path.join(dir, "accel"), { platform: "darwin", arch: "arm64", fixture });
+      let interrupt = false;
+      let reads = 0;
+      manager.reader = async (_data, _pages, acceleration) => {
+        reads += 1;
+        // The user confirms a document while the benchmark runs.
+        if (interrupt && acceleration) await documentWork.foreground(async () => undefined);
+        return { seconds: acceleration ? 10 : 40, pages: ["Pozew\nkwota"], used: true };
+      };
+      const t0 = new Date("2026-11-04T08:00:00Z");
+      expect(await manager.autoSetup(fetchImpl, t0)).toBe("FAILED");
+      expect(await manager.autoSetup(fetchImpl, new Date("2026-11-04T20:00:00Z"))).toBe("SKIPPED");
+      online = true;
+      interrupt = true;
+      expect(await manager.autoSetup(fetchImpl, new Date("2026-11-05T09:00:00Z"))).toBe("FAILED");
+      expect(manager.status().error).toBe("OCR_ACCEL_MEASURE_INTERRUPTED");
+      expect(manager.environment()).toBeNull();
+      expect(await manager.autoSetup(fetchImpl, new Date("2026-11-05T09:30:00Z"))).toBe("SKIPPED");
+      interrupt = false;
+      expect(await manager.autoSetup(fetchImpl, new Date("2026-11-05T10:01:00Z"))).toBe("DONE");
+      expect(manager.status()).toMatchObject({ auto: true, active: true, benchmark: { accepted: true, cpuSeconds: 40, accelSeconds: 10 } });
+      const before = reads;
+      expect(await manager.autoSetup(fetchImpl, new Date("2026-11-06T10:00:00Z"))).toBe("SKIPPED");
+      expect(reads).toBe(before);
+      process.env.LEX_OCR_ACCEL_AUTO = "off";
+      expect(new OcrAccelerationManager(path.join(dir, "x"), { platform: "darwin", arch: "arm64" }).autoEnabled).toBe(false);
+    } finally {
+      delete process.env.LEX_OCR_ACCEL_AUTO;
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });

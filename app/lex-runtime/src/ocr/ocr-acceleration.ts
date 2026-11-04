@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { documentWork } from "../document-work.js";
+import { CURRENT_APPLICATION_VERSION } from "../update-discovery.js";
 import { lastOcrRunStats, type OcrRunStats } from "./paddle-ocr-engine.js";
 import { downloadVerified, sizeOf, type FetchLike, type VerifiedFile } from "../verified-download.js";
 
@@ -60,6 +62,8 @@ export type OcrAccelBenchmark = {
   accepted: boolean;
   reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
   measuredAt: string;
+  // The app version that measured (information only; the measurement is not repeated).
+  appVersion?: string;
 };
 
 /** Line by line, whitespace ignored (the card may set a space differently, never a letter). */
@@ -114,6 +118,8 @@ export type OcrAccelStatus = {
   state: "IDLE" | "DOWNLOADING" | "MEASURING" | "FAILED";
   progress: { file: string; received: number; total: number; percent: number } | null;
   benchmark: OcrAccelBenchmark | null;
+  // Set up by the app itself (no button): download, measurement and choice in the background.
+  auto: boolean;
   // The last OCR pass of a document on this computer (time per page, oneDNN, threads).
   lastRun: OcrRunStats | null;
   error?: string;
@@ -222,6 +228,7 @@ export class OcrAccelerationManager {
       state: this.job.state,
       progress: this.job.progress ? { ...this.job.progress } : null,
       benchmark: installed ? (this.record()?.benchmark ?? null) : null,
+      auto: this.autoEnabled,
       lastRun: lastOcrRunStats(),
       ...(this.job.error ? { error: this.job.error } : {})
     };
@@ -289,12 +296,59 @@ export class OcrAccelerationManager {
 
   private async runMeasure(): Promise<void> {
     if (!this.reader) throw new Error("OCR_ACCEL_READER_MISSING");
+    const reader = this.reader;
     this.job = { state: "MEASURING", progress: null };
     const data = new Uint8Array(fs.readFileSync(this.fixture));
-    const cpu = await this.reader(data, BENCHMARK_PAGES, null);
-    const accel = await this.reader(data, BENCHMARK_PAGES, this.environmentFor());
-    const benchmark = judgeBenchmark({ provider: this.provider!, cpu, accel });
-    this.writeRecord({ ...(this.record() ?? {}), benchmark });
+    // Background work: it waits while the user's own document work runs; work of the user
+    // started during the measurement skews the times, so that measurement does not count.
+    const benchmark = await documentWork.background(async () => {
+      const before = documentWork.foregroundStarts;
+      const cpu = await reader(data, BENCHMARK_PAGES, null);
+      const accel = await reader(data, BENCHMARK_PAGES, this.environmentFor());
+      if (documentWork.foregroundStarts !== before) throw new Error("OCR_ACCEL_MEASURE_INTERRUPTED");
+      return judgeBenchmark({ provider: this.provider!, cpu, accel });
+    });
+    this.writeRecord({ ...(this.record() ?? {}), benchmark: { ...benchmark, appVersion: CURRENT_APPLICATION_VERSION } });
+  }
+
+  get autoEnabled(): boolean {
+    return this.provider !== null && process.env.LEX_OCR_ACCEL_AUTO !== "off";
+  }
+
+  private get autoPath(): string {
+    return path.join(this.dir, "auto.json");
+  }
+
+  /**
+   * Nothing to set by hand: on a computer with a card the app can use, the models are
+   * downloaded, both ways are measured once and the faster one with the same text is used
+   * from then on. Only a failed attempt is tried again: a day later (no network), an hour later
+   * (measurement interrupted by the user's work).
+   */
+  async autoSetup(fetchImpl?: FetchLike, now: Date = new Date()): Promise<"SKIPPED" | "DONE" | "FAILED"> {
+    if (!this.autoEnabled || this.busy()) return "SKIPPED";
+    const benchmark = this.installed() ? this.record()?.benchmark : undefined;
+    // Once measured, the choice stays: no further measurement (the "Zmierz ponownie" button
+    // remains for an administrator after a new card).
+    if (benchmark && benchmark.provider === this.provider) return "SKIPPED";
+    let last: { failedAt?: string; error?: string } = {};
+    try {
+      last = JSON.parse(fs.readFileSync(this.autoPath, "utf8")) as typeof last;
+    } catch {
+      last = {};
+    }
+    if (last.failedAt) {
+      const wait = last.error?.startsWith("OCR_ACCEL_MEASURE_INTERRUPTED") ? 60 * 60_000 : 24 * 60 * 60_000;
+      if (now.getTime() - Date.parse(last.failedAt) < wait) return "SKIPPED";
+    }
+    await (this.installed() ? this.measure() : this.start(fetchImpl));
+    if (this.job.state === "FAILED") {
+      fs.mkdirSync(this.dir, { recursive: true });
+      fs.writeFileSync(this.autoPath, JSON.stringify({ failedAt: now.toISOString(), error: this.job.error ?? "" }));
+      return "FAILED";
+    }
+    fs.rmSync(this.autoPath, { force: true });
+    return "DONE";
   }
 
   remove(): void {

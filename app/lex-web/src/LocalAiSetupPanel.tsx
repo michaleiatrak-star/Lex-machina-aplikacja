@@ -409,9 +409,24 @@ type OcrAccelStatus = {
     accepted: boolean;
     reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
   } | null;
+  auto: boolean;
   lastRun: { at: string; loadSeconds: number; pageSeconds: number[]; threads: number | null; mkldnn: boolean; mkldnnError?: string | null; accel: string | null; workers: number } | null;
   error?: string;
 };
+
+/** One sentence for anyone: what OCR uses now and why, without settings to think about. */
+export function ocrAccelHeadline(status: Pick<OcrAccelStatus, "active" | "installed" | "benchmark" | "state" | "auto" | "provider">): string {
+  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return "Trwa jednorazowe ustawianie OCR na tym komputerze (w tle).";
+  if (status.active) return "OCR korzysta z karty graficznej: na tym komputerze jest szybsza (wybrane automatycznie).";
+  if (status.benchmark) {
+    return status.benchmark.reason === "NOT_FASTER"
+      ? "OCR korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie)."
+      : "OCR korzysta z procesora: karta graficzna nie dała tu pewnego wyniku (wybrane automatycznie).";
+  }
+  return status.auto
+    ? "OCR korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę graficzną."
+    : "OCR korzysta z procesora.";
+}
 
 /** "Ostatni OCR: 3 str., 12,4 s/str. (wczytanie modeli 6,1 s), procesor: oneDNN, 28 wątków". */
 export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): string {
@@ -476,19 +491,18 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
   return (
     <div className="local-ai-facts">
       <strong>
-        OCR na karcie graficznej
+        OCR: procesor czy karta graficzna
         <InfoTip>
-          Rozpoznawanie tekstu ze skanów na karcie graficznej dowolnego producenta ({status.provider === "dml" ? "DirectML: NVIDIA, AMD, Intel" : "CoreML: układ graficzny i Neural Engine Apple"}).
-          Po pobraniu aplikacja odczytuje te same strony na procesorze i na karcie i włącza kartę tylko wtedy, gdy jest szybsza i
-          daje ten sam tekst.
+          Aplikacja raz, sama i w tle, sprawdza, czy rozpoznawanie tekstu ze skanów jest szybsze na karcie graficznej
+          ({status.provider === "dml" ? "DirectML: NVIDIA, AMD, Intel" : "CoreML: układ graficzny i Neural Engine Apple"}) czy na procesorze,
+          i zostawia szybsze rozwiązanie, jeśli daje ten sam tekst. Nic nie trzeba ustawiać.
         </InfoTip>
       </strong>
-      <small>Modele OCR w formacie ONNX, {formatBytes(status.bytes)}</small>
-      {status.lastRun ? <small>{ocrRunSummary(status.lastRun)}</small> : null}
+      <small>{ocrAccelHeadline(status)}</small>
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Pobieranie i sprawdzanie SHA-256</strong>
+            <strong>Pobieranie modeli OCR dla karty ({formatBytes(status.bytes)})</strong>
             {progress ? <small>{progress.file}</small> : null}
           </div>
           {progress ? <progress max={100} value={progress.percent} /> : <progress />}
@@ -496,35 +510,34 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
       ) : status.state === "MEASURING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Pomiar: te same strony na procesorze i na karcie</strong>
+            <strong>Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)</strong>
           </div>
           <progress />
         </div>
-      ) : status.installed && bench ? (
-        <small>
-          Procesor {bench.cpuSeconds} s, karta {bench.accelSeconds} s, zgodne linie {bench.sameLines}/{bench.lines}: {OCR_ACCEL_REASONS[bench.reason]}.
-        </small>
-      ) : status.installed ? (
-        <small>Zainstalowane, bez pomiaru: OCR zostaje na procesorze.</small>
-      ) : (
-        <small>Nie zainstalowane: OCR na procesorze.</small>
-      )}
-      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Nie powiodło się: {status.error}</small> : null}
-      {admin ? (
-        <div className="local-ai-actions">
-          <button type="button" disabled={status.installed || working} onClick={() => void act("install")}>
-            Pobierz i zmierz
-          </button>
-          <button type="button" disabled={!status.installed || working} onClick={() => void act("measure")}>
-            Zmierz ponownie
-          </button>
-          <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
-            Usuń
-          </button>
-        </div>
-      ) : (
-        <small>Przyspieszenie włącza administrator.</small>
-      )}
+      ) : null}
+      <details className="local-ai-details">
+        <summary>Szczegóły</summary>
+        {bench ? (
+          <small>
+            Pomiar: procesor {bench.cpuSeconds} s, karta {bench.accelSeconds} s (4 strony), zgodne linie {bench.sameLines}/{bench.lines}: {OCR_ACCEL_REASONS[bench.reason]}.
+          </small>
+        ) : null}
+        {status.lastRun ? <small>{ocrRunSummary(status.lastRun)}</small> : null}
+        {status.state === "FAILED" && status.error ? <small className="local-ai-error">Ostatnia próba: {status.error}</small> : null}
+        {admin ? (
+          <div className="local-ai-actions">
+            <button type="button" disabled={status.installed || working} onClick={() => void act("install")}>
+              Pobierz i zmierz teraz
+            </button>
+            <button type="button" disabled={!status.installed || working} title="Po wymianie karty graficznej" onClick={() => void act("measure")}>
+              Zmierz ponownie
+            </button>
+            <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
+              Usuń modele karty
+            </button>
+          </div>
+        ) : null}
+      </details>
       {error ? <small className="local-ai-error">{error}</small> : null}
     </div>
   );
