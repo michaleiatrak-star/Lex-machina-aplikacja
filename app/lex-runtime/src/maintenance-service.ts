@@ -136,6 +136,9 @@ export type ModelPackUpdateStatus = {
     | "UNAVAILABLE"
     | "BLOCKED";
   checkedAt: string;
+  // false: no model pack was ever published with the release (the model of the installer is the
+  // newest one). Before, this read as "the update index is invalid".
+  packPublished?: boolean;
   modelId?: string;
   modelFamily?: LocalModelUpdateFamily;
   currentSha256?: string;
@@ -1349,6 +1352,27 @@ export class MaintenanceService {
       return {
         status:
           "UNAVAILABLE",
+        checkedAt:
+          discovery.checkedAt,
+        modelId:
+          installed.modelId,
+        ...(installedFamily
+          ? {
+              modelFamily:
+                installedFamily
+            }
+          : {}),
+        currentSha256:
+          installed.sha256,
+        verificationReady,
+        signatureMode
+      };
+    }
+
+    if (!discovery.modelPackIndex) {
+      return {
+        status: "UP_TO_DATE",
+        packPublished: false,
         checkedAt:
           discovery.checkedAt,
         modelId:

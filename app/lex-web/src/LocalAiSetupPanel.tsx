@@ -144,6 +144,7 @@ type ModelPackUpdateStatus = {
     | "UNAVAILABLE"
     | "BLOCKED";
   checkedAt: string;
+  packPublished?: boolean;
   modelId?: string;
   modelFamily?: "BIELIK" | "MISTRAL";
   currentSha256?: string;
@@ -1496,7 +1497,9 @@ export function LocalAiSetupPanel({
                           ? "Mistral"
                           : "modelu"}:{" "}
                       {modelUpdate.status === "UP_TO_DATE"
-                        ? "aktualny"
+                        ? modelUpdate.packPublished === false
+                          ? "aktualny (model z instalatora; nowsza paczka modelu nie została opublikowana)"
+                          : "aktualny"
                         : modelUpdate.status === "AVAILABLE"
                           ? [
                               modelUpdate.signatureMode === "SIGNED_REQUIRED"
