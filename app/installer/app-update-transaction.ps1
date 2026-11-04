@@ -134,10 +134,7 @@ function Assert-BackupCapacity([string]$BackupBase, [int64]$InstallBytes) {
 }
 
 function Copy-DirectoryContents([string]$Source, [string]$Destination) {
-  New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-  foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
-    Copy-Item -LiteralPath $item.FullName -Destination $Destination -Recurse -Force
-  }
+  Copy-TreeLong $Source $Destination
 }
 
 function Get-LexUninstallKeys {
@@ -185,7 +182,7 @@ function Restore-Backup(
   [string]$RegistryBackup
 ) {
   Stop-LexProcesses $ApplicationRoot
-  Remove-Item -LiteralPath $ApplicationRoot -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-TreeLong $ApplicationRoot
   New-Item -ItemType Directory -Force -Path $ApplicationRoot | Out-Null
   Copy-DirectoryContents $BackupRoot $ApplicationRoot
   Restore-UninstallRegistry $RegistryBackup
@@ -316,10 +313,10 @@ $backupBase = if ($env:LOCALAPPDATA) {
   Join-Path $env:TEMP "LexMachinaUpdateBackups"
 }
 New-Item -ItemType Directory -Force -Path $backupBase | Out-Null
+# Short: every character here lengthens the deepest path of the backup copy.
 $backupRoot = Join-Path $backupBase (
-  (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssfffZ") +
-  "-" + $currentVersion +
-  "-" + [Guid]::NewGuid().ToString("N")
+  (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss") +
+  "-" + [Guid]::NewGuid().ToString("N").Substring(0, 6)
 )
 $filesBackup = Join-Path $backupRoot "install"
 $registryBackup = Join-Path $backupRoot "registry"
@@ -363,7 +360,7 @@ try {
   Write-JsonAtomic $journal $journalState
 } catch {
   $abortFailure = $_.Exception.Message
-  Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-TreeLong $backupRoot
   $journalState.state = "ABORTED_BEFORE_INSTALL"
   $journalState.lastError = $abortFailure
   Write-JsonAtomic $journal $journalState
@@ -419,7 +416,7 @@ try {
   $journalState.committedAt = (Get-Date).ToUniversalTime().ToString("o")
   Write-JsonAtomic $journal $journalState
 
-  Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-TreeLong $backupRoot
   Remove-Item -LiteralPath $receipt -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
 
@@ -449,7 +446,7 @@ try {
       $journalState.rolledBackAt = (Get-Date).ToUniversalTime().ToString("o")
       Write-JsonAtomic $journal $journalState
       # Restored and health-checked: the backup copy is no longer needed.
-      Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+      Remove-TreeLong $backupRoot
       if (Test-Path -LiteralPath $appExe -PathType Leaf) {
         Start-Process -FilePath $appExe | Out-Null
       }
