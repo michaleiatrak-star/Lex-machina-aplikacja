@@ -2,6 +2,7 @@ import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
 import { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
+import { TranscriptionAccelerationManager } from "../transcription-acceleration.js";
 import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
@@ -555,6 +556,8 @@ export async function startLocalServer(options?: {
     new LocalModelRuntime();
   const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
   const ocrAcceleration = new OcrAccelerationManager(path.join(localModels.rootDir, "ocr-acceleration"));
+  const transcriptionAcceleration = new TranscriptionAccelerationManager(path.join(localModels.rootDir, "transcription-acceleration"));
+  transcriptionAcceleration.modelInstalled = () => transcriptionModel.installed();
 
   // Server mode (off by default; LEX_SERVER_MODE_FORCE=on|off fixes it for a container).
   const serverModeDir = path.join(caseFileStore.rootDir, "server");
@@ -732,6 +735,19 @@ export async function startLocalServer(options?: {
   };
   setTimeout(autoOcrAcceleration, 3 * 60_000).unref();
   setInterval(autoOcrAcceleration, 6 * 60 * 60_000).unref();
+  // Transcription on an NVIDIA card: the same once-only setup, a little later than the OCR one
+  // (both measurements are background work and would only wait for each other).
+  const recordingTranscriber = new LocalWhisperTranscriber(() => transcriptionModel.dir, {
+    acceleration: () => transcriptionAcceleration.environment()
+  });
+  transcriptionAcceleration.reader = (data, env) => recordingTranscriber.benchmark(data, "audio/opus", env);
+  const autoTranscriptionAcceleration = () => {
+    transcriptionAcceleration.autoSetup().catch((error: unknown) => {
+      process.stderr.write(`STT_ACCEL_AUTO_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+    });
+  };
+  setTimeout(autoTranscriptionAcceleration, 8 * 60_000).unref();
+  setInterval(autoTranscriptionAcceleration, 6 * 60 * 60_000).unref();
   const documentService =
     new LocalPrivateDocumentService(
       new CompleteDocumentIngestor(
@@ -763,7 +779,7 @@ export async function startLocalServer(options?: {
         const modelId = localModels.configuredModelId();
         if (modelId && localModels.status().state !== "READY") await localModels.ensureRunning(modelId);
       },
-      new LocalWhisperTranscriber(() => transcriptionModel.dir)
+      recordingTranscriber
     );
 
   const coreApp = createLexHttpApp({
@@ -896,7 +912,8 @@ export async function startLocalServer(options?: {
       maintenance,
       anomalyJournal,
       transcriptionModel,
-      ocrAcceleration
+      ocrAcceleration,
+      transcriptionAcceleration
     }
   );
   registerCoreLawRoutes(app, {

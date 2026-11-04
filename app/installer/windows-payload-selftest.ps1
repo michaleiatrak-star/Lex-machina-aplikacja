@@ -40,6 +40,8 @@ $sttWorker = Require-File "ocr\whisper_worker.py"
 # OCR on the graphics card (models downloaded later) and the page it is measured on.
 $accelWorker = Require-File "ocr\onnx_accel.py"
 $accelFixture = Require-File "ocr\fixtures\ocr-benchmark.pdf"
+# Transcription on an NVIDIA card: the recording it is measured on (NVIDIA libraries downloaded later).
+$sttFixture = Require-File "ocr\fixtures\stt-benchmark.opus"
 $nerWorker = Require-File "privacy\stanza_ner_worker.py"
 # Morfeusz with the PESEL and TERYT registers: the anonymizer's gazetteer, run as the runtime runs it.
 $gazetteerWorker = Require-File "privacy\polish_pii_gazetteer.py"

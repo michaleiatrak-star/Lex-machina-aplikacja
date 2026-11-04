@@ -548,6 +548,160 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
   );
 }
 
+type SttAccelStatus = {
+  supported: boolean;
+  bytes: number;
+  installed: boolean;
+  active: boolean;
+  state: "IDLE" | "DOWNLOADING" | "MEASURING" | "FAILED";
+  progress: { file: string; received: number; total: number; percent: number } | null;
+  benchmark: {
+    cpuSeconds: number;
+    cudaSeconds: number;
+    words: number;
+    sameWords: number;
+    accepted: boolean;
+    reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "CUDA_NOT_USED";
+    cudaError?: string;
+  } | null;
+  auto: boolean;
+  lastRun: { device: "cpu" | "cuda"; seconds: number; audioSeconds: number; cudaError?: string; at: string } | null;
+  error?: string;
+};
+
+/** One sentence for anyone: what transcription uses now, without settings to think about. */
+export function sttAccelHeadline(status: Pick<SttAccelStatus, "active" | "benchmark" | "state" | "auto">, modelInstalled: boolean): string {
+  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return "Trwa jednorazowe ustawianie transkrypcji na karcie NVIDIA (w tle).";
+  if (status.active) return "Transkrypcja korzysta z karty NVIDIA: na tym komputerze jest szybsza (wybrane automatycznie).";
+  if (status.benchmark) {
+    return status.benchmark.reason === "NOT_FASTER"
+      ? "Transkrypcja korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie)."
+      : "Transkrypcja korzysta z procesora: karta NVIDIA nie dała tu pewnego wyniku (wybrane automatycznie).";
+  }
+  if (!modelInstalled) return "Po zainstalowaniu modelu transkrypcji aplikacja sama, jednorazowo sprawdzi kartę NVIDIA.";
+  return status.auto
+    ? "Transkrypcja korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę NVIDIA."
+    : "Transkrypcja korzysta z procesora.";
+}
+
+/** "Ostatnia transkrypcja: 12:30 nagrania w 41 s (18x szybciej niż czas nagrania), karta NVIDIA." */
+export function sttRunSummary(run: NonNullable<SttAccelStatus["lastRun"]>): string {
+  const number = (value: number) => value.toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const minutes = Math.floor(run.audioSeconds / 60);
+  const seconds = Math.round(run.audioSeconds % 60);
+  const speed = run.seconds > 0 ? run.audioSeconds / run.seconds : 0;
+  return (
+    `Ostatnia transkrypcja: ${minutes}:${String(seconds).padStart(2, "0")} nagrania w ${number(run.seconds)} s` +
+    `${speed ? ` (${number(speed)}x czasu nagrania)` : ""}, ${run.device === "cuda" ? "karta NVIDIA" : "procesor"}.` +
+    (run.cudaError ? ` Karta nie zadziałała: ${run.cudaError}` : "")
+  );
+}
+
+const STT_ACCEL_REASONS: Record<NonNullable<SttAccelStatus["benchmark"]>["reason"], string> = {
+  FASTER_SAME_TEXT: "karta szybsza, te same słowa: transkrypcja korzysta z karty",
+  NOT_FASTER: "karta nie była wyraźnie szybsza od procesora: transkrypcja zostaje na procesorze",
+  TEXT_DIFFERS: "karta napisała inny tekst niż procesor: transkrypcja zostaje na procesorze",
+  CUDA_NOT_USED: "nie udało się uruchomić transkrypcji na karcie: transkrypcja zostaje na procesorze"
+};
+
+/**
+ * Transcription on an NVIDIA card (CUDA): the NVIDIA libraries downloaded once, then the same
+ * recording transcribed both ways here and the faster one with the same words kept.
+ */
+function TranscriptionAccelerationSection({ admin, modelInstalled }: { admin: boolean; modelInstalled: boolean }) {
+  const developer = useDeveloperMode();
+  const [status, setStatus] = useState<SttAccelStatus | null>(null);
+  const [error, setError] = useState("");
+
+  async function refresh(): Promise<void> {
+    try {
+      setStatus(await request<SttAccelStatus>("/api/local-models/transcription-acceleration"));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const working = status?.state === "DOWNLOADING" || status?.state === "MEASURING";
+  useEffect(() => {
+    if (!working) return;
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => window.clearInterval(timer);
+  }, [working]);
+
+  async function act(action: "install" | "measure" | "remove"): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<SttAccelStatus>(`/api/local-models/transcription-acceleration/${action}`, { method: "POST" }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  if (!status || !status.supported) return null;
+  const progress = status.progress;
+  const bench = status.benchmark;
+  return (
+    <div className="local-ai-facts">
+      <strong>
+        Transkrypcja: procesor czy karta NVIDIA
+        <InfoTip>
+          Na komputerze z kartą NVIDIA aplikacja raz, sama i w tle, pobiera biblioteki NVIDIA (cuBLAS, cuDNN; około{" "}
+          {formatBytes(status.bytes)}, każda sprawdzona SHA-256), zamienia to samo nagranie na tekst na procesorze i na karcie
+          i zostawia szybsze rozwiązanie, jeśli daje te same słowa. Nic nie trzeba ustawiać.
+        </InfoTip>
+      </strong>
+      <small>{sttAccelHeadline(status, modelInstalled)}</small>
+      {status.state === "DOWNLOADING" ? (
+        <div className="local-ai-progress">
+          <div>
+            <strong>Pobieranie bibliotek NVIDIA ({formatBytes(status.bytes)})</strong>
+            {progress ? <small>{progress.file}</small> : null}
+          </div>
+          {progress ? <progress max={100} value={progress.percent} /> : <progress />}
+        </div>
+      ) : status.state === "MEASURING" ? (
+        <div className="local-ai-progress">
+          <div>
+            <strong>Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)</strong>
+          </div>
+          <progress />
+        </div>
+      ) : null}
+      {developer ? (
+        <details className="local-ai-details">
+          <summary>Szczegóły</summary>
+          {bench ? (
+            <small>
+              Pomiar (90 s nagrania): procesor {bench.cpuSeconds} s, karta {bench.cudaSeconds} s, zgodne słowa {bench.sameWords}/{bench.words}:{" "}
+              {STT_ACCEL_REASONS[bench.reason]}.{bench.cudaError ? ` Błąd karty: ${bench.cudaError}` : ""}
+            </small>
+          ) : null}
+          {status.lastRun ? <small>{sttRunSummary(status.lastRun)}</small> : null}
+          {status.state === "FAILED" && status.error ? <small className="local-ai-error">Ostatnia próba: {status.error}</small> : null}
+          {admin ? (
+            <div className="local-ai-actions">
+              <button type="button" disabled={status.installed || working || !modelInstalled} onClick={() => void act("install")}>
+                Pobierz i zmierz teraz
+              </button>
+              <button type="button" disabled={!status.installed || working || !modelInstalled} title="Po wymianie karty lub sterownika" onClick={() => void act("measure")}>
+                Zmierz ponownie
+              </button>
+              <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
+                Usuń biblioteki NVIDIA
+              </button>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+      {error ? <small className="local-ai-error">{error}</small> : null}
+    </div>
+  );
+}
+
 type TranscriptionStatus = {
   modelId: string;
   label: string;
@@ -597,6 +751,7 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
   if (!status) return null;
   const progress = status.progress;
   return (
+    <>
     <div className="local-ai-facts">
       <strong>
         Transkrypcja nagrań
@@ -646,6 +801,8 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
       )}
       {error ? <small className="local-ai-error">{error}</small> : null}
     </div>
+    <TranscriptionAccelerationSection admin={admin} modelInstalled={status.installed} />
+    </>
   );
 }
 
