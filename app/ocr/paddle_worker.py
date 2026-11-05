@@ -1018,42 +1018,9 @@ def wait_while_paused() -> None:
         time.sleep(0.25)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--pages", default="1")
-    parser.add_argument("--lang", default="pl")
-    parser.add_argument("--dpi", type=int, default=220)
-    parser.add_argument("--device", default=None)
-    parser.add_argument("--evidence-dir", default=None)
-    # Straightened image of every line (base64 JPEG) for the local vision model.
-    parser.add_argument("--line-crops", action="store_true")
-    parser.add_argument(
-        "--mode",
-        choices=("pdf", "image"),
-        default="pdf",
-    )
-    # UVDoc straightens a photographed, bent page. On a flat scan it bends the
-    # text and merges neighbouring lines (a whole "KRS ... NIP ... ul." line was
-    # lost on a real scan), so by default it runs for photographs only.
-    parser.add_argument(
-        "--unwarp",
-        choices=("auto", "on", "off"),
-        default=os.environ.get("LEX_OCR_UNWARP", "auto"),
-    )
-    args = parser.parse_args()
+def load_engine(lang: str, unwarp: bool, device: str | None) -> dict:
+    """Models of one configuration, loaded once: the one-shot run and every job of --serve."""
     started = time.perf_counter()
-    try:
-        # OpenCV's own pool (image steps around the networks) to the worker's share as well.
-        import cv2
-
-        cv2.setNumThreads(cpu_threads())
-    except Exception:  # noqa: BLE001
-        pass
-    page_seconds: list[float] = []
-
-    pages = parse_pages(args.pages)
     model_root_raw = os.environ.get("LEX_PADDLE_MODEL_DIR", "").strip()
     if not model_root_raw:
         raise RuntimeError("LEX_PADDLE_MODEL_DIR is required; network model downloads are disabled")
@@ -1088,10 +1055,10 @@ def main() -> None:
         raise SystemExit(3)
 
     ocr_kwargs = dict(
-        lang=args.lang,
+        lang=lang,
         ocr_version="PP-OCRv6",
         use_doc_orientation_classify=True,
-        use_doc_unwarping=(args.unwarp == "on" or (args.unwarp == "auto" and args.mode == "image")),
+        use_doc_unwarping=unwarp,
         # Per-line orientation (the model stays installed) turned lines of degraded
         # scans upside down and garbled them; page orientation is still corrected.
         use_textline_orientation=False,
@@ -1101,32 +1068,40 @@ def main() -> None:
             for key, value in required_models.items()
         },
     )
-    if args.device:
-        ocr_kwargs["device"] = args.device
+    if device:
+        ocr_kwargs["device"] = device
 
     # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
     latin_dir = native_model_root / LATIN_REC
     ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
-    load_seconds = time.perf_counter() - started
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
+    return {"ocr": ocr, "fold": fold, "kwargs": ocr_kwargs, "loadSeconds": time.perf_counter() - started}
+
+
+def run_job(engine: dict, input_path: str, output_path: str, pages: list[int], mode: str, dpi: int, evidence: str | None, line_crops: bool, load_seconds: float) -> None:
+    """One document (or its pages) read with loaded models; the result file and the stats line."""
+    ocr = engine["ocr"]
+    fold = engine["fold"]
+    ocr_kwargs = engine["kwargs"]
+    page_seconds: list[float] = []
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).
     stamp_split = os.environ.get("LEX_OCR_STAMPS", "on") != "off"
     results = []
-    evidence_dir = Path(args.evidence_dir) if args.evidence_dir else None
+    evidence_dir = Path(evidence) if evidence else None
     if evidence_dir is not None:
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.mode == "image":
+    if mode == "image":
         if pages != [1]:
             raise ValueError("image mode accepts only page 1")
-        with Image.open(args.input) as source:
+        with Image.open(input_path) as source:
             image = np.array(source.convert("RGB"))
         results.append(
-            predict_page(ocr, image, 1, evidence_dir, args.line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"], fold=fold)
+            predict_page(ocr, image, 1, evidence_dir, line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"], fold=fold)
         )
     else:
-        doc = fitz.open(args.input)
+        doc = fitz.open(input_path)
         try:
             for page_number in pages:
                 wait_while_paused()
@@ -1138,7 +1113,7 @@ def main() -> None:
                 page_started = time.perf_counter()
                 page = doc.load_page(page_number - 1)
                 pix = page.get_pixmap(
-                    dpi=args.dpi,
+                    dpi=dpi,
                     alpha=False,
                 )
                 channels = pix.n
@@ -1159,7 +1134,7 @@ def main() -> None:
                         image,
                         page_number,
                         evidence_dir,
-                        args.line_crops,
+                        line_crops,
                         stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"],
                         fold=fold,
                     )
@@ -1170,7 +1145,7 @@ def main() -> None:
         finally:
             doc.close()
 
-    Path(args.output).write_text(
+    Path(output_path).write_text(
         json.dumps(results, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -1186,6 +1161,99 @@ def main() -> None:
         "marks": getattr(ocr, "latin_dir", None) is not None,
     }
     print("LEX_OCR_STATS " + json.dumps(stats), file=sys.stderr, flush=True)
+
+
+def unwarp_for(choice: str, mode: str) -> bool:
+    return choice == "on" or (choice == "auto" and mode == "image")
+
+
+def opencv_threads() -> None:
+    try:
+        # OpenCV's own pool (image steps around the networks) to the worker's share as well.
+        import cv2
+
+        cv2.setNumThreads(cpu_threads())
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def serve() -> None:
+    """Jobs as JSON lines on stdin, the models loaded once per configuration: a document no
+    longer waits 3-12 s for the models. On stdout "LEX_OCR_JOB_DONE <id>" or
+    "LEX_OCR_JOB_FAILED <id> <reason>" ends each job; stderr carries pages and stats as before."""
+    opencv_threads()
+    engines: dict = {}
+    print("LEX_OCR_SERVE_READY", flush=True)
+    for raw in sys.stdin:
+        raw = raw.strip()
+        if not raw:
+            continue
+        job_id = "?"
+        try:
+            job = json.loads(raw)
+            job_id = str(job.get("id", "?"))
+            pause = str(job.get("pauseFile") or "")
+            if pause:
+                os.environ["LEX_OCR_PAUSE_FILE"] = pause
+            else:
+                os.environ.pop("LEX_OCR_PAUSE_FILE", None)
+            mode = job.get("mode", "pdf")
+            key = (job.get("lang", "pl"), unwarp_for(job.get("unwarp", os.environ.get("LEX_OCR_UNWARP", "auto")), mode), job.get("device"))
+            load_seconds = 0.0
+            if key not in engines:
+                engines[key] = load_engine(*key)
+                load_seconds = engines[key]["loadSeconds"]
+            run_job(
+                engines[key],
+                job["input"],
+                job["output"],
+                parse_pages(str(job.get("pages", "1"))),
+                mode,
+                int(job.get("dpi", 220)),
+                job.get("evidenceDir"),
+                bool(job.get("lineCrops")),
+                load_seconds,
+            )
+            print(f"LEX_OCR_JOB_DONE {job_id}", flush=True)
+        except SystemExit as stop:
+            print(f"LEX_OCR_JOB_FAILED {job_id} EXIT:{stop.code}", flush=True)
+        except Exception as error:  # noqa: BLE001
+            print(f"{type(error).__name__}: {str(error)[:400]}", file=sys.stderr, flush=True)
+            print(f"LEX_OCR_JOB_FAILED {job_id} {type(error).__name__}", flush=True)
+
+
+def main() -> None:
+    if "--serve" in sys.argv[1:]:
+        serve()
+        return
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--pages", default="1")
+    parser.add_argument("--lang", default="pl")
+    parser.add_argument("--dpi", type=int, default=220)
+    parser.add_argument("--device", default=None)
+    parser.add_argument("--evidence-dir", default=None)
+    # Straightened image of every line (base64 JPEG) for the local vision model.
+    parser.add_argument("--line-crops", action="store_true")
+    parser.add_argument(
+        "--mode",
+        choices=("pdf", "image"),
+        default="pdf",
+    )
+    # UVDoc straightens a photographed, bent page. On a flat scan it bends the
+    # text and merges neighbouring lines (a whole "KRS ... NIP ... ul." line was
+    # lost on a real scan), so by default it runs for photographs only.
+    parser.add_argument(
+        "--unwarp",
+        choices=("auto", "on", "off"),
+        default=os.environ.get("LEX_OCR_UNWARP", "auto"),
+    )
+    args = parser.parse_args()
+    opencv_threads()
+    pages = parse_pages(args.pages)
+    engine = load_engine(args.lang, unwarp_for(args.unwarp, args.mode), args.device)
+    run_job(engine, args.input, args.output, pages, args.mode, args.dpi, args.evidence_dir, args.line_crops, engine["loadSeconds"])
 
 
 if __name__ == "__main__":

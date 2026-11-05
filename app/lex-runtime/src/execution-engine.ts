@@ -2652,6 +2652,8 @@ export class LexExecutionEngine {
       !args.model.startsWith("local/") && cachePrefix >= 4_096 && cachePrefix < systemPrompt.length
         ? {
             systemPromptCachePrefix: cachePrefix,
+            // Every domain shares the instructions, the catalog and the router core.
+            ...(sharedPrefix.length + 2 < cachePrefix ? { systemPromptSharedPrefix: sharedPrefix.length + 2 } : {}),
             promptCacheKey: promptCacheKeyFor("auto", systemPrompt.slice(0, cachePrefix)),
             // The next question (often more than five minutes later) reads the shared prefix:
             // one rewrite costs more than the dearer 1-hour write.

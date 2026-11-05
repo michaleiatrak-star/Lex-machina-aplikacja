@@ -1,3 +1,4 @@
+import { ocrServePool } from "./ocr-serve-pool.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -25,6 +26,11 @@ export type LocalPaddleOcrOptions = {
   workers?: number;
   // The graphics card (ocr-acceleration.ts): its worker environment while it is on.
   acceleration?: () => OcrAccelEnvironment | null;
+  // Long-lived workers with the models loaded (ocr-serve-pool.ts); LEX_OCR_PERSISTENT=off: a
+  // new process per pass as before.
+  persistent?: boolean;
+  // Whether a local text model holds memory (on the card) while this document is read.
+  textModelResident?: () => boolean;
 };
 
 type AccelUsage = { used: boolean; failed: boolean };
@@ -44,6 +50,8 @@ export type OcrRunStats = {
   // at once, so wallSeconds / pages is what the user waits per page.
   pages?: number;
   wallSeconds?: number;
+  // A local text model was loaded when the document finished: it shares the card with OCR.
+  textModelResident?: boolean;
 };
 
 /** The passes of one document as one run: every worker's pages, the time the user waited. */
@@ -158,6 +166,8 @@ implements OcrEngine {
   private readonly lineCrops: () => boolean;
   private readonly workers: number | undefined;
   private readonly acceleration: () => OcrAccelEnvironment | null;
+  private readonly persistent: boolean;
+  private readonly textModelResident: () => boolean;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -181,6 +191,8 @@ implements OcrEngine {
     this.lineCrops = options.lineCrops ?? (() => false);
     this.workers = options.workers;
     this.acceleration = options.acceleration ?? (() => null);
+    this.persistent = (options.persistent ?? false) && process.env.LEX_OCR_PERSISTENT !== "off";
+    this.textModelResident = options.textModelResident ?? (() => false);
   }
 
   async recognizePages(
@@ -188,7 +200,7 @@ implements OcrEngine {
     pages: number[],
     onPage?: (done: number) => void
   ): Promise<OcrPageResult[]> {
-    return this.read(data, pages, onPage, this.acceleration(), { used: false, failed: false });
+    return this.read(data, pages, onPage, this.acceleration(), { used: false, failed: false }, this.persistent);
   }
 
   /** One reading with the card on or off, for the measurement of ocr-acceleration.ts. */
@@ -199,7 +211,8 @@ implements OcrEngine {
   ): Promise<{ seconds: number; pages: string[]; used: boolean }> {
     const usage: AccelUsage = { used: false, failed: false };
     const started = performance.now();
-    const results = await this.read(data, pages, undefined, acceleration, usage);
+    // The measurement starts its own processes (the card's use is read from their start).
+    const results = await this.read(data, pages, undefined, acceleration, usage, false);
     return {
       seconds: (performance.now() - started) / 1000,
       pages: results.map((result) => result.text),
@@ -212,7 +225,8 @@ implements OcrEngine {
     pages: number[],
     onPage: ((done: number) => void) | undefined,
     acceleration: OcrAccelEnvironment | null,
-    usage: AccelUsage
+    usage: AccelUsage,
+    persistent = false
   ): Promise<OcrPageResult[]> {
     if (pages.length === 0) return [];
     const started = performance.now();
@@ -294,7 +308,8 @@ implements OcrEngine {
             acceleration,
             usage,
             workers,
-            collected
+            collected,
+            persistent
           );
           draining = draining.then(drain);
           await draining;
@@ -302,7 +317,9 @@ implements OcrEngine {
       };
       await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, lane));
       await draining;
-      if (collected.length > 0) lastOcrRun = mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers);
+      if (collected.length > 0) {
+        lastOcrRun = { ...mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers), textModelResident: this.textModelResident() };
+      }
 
       const requested = new Set(pages);
       const seen = new Set<number>();
@@ -343,7 +360,8 @@ implements OcrEngine {
     acceleration: OcrAccelEnvironment | null = null,
     usage?: AccelUsage,
     workerCount?: number,
-    collect?: OcrRunStats[]
+    collect?: OcrRunStats[],
+    persistent = false
   ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
@@ -372,6 +390,10 @@ implements OcrEngine {
     // Background OCR waits between pages while the user's own document is worked on; the
     // time it waits does not count against the timeout.
     const background = documentWork.inBackground();
+    if (persistent) {
+      await this.recognizeBatchServed({ input, output, batchDir, pages, onPage, threads, acceleration, workerCount, collect, background });
+      return JSON.parse(await readFile(output, "utf8")) as unknown[];
+    }
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         this.python,
@@ -447,5 +469,80 @@ implements OcrEngine {
     });
 
     return JSON.parse(await readFile(output, "utf8")) as unknown[];
+  }
+
+  /** One pass on a long-lived worker (ocr-serve-pool.ts): the models are already loaded. */
+  private async recognizeBatchServed(args: {
+    input: string;
+    output: string;
+    batchDir: string;
+    pages: number[];
+    onPage?: ((done: number) => void) | undefined;
+    threads?: string | undefined;
+    acceleration: OcrAccelEnvironment | null;
+    workerCount?: number | undefined;
+    collect?: OcrRunStats[] | undefined;
+    background: boolean;
+  }): Promise<void> {
+    const { pages, onPage, threads, acceleration } = args;
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      ...(threads ? { LEX_OCR_THREADS: threads, OMP_NUM_THREADS: threads, MKL_NUM_THREADS: threads, OPENBLAS_NUM_THREADS: threads } : {}),
+      ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
+    };
+    delete env.LEX_OCR_PAUSE_FILE;
+    const key = JSON.stringify({ python: this.python, worker: this.workerPath, threads: threads ?? null, accel: acceleration?.env ?? null, device: this.device ?? null });
+    let stderr = "";
+    let pagesDone = 0;
+    const run = ocrServePool.run({
+      key,
+      python: this.python,
+      workerArgs: [this.workerPath, "--serve"],
+      env,
+      job: {
+        input: args.input,
+        output: args.output,
+        pages: pages.join(","),
+        lang: "pl",
+        dpi: this.dpi,
+        ...(this.device ? { device: this.device } : {}),
+        evidenceDir: path.join(args.batchDir, "evidence"),
+        lineCrops: this.lineCrops(),
+        mode: "pdf",
+        pauseFile: args.background ? documentWork.pauseFile : ""
+      },
+      onStderr: (text) => {
+        const finished = text.match(/^LEX_OCR_PAGE \d+$/gm)?.length ?? 0;
+        if (finished && onPage) {
+          pagesDone += finished;
+          onPage(Math.min(pagesDone, pages.length));
+        }
+        stderr = (stderr + text).slice(-32_000);
+      }
+    });
+    let active = 0;
+    const timer = setInterval(() => {
+      if (!args.background || !documentWork.paused()) active += TIMEOUT_TICK_MS;
+      if (active >= this.timeoutMs) run.kill();
+    }, TIMEOUT_TICK_MS);
+    try {
+      await run.done;
+    } catch (error) {
+      writeOcrRunLog(pages, 1, stderr);
+      if (active >= this.timeoutMs) {
+        throw new Error(`OCR_ENGINE_TIMEOUT: Local PaddleOCR worker exceeded the configured timeout (pages ${pages[0]}-${pages.at(-1)}).`);
+      }
+      const code = (error as { exitCode?: number | null }).exitCode ?? 1;
+      throw ocrWorkerFailure(stderr, code, "worker");
+    } finally {
+      clearInterval(timer);
+    }
+    const stats = parseOcrStats(stderr, args.workerCount ?? 1);
+    if (stats) {
+      lastOcrRun = stats;
+      args.collect?.push(stats);
+    }
+    writeOcrRunLog(pages, 0, stderr);
   }
 }

@@ -50,6 +50,7 @@ import {
   lexMcpPackagePath
 } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
+import { warmChatPaths } from "../chat-warmup.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import {
   EnvironmentCredentialResolver,
@@ -360,6 +361,9 @@ function resolveAccountSkillRoot(
     return baseRoot;
   }
 }
+
+// A text model idle this long gives the card to OCR (ms).
+const LOCAL_MODEL_OCR_RELEASE_IDLE_MS = 60_000;
 
 export async function startLocalServer(options?: {
   host?: string;
@@ -720,10 +724,26 @@ export async function startLocalServer(options?: {
     new LegalDocumentAstGenerator(
       sessionExecutor
     );
+  // OCR on the card: a text model idle for a minute gives the card back first (the next answer
+  // starts it again); during a series of documents, when it answers every few seconds, it stays.
+  const ocrCardEnvironment = () => {
+    const environment = ocrAcceleration.environment();
+    if (environment) void localModels.releaseIfIdle(LOCAL_MODEL_OCR_RELEASE_IDLE_MS, "OCR");
+    return environment;
+  };
   const caseOcrEngine = new LocalPaddleOcrEngine({
     lineCrops: () => localModels.visionOcr() !== null,
-    acceleration: () => ocrAcceleration.environment()
+    acceleration: ocrCardEnvironment,
+    textModelResident: () => localModels.resident,
+    persistent: true
   });
+  // After a series of documents or a conversation: the model's memory back after a quiet while.
+  const idleMinutes = Number(process.env.LEX_LOCAL_MODEL_IDLE_MINUTES ?? "5");
+  if (Number.isFinite(idleMinutes) && idleMinutes > 0) {
+    setInterval(() => {
+      void localModels.releaseIfIdle(idleMinutes * 60_000, "IDLE");
+    }, 60_000).unref();
+  }
   // The measurement reads without the vision model's line images, like any plain OCR.
   const benchmarkOcr = new LocalPaddleOcrEngine();
   ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);
@@ -760,7 +780,8 @@ export async function startLocalServer(options?: {
       new CompleteImageIngestor(
         new LocalPaddleImageOcrEngine({
           lineCrops: () => localModels.visionOcr() !== null,
-          acceleration: () => ocrAcceleration.environment()
+          acceleration: () => ocrAcceleration.environment(),
+          persistent: true
         })
       ),
       privacyVaultStore,
@@ -1034,6 +1055,14 @@ export async function startLocalServer(options?: {
           ? address.port
           : port;
       selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
+      // Chat routing indexes built a few seconds after start (the UI's first requests first),
+      // not on the user's first question (chat-warmup.ts).
+      if (!process.env.VITEST && process.env.LEX_CHAT_WARMUP !== "off") {
+        setTimeout(() => {
+          const ms = warmChatPaths(registry);
+          process.stderr.write(`LEX_CHAT_WARMUP:${ms}ms\n`);
+        }, 3_000).unref();
+      }
 
       resolve({
         host,

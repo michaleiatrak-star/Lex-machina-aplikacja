@@ -424,6 +424,7 @@ type OcrAccelStatus = {
     workers: number;
     pages?: number;
     wallSeconds?: number;
+    textModelResident?: boolean;
   } | null;
   error?: string;
 };
@@ -454,7 +455,9 @@ export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): stri
     return (
       `Ostatni OCR: ${run.pages} str. w ${number(run.wallSeconds)} s, ${number(run.wallSeconds / run.pages)} s/str. dokumentu` +
       (run.workers > 1 ? ` (${run.workers} procesy naraz, w każdym ${number(average)} s/str.)` : "") +
-      ` (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}${run.threads ? `, ${run.threads} wątków` : ""}.` +
+      ` (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}${run.threads ? `, ${run.threads} wątków` : ""}` +
+      (run.accel && run.textModelResident ? ", model tekstowy w pamięci karty" : "") +
+      "." +
       (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
     );
   }
