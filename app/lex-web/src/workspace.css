@@ -306,6 +306,67 @@
   font-size: 11px;
 }
 
+/* Files grouped by category: a header with the category's shared choice, then its files. */
+.workspace-categories {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.workspace-category-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--lm-l39);
+}
+
+.workspace-category-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lm-t7);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-category-toggle small {
+  color: var(--lm-t3);
+  font-weight: 400;
+}
+
+.workspace-category-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.workspace-category-actions select,
+.workspace-category-actions button {
+  width: auto;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 8px;
+  background: var(--lm-s2);
+  color: var(--lm-t7);
+  font: inherit;
+  font-size: 11px;
+}
+
+.workspace-item-actions .workspace-apply-all {
+  border-style: dashed;
+}
+
 .workspace-item-actions {
   display: flex;
   align-items: center;

@@ -88,6 +88,7 @@ import {
   processingModeUsesVision,
   type DocumentProcessingMode
 } from "./document-processing-mode.js";
+import { CASE_FILE_CATEGORIES, caseFileCategory, caseFileCategoryLabel, groupCaseFiles, type CaseFileCategory } from "./case-file-categories.js";
 
 const TEXT_EXTENSIONS = /\.(txt|md|markdown|json|xml|log)$/i;
 const DOCUMENT_TYPES = new Set([
@@ -183,7 +184,11 @@ function canRunPrivacyPipeline(
       item.mediaType ===
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
       item.mediaType ===
-        "application/vnd.ms-excel.sheet.macroenabled.12"
+        "application/vnd.ms-excel.sheet.macroenabled.12" ||
+      // Transcribed (recordings) or read as text (e-mail, RTF) by the runtime as well.
+      caseFileCategory(item) === "RECORDING" ||
+      item.mediaType === "message/rfc822" ||
+      item.mediaType === "application/rtf"
     )
   );
 }
@@ -235,6 +240,13 @@ function folderDepth(folder: WorkspaceFolder, all: WorkspaceFolder[]): number {
   }
   return depth;
 }
+
+// -1: the default of the local models panel; 0: estimated by the models; 2-12: given.
+const SPEAKER_CHOICES: ReadonlyArray<{ value: number; label: string }> = [
+  { value: -1, label: "Rozmówcy: jak w ustawieniach" },
+  { value: 0, label: "Rozmówcy: automatycznie" },
+  ...Array.from({ length: 11 }, (_, index) => ({ value: index + 2, label: `Rozmówcy: ${index + 2}` }))
+];
 
 type PrivacyPreviewQueueItem = {
   item: WorkspaceItem;
@@ -290,6 +302,11 @@ export function WorkspaceManager({
   const [modeByItem, setModeByItem] = useState<Record<string, DocumentProcessingMode>>({});
   const modeFor = (item: WorkspaceItem): DocumentProcessingMode =>
     modeByItem[item.itemId] ?? DEFAULT_DOCUMENT_PROCESSING_MODE;
+  // People speaking in a recording (0 = estimated by the models), chosen per file like the mode.
+  const [speakersByItem, setSpeakersByItem] = useState<Record<string, number>>({});
+  const speakersRef = useRef(speakersByItem);
+  speakersRef.current = speakersByItem;
+  const [collapsedCategories, setCollapsedCategories] = useState<Partial<Record<CaseFileCategory, boolean>>>({});
   const [localRuntime, setLocalRuntime] = useState<LocalModelsResponse["runtime"] | null>(null);
   const [localAiMessage, setLocalAiMessage] = useState("");
   // The processed file waiting for the user's confirmation in its preview; the next ones of
@@ -648,7 +665,11 @@ export function WorkspaceManager({
         setQueue((current) => updateEntry(current, next.itemId, { status: "READING" }));
         try {
           const review = await withItemProgress(next, (progressId) =>
-            processStoredCaseFile(runCase, next.itemId, undefined, progressId, { detect: false, background: true })
+            processStoredCaseFile(runCase, next.itemId, undefined, progressId, {
+              detect: false,
+              background: true,
+              ...(speakersRef.current[next.itemId] !== undefined ? { speakers: speakersRef.current[next.itemId]! } : {})
+            })
           );
           if (caseRef.current !== runCase) break;
           reviews.current.set(next.itemId, review);
@@ -933,6 +954,38 @@ export function WorkspaceManager({
     ]);
   // Shown files never processed: "Przetwórz wszystkie", each in its chosen mode.
   const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item) && !decided(item));
+  // Not processed yet and not chosen in the queue: its way can still be set.
+  const isPending = (item: WorkspaceItem) => canRunPrivacyPipeline(item) && !processingFor(item) && !decided(item);
+  // The other pending files of the case of the same category whose choice differs from this file's.
+  function othersLike(item: WorkspaceItem): WorkspaceItem[] {
+    const category = caseFileCategory(item);
+    return (workspace?.items ?? []).filter(
+      (other) =>
+        other.itemId !== item.itemId &&
+        isPending(other) &&
+        caseFileCategory(other) === category &&
+        (modeFor(other) !== modeFor(item) ||
+          (category === "RECORDING" && (speakersByItem[other.itemId] ?? -1) !== (speakersByItem[item.itemId] ?? -1)))
+    );
+  }
+  function applySpeakers(items: WorkspaceItem[], count: number): void {
+    setSpeakersByItem((current) => {
+      const next = { ...current };
+      for (const item of items) {
+        if (count < 0) delete next[item.itemId];
+        else next[item.itemId] = count;
+      }
+      return next;
+    });
+  }
+  function applyLike(item: WorkspaceItem): void {
+    const others = othersLike(item);
+    const mode = modeFor(item);
+    setModeByItem((current) => ({ ...current, ...Object.fromEntries(others.map((other) => [other.itemId, mode])) }));
+    if (caseFileCategory(item) === "RECORDING") applySpeakers(others, speakersByItem[item.itemId] ?? -1);
+    const label = DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === mode)?.label ?? mode;
+    setNotice(`„${label}” ustawiono także w ${others.length === 1 ? "1 pliku" : `${others.length} plikach`} kategorii „${caseFileCategoryLabel(caseFileCategory(item))}”.`);
+  }
 
   function knowledgeHitFor(
     item: WorkspaceItem
@@ -1186,7 +1239,7 @@ export function WorkspaceManager({
             </select>
           </label>
           <label className="workspace-filter">
-            <span>Typ</span>
+            <span>Kategoria</span>
             <select
               value={documentType}
               aria-label="Typ dokumentu"
@@ -1197,27 +1250,12 @@ export function WorkspaceManager({
                 )
               }
             >
-              <option value="ALL">
-                Wszystkie
-              </option>
-              <option value="PDF">
-                PDF
-              </option>
-              <option value="OFFICE">
-                Office / ODT
-              </option>
-              <option value="IMAGE">
-                Obrazy
-              </option>
-              <option value="TEXT">
-                Tekst
-              </option>
-              <option value="ARCHIVE">
-                Archiwa
-              </option>
-              <option value="TEMPLATE">
-                Wzory
-              </option>
+              <option value="ALL">Wszystkie</option>
+              {CASE_FILE_CATEGORIES.map((entry) => (
+                <option key={entry.category} value={entry.category}>
+                  {entry.label}
+                </option>
+              ))}
             </select>
           </label>
           {documentSearch.trim() ||
@@ -1403,260 +1441,351 @@ export function WorkspaceManager({
                 : "Ten folder jest pusty."}
             </p>
           ) : (
-            <ul className="workspace-file-list workspace-file-actions-list">
-              {visibleItems.map((item) => (
-                <li key={item.itemId}>
-                  <div>
-                    <strong title={item.filename}>{item.filename}</strong>
-                    <span title={item.mediaType}>
-                      {item.kind === "TEMPLATE" ? "Wzór" : "Dokument"} · {fileTypeLabel(item)} · {bytesLabel(item.bytes)}
-                    </span>
-                    {documentSearch.trim() ? (
-                      <>
-                        <small className="workspace-search-path">
-                          {itemFolderLabel(
-                            item
-                          )}
-                        </small>
-                        {knowledgeHitFor(
-                          item
-                        ) ? (
-                          <small className="workspace-search-snippet">
-                            s. {knowledgeHitFor(item)!.pageStart}
-                            {knowledgeHitFor(item)!.pageEnd !==
-                            knowledgeHitFor(item)!.pageStart
-                              ? `–${knowledgeHitFor(item)!.pageEnd}`
-                              : ""}
-                            {" · "}
-                            {knowledgeHitFor(item)!.text}
-                          </small>
-                        ) : null}
-                      </>
-                    ) : null}
-                    {item.kind === "UPLOAD" ? (
-                      <small className="workspace-processing-status">
-                        {processingFor(item) ? (
-                          processingFor(item)!.anonymized === false ? (
-                            <span className="anonymized-badge clear-text-badge" title="Przetworzony bez anonimizacji: tekst trafia do modeli w jawnej postaci">
-                              Tekst jawny (bez anonimizacji)
-                            </span>
-                          ) : (
-                            <span className="anonymized-badge" title="Dokument ma wersję zanonimizowaną i klucz anonimizacji">
-                              {processingFor(item)!.sharedKey ? "Zanonimizowany · klucz sprawy" : "Zanonimizowany · klucz osobny"}
-                            </span>
-                          )
-                        ) : null}
-                        {processingFor(item)?.reviewed === false ? (
-                          <span className="anonymized-badge clear-text-badge" title="Nie trafi do modelu spoza komputera, dopóki nie zatwierdzisz podglądu">
-                            Niezatwierdzony
-                          </span>
-                        ) : null}
-                        <span>
-                          {processingFor(item)
-                            ? processingFor(item)!.ocrPages > 0
-                              ? `OCR: ${processingFor(item)!.ocrPages} z ${processingFor(item)!.totalPages} stron`
-                              : `Tekst cyfrowy · ${processingFor(item)!.totalPages} ${processingFor(item)!.totalPages === 1 ? "strona" : "stron"}`
-                            : "Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”"}
-                        </span>
-                      </small>
-                    ) : null}
-                    {progressByItem[item.itemId] ? (
-                      <div className="workspace-progress" role="status" aria-live="polite">
-                        <progress max={100} value={progressPercent(progressByItem[item.itemId]!)} />
-                        <small>{progressLabel(progressByItem[item.itemId]!)}</small>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="workspace-item-actions">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void showPreview(
-                          item,
-                          knowledgeHitFor(
-                            item
-                          )?.pageStart
-                        )
-                      }
-                    >
-                      {knowledgeHitFor(item)
-                        ? `Podgląd s. ${knowledgeHitFor(item)!.pageStart}`
-                        : "Podgląd"}
-                    </button>
-                    {processingFor(item)?.reviewed === false ? (
+            <div className="workspace-categories">
+              {groupCaseFiles(visibleItems).map((group) => {
+                const collapsed = collapsedCategories[group.category] === true;
+                const pending = canWrite ? group.items.filter(isPending) : [];
+                const pendingModes = [...new Set(pending.map(modeFor))];
+                return (
+                  <section key={group.category} className="workspace-category" aria-label={group.label}>
+                    <header className="workspace-category-head">
                       <button
                         type="button"
-                        className="primary-button"
-                        disabled={busy}
-                        title="Dokument nie został jeszcze zatwierdzony po podglądzie i nie trafi do modelu spoza komputera"
-                        onClick={() => showAnonymized(item, "marked")}
+                        className="workspace-category-toggle"
+                        aria-expanded={!collapsed}
+                        onClick={() => setCollapsedCategories((current) => ({ ...current, [group.category]: !collapsed }))}
                       >
-                        Podgląd i zatwierdzenie
+                        <span aria-hidden="true">{collapsed ? "+" : "−"}</span> {group.label} <small>({group.items.length})</small>
                       </button>
-                    ) : null}
-                    {processingFor(item) && processingFor(item)!.anonymized !== false ? (
-                      <>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          title="Symbole zastępcze i dane, które zastępują (tylko na tym komputerze)"
-                          onClick={() => showAnonymized(item, "key")}
-                        >
-                          Klucz anonimizacji
-                        </button>
-                      </>
-                    ) : null}
-                    {canWrite &&
-                    item.kind === "UPLOAD" &&
-                    !processingFor(item) &&
-                    processedDocuments.length > 0 &&
-                    /\.(txt|md|markdown|csv|tsv|docx|odt|xlsx|xlsm)$/i.test(item.filename) ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        title="Plik z symbolami (np. odpowiedź zewnętrznego modelu): podstawia dane z klucza wybranego dokumentu"
-                        onClick={() =>
-                          setFileDeanonymize({ itemId: item.itemId, documentId: processedDocuments[0]!.documentId })
-                        }
-                      >
-                        Deanonimizuj plik
-                      </button>
-                    ) : null}
-                    {isDesktopShell() ? (
-                      <button type="button" disabled={busy} onClick={() => void openInSystem(item)}>
-                        Otwórz w systemie
-                      </button>
-                    ) : null}
-
-                    {canWrite && decided(item) ? (
-                      <span className="workspace-process" role="status">
-                        <small>Kolejka: {queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
-                        {queue.some((entry) => entry.itemId === item.itemId && entry.status === "QUEUED") ? (
-                          <button type="button" onClick={() => setQueue((current) => removeQueued(current, item.itemId))}>
-                            Usuń z kolejki
+                      {pending.length > 1 ? (
+                        <span className="workspace-category-actions">
+                          <select
+                            aria-label={`Sposób przetwarzania dla kategorii: ${group.label}`}
+                            value={pendingModes.length === 1 ? pendingModes[0] : ""}
+                            disabled={busy}
+                            title="Ten sam sposób przetwarzania dla wszystkich nieprzetworzonych plików tej kategorii"
+                            onChange={(event) => {
+                              const mode = event.target.value as DocumentProcessingMode;
+                              setModeByItem((current) => ({ ...current, ...Object.fromEntries(pending.map((item) => [item.itemId, mode])) }));
+                            }}
+                          >
+                            {pendingModes.length > 1 ? <option value="">Różne sposoby</option> : null}
+                            {DOCUMENT_PROCESSING_MODES.map((entry) => (
+                              <option key={entry.mode} value={entry.mode} title={entry.title}>
+                                {entry.label}
+                              </option>
+                            ))}
+                          </select>
+                          {group.category === "RECORDING" ? (
+                            <select
+                              aria-label={`Liczba rozmówców dla kategorii: ${group.label}`}
+                              value={(() => {
+                                const counts = [...new Set(pending.map((item) => speakersByItem[item.itemId] ?? -1))];
+                                return counts.length === 1 ? String(counts[0]) : "mixed";
+                              })()}
+                              disabled={busy}
+                              onChange={(event) => applySpeakers(pending, Number(event.target.value))}
+                            >
+                              <option value="mixed" disabled hidden>Różna liczba rozmówców</option>
+                              {SPEAKER_CHOICES.map((choice) => (
+                                <option key={choice.value} value={choice.value}>
+                                  {choice.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
+                          <button type="button" disabled={busy} onClick={() => void processAll(pending)}>
+                            {`Przetwórz kategorię (${pending.length})`}
                           </button>
-                        ) : null}
-                      </span>
-                    ) : canWrite && canRunPrivacyPipeline(item) ? (
-                      <span className="workspace-process">
-                        {inQueue(item) ? (
-                          <small role="status">{queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
-                        ) : null}
-                        <select
-                          aria-label={`Sposób przetwarzania: ${item.filename}`}
-                          value={modeFor(item)}
-                          disabled={busy}
-                          title={DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === modeFor(item))?.title}
-                          onChange={(event) =>
-                            setModeByItem((current) => ({
-                              ...current,
-                              [item.itemId]: event.target.value as DocumentProcessingMode
-                            }))
-                          }
-                        >
-                          {DOCUMENT_PROCESSING_MODES.map((entry) => (
-                            <option key={entry.mode} value={entry.mode} title={entry.title}>
-                              {entry.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            const mode = modeFor(item);
-                            if (
-                              processingModeKeepsClearText(mode) &&
-                              !window.confirm(
-                                `„${item.filename}” zostanie przetworzony bez anonimizacji. Wybrany do czatu trafi do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
-                              )
-                            ) {
-                              return;
-                            }
-                            // Read already (or first in the queue to read), then corrected right away.
-                            void processAll([item], true);
-                          }}
-                        >
-                          Przetwórz
-                        </button>
-                      </span>
-                    ) : null}
-                    {canWrite ? (
-                      <div className="workspace-item-end">
-                      <label className="workspace-move" title="Przenieś do folderu">
-                        Folder
-                        <select
-                          value={workspace?.itemLocations[item.itemId] ?? ""}
-                          disabled={busy}
-                          aria-label={`Folder pliku ${item.filename}`}
-                          onChange={(event) => void run(async () => {
-                            await moveWorkspaceItem(caseId, item.itemId, event.target.value || null);
-                          })}
-                        >
-                          <option value="">Główny ({rootFolderName})</option>
-                          {folders.map((folder) => (
-                            <option key={folder.folderId} value={folder.folderId}>
-                              {folderPath(folder, folders)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="workspace-delete"
-                        disabled={busy}
-                        onClick={() => void run(async () => {
-                          if (!window.confirm(`Usunąć plik „${item.filename}”?`)) return;
-                          await deleteWorkspaceItem(caseId, item.itemId);
-                          if (preview?.item.itemId === item.itemId) setPreview(null);
-                        })}
-                      >
-                        Usuń
-                      </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  {fileDeanonymize?.itemId === item.itemId ? (
-                    <div className="artifact-deanonymize">
-                      <label>
-                        Klucz dokumentu źródłowego{" "}
-                        <select
-                          value={fileDeanonymize.documentId}
-                          onChange={(event) =>
-                            setFileDeanonymize({ itemId: item.itemId, documentId: event.target.value })
-                          }
-                        >
-                          {processedDocuments.map((entry) => (
-                            <option key={entry.documentId} value={entry.documentId}>{entry.filename}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="chat-primary-action"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            const result = await deanonymizeUpload(caseId, item.itemId, fileDeanonymize.documentId);
-                            setFileDeanonymize(null);
-                            setNotice(
-                              `Utworzono „${result.upload.filename}”: przywrócono ${result.restored} wartości.` +
-                                (result.unresolved.length
-                                  ? ` Symbole spoza klucza zostały bez zmian: ${result.unresolved.join(", ")}.`
-                                  : "")
-                            );
-                          })
-                        }
-                      >
-                        Deanonimizuj
-                      </button>
-                      <button type="button" onClick={() => setFileDeanonymize(null)}>Anuluj</button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                        </span>
+                      ) : null}
+                    </header>
+                    {collapsed ? null : (
+                      <ul className="workspace-file-list workspace-file-actions-list">
+                        {group.items.map((item) => (
+                        <li key={item.itemId}>
+                          <div>
+                            <strong title={item.filename}>{item.filename}</strong>
+                            <span title={item.mediaType}>
+                              {item.kind === "TEMPLATE" ? "Wzór" : "Dokument"} · {fileTypeLabel(item)} · {bytesLabel(item.bytes)}
+                            </span>
+                            {documentSearch.trim() ? (
+                              <>
+                                <small className="workspace-search-path">
+                                  {itemFolderLabel(
+                                    item
+                                  )}
+                                </small>
+                                {knowledgeHitFor(
+                                  item
+                                ) ? (
+                                  <small className="workspace-search-snippet">
+                                    s. {knowledgeHitFor(item)!.pageStart}
+                                    {knowledgeHitFor(item)!.pageEnd !==
+                                    knowledgeHitFor(item)!.pageStart
+                                      ? `–${knowledgeHitFor(item)!.pageEnd}`
+                                      : ""}
+                                    {" · "}
+                                    {knowledgeHitFor(item)!.text}
+                                  </small>
+                                ) : null}
+                              </>
+                            ) : null}
+                            {item.kind === "UPLOAD" ? (
+                              <small className="workspace-processing-status">
+                                {processingFor(item) ? (
+                                  processingFor(item)!.anonymized === false ? (
+                                    <span className="anonymized-badge clear-text-badge" title="Przetworzony bez anonimizacji: tekst trafia do modeli w jawnej postaci">
+                                      Tekst jawny (bez anonimizacji)
+                                    </span>
+                                  ) : (
+                                    <span className="anonymized-badge" title="Dokument ma wersję zanonimizowaną i klucz anonimizacji">
+                                      {processingFor(item)!.sharedKey ? "Zanonimizowany · klucz sprawy" : "Zanonimizowany · klucz osobny"}
+                                    </span>
+                                  )
+                                ) : null}
+                                {processingFor(item)?.reviewed === false ? (
+                                  <span className="anonymized-badge clear-text-badge" title="Nie trafi do modelu spoza komputera, dopóki nie zatwierdzisz podglądu">
+                                    Niezatwierdzony
+                                  </span>
+                                ) : null}
+                                <span>
+                                  {processingFor(item)
+                                    ? processingFor(item)!.ocrPages > 0
+                                      ? `OCR: ${processingFor(item)!.ocrPages} z ${processingFor(item)!.totalPages} stron`
+                                      : `Tekst cyfrowy · ${processingFor(item)!.totalPages} ${processingFor(item)!.totalPages === 1 ? "strona" : "stron"}`
+                                    : "Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”"}
+                                </span>
+                              </small>
+                            ) : null}
+                            {progressByItem[item.itemId] ? (
+                              <div className="workspace-progress" role="status" aria-live="polite">
+                                <progress max={100} value={progressPercent(progressByItem[item.itemId]!)} />
+                                <small>{progressLabel(progressByItem[item.itemId]!)}</small>
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="workspace-item-actions">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void showPreview(
+                                  item,
+                                  knowledgeHitFor(
+                                    item
+                                  )?.pageStart
+                                )
+                              }
+                            >
+                              {knowledgeHitFor(item)
+                                ? `Podgląd s. ${knowledgeHitFor(item)!.pageStart}`
+                                : "Podgląd"}
+                            </button>
+                            {processingFor(item)?.reviewed === false ? (
+                              <button
+                                type="button"
+                                className="primary-button"
+                                disabled={busy}
+                                title="Dokument nie został jeszcze zatwierdzony po podglądzie i nie trafi do modelu spoza komputera"
+                                onClick={() => showAnonymized(item, "marked")}
+                              >
+                                Podgląd i zatwierdzenie
+                              </button>
+                            ) : null}
+                            {processingFor(item) && processingFor(item)!.anonymized !== false ? (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  title="Symbole zastępcze i dane, które zastępują (tylko na tym komputerze)"
+                                  onClick={() => showAnonymized(item, "key")}
+                                >
+                                  Klucz anonimizacji
+                                </button>
+                              </>
+                            ) : null}
+                            {canWrite &&
+                            item.kind === "UPLOAD" &&
+                            !processingFor(item) &&
+                            processedDocuments.length > 0 &&
+                            /\.(txt|md|markdown|csv|tsv|docx|odt|xlsx|xlsm)$/i.test(item.filename) ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                title="Plik z symbolami (np. odpowiedź zewnętrznego modelu): podstawia dane z klucza wybranego dokumentu"
+                                onClick={() =>
+                                  setFileDeanonymize({ itemId: item.itemId, documentId: processedDocuments[0]!.documentId })
+                                }
+                              >
+                                Deanonimizuj plik
+                              </button>
+                            ) : null}
+                            {isDesktopShell() ? (
+                              <button type="button" disabled={busy} onClick={() => void openInSystem(item)}>
+                                Otwórz w systemie
+                              </button>
+                            ) : null}
+
+                            {canWrite && decided(item) ? (
+                              <span className="workspace-process" role="status">
+                                <small>Kolejka: {queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
+                                {queue.some((entry) => entry.itemId === item.itemId && entry.status === "QUEUED") ? (
+                                  <button type="button" onClick={() => setQueue((current) => removeQueued(current, item.itemId))}>
+                                    Usuń z kolejki
+                                  </button>
+                                ) : null}
+                              </span>
+                            ) : canWrite && canRunPrivacyPipeline(item) ? (
+                              <span className="workspace-process">
+                                {inQueue(item) ? (
+                                  <small role="status">{queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
+                                ) : null}
+                                <select
+                                  aria-label={`Sposób przetwarzania: ${item.filename}`}
+                                  value={modeFor(item)}
+                                  disabled={busy}
+                                  title={DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === modeFor(item))?.title}
+                                  onChange={(event) =>
+                                    setModeByItem((current) => ({
+                                      ...current,
+                                      [item.itemId]: event.target.value as DocumentProcessingMode
+                                    }))
+                                  }
+                                >
+                                  {DOCUMENT_PROCESSING_MODES.map((entry) => (
+                                    <option key={entry.mode} value={entry.mode} title={entry.title}>
+                                      {entry.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                {caseFileCategory(item) === "RECORDING" ? (
+                                  <select
+                                    aria-label={`Liczba rozmówców: ${item.filename}`}
+                                    value={String(speakersByItem[item.itemId] ?? -1)}
+                                    disabled={busy}
+                                    title="Podana liczba osób daje dokładniejszy podział na rozmówców"
+                                    onChange={(event) => applySpeakers([item], Number(event.target.value))}
+                                  >
+                                    {SPEAKER_CHOICES.map((choice) => (
+                                      <option key={choice.value} value={choice.value}>
+                                        {choice.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : null}
+                                {othersLike(item).length ? (
+                                  <button
+                                    type="button"
+                                    className="workspace-apply-all"
+                                    disabled={busy}
+                                    title={`Ustawia ten sam sposób przetwarzania${caseFileCategory(item) === "RECORDING" ? " i liczbę rozmówców" : ""} we wszystkich nieprzetworzonych plikach kategorii „${caseFileCategoryLabel(caseFileCategory(item))}”`}
+                                    onClick={() => applyLike(item)}
+                                  >
+                                    {`Zastosuj do wszystkich tego typu (${othersLike(item).length})`}
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    const mode = modeFor(item);
+                                    if (
+                                      processingModeKeepsClearText(mode) &&
+                                      !window.confirm(
+                                        `„${item.filename}” zostanie przetworzony bez anonimizacji. Wybrany do czatu trafi do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    // Read already (or first in the queue to read), then corrected right away.
+                                    void processAll([item], true);
+                                  }}
+                                >
+                                  Przetwórz
+                                </button>
+                              </span>
+                            ) : null}
+                            {canWrite ? (
+                              <div className="workspace-item-end">
+                              <label className="workspace-move" title="Przenieś do folderu">
+                                Folder
+                                <select
+                                  value={workspace?.itemLocations[item.itemId] ?? ""}
+                                  disabled={busy}
+                                  aria-label={`Folder pliku ${item.filename}`}
+                                  onChange={(event) => void run(async () => {
+                                    await moveWorkspaceItem(caseId, item.itemId, event.target.value || null);
+                                  })}
+                                >
+                                  <option value="">Główny ({rootFolderName})</option>
+                                  {folders.map((folder) => (
+                                    <option key={folder.folderId} value={folder.folderId}>
+                                      {folderPath(folder, folders)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                className="workspace-delete"
+                                disabled={busy}
+                                onClick={() => void run(async () => {
+                                  if (!window.confirm(`Usunąć plik „${item.filename}”?`)) return;
+                                  await deleteWorkspaceItem(caseId, item.itemId);
+                                  if (preview?.item.itemId === item.itemId) setPreview(null);
+                                })}
+                              >
+                                Usuń
+                              </button>
+                              </div>
+                            ) : null}
+                          </div>
+                          {fileDeanonymize?.itemId === item.itemId ? (
+                            <div className="artifact-deanonymize">
+                              <label>
+                                Klucz dokumentu źródłowego{" "}
+                                <select
+                                  value={fileDeanonymize.documentId}
+                                  onChange={(event) =>
+                                    setFileDeanonymize({ itemId: item.itemId, documentId: event.target.value })
+                                  }
+                                >
+                                  {processedDocuments.map((entry) => (
+                                    <option key={entry.documentId} value={entry.documentId}>{entry.filename}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                className="chat-primary-action"
+                                disabled={busy}
+                                onClick={() =>
+                                  void run(async () => {
+                                    const result = await deanonymizeUpload(caseId, item.itemId, fileDeanonymize.documentId);
+                                    setFileDeanonymize(null);
+                                    setNotice(
+                                      `Utworzono „${result.upload.filename}”: przywrócono ${result.restored} wartości.` +
+                                        (result.unresolved.length
+                                          ? ` Symbole spoza klucza zostały bez zmian: ${result.unresolved.join(", ")}.`
+                                          : "")
+                                    );
+                                  })
+                                }
+                              >
+                                Deanonimizuj
+                              </button>
+                              <button type="button" onClick={() => setFileDeanonymize(null)}>Anuluj</button>
+                            </div>
+                          ) : null}
+                        </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
           )}
         </section>
       </div>
