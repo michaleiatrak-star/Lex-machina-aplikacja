@@ -2009,14 +2009,17 @@ function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean
 export function anthropicSystem(model: LanguageModel, params: ProviderStreamParams): string | SystemModelMessage[] {
   const split = params.systemPromptCachePrefix ?? 0;
   if (!isAnthropicModel(model) || split < 4_096 || split >= params.systemPrompt.length) return params.systemPrompt;
+  const cacheControl = { type: "ephemeral" as const, ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) };
+  // The part every domain shares, then the domain's own stable part (systemPromptSharedPrefix):
+  // three system breakpoints and the moving one of the conversation, Anthropic's limit of four.
+  const shared = params.systemPromptSharedPrefix ?? 0;
+  const bounds = shared >= 4_096 && shared < split ? [0, shared, split] : [0, split];
   return [
-    {
-      role: "system",
-      content: params.systemPrompt.slice(0, split),
-      providerOptions: {
-        anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) } }
-      }
-    },
+    ...bounds.slice(0, -1).map((start, index) => ({
+      role: "system" as const,
+      content: params.systemPrompt.slice(start, bounds[index + 1]),
+      providerOptions: { anthropic: { cacheControl } }
+    })),
     // A second breakpoint at the end of the system prompt: a correcting round over the same
     // prompt (tools not callable, so its messages are cached apart) reads all of it. Five
     // minutes: the case's part serves this turn; a 1-hour write costs twice the input price.

@@ -50,6 +50,7 @@ import {
   lexMcpPackagePath
 } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
+import { warmChatPaths } from "../chat-warmup.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import {
   EnvironmentCredentialResolver,
@@ -1054,6 +1055,14 @@ export async function startLocalServer(options?: {
           ? address.port
           : port;
       selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
+      // Chat routing indexes built a few seconds after start (the UI's first requests first),
+      // not on the user's first question (chat-warmup.ts).
+      if (!process.env.VITEST && process.env.LEX_CHAT_WARMUP !== "off") {
+        setTimeout(() => {
+          const ms = warmChatPaths(registry);
+          process.stderr.write(`LEX_CHAT_WARMUP:${ms}ms\n`);
+        }, 3_000).unref();
+      }
 
       resolve({
         host,
