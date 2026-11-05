@@ -18,6 +18,9 @@ const dataRoot = fs.mkdtempSync(
   )
 );
 process.env.LEX_DATA_DIR = dataRoot;
+// The API is checked here, not the ELI crawl of every mapped act the runtime starts in the
+// background (with its pauses it kept this check running for 40 minutes after it passed).
+process.env.LEX_CORE_LAW_REFRESH ??= "off";
 
 const server = await startLocalServer({
   host: "127.0.0.1",
