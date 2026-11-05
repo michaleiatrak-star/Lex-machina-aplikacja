@@ -112,6 +112,13 @@ jobs:
           "$server" --version
           "$server" --list-devices || true
 
+      - name: Transcription on the Apple GPU (MLX) is installed
+        run: |
+          set -euo pipefail
+          py="$HOME/Library/Application Support/LexMachina/runtime/python/bin/python3"
+          # The packages the worker uses on Apple Silicon; the GPU itself is measured on the user's Mac.
+          "$py" -c 'import mlx.core as mx, mlx_whisper, importlib.metadata as m; print("mlx", m.version("mlx"), "mlx-whisper", m.version("mlx-whisper"), "metal", mx.metal.is_available())'
+
       - name: Launch the installed app (it must start its runtime)
         run: |
           set -euo pipefail

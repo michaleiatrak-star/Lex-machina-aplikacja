@@ -25,6 +25,7 @@ computer showed it faster with the same result; the processor otherwise and when
 import argparse
 import json
 import os
+import platform
 import sys
 import time
 from pathlib import Path
@@ -113,6 +114,113 @@ def run(model_dir: Path, audio: np.ndarray, language: str, device: str):
     return words, info
 
 
+class MlxInfo:
+    def __init__(self, duration: float, language: str):
+        self.duration = duration
+        self.language = language
+
+
+def mlx_usable(mlx_dir: str) -> bool:
+    """macOS on Apple Silicon with the MLX model (config.json, weights.safetensors) and package."""
+    if not mlx_dir or sys.platform != "darwin" or platform.machine() != "arm64":
+        return False
+    folder = Path(mlx_dir)
+    if not ((folder / "config.json").is_file() and (folder / "weights.safetensors").is_file()):
+        return False
+    try:
+        import mlx_whisper  # noqa: F401
+    except Exception:  # noqa: BLE001
+        return False
+    return True
+
+
+def run_mlx(mlx_dir: str, audio: np.ndarray, language: str):
+    """The same words with times as run(), on the Apple GPU (mlx-whisper, large-v3-turbo in MLX)."""
+    import mlx_whisper
+
+    total = len(audio) / SAMPLE_RATE
+    result = mlx_whisper.transcribe(
+        audio.astype(np.float32),
+        path_or_hf_repo=str(mlx_dir),
+        language=language,
+        initial_prompt=INITIAL_PROMPT,
+        word_timestamps=True,
+        condition_on_previous_text=False,
+        verbose=None,
+    )
+    words = []
+    for segment in result.get("segments", []):
+        seg_words = segment.get("words") or []
+        if seg_words:
+            words.extend((float(w["start"]), float(w["end"]), str(w["word"])) for w in seg_words if str(w["word"]).strip())
+        elif str(segment.get("text", "")).strip():
+            words.append((float(segment["start"]), float(segment["end"]), str(segment["text"])))
+        print(f"LEX_STT_PROGRESS {int(segment.get('end', 0))} {int(total)}", file=sys.stderr, flush=True)
+    return words, MlxInfo(total, str(result.get("language") or language))
+
+
+MLX_RECORD = "card.json"
+MLX_BENCH_SECONDS = 60
+
+
+def same_words(a, b) -> float:
+    import difflib
+
+    left = [w[2].strip().lower().strip(".,?!;:") for w in a]
+    right = [w[2].strip().lower().strip(".,?!;:") for w in b]
+    if not left and not right:
+        return 1.0
+    return difflib.SequenceMatcher(None, left, right, autojunk=False).ratio()
+
+
+def mlx_decision(audio: np.ndarray, mlx_dir: str, model_dir: Path, language: str):
+    """Whether the Apple GPU transcribes: measured once per computer on the first minute of a
+    recording (GPU and processor), kept in the MLX model folder. The GPU stays when it takes at
+    most CARD_MIN_GAIN of the processor's time and the words match at least MLX_MIN_SAME.
+    None: a recording too short to measure (the processor this time)."""
+    record = Path(mlx_dir) / MLX_RECORD
+    try:
+        import importlib.metadata as metadata
+
+        version = metadata.version("mlx-whisper")
+    except Exception:  # noqa: BLE001
+        version = ""
+    try:
+        saved = json.loads(record.read_text(encoding="utf-8"))
+        if saved.get("mlxWhisper") == version and isinstance(saved.get("accepted"), bool):
+            return saved, False
+    except (OSError, ValueError):
+        pass
+    seconds = min(len(audio) / SAMPLE_RATE, MLX_BENCH_SECONDS)
+    if seconds < BENCH_MIN_SECONDS:
+        return None, False
+    sample = audio[: int(seconds * SAMPLE_RATE)]
+    result = {"mlxWhisper": version}
+    try:
+        run_mlx(mlx_dir, sample[: SAMPLE_RATE * 5], language)  # loads the model; not counted
+        started = time.time()
+        gpu, _ = run_mlx(mlx_dir, sample, language)
+        result["gpuSeconds"] = round(time.time() - started, 2)
+    except Exception as error:  # noqa: BLE001
+        result.update(accepted=False, error=f"{type(error).__name__}:{str(error)[:200]}")
+        gpu = None
+    started = time.time()
+    cpu, _ = run(model_dir, sample, language, "cpu")
+    result["cpuSeconds"] = round(time.time() - started, 2)
+    if gpu is not None:
+        result["sameWords"] = round(same_words(cpu, gpu), 3)
+        result["accepted"] = result["gpuSeconds"] <= CARD_MIN_GAIN * result["cpuSeconds"] and result["sameWords"] >= MLX_MIN_SAME
+    result["measuredSeconds"] = round(seconds, 1)
+    try:
+        tmp = record.with_suffix(".tmp")
+        tmp.write_text(json.dumps(result), encoding="utf-8")
+        tmp.replace(record)
+    except OSError:
+        pass
+    print("LEX_STT_MLX_BENCH " + json.dumps(result), file=sys.stderr, flush=True)
+    return result, True
+
+
 def diarize_provider() -> tuple[str, bool]:
     """The graphics card as for OCR: DirectML on Windows (any DirectX 12 card), CoreML on macOS
     (Apple GPU and Neural Engine); both are built into the sherpa-onnx wheels. LEX_STT_DIARIZE_PROVIDER:
@@ -135,6 +243,8 @@ CARD_MIN_SAME = 0.95
 BENCH_SECONDS = 120
 BENCH_MIN_SECONDS = 30
 CARD_RECORD = "card.json"
+# Words (order kept) the GPU must read as the processor does; two Whisper runs differ a little.
+MLX_MIN_SAME = 0.9
 
 
 def frame_labels(turns, frames: int, step: float = 0.1):
@@ -325,6 +435,8 @@ def main() -> None:
     parser.add_argument("--diarize-dir", default="")
     parser.add_argument("--speakers", type=int, default=0)
     parser.add_argument("--diarize-threshold", type=float, default=0.7)
+    # macOS (Apple Silicon): large-v3-turbo in MLX for the GPU, used once measured faster.
+    parser.add_argument("--mlx-dir", default="")
     args = parser.parse_args()
 
     model_dir = Path(args.model_dir)
@@ -344,19 +456,34 @@ def main() -> None:
         cuda_error = cuda_ready(os.environ.get("LEX_STT_CUDA_DIR", "").strip())
         if cuda_error:
             device = "cpu"
+    mlx_stats = None
+    if device == "cpu" and os.environ.get("LEX_STT_MLX", "auto").strip().lower() != "off" and mlx_usable(args.mlx_dir):
+        decision, fresh = mlx_decision(audio, args.mlx_dir, model_dir, args.language)
+        mlx_stats = {"measurement": decision} if fresh else {}
+        if decision and decision.get("accepted"):
+            device = "mlx"
     started = time.time()
     try:
-        words, info = run(model_dir, audio, args.language, device)
+        words, info = run_mlx(args.mlx_dir, audio, args.language) if device == "mlx" else run(model_dir, audio, args.language, device)
     except Exception as error:  # noqa: BLE001
-        if device != "cuda":
+        if device == "mlx":
+            # The GPU failed: the whole recording on the processor, so the text never mixes the two.
+            if mlx_stats is not None:
+                mlx_stats["error"] = f"{type(error).__name__}:{str(error)[:200]}"
+            print(f"LEX_STT_MLX_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
+            device = "cpu"
+            started = time.time()
+            words, info = run(model_dir, audio, args.language, device)
+        elif device != "cuda":
             raise
-        # The card failed (cuDNN or cuBLAS missing, driver, memory): the whole recording again
-        # on the processor, so the text never mixes the two.
-        cuda_error = f"{type(error).__name__}:{str(error)[:200]}"
-        print(f"LEX_STT_CUDA_FAILED:{cuda_error}", file=sys.stderr, flush=True)
-        device = "cpu"
-        started = time.time()
-        words, info = run(model_dir, audio, args.language, device)
+        else:
+            # The card failed (cuDNN or cuBLAS missing, driver, memory): the whole recording again
+            # on the processor, so the text never mixes the two.
+            cuda_error = f"{type(error).__name__}:{str(error)[:200]}"
+            print(f"LEX_STT_CUDA_FAILED:{cuda_error}", file=sys.stderr, flush=True)
+            device = "cpu"
+            started = time.time()
+            words, info = run(model_dir, audio, args.language, device)
     seconds = round(time.time() - started, 1)
     turns = []
     diarize_stats = None
@@ -394,6 +521,8 @@ def main() -> None:
     if cuda_error:
         stats["cudaError"] = cuda_error
     stats["batched"] = batched_enabled()
+    if mlx_stats is not None:
+        stats["mlx"] = mlx_stats
     if diarize_stats is not None:
         stats["diarize"] = diarize_stats
     print("LEX_STT_STATS " + json.dumps(stats), file=sys.stderr, flush=True)

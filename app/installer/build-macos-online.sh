@@ -62,9 +62,13 @@ actual="$(shasum -a 256 "$PAYLOAD/corpus/audyt-systemu-v4/mcp-servers/dist/lex-m
 cp "$REPO/LICENSE" "$PAYLOAD/LICENSE.txt"
 cp "$REPO/POLITYKA-PRYWATNOSCI.md" "$PAYLOAD/POLITYKA-PRYWATNOSCI.md"
 cp "$INSTALLER/macos-release-source.json" "$PAYLOAD/release-source.json"
-cp "$INSTALLER/windows-release-requirements.txt" "$PAYLOAD/release-requirements.txt"
+cp "$INSTALLER/macos-release-requirements.txt" "$PAYLOAD/release-requirements.txt"
 mkdir -p "$PAYLOAD/bootstrap"
-for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-release-models.py verify-python-package-set.py; do
+# llama-*: the standalone llama.cpp server with tools (start-llama-native-agent.sh, written when
+# a local model is installed).
+for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-release-models.py verify-python-package-set.py \
+  llama-web-mcp.py llama-legal-skills-mcp.py llama-local-documents-mcp.py llama-native-system-message.txt \
+  mistral-nemo-web-grounded.jinja bielik-web-grounded.jinja; do
   cp "$INSTALLER/$file" "$PAYLOAD/bootstrap/$file"
 done
 chmod +x "$PAYLOAD/bootstrap/macos-online-bootstrap.sh"

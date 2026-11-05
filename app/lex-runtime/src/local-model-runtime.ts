@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { provisionLocalAiMacos } from "./local-ai-provision-macos.js";
+import { writeNativeAgentMacos } from "./llama-native-macos.js";
 import type {
   ModelPackEntry
 } from "./model-pack-verifier.js";
@@ -4223,6 +4224,22 @@ export class LocalModelRuntime {
           this.provisioningProgress = { ...progress, updatedAt: new Date().toISOString() };
         }
       });
+      // The standalone llama.cpp server with tools (start-llama-native-agent.sh), as on Windows;
+      // the application does not need it, so a missing piece is reported, not fatal.
+      try {
+        const paddle = process.env.LEX_PADDLE_MODEL_DIR?.trim();
+        const python = process.env.LEX_OCR_PYTHON?.trim();
+        if (!paddle || !python) throw new Error("LLAMA_NATIVE_COMPONENTS_UNKNOWN");
+        writeNativeAgentMacos({
+          runtimeRoot: this.runtimeRoot,
+          localRoot: this.rootDir,
+          python,
+          node: process.execPath,
+          modelsRoot: path.resolve(paddle, "..", "..")
+        });
+      } catch (error) {
+        process.stderr.write(`LLAMA_NATIVE_AGENT_NOT_CONFIGURED:${error instanceof Error ? error.message : String(error)}\n`);
+      }
       return;
     }
     if (!fs.existsSync(script)) {

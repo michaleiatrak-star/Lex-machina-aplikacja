@@ -807,6 +807,8 @@ type TranscriptionStatus = {
   error?: string;
   // Who speaks when (older runtimes do not send it); count 0 = estimated.
   speakers?: { installed: boolean; bytes: number; count?: number };
+  // Mac with Apple Silicon: the copy of the model for the GPU (null elsewhere).
+  gpu?: { installed: boolean; bytes: number } | null;
 };
 
 /**
@@ -892,6 +894,14 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
                 : `modele (${Math.round(status.speakers.bytes / 1_000_000)} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.`}
             </small>
           ) : null}
+          {status.gpu ? (
+            <small>
+              Karta graficzna Apple:{" "}
+              {status.gpu.installed
+                ? "model gotowy; przy pierwszym nagraniu aplikacja zmierzy, czy karta jest szybsza od procesora, i wtedy jej użyje."
+                : `model (${Math.round(status.gpu.bytes / 1_000_000)} MB) pobierze się sam w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+            </small>
+          ) : null}
           {status.speakers?.installed && admin ? (
             <label className="local-ai-inline-select">
               Liczba rozmówców w nagraniach
@@ -917,7 +927,7 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
         <div className="local-ai-actions">
           <button
             type="button"
-            disabled={(status.installed && (status.speakers?.installed ?? true)) || status.state === "DOWNLOADING"}
+            disabled={(status.installed && (status.speakers?.installed ?? true) && (status.gpu?.installed ?? true)) || status.state === "DOWNLOADING"}
             onClick={() => void act("install")}
           >
             Pobierz model transkrypcji

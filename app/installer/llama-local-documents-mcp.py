@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
-from ctypes import wintypes
 import hashlib
 import json
 import os
@@ -122,11 +121,14 @@ def _dedupe_spans(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(accepted, key=lambda span: span["start"])
 
 
-class DATA_BLOB(ctypes.Structure):
-    _fields_ = [
-        ("cbData", wintypes.DWORD),
-        ("pbData", ctypes.POINTER(ctypes.c_byte)),
-    ]
+if os.name == "nt":
+    from ctypes import wintypes
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [
+            ("cbData", wintypes.DWORD),
+            ("pbData", ctypes.POINTER(ctypes.c_byte)),
+        ]
 
 
 def _blob(data: bytes) -> tuple[DATA_BLOB, Any]:
@@ -184,6 +186,52 @@ def _dpapi_unprotect(data: bytes) -> bytes:
         if description:
             kernel32.LocalFree(description)
         del backing
+
+
+# macOS: the vault encrypted with AES-256-GCM; its key is a random secret kept in the user's login
+# keychain (the security tool), never on disk next to the vaults.
+KEYCHAIN_SERVICE = "LexMachina llama native privacy vault"
+KEYCHAIN_ACCOUNT = "vault-key"
+
+
+def _keychain_key() -> bytes:
+    found = subprocess.run(
+        ["/usr/bin/security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
+        capture_output=True,
+        text=True,
+    )
+    if found.returncode == 0 and found.stdout.strip():
+        return base64.b64decode(found.stdout.strip())
+    key = os.urandom(32)
+    added = subprocess.run(
+        ["/usr/bin/security", "add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w", base64.b64encode(key).decode("ascii"), "-U"],
+        capture_output=True,
+        text=True,
+    )
+    if added.returncode != 0:
+        raise RuntimeError("PRIVACY_KEYCHAIN_UNAVAILABLE")
+    return key
+
+
+def _protect(data: bytes) -> bytes:
+    if os.name == "nt":
+        return _dpapi_protect(data)
+    if sys.platform != "darwin":
+        raise RuntimeError("PRIVACY_VAULT_PLATFORM_UNSUPPORTED")
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    nonce = os.urandom(12)
+    return b"LXV1" + nonce + AESGCM(_keychain_key()).encrypt(nonce, data, b"lex-vault")
+
+
+def _unprotect(data: bytes) -> bytes:
+    if os.name == "nt":
+        return _dpapi_unprotect(data)
+    if sys.platform != "darwin" or not data.startswith(b"LXV1"):
+        raise RuntimeError("PRIVACY_VAULT_PLATFORM_UNSUPPORTED")
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    return AESGCM(_keychain_key()).decrypt(data[4:16], data[16:], b"lex-vault")
 
 
 class Morphology:
@@ -313,7 +361,7 @@ class VaultStore:
     def _path(self, vault_id: str) -> Path:
         if not re.fullmatch(r"vault_[a-f0-9]{32}", vault_id):
             raise ValueError("PRIVACY_VAULT_ID_INVALID")
-        return self.root / f"{vault_id}.dpapi"
+        return self.root / f"{vault_id}.{'dpapi' if os.name == 'nt' else 'vault'}"
 
     def create(self) -> dict[str, Any]:
         vault = {
@@ -330,7 +378,7 @@ class VaultStore:
         path = self._path(vault_id)
         if not path.is_file():
             raise ValueError("PRIVACY_VAULT_NOT_FOUND")
-        raw = _dpapi_unprotect(path.read_bytes())
+        raw = _unprotect(path.read_bytes())
         payload = json.loads(raw.decode("utf-8"))
         if payload.get("schemaVersion") != 1 or payload.get("vaultId") != vault_id:
             raise ValueError("PRIVACY_VAULT_INVALID")
@@ -339,7 +387,7 @@ class VaultStore:
     def save(self, vault: dict[str, Any]) -> None:
         path = self._path(str(vault["vaultId"]))
         plaintext = _json_dumps(vault).encode("utf-8")
-        protected = _dpapi_protect(plaintext)
+        protected = _protect(plaintext)
         temp = path.with_suffix(".partial")
         temp.write_bytes(protected)
         os.replace(temp, path)
@@ -368,13 +416,16 @@ class VaultStore:
 
 
 class LocalDocumentMcp:
-    def __init__(self, runtime_root: Path, vault_root: Path) -> None:
+    def __init__(self, runtime_root: Path, vault_root: Path, models_root: Path | None = None, python: Path | None = None) -> None:
         self.runtime_root = runtime_root.resolve()
-        self.python = self.runtime_root / "python" / "python.exe"
+        # Windows: Python and the models in the runtime folder; macOS: in the components folder
+        # outside the application (--models-root, --python).
+        self.python = python or self.runtime_root / "python" / "python.exe"
         self.ocr_worker = self.runtime_root / "ocr" / "paddle_worker.py"
         self.ner_worker = self.runtime_root / "privacy" / "stanza_ner_worker.py"
-        self.paddle_models = self.runtime_root / "models" / "paddle" / "official_models"
-        self.stanza_models = self.runtime_root / "models" / "stanza"
+        models = models_root or self.runtime_root / "models"
+        self.paddle_models = models / "paddle" / "official_models"
+        self.stanza_models = models / "stanza"
         for path, error in (
             (self.python, "LOCAL_DOCS_PYTHON_MISSING"),
             (self.ocr_worker, "LOCAL_DOCS_OCR_WORKER_MISSING"),
@@ -928,13 +979,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", required=True)
     parser.add_argument("--vault-root")
+    parser.add_argument("--models-root")
+    parser.add_argument("--python")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     runtime_root = Path(args.runtime_root).resolve()
     if args.self_test:
         return self_test(runtime_root)
     vault_root = Path(args.vault_root).resolve() if args.vault_root else Path(os.environ["LOCALAPPDATA"]) / "LexMachina" / "local-ai" / "privacy-vaults"
-    runtime = LocalDocumentMcp(runtime_root, vault_root)
+    runtime = LocalDocumentMcp(
+        runtime_root,
+        vault_root,
+        Path(args.models_root).resolve() if args.models_root else None,
+        Path(args.python) if args.python else None,
+    )
     return serve(runtime)
 
 
