@@ -3697,3 +3697,22 @@ mark.restored {
 .wokanda-group summary {
   cursor: pointer;
 }
+
+.case-signature-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(var(--lm-o5-rgb) / 0.25);
+  border-radius: 8px;
+}
+
+.case-signature-fields label {
+  display: grid;
+  gap: 4px;
+}
+
+.case-signature-preview {
+  grid-column: 1 / -1;
+}
