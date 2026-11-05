@@ -3638,3 +3638,62 @@ mark.restored {
   flex: 1 1 200px;
   min-width: 0;
 }
+
+/* Case: court, signature and its wokanda. */
+.case-court-form {
+  display: grid;
+  gap: 8px;
+}
+
+.case-court-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.case-court-view {
+  display: grid;
+  gap: 2px;
+}
+
+.case-court-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-court-result {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.case-court-hearings,
+.wokanda-courts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case-court-hearings li,
+.wokanda-courts li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 10px;
+  border: 1px solid rgb(var(--lm-o5-rgb) / 0.25);
+  border-radius: 8px;
+}
+
+.wokanda-courts li > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wokanda-group summary {
+  cursor: pointer;
+}

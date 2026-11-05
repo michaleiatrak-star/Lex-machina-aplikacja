@@ -1,3 +1,5 @@
+import { CaseCourtCard } from "./CaseCourtCard.js";
+import { WokandaRegisterPanel } from "./WokandaRegisterPanel.js";
 import {
   AccountConnectProgress,
   type AccountConnectPhase
@@ -265,7 +267,8 @@ export type SettingsSection =
   | "maintenance"
   | "server"
   | "account"
-  | "display";
+  | "display"
+  | "courts";
 
 export type SettingsRequest = {
   section: SettingsSection;
@@ -7628,6 +7631,15 @@ export default function MatterChatApp({
             </article>
 
             {selectedCase ? (
+              <CaseCourtCard
+                key={`court-${caseId}`}
+                caseId={caseId}
+                canWrite={canWriteCase(selectedCase)}
+                onScheduleChanged={() => setScheduleRefresh((count) => count + 1)}
+              />
+            ) : null}
+
+            {selectedCase ? (
               <CaseMemoryCard
                 caseId={caseId}
                 canWrite={canWriteCase(selectedCase)}
@@ -7737,11 +7749,12 @@ export default function MatterChatApp({
                 ["Kancelaria", "invoices", "Faktury i KSeF"],
                 ...(settingsPanels?.server ? [["Kancelaria", "server", "Tryb serwerowy"]] : []),
                 ["Źródła i integracje", "mcp", "Integracje i konektory"],
+                ["Źródła i integracje", "courts", "Wokandy sądów"],
                 ["Aplikacja", "maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
                 [string, SettingsSection, string]
               >)
-                .filter(([, section]) => developerMode || section !== "skills")
+                .filter(([, section]) => developerMode || (section !== "skills" && section !== "courts"))
                 // Konto użytkownika: bez zakładek administracyjnych i technicznych.
                 .filter(
                   ([, section]) =>
@@ -8350,6 +8363,8 @@ export default function MatterChatApp({
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.invoices}
                 </div>
+              ) : settingsSection === "courts" && developerMode ? (
+                <WokandaRegisterPanel admin={user.appRole === "ADMIN"} />
               ) : settingsSection === "skills" && developerMode ? (
                 <section className="chat-card-stack">
             <article className="chat-card">

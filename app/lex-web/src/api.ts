@@ -4801,3 +4801,79 @@ export async function setServerProviderKey(provider: ProviderId, apiKey: string)
 export async function clearServerProviderKey(provider: ProviderId): Promise<ServerProviderKey[]> {
   return (await json<{ providerKeys: ServerProviderKey[] }>(`/api/server-mode/provider-keys/${provider}`, { method: "DELETE" })).providerKeys;
 }
+
+// --- Court of the case and its wokanda (runtime courts/wokanda.ts) ----------------------------
+
+export type CaseCourtInfo = {
+  nazwa: string;
+  wydzial?: string;
+  sygnatura?: string;
+  zrodlo: "AKTA" | "PISMO" | "UZYTKOWNIK";
+  at: string;
+};
+
+export type WokandaStatus = "PORTAL" | "BROWSER" | "NONE" | "UNREACHABLE";
+
+export type WokandaCourtInfo = {
+  nazwa: string;
+  domena: string;
+  status: WokandaStatus;
+  system?: "MS_PORTAL" | "CMS_FORM" | "GET_FORM" | "POST_FORM" | "DRUPAL_VIEW" | "LIST";
+  url?: string;
+  powod?: string;
+  sprawdzono?: string;
+  zrodlo?: "WYDANIE" | "TEN_KOMPUTER";
+};
+
+export type WokandaHearing = {
+  sygnatura: string;
+  wydzial: string;
+  data: string;
+  godzina: string;
+  sala: string;
+  status: string;
+  miejsce?: string;
+  przewodniczacy?: string;
+  sklad?: string;
+  url: string;
+};
+
+export type WokandaCheck =
+  | { state: "FOUND" | "NOT_FOUND"; court: string; signature: string; searchUrl: string; hearings: WokandaHearing[]; checkedAt: string; note?: string }
+  | {
+      state: "BROWSER_ONLY" | "NO_WOKANDA" | "UNREACHABLE";
+      court: string;
+      signature: string;
+      url?: string;
+      reason: string;
+      checkedAt: string;
+      // The court's browser verification, passed by the user in its window (as for sn.pl).
+      verification?: { domain: string; url: string; savedSession: boolean };
+    };
+
+export function getCaseCourt(caseId: string): Promise<{ court: CaseCourtInfo | null; wokanda: WokandaCourtInfo | null }> {
+  return json(`/api/cases/${caseId}/court`);
+}
+
+export function setCaseCourt(
+  caseId: string,
+  input: { nazwa?: string; wydzial?: string; sygnatura?: string }
+): Promise<{ court: CaseCourtInfo | null; wokanda: WokandaCourtInfo | null }> {
+  return json(`/api/cases/${caseId}/court`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function checkCaseWokanda(caseId: string): Promise<WokandaCheck> {
+  return json(`/api/cases/${caseId}/wokanda`, { method: "POST", body: "{}" });
+}
+
+export function listWokandaCourts(): Promise<{ checkedAt: string; courts: WokandaCourtInfo[] }> {
+  return json("/api/courts/wokanda");
+}
+
+export function recheckWokandaCourts(courts?: string[]): Promise<{ courts: WokandaCourtInfo[] }> {
+  return json("/api/courts/wokanda/recheck", { method: "POST", body: JSON.stringify(courts ? { courts } : {}) });
+}
+
+export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
+  return json("/api/courts/wokanda/session/probe", { method: "POST", body: JSON.stringify({ domain, cookie, userAgent }) });
+}

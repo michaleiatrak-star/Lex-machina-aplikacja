@@ -1489,6 +1489,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/transcription"
         | "/api/local-models/ocr-acceleration"
         | "/api/diagnostics/chat-turns"
+        | "/api/courts/wokanda"
         | "/api/local-models/transcription-acceleration"
         | "/api/skills/update/status"
         | "/api/guide/state"
@@ -1498,6 +1499,10 @@ fn route_allowed(method: &str, path: &str) -> bool {
         }
         "/api/skills/channel/status" => method == "GET",
         "/api/skills/channel/refresh" => method == "POST",
+        // Wokandy of the common courts: re-checked from this computer (administrator).
+        "/api/courts/wokanda/recheck" => method == "POST",
+        // A court's browser verification passed by the user in the court's window (as for sn.pl).
+        "/api/courts/wokanda/session/probe" => method == "POST",
         "/api/update/download"
         | "/api/local-models/provision"
         | "/api/local-models/repair"
@@ -2289,6 +2294,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/remove"));
         assert!(!route_allowed("GET", "/api/local-models/ocr-acceleration/measure"));
         assert!(route_allowed("GET", "/api/diagnostics/chat-turns"));
+        assert!(route_allowed("GET", "/api/courts/wokanda"));
+        assert!(route_allowed("POST", "/api/courts/wokanda/recheck"));
+        assert!(route_allowed("POST", "/api/courts/wokanda/session/probe"));
+        assert!(route_allowed("PATCH", "/api/cases/case_1/court"));
+        assert!(route_allowed("POST", "/api/cases/case_1/wokanda"));
         assert!(route_allowed("GET", "/api/local-models/transcription-acceleration"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/install"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/measure"));

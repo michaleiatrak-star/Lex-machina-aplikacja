@@ -1096,7 +1096,7 @@ export type SessionExecutionResponse = {
   // A letter addressed to a court that came neither from court_for_address nor from the case.
   courtCheck?: { unverified: string[] };
   // The court of the case the turn used or saved (http/app.ts, case memory).
-  caseCourt?: { nazwa: string; zrodlo: "AKTA" | "PISMO"; sygnatura?: string };
+  caseCourt?: { nazwa: string; zrodlo: "AKTA" | "PISMO" | "UZYTKOWNIK"; sygnatura?: string };
   // The answer is itself a letter kept with its session's trail: "Generuj dokument" makes its
   // file from this text mechanically (answer-document.ts), with no model turn.
   answerDocument?: { sessionId: string };

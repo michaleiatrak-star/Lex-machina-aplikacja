@@ -293,6 +293,8 @@ import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../c
 import { overviewBlock, overviewFromAnswer, overviewRequested, queryWithOverviewTemplate } from "../case-overview.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
 import { addresseeCourt, courtOfCaseDocuments, type CaseCourt } from "../courts/case-court.js";
+import { courtByName } from "../courts/court-base.js";
+import { checkWokanda, defaultFetchText, effectiveWokandaCourt, parseCommonSignature, type FetchText } from "../courts/wokanda.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import {
@@ -626,6 +628,8 @@ export type LexHttpAppOptions = {
   >;
   // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
   caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
+  // Tests: the court sites of the wokanda check (courts/wokanda.ts).
+  wokandaFetch?: FetchText;
   orderedCaseWorkflowStore?: Pick<
     EncryptedCaseWorkspaceStore,
     | "getOrderedCaseWorkflowState"
@@ -4012,6 +4016,71 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       });
     } catch (error) {
       if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+    }
+  });
+
+  // The court and signature of a case (courts/case-court.ts), set by the user: documents do not
+  // replace it. The court must be one of the common courts of the court base.
+  app.get("/api/cases/:caseId/court", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    try {
+      const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
+      const court = memory.court ?? null;
+      res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+    }
+  });
+
+  app.patch("/api/cases/:caseId/court", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const name = typeof body.nazwa === "string" ? body.nazwa.trim() : "";
+    const known = name ? courtByName(name) : null;
+    const wydzial = typeof body.wydzial === "string" ? body.wydzial.trim().slice(0, 120) : "";
+    const sygnatura = typeof body.sygnatura === "string" ? body.sygnatura.replace(/\s+/gu, " ").trim() : "";
+    if (name && !known) {
+      res.status(400).json({ error: "CASE_COURT_UNKNOWN" });
+      return;
+    }
+    if (sygnatura && (sygnatura.length > 40 || !parseCommonSignature(sygnatura))) {
+      res.status(400).json({ error: "CASE_SIGNATURE_INVALID" });
+      return;
+    }
+    try {
+      const court: CaseCourt | null = known
+        ? { nazwa: known.nazwa, ...(wydzial ? { wydzial } : {}), ...(sygnatura ? { sygnatura } : {}), zrodlo: "UZYTKOWNIK", at: new Date().toISOString() }
+        : null;
+      await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore!.saveCaseMemory({ ...key, court }));
+      res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
+    }
+  });
+
+  // The case's hearings on its court's wokanda, on the user's request (courts/wokanda.ts): one
+  // search by the signature and the details of each hearing; never in the background.
+  app.post("/api/cases/:caseId/wokanda", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    try {
+      const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
+      const court = memory.court;
+      if (!court?.sygnatura) {
+        res.status(409).json({ error: court ? "CASE_SIGNATURE_MISSING" : "CASE_COURT_MISSING" });
+        return;
+      }
+      res.json(await checkWokanda(court.nazwa, court.sygnatura, options.wokandaFetch ?? defaultFetchText, () => new Date(), (name) => effectiveWokandaCourt(name)));
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "WOKANDA_CHECK_FAILED" });
     }
   });
 
@@ -10493,7 +10562,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
       // A case's documents name its court (a court's letter, a judgment): found once and kept,
       // the documents of this turn first, then the case's files by a court's head and signature.
-      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA") {
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA" && caseCourt?.zrodlo !== "UZYTKOWNIK") {
         try {
           const actor = responseAuthContext(res);
           const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
