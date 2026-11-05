@@ -19,7 +19,8 @@ Speakers (--diarize-dir with segmentation.onnx and embedding.onnx, --diarize-thr
 (pyannote segmentation 3.0 and a speaker embedding model) labels who speaks when; each word gets
 the speaker of its moment and the text is cut into turns. --speakers N when the number is known
 (more accurate), 0 for the application's estimate. Without the models or the package: no speakers.
-On the graphics card as OCR (DirectML on Windows, CoreML on macOS), the processor when it fails.
+On the graphics card as OCR (DirectML on Windows, CoreML on macOS) once a measurement on this
+computer showed it faster with the same result; the processor otherwise and when it fails.
 """
 import argparse
 import json
@@ -112,18 +113,108 @@ def run(model_dir: Path, audio: np.ndarray, language: str, device: str):
     return words, info
 
 
-def diarize_provider() -> str:
+def diarize_provider() -> tuple[str, bool]:
     """The graphics card as for OCR: DirectML on Windows (any DirectX 12 card), CoreML on macOS
     (Apple GPU and Neural Engine); both are built into the sherpa-onnx wheels. LEX_STT_DIARIZE_PROVIDER:
-    auto (default), cpu, directml, coreml."""
+    auto (default: the card only after the measurement below accepted it), cpu, directml, coreml.
+    Returns the provider and whether it was chosen by the user (no measurement then)."""
     wanted = os.environ.get("LEX_STT_DIARIZE_PROVIDER", "auto").strip().lower()
     if wanted in ("cpu", "directml", "coreml"):
-        return wanted
+        return wanted, True
     if sys.platform == "win32":
-        return "directml"
+        return "directml", False
     if sys.platform == "darwin":
-        return "coreml"
-    return "cpu"
+        return "coreml", False
+    return "cpu", False
+
+
+# The card is kept when it takes at most this share of the processor's time and labels at least
+# this share of the measured audio the same way (as the OCR measurement, ocr-acceleration.ts).
+CARD_MIN_GAIN = 0.85
+CARD_MIN_SAME = 0.95
+BENCH_SECONDS = 120
+BENCH_MIN_SECONDS = 30
+CARD_RECORD = "card.json"
+
+
+def frame_labels(turns, frames: int, step: float = 0.1):
+    labels = [None] * frames
+    for start, end, speaker in turns:
+        for index in range(max(0, int(start / step)), min(frames, int(end / step))):
+            if labels[index] is None:
+                labels[index] = speaker
+    return labels
+
+
+def same_share(cpu_turns, card_turns, seconds: float) -> float:
+    """Share of the speech frames both runs give to the same person (labels matched by overlap:
+    two runs may number the same people differently)."""
+    frames = int(seconds / 0.1) + 1
+    a, b = frame_labels(cpu_turns, frames), frame_labels(card_turns, frames)
+    pairs = {}
+    for x, y in zip(a, b):
+        if x is not None and y is not None:
+            pairs[(x, y)] = pairs.get((x, y), 0) + 1
+    mapping, used = {}, set()
+    for (x, y), _count in sorted(pairs.items(), key=lambda item: -item[1]):
+        if y not in mapping and x not in used:
+            mapping[y] = x
+            used.add(x)
+    speech = sum(1 for x, y in zip(a, b) if x is not None or y is not None)
+    same = sum(1 for x, y in zip(a, b) if x is not None and y is not None and mapping.get(y) == x)
+    return same / speech if speech else 1.0
+
+
+def sherpa_version() -> str:
+    try:
+        import sherpa_onnx
+
+        return str(getattr(sherpa_onnx, "__version__", ""))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def card_decision(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float, provider: str):
+    """Whether the card is used: measured once per computer (card and processor on the first two
+    minutes of a recording), the result kept in the speaker models folder. None: not decided yet
+    (a recording too short to measure, the processor used this time)."""
+    record = Path(diarize_dir) / CARD_RECORD
+    key = {"provider": provider, "sherpa": sherpa_version()}
+    try:
+        saved = json.loads(record.read_text(encoding="utf-8"))
+        if all(saved.get(name) == value for name, value in key.items()) and isinstance(saved.get("accepted"), bool):
+            return saved, False
+    except (OSError, ValueError):
+        pass
+    seconds = min(len(audio) / 16000, BENCH_SECONDS)
+    if seconds < BENCH_MIN_SECONDS:
+        return None, False
+    sample = audio[: int(seconds * 16000)]
+    result = dict(key)
+    try:
+        # A first short run loads (CoreML: compiles) the models on the card; not counted.
+        diarize_with(sample[: 16000 * 5], diarize_dir, speakers, threshold, provider)
+        started = time.time()
+        card = diarize_with(sample, diarize_dir, speakers, threshold, provider)
+        result["cardSeconds"] = round(time.time() - started, 2)
+    except Exception as error:  # noqa: BLE001
+        result.update(accepted=False, error=f"{type(error).__name__}:{str(error)[:200]}")
+        card = None
+    started = time.time()
+    cpu = diarize_with(sample, diarize_dir, speakers, threshold, "cpu")
+    result["cpuSeconds"] = round(time.time() - started, 2)
+    if card is not None:
+        result["sameShare"] = round(same_share(cpu, card, seconds), 3)
+        result["accepted"] = result["cardSeconds"] <= CARD_MIN_GAIN * result["cpuSeconds"] and result["sameShare"] >= CARD_MIN_SAME
+    result["measuredSeconds"] = round(seconds, 1)
+    try:
+        tmp = record.with_suffix(".tmp")
+        tmp.write_text(json.dumps(result), encoding="utf-8")
+        tmp.replace(record)
+    except OSError:
+        pass
+    print("LEX_STT_DIARIZE_BENCH " + json.dumps(result), file=sys.stderr, flush=True)
+    return result, True
 
 
 def diarize_with(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float, provider: str):
@@ -148,17 +239,25 @@ def diarize_with(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: 
 
 
 def diarize(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float):
-    """([(start, end, speaker)], provider used, card error) from sherpa-onnx; raises when not even
-    the processor can (no package, no models). A failure on the card runs it again on the processor."""
-    provider = diarize_provider()
+    """([(start, end, speaker)], provider used, card error, measurement) from sherpa-onnx; raises
+    when not even the processor can (no package, no models). A failure on the card runs it again
+    on the processor."""
+    provider, chosen = diarize_provider()
+    measured = None
+    if provider != "cpu" and not chosen:
+        decision, fresh = card_decision(audio, diarize_dir, speakers, threshold, provider)
+        if fresh:
+            measured = decision
+        if not (decision and decision.get("accepted")):
+            provider = "cpu"
     if provider != "cpu":
         try:
-            return diarize_with(audio, diarize_dir, speakers, threshold, provider), provider, ""
+            return diarize_with(audio, diarize_dir, speakers, threshold, provider), provider, "", measured
         except Exception as error:  # noqa: BLE001
             card_error = f"{type(error).__name__}:{str(error)[:200]}"
             print(f"LEX_STT_DIARIZE_CARD_FAILED:{provider}:{card_error}", file=sys.stderr, flush=True)
-            return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", card_error
-    return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", ""
+            return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", card_error, measured
+    return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", "", measured
 
 
 def speaker_at(turns, start: float, end: float, previous):
@@ -264,10 +363,12 @@ def main() -> None:
     if args.diarize_dir and args.speakers != 1:
         diarize_started = time.time()
         try:
-            turns, provider, card_error = diarize(audio, args.diarize_dir, args.speakers, args.diarize_threshold)
+            turns, provider, card_error, measured = diarize(audio, args.diarize_dir, args.speakers, args.diarize_threshold)
             diarize_stats = {"seconds": round(time.time() - diarize_started, 1), "provider": provider}
             if card_error:
                 diarize_stats["cardError"] = card_error
+            if measured:
+                diarize_stats["cardBenchmark"] = measured
         except Exception as error:  # noqa: BLE001
             # The transcript without speakers rather than none.
             diarize_stats = {"error": f"{type(error).__name__}:{str(error)[:200]}"}

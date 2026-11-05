@@ -39,7 +39,8 @@ type LocalModel = {
 type BackendPreference =
   | "AUTO"
   | "VULKAN_X64"
-  | "CPU_X64_PORTABLE";
+  | "CPU_X64_PORTABLE"
+  | "METAL_ARM64";
 
 type BackendPolicy = {
   allowed:
@@ -80,7 +81,8 @@ type LocalRuntimeStatus = {
     engine: "llama.cpp";
     backend?:
       | "VULKAN_X64"
-      | "CPU_X64_PORTABLE";
+      | "CPU_X64_PORTABLE"
+      | "METAL_ARM64";
     startupMs: number;
     validatedAt: string;
   } | null;
@@ -113,6 +115,7 @@ type LocalRuntimeStatus = {
     configuredBackend:
       | "VULKAN_X64"
       | "CPU_X64_PORTABLE"
+      | "METAL_ARM64"
       | null;
     backendSelectionMode:
       BackendPreference | null;
@@ -265,15 +268,18 @@ function contextLabel(
 }
 
 function backendLabel(
-  value: BackendPreference
+  value: BackendPreference,
+  mac = false
 ): string {
   switch (value) {
     case "AUTO":
-      return "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
+      return mac ? "Auto · karta graficzna Apple (Metal)" : "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
     case "VULKAN_X64":
       return "Vulkan GPU · bez automatycznego fallbacku";
     case "CPU_X64_PORTABLE":
       return "CPU · maksymalna zgodność";
+    case "METAL_ARM64":
+      return "Metal · karta graficzna Apple";
   }
 }
 
@@ -1106,10 +1112,11 @@ export function LocalAiSetupPanel({
   const extended = Boolean(
     selected && contextTokens > selected.nativeContextWindow
   );
-  // Installation runs on Windows only (runtime: LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED);
-  // elsewhere the action is not offered as available.
-  const provisioningSupported =
-    data?.runtime.hardware?.platform ? data.runtime.hardware.platform === "win32" : !/Macintosh|Mac OS X|Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
+  // Installation runs on Windows and on Macs with Apple Silicon (runtime:
+  // LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED elsewhere); elsewhere it is not offered.
+  const provisioningSupported = data?.runtime.hardware?.platform
+    ? data.runtime.hardware.platform === "win32" || (data.runtime.hardware.platform === "darwin" && data.runtime.hardware.arch === "arm64")
+    : !/Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
   const canProvision =
     provisioningSupported &&
     user.appRole === "ADMIN" &&
@@ -1500,7 +1507,7 @@ export function LocalAiSetupPanel({
       <div className="local-ai-body">
         {provisioningSupported ? null : (
           <p className="local-ai-error" role="note">
-            Instalacja modelu lokalnego jest dostępna tylko w Windows. W tym systemie korzystaj z modeli
+            Instalacja modelu lokalnego jest dostępna w Windows i na Macach z procesorem Apple. W tym systemie korzystaj z modeli
             przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
           </p>
         )}
@@ -1544,7 +1551,7 @@ export function LocalAiSetupPanel({
                   >
                     {data.runtime.backendPolicy.allowed.map((value) => (
                       <option key={value} value={value}>
-                        {backendLabel(value)}
+                        {backendLabel(value, data.runtime.backendPolicy.allowed.includes("METAL_ARM64"))}
                       </option>
                     ))}
                   </select>

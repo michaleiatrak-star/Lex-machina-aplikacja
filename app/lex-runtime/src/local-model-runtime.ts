@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { provisionLocalAiMacos } from "./local-ai-provision-macos.js";
 import type {
   ModelPackEntry
 } from "./model-pack-verifier.js";
@@ -36,7 +37,9 @@ export type LocalModelId = string;
 
 export type LocalBackendId =
   | "CPU_X64_PORTABLE"
-  | "VULKAN_X64";
+  | "VULKAN_X64"
+  // macOS on Apple Silicon: the llama.cpp Metal build (local-ai-provision-macos.ts).
+  | "METAL_ARM64";
 
 export type LocalBackendPreference =
   | "AUTO"
@@ -418,7 +421,8 @@ function isBackendId(
   return (
     value ===
       "CPU_X64_PORTABLE" ||
-    value === "VULKAN_X64"
+    value === "VULKAN_X64" ||
+    value === "METAL_ARM64"
   );
 }
 
@@ -452,6 +456,16 @@ function configSelectionMode(
   )
     ? config.engine.selectionMode
     : configBackend(config);
+}
+
+/** macOS on Apple Silicon: the llama.cpp Metal build. */
+function macMetal(): boolean {
+  return process.platform === "darwin" && process.arch === "arm64";
+}
+
+/** Installation of a local model: Windows (install-local-llm.ps1) and Apple Silicon (in the runtime). */
+function localProvisioningSupported(): boolean {
+  return process.platform === "win32" || macMetal();
 }
 
 function usableAcceleratorName(
@@ -1182,6 +1196,9 @@ export class LocalModelRuntime {
       }
     }
 
+    // Apple Silicon: the GPU shares the memory and llama.cpp reaches it through Metal.
+    if (macMetal()) accelerators.push({ name: "Apple GPU (Metal)" });
+
     const config =
       this.readConfig();
     const qualification =
@@ -1202,8 +1219,7 @@ export class LocalModelRuntime {
     const gpuOffloadEnabled =
       Boolean(
         config &&
-        configuredBackend ===
-          "VULKAN_X64" &&
+        (configuredBackend === "VULKAN_X64" || configuredBackend === "METAL_ARM64") &&
         config.engine.gpuOffload ===
           true &&
         qualification &&
@@ -1340,6 +1356,7 @@ export class LocalModelRuntime {
     ) {
       return preference;
     }
+    if (macMetal() && policy.allowed.includes("METAL_ARM64")) return "METAL_ARM64";
     return this
       .hardwareProfile()
       .gpuCandidateDetected &&
@@ -1461,7 +1478,7 @@ export class LocalModelRuntime {
     configPath: string;
   }> {
     if (this.external) throw new Error("LOCAL_MODEL_ENDPOINT_EXTERNAL");
-    if (process.platform !== "win32") {
+    if (!localProvisioningSupported()) {
       throw new Error("LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED");
     }
     if (this.provisioning) {
@@ -2493,7 +2510,7 @@ export class LocalModelRuntime {
             spec.filename
           );
         if (
-          process.platform !== "win32" ||
+          !localProvisioningSupported() ||
           !fs.existsSync(
             targetModelPath
           )
@@ -4193,6 +4210,21 @@ export class LocalModelRuntime {
             manifestOverride
           )
         : this.manifestPath();
+    if (macMetal()) {
+      if (!fs.existsSync(manifest)) throw new Error("LOCAL_MODEL_RELEASE_MANIFEST_MISSING");
+      if (backend !== "METAL_ARM64") throw new Error(`LOCAL_MODEL_BACKEND_NOT_ALLOWED:${backend}`);
+      await provisionLocalAiMacos({
+        manifestPath: manifest,
+        localRoot: this.rootDir,
+        modelId,
+        contextTokens,
+        backendMode,
+        onProgress: (progress) => {
+          this.provisioningProgress = { ...progress, updatedAt: new Date().toISOString() };
+        }
+      });
+      return;
+    }
     if (!fs.existsSync(script)) {
       throw new Error("LOCAL_MODEL_PROVISIONER_MISSING");
     }
@@ -4378,8 +4410,7 @@ export class LocalModelRuntime {
       "q8_0"
     ];
     if (
-      configBackend(config) ===
-        "VULKAN_X64" &&
+      (configBackend(config) === "VULKAN_X64" || configBackend(config) === "METAL_ARM64") &&
       config.engine.gpuOffload ===
         true
     ) {
