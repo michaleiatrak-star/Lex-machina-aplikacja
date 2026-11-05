@@ -14,18 +14,9 @@ on:
       LEX_WINDOWS_SIGNING_PFX_PASSWORD:
         required: false
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "app/installer/**"
-      - "app/lex-desktop/**"
-      - "app/lex-runtime/**"
-      - "app/lex-web/**"
-      - "app/ocr/**"
-      - "app/privacy/**"
-      - "app/storage/**"
-      - "app/lex-version.yaml"
-      - "Wersja rozwojowa rozpakowana/**"
-      - ".github/workflows/offline-windows-installer.yml"
+  # Not on every pull request: releases ship the online installers only
+  # (publish-windows-installers.yml RELEASE_OFFLINE_INSTALLER). Built on demand or by the
+  # release workflow when the offline installer is shipped again.
 
 permissions:
   contents: read

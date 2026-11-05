@@ -761,11 +761,13 @@ export async function startLocalServer(options?: {
   const recordingTranscriber = new LocalWhisperTranscriber(() => transcriptionModel.dir, {
     acceleration: () => transcriptionAcceleration.environment(),
     speakersDir: () => (transcriptionModel.speakersInstalled() ? transcriptionModel.speakersDir : null),
-    speakerCount: () => transcriptionModel.speakerCount()
+    speakerCount: () => transcriptionModel.speakerCount(),
+    mlxDir: () => (transcriptionModel.mlxInstalled() ? transcriptionModel.mlxDir : null)
   });
   // Speaker models (tens of MB) for a transcription model installed before they existed: fetched
   // once in the background, checked against their SHA-256 (the administrator chose transcription).
-  if (!process.env.VITEST && transcriptionModel.installed() && !transcriptionModel.speakersInstalled()) {
+  // (and on Apple Silicon the GPU copy of the model)
+  if (!process.env.VITEST && transcriptionModel.installed() && !transcriptionModel.complete()) {
     setTimeout(() => {
       transcriptionModel.start().catch(() => undefined);
     }, 20_000).unref();

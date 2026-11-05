@@ -79,8 +79,10 @@ const componentLock =
   );
 
 const checks = {
-  pullRequestGate:
-    workflow.includes("pull_request:") &&
+  // On demand and from the release workflow (offline installer not shipped at present).
+  onDemandGate:
+    workflow.includes("workflow_dispatch:") &&
+    workflow.includes("workflow_call:") &&
     workflow.includes(
       "Build and accept standalone offline Windows EXE"
     ),

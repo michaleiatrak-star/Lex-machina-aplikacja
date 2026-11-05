@@ -39,7 +39,8 @@ type LocalModel = {
 type BackendPreference =
   | "AUTO"
   | "VULKAN_X64"
-  | "CPU_X64_PORTABLE";
+  | "CPU_X64_PORTABLE"
+  | "METAL_ARM64";
 
 type BackendPolicy = {
   allowed:
@@ -80,7 +81,8 @@ type LocalRuntimeStatus = {
     engine: "llama.cpp";
     backend?:
       | "VULKAN_X64"
-      | "CPU_X64_PORTABLE";
+      | "CPU_X64_PORTABLE"
+      | "METAL_ARM64";
     startupMs: number;
     validatedAt: string;
   } | null;
@@ -113,6 +115,7 @@ type LocalRuntimeStatus = {
     configuredBackend:
       | "VULKAN_X64"
       | "CPU_X64_PORTABLE"
+      | "METAL_ARM64"
       | null;
     backendSelectionMode:
       BackendPreference | null;
@@ -265,15 +268,18 @@ function contextLabel(
 }
 
 function backendLabel(
-  value: BackendPreference
+  value: BackendPreference,
+  mac = false
 ): string {
   switch (value) {
     case "AUTO":
-      return "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
+      return mac ? "Auto · karta graficzna Apple (Metal)" : "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
     case "VULKAN_X64":
       return "Vulkan GPU · bez automatycznego fallbacku";
     case "CPU_X64_PORTABLE":
       return "CPU · maksymalna zgodność";
+    case "METAL_ARM64":
+      return "Metal · karta graficzna Apple";
   }
 }
 
@@ -801,6 +807,8 @@ type TranscriptionStatus = {
   error?: string;
   // Who speaks when (older runtimes do not send it); count 0 = estimated.
   speakers?: { installed: boolean; bytes: number; count?: number };
+  // Mac with Apple Silicon: the copy of the model for the GPU (null elsewhere).
+  gpu?: { installed: boolean; bytes: number } | null;
 };
 
 /**
@@ -886,6 +894,14 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
                 : `modele (${Math.round(status.speakers.bytes / 1_000_000)} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.`}
             </small>
           ) : null}
+          {status.gpu ? (
+            <small>
+              Karta graficzna Apple:{" "}
+              {status.gpu.installed
+                ? "model gotowy; przy pierwszym nagraniu aplikacja zmierzy, czy karta jest szybsza od procesora, i wtedy jej użyje."
+                : `model (${Math.round(status.gpu.bytes / 1_000_000)} MB) pobierze się sam w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+            </small>
+          ) : null}
           {status.speakers?.installed && admin ? (
             <label className="local-ai-inline-select">
               Liczba rozmówców w nagraniach
@@ -911,7 +927,7 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
         <div className="local-ai-actions">
           <button
             type="button"
-            disabled={(status.installed && (status.speakers?.installed ?? true)) || status.state === "DOWNLOADING"}
+            disabled={(status.installed && (status.speakers?.installed ?? true) && (status.gpu?.installed ?? true)) || status.state === "DOWNLOADING"}
             onClick={() => void act("install")}
           >
             Pobierz model transkrypcji
@@ -1106,10 +1122,11 @@ export function LocalAiSetupPanel({
   const extended = Boolean(
     selected && contextTokens > selected.nativeContextWindow
   );
-  // Installation runs on Windows only (runtime: LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED);
-  // elsewhere the action is not offered as available.
-  const provisioningSupported =
-    data?.runtime.hardware?.platform ? data.runtime.hardware.platform === "win32" : !/Macintosh|Mac OS X|Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
+  // Installation runs on Windows and on Macs with Apple Silicon (runtime:
+  // LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED elsewhere); elsewhere it is not offered.
+  const provisioningSupported = data?.runtime.hardware?.platform
+    ? data.runtime.hardware.platform === "win32" || (data.runtime.hardware.platform === "darwin" && data.runtime.hardware.arch === "arm64")
+    : !/Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
   const canProvision =
     provisioningSupported &&
     user.appRole === "ADMIN" &&
@@ -1500,7 +1517,7 @@ export function LocalAiSetupPanel({
       <div className="local-ai-body">
         {provisioningSupported ? null : (
           <p className="local-ai-error" role="note">
-            Instalacja modelu lokalnego jest dostępna tylko w Windows. W tym systemie korzystaj z modeli
+            Instalacja modelu lokalnego jest dostępna w Windows i na Macach z procesorem Apple. W tym systemie korzystaj z modeli
             przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
           </p>
         )}
@@ -1544,7 +1561,7 @@ export function LocalAiSetupPanel({
                   >
                     {data.runtime.backendPolicy.allowed.map((value) => (
                       <option key={value} value={value}>
-                        {backendLabel(value)}
+                        {backendLabel(value, data.runtime.backendPolicy.allowed.includes("METAL_ARM64"))}
                       </option>
                     ))}
                   </select>

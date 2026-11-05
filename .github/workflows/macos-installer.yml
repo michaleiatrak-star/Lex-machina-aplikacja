@@ -95,6 +95,30 @@ jobs:
             || { echo "ADMIN_ADMIN_LOGIN_FAILED" >&2; kill "$pid"; exit 1; }
           kill "$pid"
 
+      - name: Local model engine (llama.cpp Metal) from the release manifest
+        run: |
+          set -euo pipefail
+          # The archive the app downloads for a local model: checksum, safe layout, the server runs.
+          manifest="/Applications/Lex Machina.app/Contents/Resources/runtime/release-source.json"
+          read -r url sha < <(python3 -c 'import json,sys; b=[x for x in json.load(open(sys.argv[1]))["runtime"]["llamaCpp"]["backends"] if x["id"]=="METAL_ARM64"][0]; print(b["url"], b["sha256"])' "$manifest")
+          work="$RUNNER_TEMP/llama-metal"
+          mkdir -p "$work/x"
+          curl -fsSL -o "$work/engine.tar.gz" "$url"
+          echo "$sha  $work/engine.tar.gz" | shasum -a 256 -c -
+          if tar -tzf "$work/engine.tar.gz" | grep -E '^/|(^|/)\.\.(/|$)'; then echo "ENGINE_ARCHIVE_UNSAFE" >&2; exit 1; fi
+          tar -xzf "$work/engine.tar.gz" -C "$work/x"
+          server="$(find "$work/x" -type f -name llama-server | head -1)"
+          [ -n "$server" ] || { echo "LLAMA_SERVER_MISSING" >&2; exit 1; }
+          "$server" --version
+          "$server" --list-devices || true
+
+      - name: Transcription on the Apple GPU (MLX) is installed
+        run: |
+          set -euo pipefail
+          py="$HOME/Library/Application Support/LexMachina/runtime/python/bin/python3"
+          # The packages the worker uses on Apple Silicon; the GPU itself is measured on the user's Mac.
+          "$py" -c 'import mlx.core as mx, mlx_whisper, importlib.metadata as m; print("mlx", m.version("mlx"), "mlx-whisper", m.version("mlx-whisper"), "metal", mx.metal.is_available())'
+
       - name: Launch the installed app (it must start its runtime)
         run: |
           set -euo pipefail

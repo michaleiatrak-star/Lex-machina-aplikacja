@@ -112,6 +112,32 @@ export const SPEAKER_MODEL = {
   ] as TranscriptionModelFile[]
 };
 
+// macOS on Apple Silicon: the same model (large-v3-turbo, MIT) converted to MLX for the GPU
+// (whisper_worker.py --mlx-dir, mlx-whisper). Used only after a measurement on that Mac.
+const MLX_REVISION = "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb";
+export const MLX_MODEL = {
+  id: "whisper-large-v3-turbo-mlx",
+  files: [
+    {
+      filename: "config.json",
+      bytes: 268,
+      sha256: "b34fc29e4e11e0a25e812775dd67f4dd16fc2c8eb43d28ae25ff7d660ecb6379",
+      url: `https://huggingface.co/mlx-community/whisper-large-v3-turbo/resolve/${MLX_REVISION}/config.json`
+    },
+    {
+      filename: "weights.safetensors",
+      bytes: 1613977612,
+      sha256: "951ed3fc1203e6a62467abb2144a96ce7eafca8fa77e3704fdb8635ff3e7f8a6",
+      url: `https://huggingface.co/mlx-community/whisper-large-v3-turbo/resolve/${MLX_REVISION}/weights.safetensors`
+    }
+  ] as TranscriptionModelFile[]
+};
+
+/** The Apple GPU model applies on macOS with Apple Silicon only. */
+export function mlxTranscriptionSupported(platform: string = process.platform, arch: string = process.arch): boolean {
+  return platform === "darwin" && arch === "arm64";
+}
+
 export type TranscriptionModelStatus = {
   modelId: string;
   label: string;
@@ -123,6 +149,8 @@ export type TranscriptionModelStatus = {
   error?: string;
   // Who speaks when: the speaker models next to the transcription model; count 0 = estimated.
   speakers: { installed: boolean; bytes: number; count: number };
+  // Apple Silicon: the GPU copy of the model (null elsewhere).
+  gpu: { installed: boolean; bytes: number } | null;
 };
 
 /** The model folder holds every file of the pinned revision and the record written after the check. */
@@ -164,7 +192,24 @@ export async function installTranscriptionModel(
 export class TranscriptionModelManager {
   private install: { state: TranscriptionModelStatus["state"]; progress: TranscriptionModelStatus["progress"]; error?: string } = { state: "IDLE", progress: null };
 
-  constructor(readonly dir: string) {}
+  constructor(
+    readonly dir: string,
+    private readonly mlxSupported: boolean = mlxTranscriptionSupported()
+  ) {}
+
+  /** The MLX copy of the model for the Apple GPU. */
+  get mlxDir(): string {
+    return path.join(this.dir, "mlx");
+  }
+
+  mlxInstalled(): boolean {
+    return installedTranscriptionModel(this.mlxDir, MLX_MODEL.files, "mlx.json");
+  }
+
+  /** Every model this computer uses: the GPU copy counts only where it applies. */
+  complete(): boolean {
+    return this.installed() && this.speakersInstalled() && (!this.mlxSupported || this.mlxInstalled());
+  }
 
   installed(): boolean {
     return installedTranscriptionModel(this.dir);
@@ -202,6 +247,7 @@ export class TranscriptionModelManager {
       bytes: TRANSCRIPTION_MODEL.files.reduce((sum, file) => sum + file.bytes, 0),
       installed: this.installed(),
       speakers: { installed: this.speakersInstalled(), bytes: SPEAKER_MODEL.files.reduce((sum, file) => sum + file.bytes, 0), count: this.speakerCount() },
+      gpu: this.mlxSupported ? { installed: this.mlxInstalled(), bytes: MLX_MODEL.files.reduce((sum, file) => sum + file.bytes, 0) } : null,
       state: this.install.state,
       progress: this.install.progress ? { ...this.install.progress } : null,
       ...(this.install.error ? { error: this.install.error } : {})
@@ -220,6 +266,9 @@ export class TranscriptionModelManager {
       if (!this.installed()) await installTranscriptionModel(this.dir, progress, TRANSCRIPTION_MODEL.files, fetchImpl);
       if (!this.speakersInstalled()) {
         await installTranscriptionModel(this.speakersDir, progress, SPEAKER_MODEL.files, fetchImpl, { id: SPEAKER_MODEL.id, revision: SEGMENTATION_REVISION, record: "speakers.json" });
+      }
+      if (this.mlxSupported && !this.mlxInstalled()) {
+        await installTranscriptionModel(this.mlxDir, progress, MLX_MODEL.files, fetchImpl, { id: MLX_MODEL.id, revision: MLX_REVISION, record: "mlx.json" });
       }
     })();
     return task.then(
@@ -342,6 +391,7 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
   private readonly acceleration: () => Record<string, string> | null;
   private readonly speakersDir: () => string | null;
   private readonly speakerCount: () => number;
+  private readonly mlxDir: () => string | null;
 
   constructor(
     private readonly modelDir: () => string,
@@ -354,6 +404,8 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
       speakersDir?: () => string | null;
       // People speaking: 0 = estimated.
       speakerCount?: () => number;
+      // Apple Silicon: the MLX model's folder when installed (the worker measures it once).
+      mlxDir?: () => string | null;
     } = {}
   ) {
     this.python = options.python ?? process.env.LEX_OCR_PYTHON ?? "python3";
@@ -363,6 +415,7 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
     this.acceleration = options.acceleration ?? (() => null);
     this.speakersDir = options.speakersDir ?? (() => null);
     this.speakerCount = options.speakerCount ?? (() => 0);
+    this.mlxDir = options.mlxDir ?? (() => null);
   }
 
   available(): boolean {
@@ -411,6 +464,8 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
         const speakers = this.speakersDir();
         const args = [this.workerPath, "--input", input, "--output", output, "--model-dir", this.modelDir()];
         if (speakers) args.push("--diarize-dir", speakers, "--diarize-threshold", String(SPEAKER_MODEL.threshold), "--speakers", String(speakerCount ?? this.speakerCount()));
+        const mlx = this.mlxDir();
+        if (mlx) args.push("--mlx-dir", mlx);
         const child = spawn(this.python, args, {
           stdio: ["ignore", "ignore", "pipe"],
           env
