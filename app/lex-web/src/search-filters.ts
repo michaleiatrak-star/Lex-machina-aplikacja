@@ -1,3 +1,4 @@
+import { caseFileCategory, type CaseFileCategory } from "./case-file-categories.js";
 import type {
   CaseKnowledgeHit,
   CaseListItem,
@@ -27,14 +28,7 @@ export type DocumentScopeFilter =
   | "ALL_CASE"
   | "CURRENT_FOLDER";
 
-export type DocumentTypeFilter =
-  | "ALL"
-  | "PDF"
-  | "OFFICE"
-  | "IMAGE"
-  | "TEXT"
-  | "ARCHIVE"
-  | "TEMPLATE";
+export type DocumentTypeFilter = "ALL" | CaseFileCategory;
 
 function normalized(
   value: string | undefined
@@ -197,53 +191,7 @@ function documentMatchesType(
   item: WorkspaceItem,
   type: DocumentTypeFilter
 ): boolean {
-  if (type === "ALL") {
-    return true;
-  }
-  if (type === "TEMPLATE") {
-    return (
-      item.kind ===
-      "TEMPLATE"
-    );
-  }
-  if (type === "ARCHIVE") {
-    return item.archive;
-  }
-  if (type === "PDF") {
-    return (
-      item.mediaType ===
-      "application/pdf"
-    );
-  }
-  if (type === "IMAGE") {
-    return item.mediaType
-      .startsWith("image/");
-  }
-  if (type === "TEXT") {
-    return (
-      item.mediaType
-        .startsWith("text/") ||
-      item.mediaType ===
-        "application/json"
-    );
-  }
-  return (
-    item.mediaType.includes(
-      "wordprocessing"
-    ) ||
-    item.mediaType.includes(
-      "spreadsheet"
-    ) ||
-    item.mediaType.includes(
-      "opendocument"
-    ) ||
-    item.mediaType.includes(
-      "ms-excel"
-    ) ||
-    item.mediaType.includes(
-      "msword"
-    )
-  );
+  return type === "ALL" || caseFileCategory(item) === type;
 }
 
 function contentHitFor(
