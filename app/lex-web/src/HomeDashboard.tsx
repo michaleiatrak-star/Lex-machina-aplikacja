@@ -31,7 +31,8 @@ export function HomeDashboard({
   onOpenFirm,
   onOpenModels,
   onOpenInvoices,
-  onNewCase
+  onNewCase,
+  onRenameCase
 }: {
   user: AuthenticatedUser;
   cases: readonly CaseListItem[];
@@ -44,6 +45,8 @@ export function HomeDashboard({
   onOpenModels: () => void;
   onOpenInvoices?: () => void;
   onNewCase: () => void;
+  // The case's owner renames it here too (as in the case list of the chat).
+  onRenameCase?: (caseId: string, displayName: string) => Promise<void>;
 }) {
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   useEffect(() => {
@@ -61,6 +64,27 @@ export function HomeDashboard({
   const [events, setEvents] = useState<UpcomingCaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [rename, setRename] = useState<{ caseId: string; value: string; error: string } | null>(null);
+  const [renaming, setRenaming] = useState(false);
+
+  async function saveRename(): Promise<void> {
+    if (!rename || !onRenameCase) return;
+    const value = rename.value.trim();
+    const current = cases.find((item) => item.caseId === rename.caseId);
+    if (!value || value === current?.displayName) {
+      setRename(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await onRenameCase(rename.caseId, value);
+      setRename(null);
+    } catch (failure) {
+      setRename({ ...rename, error: failure instanceof Error ? failure.message : String(failure) });
+    } finally {
+      setRenaming(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -177,23 +201,76 @@ export function HomeDashboard({
             <p>Brak spraw.</p>
           ) : (
             <div className="matter-schedule-list">
-              {recent.map((item) => (
-                <button
-                  type="button"
-                  key={item.caseId}
-                  className="matter-schedule-item lex-home-item"
-                  onClick={() => onOpenCase(item.caseId)}
-                >
-                  <span className="matter-schedule-item-main">
-                    <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
-                    <small>
-                      zmieniona {new Date(item.updatedAt || item.createdAt).toLocaleString("pl-PL")}
-                      {" · "}
-                      {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
-                    </small>
-                  </span>
-                </button>
-              ))}
+              {recent.map((item) =>
+                rename?.caseId === item.caseId ? (
+                  <form
+                    key={item.caseId}
+                    className="matter-thread-rename"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveRename();
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={rename.value}
+                      maxLength={160}
+                      disabled={renaming}
+                      aria-label="Nowa nazwa sprawy"
+                      onChange={(event) => setRename({ ...rename, value: event.target.value, error: "" })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setRename(null);
+                      }}
+                    />
+                    <div className="matter-thread-rename-actions">
+                      <button type="submit" disabled={renaming || !rename.value.trim()}>
+                        Zapisz
+                      </button>
+                      <button type="button" disabled={renaming} onClick={() => setRename(null)}>
+                        Anuluj
+                      </button>
+                    </div>
+                    {rename.error ? <small className="matter-thread-rename-error">{rename.error}</small> : null}
+                  </form>
+                ) : (
+                  <div key={item.caseId} className="matter-thread-row">
+                    <button
+                      type="button"
+                      className="matter-schedule-item lex-home-item"
+                      onClick={() => onOpenCase(item.caseId)}
+                    >
+                      <span className="matter-schedule-item-main">
+                        <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                        <small>
+                          zmieniona {new Date(item.updatedAt || item.createdAt).toLocaleString("pl-PL")}
+                          {" · "}
+                          {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
+                        </small>
+                      </span>
+                    </button>
+                    {onRenameCase && item.role === "OWNER" ? (
+                      <button
+                        type="button"
+                        className="matter-thread-edit"
+                        disabled={renaming}
+                        title="Zmień nazwę sprawy"
+                        aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                        onClick={() => setRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })}
+                      >
+                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                          <path
+                            d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.3"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              )}
             </div>
           )}
         </article>

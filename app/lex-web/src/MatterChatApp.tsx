@@ -7269,6 +7269,12 @@ export default function MatterChatApp({
               setSettingsSection("models");
             }}
             onNewCase={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa").catch(() => undefined)}
+            onRenameCase={async (renamedCaseId, value) => {
+              await renameCase(renamedCaseId, value);
+              await refreshCases(caseId || renamedCaseId);
+              if (renamedCaseId === caseId) setCaseNameDraft(value);
+              setWorkspaceRefresh((count) => count + 1);
+            }}
           />
         ) : null}
 
