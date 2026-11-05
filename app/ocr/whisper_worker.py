@@ -19,6 +19,7 @@ Speakers (--diarize-dir with segmentation.onnx and embedding.onnx, --diarize-thr
 (pyannote segmentation 3.0 and a speaker embedding model) labels who speaks when; each word gets
 the speaker of its moment and the text is cut into turns. --speakers N when the number is known
 (more accurate), 0 for the application's estimate. Without the models or the package: no speakers.
+On the graphics card as OCR (DirectML on Windows, CoreML on macOS), the processor when it fails.
 """
 import argparse
 import json
@@ -111,8 +112,21 @@ def run(model_dir: Path, audio: np.ndarray, language: str, device: str):
     return words, info
 
 
-def diarize(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float):
-    """[(start, end, speaker)] from sherpa-onnx, or raises (no package, no models)."""
+def diarize_provider() -> str:
+    """The graphics card as for OCR: DirectML on Windows (any DirectX 12 card), CoreML on macOS
+    (Apple GPU and Neural Engine); both are built into the sherpa-onnx wheels. LEX_STT_DIARIZE_PROVIDER:
+    auto (default), cpu, directml, coreml."""
+    wanted = os.environ.get("LEX_STT_DIARIZE_PROVIDER", "auto").strip().lower()
+    if wanted in ("cpu", "directml", "coreml"):
+        return wanted
+    if sys.platform == "win32":
+        return "directml"
+    if sys.platform == "darwin":
+        return "coreml"
+    return "cpu"
+
+
+def diarize_with(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float, provider: str):
     import sherpa_onnx
 
     folder = Path(diarize_dir)
@@ -120,8 +134,9 @@ def diarize(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(folder / "segmentation.onnx")),
             num_threads=threads(),
+            provider=provider,
         ),
-        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / "embedding.onnx"), num_threads=threads()),
+        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(folder / "embedding.onnx"), num_threads=threads(), provider=provider),
         clustering=sherpa_onnx.FastClusteringConfig(num_clusters=speakers if speakers > 0 else -1, threshold=threshold),
         min_duration_on=0.3,
         min_duration_off=0.5,
@@ -130,6 +145,20 @@ def diarize(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float
         raise ValueError("DIARIZE_CONFIG_INVALID")
     result = sherpa_onnx.OfflineSpeakerDiarization(cfg).process(audio).sort_by_start_time()
     return [(float(r.start), float(r.end), int(r.speaker)) for r in result]
+
+
+def diarize(audio: np.ndarray, diarize_dir: str, speakers: int, threshold: float):
+    """([(start, end, speaker)], provider used, card error) from sherpa-onnx; raises when not even
+    the processor can (no package, no models). A failure on the card runs it again on the processor."""
+    provider = diarize_provider()
+    if provider != "cpu":
+        try:
+            return diarize_with(audio, diarize_dir, speakers, threshold, provider), provider, ""
+        except Exception as error:  # noqa: BLE001
+            card_error = f"{type(error).__name__}:{str(error)[:200]}"
+            print(f"LEX_STT_DIARIZE_CARD_FAILED:{provider}:{card_error}", file=sys.stderr, flush=True)
+            return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", card_error
+    return diarize_with(audio, diarize_dir, speakers, threshold, "cpu"), "cpu", ""
 
 
 def speaker_at(turns, start: float, end: float, previous):
@@ -235,8 +264,10 @@ def main() -> None:
     if args.diarize_dir and args.speakers != 1:
         diarize_started = time.time()
         try:
-            turns = diarize(audio, args.diarize_dir, args.speakers, args.diarize_threshold)
-            diarize_stats = {"seconds": round(time.time() - diarize_started, 1)}
+            turns, provider, card_error = diarize(audio, args.diarize_dir, args.speakers, args.diarize_threshold)
+            diarize_stats = {"seconds": round(time.time() - diarize_started, 1), "provider": provider}
+            if card_error:
+                diarize_stats["cardError"] = card_error
         except Exception as error:  # noqa: BLE001
             # The transcript without speakers rather than none.
             diarize_stats = {"error": f"{type(error).__name__}:{str(error)[:200]}"}
