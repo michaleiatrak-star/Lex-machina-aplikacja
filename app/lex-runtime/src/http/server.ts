@@ -733,7 +733,8 @@ export async function startLocalServer(options?: {
   const caseOcrEngine = new LocalPaddleOcrEngine({
     lineCrops: () => localModels.visionOcr() !== null,
     acceleration: ocrCardEnvironment,
-    textModelResident: () => localModels.resident
+    textModelResident: () => localModels.resident,
+    persistent: true
   });
   // After a series of documents or a conversation: the model's memory back after a quiet while.
   const idleMinutes = Number(process.env.LEX_LOCAL_MODEL_IDLE_MINUTES ?? "5");
@@ -778,7 +779,8 @@ export async function startLocalServer(options?: {
       new CompleteImageIngestor(
         new LocalPaddleImageOcrEngine({
           lineCrops: () => localModels.visionOcr() !== null,
-          acceleration: () => ocrAcceleration.environment()
+          acceleration: () => ocrAcceleration.environment(),
+          persistent: true
         })
       ),
       privacyVaultStore,
