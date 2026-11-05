@@ -3620,6 +3620,25 @@ mark.restored {
   line-height: 1;
 }
 
+/* Start: a recent case with its rename button (owner). */
+.lex-home .matter-thread-row .lex-home-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.case-access-admin-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-access-admin-search label {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
 /* Case: court, signature and its wokanda. */
 .case-court-form {
   display: grid;

@@ -2663,12 +2663,37 @@ export class LocalModelRuntime {
   async withGeneration<T>(fn: () => Promise<T>): Promise<T> {
     while (this.exclusive) await new Promise<void>((resolve) => this.lockWaiters.push(resolve));
     this.generations += 1;
+    this.lastUsedAt = Date.now();
     try {
       return await fn();
     } finally {
       this.generations -= 1;
+      this.lastUsedAt = Date.now();
       this.wakeLockWaiters();
     }
+  }
+
+  // The memory of the model (on the card about 10-11 GB of 12 for Bielik with 32k context) is
+  // given back when it is not used: before, a model once started stayed loaded until the app
+  // closed, and OCR on the card ran in what was left. It starts again on the next answer.
+  private lastUsedAt = Date.now();
+
+  /** Whether the model is loaded and has not answered for at least `idleMs`. */
+  idleFor(idleMs: number, now: number = Date.now()): boolean {
+    return this.child !== null && !this.startup && this.generations === 0 && !this.exclusive && now - this.lastUsedAt >= idleMs;
+  }
+
+  /** Stops a loaded model that has been idle for `idleMs` (memory for OCR, other programs). */
+  async releaseIfIdle(idleMs: number, reason: string): Promise<boolean> {
+    if (this.external || !this.idleFor(idleMs)) return false;
+    process.stderr.write(`LOCAL_MODEL_RELEASED:${reason}:idle=${Math.round((Date.now() - this.lastUsedAt) / 1000)}s\n`);
+    await this.stop();
+    return true;
+  }
+
+  /** Whether the model is in memory now (for the OCR statistics). */
+  get resident(): boolean {
+    return this.child !== null;
   }
 
   /**

@@ -74,6 +74,10 @@ export type ProviderStreamParams = {
   // parts go as separate system blocks with a cache breakpoint after the first, so the
   // next checkpoint reads it from the cache although its own part differs.
   systemPromptCachePrefix?: number;
+  // Shorter part of that prefix shared by every question whatever its domain (instructions,
+  // catalog, router core): a breakpoint after it too, so a question of another domain reads it
+  // from the cache instead of writing the whole prefix again.
+  systemPromptSharedPrefix?: number;
   // Same for every request sharing that prefix (a hash of it): OpenAI routes such requests
   // to the same cache (prompt_cache_key), xAI by its conversation header (x-grok-conv-id).
   promptCacheKey?: string;

@@ -58,3 +58,32 @@ describe("lokalny model: odpowiedź czatu a krok modelu wizyjnego", () => {
     await answer;
   });
 });
+
+describe("lokalny model: zwalnianie pamięci, gdy nie jest używany", () => {
+  it("bezczynny dłużej niż próg: zatrzymany; w trakcie odpowiedzi albo kroku wizyjnego: nie", async () => {
+    const models = runtime();
+    const internal = models as unknown as { child: unknown; lastUsedAt: number; stop: () => Promise<void> };
+    let stopped = 0;
+    internal.stop = async () => {
+      stopped += 1;
+      internal.child = null;
+    };
+    // Not loaded: nothing to release.
+    expect(await models.releaseIfIdle(0, "TEST")).toBe(false);
+    internal.child = {};
+    internal.lastUsedAt = Date.now() - 10 * 60_000;
+    let endAnswer!: () => void;
+    const answer = models.withGeneration(() => new Promise<void>((resolve) => (endAnswer = resolve)));
+    await tick();
+    expect(await models.releaseIfIdle(60_000, "OCR")).toBe(false);
+    endAnswer();
+    await answer;
+    // Just answered: the series goes on, the model stays.
+    expect(await models.releaseIfIdle(60_000, "OCR")).toBe(false);
+    internal.lastUsedAt = Date.now() - 2 * 60_000;
+    expect(models.resident).toBe(true);
+    expect(await models.releaseIfIdle(60_000, "OCR")).toBe(true);
+    expect(stopped).toBe(1);
+    expect(models.resident).toBe(false);
+  });
+});
