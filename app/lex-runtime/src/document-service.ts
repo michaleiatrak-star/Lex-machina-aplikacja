@@ -114,6 +114,9 @@ export type DocumentSecurityContext = {
   detect?: boolean;
   // OCR of a file added to the case, before the user's decision: yields to the user's work.
   background?: boolean;
+  // A recording transcribed again with this many speakers (0 = estimated): the stored reading
+  // is not reused.
+  speakers?: number;
   // Background OCR runs outside the case lock (a confirmation in the same case does not wait
   // for it); only saving its result takes the lock and the case key, through this callback.
   storeUnderLock?: <T>(save: (key: { caseDataKey: Buffer; keyVersion: number }) => Promise<T>) => Promise<T>;
@@ -647,11 +650,16 @@ implements DocumentService {
    * A recording as a document: one page per 10 minutes, each line with the time it starts.
    * The pages are DIGITAL text (no scan to compare), so the privacy review works as for a letter.
    */
-  private async transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: ProgressReporter): Promise<DocumentIngestionResult> {
+  private async transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: ProgressReporter, speakers?: number): Promise<DocumentIngestionResult> {
     if (!this.transcriber) throw new Error("TRANSCRIPTION_UNAVAILABLE");
     if (!this.transcriber.available()) throw new Error("TRANSCRIPTION_MODEL_MISSING");
     onProgress?.({ stage: "TRANSCRIPTION", done: 0, total: 0 });
-    const transcript = await this.transcriber.transcribe(data, mediaType, (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }));
+    const transcript = await this.transcriber.transcribe(
+      data,
+      mediaType,
+      (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }),
+      ...(speakers !== undefined ? [{ speakers }] : [])
+    );
     const pages: IngestedPage[] = transcriptPages(transcript).map((page) => ({
       page: page.page,
       text: page.text,
@@ -732,13 +740,14 @@ implements DocumentService {
   private async extract(
     data: Uint8Array,
     mediaType: SupportedDocumentMediaType,
-    onProgress?: ProgressReporter
+    onProgress?: ProgressReporter,
+    speakers?: number
   ): Promise<DocumentIngestionResult> {
     if (mediaType === "application/pdf") {
       return this.pdfIngestor.ingest(data, onProgress);
     }
     if (isRecordingMediaType(mediaType)) {
-      return this.transcribe(data, mediaType, onProgress);
+      return this.transcribe(data, mediaType, onProgress, speakers);
     }
     if (
       mediaType ===
@@ -859,7 +868,7 @@ implements DocumentService {
     onProgress?.({ stage: "READING" });
     // The same file read before in this case (a retry, the file added again, a password typed
     // after the first attempt): its stored reading is used, no second OCR or transcription.
-    const cached = await this.storedReading(data, security);
+    const cached = security?.speakers !== undefined ? null : await this.storedReading(data, security);
     if (cached) {
       const vault = new PseudonymizationVault();
       this.documents.set(cached.documentId, {
@@ -875,7 +884,8 @@ implements DocumentService {
     const extracted = nfcIngestion(await this.extract(
       data,
       mediaType,
-      onProgress
+      onProgress,
+      security?.speakers
     ));
     const spaced = await this.restoreSpacing(extracted);
     // Model-free cleanup on every OCR page (ligatures, look-alike letters, misread amounts;

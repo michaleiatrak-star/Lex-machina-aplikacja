@@ -1669,6 +1669,11 @@ export function applyNonLegalChatGate(
   return true;
 }
 
+/** People speaking in a recording asked for at processing: 0 (estimated) or 2-12; else none. */
+export function transcriptSpeakers(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && (value === 0 || (value >= 2 && value <= 12)) ? value : undefined;
+}
+
 /**
  * X-Lex-Processing on a raw document upload: "local-ai" (the local model also
  * checks personal data) and "ocr-fix" (the local model corrects OCR errors),
@@ -5287,6 +5292,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         ...(req.body?.localAi === true ? { localAi: true } : {}),
         ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
         ...(req.body?.detect === false ? { detect: false } : {}),
+        ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers)! } : {}),
         background: true,
         storeUnderLock: (save) =>
           access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) =>
@@ -5524,7 +5530,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       ...(req.body?.localAi === true ? { localAi: true } : {}),
                       ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                       // OCR only now; personal data later (POST /api/documents/:id/detect).
-                      ...(req.body?.detect === false ? { detect: false } : {})
+                      ...(req.body?.detect === false ? { detect: false } : {}),
+                      ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers)! } : {})
                     }
                   );
               } finally {

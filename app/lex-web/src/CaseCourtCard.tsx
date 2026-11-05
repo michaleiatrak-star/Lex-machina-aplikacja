@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { InfoTip } from "./InfoTip";
+import { CourtPicker } from "./CourtPicker.js";
 import { WokandaVerification } from "./WokandaVerification.js";
 import { DEPARTMENTS, EMPTY_SIGNATURE, composeSignature, repertoriesFor, signatureYears, splitSignature, type SignatureParts } from "./case-signature.js";
 import {
@@ -176,12 +177,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
         >
           <label>
             Sąd
-            <input list={`courts-${caseId}`} value={draft.nazwa} placeholder="Sąd Rejonowy w …" onChange={(event) => setDraft({ ...draft, nazwa: event.target.value })} />
-            <datalist id={`courts-${caseId}`}>
-              {courtNames.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
+            <CourtPicker value={draft.nazwa} courts={courtNames} onChange={(nazwa) => setDraft({ ...draft, nazwa })} />
           </label>
           <label>
             Wydział

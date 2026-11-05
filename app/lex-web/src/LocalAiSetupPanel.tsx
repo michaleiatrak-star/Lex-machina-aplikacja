@@ -799,6 +799,8 @@ type TranscriptionStatus = {
   state: "IDLE" | "DOWNLOADING" | "FAILED";
   progress: { file: string; received: number; total: number; percent: number } | null;
   error?: string;
+  // Who speaks when (older runtimes do not send it); count 0 = estimated.
+  speakers?: { installed: boolean; bytes: number; count?: number };
 };
 
 /**
@@ -836,6 +838,15 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
     }
   }
 
+  async function setSpeakers(count: number): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<TranscriptionStatus>("/api/local-models/transcription/speakers", { method: "POST", body: JSON.stringify({ count }) }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
   if (!status) return null;
   const progress = status.progress;
   return (
@@ -865,14 +876,44 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
           ) : null}
         </div>
       ) : status.installed ? (
-        <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst.</small>
+        <>
+          <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst ze znacznikami czasu.</small>
+          {status.speakers ? (
+            <small>
+              Rozpoznawanie rozmówców:{" "}
+              {status.speakers.installed
+                ? "gotowe (transkrypcja dzieli tekst na osoby, nazwy zmienisz w podglądzie dokumentu)."
+                : `modele (${Math.round(status.speakers.bytes / 1_000_000)} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+            </small>
+          ) : null}
+          {status.speakers?.installed && admin ? (
+            <label className="local-ai-inline-select">
+              Liczba rozmówców w nagraniach
+              <InfoTip>Znana liczba osób (np. 3 na rozprawie: sąd i dwie strony) daje dokładniejszy podział niż ocena automatyczna.</InfoTip>
+              <select value={status.speakers.count ?? 0} onChange={(event) => void setSpeakers(Number(event.target.value))}>
+                <option value={0}>automatycznie</option>
+                <option value={2}>2</option>
+                <option value={3}>3 (np. rozprawa)</option>
+                {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </>
       ) : (
         <small>Nie zainstalowany.</small>
       )}
       {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
       {admin ? (
         <div className="local-ai-actions">
-          <button type="button" disabled={status.installed || status.state === "DOWNLOADING"} onClick={() => void act("install")}>
+          <button
+            type="button"
+            disabled={(status.installed && (status.speakers?.installed ?? true)) || status.state === "DOWNLOADING"}
+            onClick={() => void act("install")}
+          >
             Pobierz model transkrypcji
           </button>
           <button

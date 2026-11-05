@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "windows-x86_64",
-  "applicationVersion": "0.1.67",
+  "applicationVersion": "0.1.68",
   "installerMode": "ONLINE_BOOTSTRAP_DEFAULT",
   "applicationUpdate": {
     "verification": "SHA256_REQUIRED_SIGNATURE_OPTIONAL",
@@ -72,6 +72,7 @@
     "uv": "0.12.17",
     "morfeusz2": "1.99.15",
     "faster-whisper": "1.2.1",
+    "sherpa-onnx": "2.0.1",
     "ctranslate2": "4.8.5",
     "av": "19.0.2",
     "onnxruntime": "1.31.1",

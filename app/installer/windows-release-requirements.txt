@@ -8,6 +8,7 @@ torch==2.14.0
 uv==0.12.17
 morfeusz2==1.99.15
 faster-whisper==1.2.1
+sherpa-onnx==2.0.1
 ctranslate2==4.8.5
 av==19.0.2
 onnxruntime==1.31.1
