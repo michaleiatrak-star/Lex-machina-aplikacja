@@ -583,10 +583,12 @@ export function WorkspaceManager({
     item: WorkspaceItem,
     mode: DocumentProcessingMode,
     // false = run the same mode again without the AI's OCR corrections
-    ocrFix = true
+    ocrFix = true,
+    // A recording transcribed again with this many speakers (0 = estimated).
+    speakers?: number
   ): Promise<void> {
     if (!(await modeReady(mode, ocrFix))) return;
-    await withItemProgress(item, (progressId) => runAutomaticPrivacySteps(item, progressId, mode, ocrFix));
+    await withItemProgress(item, (progressId) => runAutomaticPrivacySteps(item, progressId, mode, ocrFix, speakers));
   }
 
   /**
@@ -710,7 +712,8 @@ export function WorkspaceManager({
             keepClear,
             ...(options?.ocrFix && ready.pages.some((page) => page.corrections?.length)
               ? { onUndoOcrFixes: () => { nextPreview(); void runAutomaticPrivacy(item, entry.mode, false); } }
-              : {})
+              : {}),
+            onRetranscribe: (count: number) => { nextPreview(); void runAutomaticPrivacy(item, entry.mode, true, count); }
           }
         });
         await closed;
@@ -733,7 +736,8 @@ export function WorkspaceManager({
     item: WorkspaceItem,
     progressId: string,
     mode: DocumentProcessingMode,
-    ocrFix: boolean
+    ocrFix: boolean,
+    speakers?: number
   ): Promise<void> {
     const keepClear = processingModeKeepsClearText(mode);
     const options = processingModeOptions(mode);
@@ -744,7 +748,7 @@ export function WorkspaceManager({
           item.itemId,
           undefined,
           progressId,
-          options ? { ...options, ...(ocrFix ? {} : { ocrFix: false }) } : undefined
+          options || speakers !== undefined ? { ...(options ?? {}), ...(ocrFix ? {} : { ocrFix: false }), ...(speakers !== undefined ? { speakers } : {}) } : undefined
         );
       // Finalized only after the preview (doubtful OCR lines, local AI hints, masks) is confirmed.
       offerPreview({
@@ -757,7 +761,8 @@ export function WorkspaceManager({
           keepClear,
           ...(review.pages.some((page) => page.corrections?.length) && ocrFix
             ? { onUndoOcrFixes: () => { showPrivacyPreview(null); void runAutomaticPrivacy(item, mode, false); } }
-            : {})
+            : {}),
+          onRetranscribe: (count: number) => { showPrivacyPreview(null); void runAutomaticPrivacy(item, mode, ocrFix, count); }
         }
       });
     });

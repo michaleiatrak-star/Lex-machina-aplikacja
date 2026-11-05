@@ -3716,3 +3716,133 @@ mark.restored {
 .case-signature-preview {
   grid-column: 1 / -1;
 }
+
+/* A recording's transcript: protocol preview and editor. */
+.transcript-editor {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgb(var(--lm-o5-rgb) / 0.25);
+  border-radius: 10px;
+}
+
+.transcript-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transcript-editor-head > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.transcript-speakers {
+  display: grid;
+  gap: 6px;
+}
+
+.transcript-speakers label {
+  display: grid;
+  grid-template-columns: minmax(80px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-turns {
+  display: grid;
+  gap: 4px;
+  max-height: 60vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.transcript-turn {
+  display: grid;
+  grid-template-columns: 64px minmax(110px, 160px) minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.transcript-turn:not(:has(select)) {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.transcript-time {
+  padding-top: 6px;
+  color: var(--lm-t11);
+  font-variant-numeric: tabular-nums;
+}
+
+.transcript-turn textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  .transcript-turn,
+  .transcript-speakers label {
+    grid-template-columns: 1fr;
+  }
+}
+
+.transcript-retranscribe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-retranscribe label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.court-picker {
+  position: relative;
+}
+
+.court-picker input {
+  width: 100%;
+}
+
+.court-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 0;
+  left: 0;
+  max-height: 260px;
+  margin: 2px 0 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid rgb(var(--lm-o5-rgb) / 0.35);
+  border-radius: 8px;
+  background: var(--lm-s1, #fff);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
+}
+
+.court-picker-list li {
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.court-picker-list li.active,
+.court-picker-list li:hover {
+  background: rgb(var(--lm-o1-rgb) / 0.12);
+}
+
+.court-picker-empty {
+  color: var(--lm-t11);
+  cursor: default;
+}

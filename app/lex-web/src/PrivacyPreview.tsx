@@ -8,6 +8,8 @@ import {
 } from "./api.js";
 import { PageScanView } from "./PageScanView.js";
 import { InfoTip } from "./InfoTip";
+import { TranscriptEditor } from "./TranscriptEditor.js";
+import { isTranscript } from "./transcript.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
 import { replaceOcrLine } from "./ocr-line-fix.js";
@@ -26,6 +28,8 @@ export type PrivacyPreviewRequest = {
   keepClear: boolean;
   // Runs the processing again without the local model's OCR corrections.
   onUndoOcrFixes?: () => void;
+  // A recording transcribed again with this many speakers (0 = estimated).
+  onRetranscribe?: (speakers: number) => void;
 };
 
 type Suggestion = DocumentReviewResponse["suggestions"][number];
@@ -275,6 +279,34 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     }
   }
 
+  // A recording's transcript: the pages its editor changed, saved one after another.
+  const transcript = useMemo(() => isTranscript(review.pages, props.fileName), [review.pages, props.fileName]);
+  async function saveTranscriptPages(changed: Array<{ page: number; text: string }>): Promise<boolean> {
+    setSaving(true);
+    setError("");
+    try {
+      let next = review;
+      for (const target of changed) {
+        const result = await editDocumentPage(props.caseId, next.documentId, target.page, target.text);
+        next = {
+          ...next,
+          pages: next.pages.map((page) => (page.page === target.page ? result.page : page)),
+          suggestions: [...next.suggestions.filter((item) => item.page !== target.page), ...result.suggestions]
+        };
+      }
+      const pagesChanged = new Set(changed.map((item) => item.page));
+      setReview(next);
+      setDirectives((current) => current.filter((item) => !pagesChanged.has(item.page)));
+      setSelection(null);
+      return true;
+    } catch (failure) {
+      setError(`Nie udało się zapisać transkrypcji: ${failure instanceof Error ? failure.message : String(failure)}`);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const pages = useMemo(
     () =>
       review.pages.map((page) => {
@@ -387,6 +419,13 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         </div>
         {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
+      {transcript ? <TranscriptEditor
+          pages={review.pages}
+          fileName={props.fileName}
+          busy={saving || props.busy}
+          onSave={saveTranscriptPages}
+          {...(props.onRetranscribe ? { onRetranscribe: props.onRetranscribe } : {})}
+        /> : null}
 
       {!props.keepClear && review.recognizerWarnings?.length ? (
         <p className="field-error" role="alert">

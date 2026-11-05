@@ -249,3 +249,10 @@
 .local-ai-details > small {
   display: block;
 }
+
+.local-ai-inline-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

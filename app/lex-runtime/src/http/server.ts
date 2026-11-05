@@ -759,8 +759,17 @@ export async function startLocalServer(options?: {
   // Transcription on an NVIDIA card: the same once-only setup, a little later than the OCR one
   // (both measurements are background work and would only wait for each other).
   const recordingTranscriber = new LocalWhisperTranscriber(() => transcriptionModel.dir, {
-    acceleration: () => transcriptionAcceleration.environment()
+    acceleration: () => transcriptionAcceleration.environment(),
+    speakersDir: () => (transcriptionModel.speakersInstalled() ? transcriptionModel.speakersDir : null),
+    speakerCount: () => transcriptionModel.speakerCount()
   });
+  // Speaker models (tens of MB) for a transcription model installed before they existed: fetched
+  // once in the background, checked against their SHA-256 (the administrator chose transcription).
+  if (!process.env.VITEST && transcriptionModel.installed() && !transcriptionModel.speakersInstalled()) {
+    setTimeout(() => {
+      transcriptionModel.start().catch(() => undefined);
+    }, 20_000).unref();
+  }
   transcriptionAcceleration.reader = (data, env) => recordingTranscriber.benchmark(data, "audio/opus", env);
   const autoTranscriptionAcceleration = () => {
     transcriptionAcceleration.autoSetup().catch((error: unknown) => {

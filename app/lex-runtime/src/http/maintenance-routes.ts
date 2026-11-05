@@ -266,6 +266,17 @@ export function registerMaintenanceRoutes(
         sendMaintenanceError(res, error);
       }
     });
+    // How many people speak in recordings: 0 = estimated, 2-12 = known (a hearing: 3), more accurate.
+    app.post("/api/local-models/transcription/speakers", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      const count = Number(req.body?.count);
+      if (!Number.isInteger(count) || count < 0 || count > 12 || count === 1) {
+        res.status(400).json({ error: "TRANSCRIPTION_SPEAKERS_INVALID" });
+        return;
+      }
+      transcriptionModel.setSpeakerCount(count);
+      res.json(transcriptionModel.status());
+    });
     app.post("/api/local-models/transcription/remove", (req, res) => {
       if (!requireAdmin(req, res, authService)) return;
       try {

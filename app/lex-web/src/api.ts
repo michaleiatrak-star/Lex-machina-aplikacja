@@ -3513,7 +3513,7 @@ export async function processStoredCaseFile(
   progressId?: string,
   // "z lokalnym AI": the local model also checks the document; detect false: OCR only now;
   // background: read before the user's decision, yields to the user's own document work.
-  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean }
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean; speakers?: number }
 ): Promise<DocumentReviewResponse> {
   const path = fileId
     ? `/api/cases/${caseId}/files/${uploadId}/members/${fileId}/process`
@@ -3523,7 +3523,7 @@ export async function processStoredCaseFile(
     {
       method: "POST",
       headers: { "X-Lex-Keep-Alive": "1", ...(progressId ? { "X-Lex-Progress": progressId } : {}) },
-      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false || options?.background
+      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false || options?.background || options?.speakers !== undefined
         ? {
             headers: {
               "X-Lex-Keep-Alive": "1",
@@ -3534,7 +3534,8 @@ export async function processStoredCaseFile(
               ...(options.localAi ? { localAi: true } : {}),
               ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {}),
               ...(options.detect === false ? { detect: false } : {}),
-              ...(options.background ? { background: true } : {})
+              ...(options.background ? { background: true } : {}),
+              ...(options.speakers !== undefined ? { speakers: options.speakers } : {})
             })
           }
         : {})
