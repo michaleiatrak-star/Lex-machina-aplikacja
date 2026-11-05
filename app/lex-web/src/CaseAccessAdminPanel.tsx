@@ -66,6 +66,66 @@ export function assignableCases(cases: CaseAccessOverviewItem[]): CaseAccessOver
     .sort((a, b) => (a.displayName ?? a.caseId).localeCompare(b.displayName ?? b.caseId, "pl"));
 }
 
+export type CaseSort = "name-asc" | "name-desc" | "created-desc" | "created-asc";
+
+export const CASE_SORT_LABELS: Record<CaseSort, string> = {
+  "name-asc": "Nazwa A–Z",
+  "name-desc": "Nazwa Z–A",
+  "created-desc": "Utworzone: najnowsze",
+  "created-asc": "Utworzone: najstarsze"
+};
+
+const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pl");
+
+/** Cases matching the search (name, case id, a member's name or login), in the chosen order. */
+export type CaseDateRange = { from: string; to: string };
+
+// The day of an ISO time on this computer (yyyy-mm-dd), as the date fields show it.
+function localDay(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function searchAndSortCases(
+  cases: readonly CaseAccessOverviewItem[],
+  query: string,
+  sort: CaseSort,
+  // Cases created between these days (inclusive); an empty end is open.
+  range: CaseDateRange = { from: "", to: "" }
+): CaseAccessOverviewItem[] {
+  const words = fold(query).split(/\s+/u).filter(Boolean);
+  const name = (item: CaseAccessOverviewItem) => item.displayName || item.caseId;
+  const matches = cases.filter((item) => {
+    if (range.from || range.to) {
+      const day = item.createdAt ? localDay(item.createdAt) : "";
+      if (!day || (range.from && day < range.from) || (range.to && day > range.to)) return false;
+    }
+    if (!words.length) return true;
+    const haystack = fold([name(item), item.caseId, ...item.members.flatMap((member) => [member.displayName, member.loginName])].join(" "));
+    return words.every((word) => haystack.includes(word));
+  });
+  const created = (item: CaseAccessOverviewItem) => item.createdAt ?? "";
+  return matches.sort((a, b) => {
+    switch (sort) {
+      case "name-asc":
+        return name(a).localeCompare(name(b), "pl", { sensitivity: "base", numeric: true });
+      case "name-desc":
+        return name(b).localeCompare(name(a), "pl", { sensitivity: "base", numeric: true });
+      case "created-asc":
+        return created(a).localeCompare(created(b)) || name(a).localeCompare(name(b), "pl");
+      case "created-desc":
+        return created(b).localeCompare(created(a)) || name(a).localeCompare(name(b), "pl");
+    }
+  });
+}
+
+/** The quick assignment's case list: the search and order above it; the chosen case stays listed. */
+export function quickCaseOptions(cases: CaseAccessOverviewItem[], query: string, sort: CaseSort, selected: string, range?: CaseDateRange): CaseAccessOverviewItem[] {
+  const options = searchAndSortCases(assignableCases(cases), query, sort, range);
+  const chosen = selected && !options.some((item) => item.caseId === selected) ? cases.find((item) => item.caseId === selected) : undefined;
+  return chosen ? [chosen, ...options] : options;
+}
+
 function PencilIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -100,6 +160,9 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   const [cases, setCases] = useState<CaseAccessOverviewItem[]>([]);
   const [users, setUsers] = useState<AuthenticatedUser[]>([]);
   const [userFilter, setUserFilter] = useState("");
+  const [caseQuery, setCaseQuery] = useState("");
+  const [caseSort, setCaseSort] = useState<CaseSort>("name-asc");
+  const [caseRange, setCaseRange] = useState<CaseDateRange>({ from: "", to: "" });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -126,10 +189,11 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
     void reload().catch((failure) => setError(errorText(failure)));
   }, [reload]);
 
+  const shown = useMemo(() => searchAndSortCases(cases, caseQuery, caseSort, caseRange), [cases, caseQuery, caseSort, caseRange]);
   const visible = useMemo(() => {
-    if (!userFilter) return { member: cases, other: [] as CaseAccessOverviewItem[] };
-    return splitCasesForUser(cases, userFilter);
-  }, [cases, userFilter]);
+    if (!userFilter) return { member: shown, other: [] as CaseAccessOverviewItem[] };
+    return splitCasesForUser(shown, userFilter);
+  }, [shown, userFilter]);
 
   async function run(key: string, action: () => Promise<unknown>, done: string) {
     setBusy(key);
@@ -457,6 +521,35 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => ` ${ROLE_HELP[role]}`).join("")}
         </InfoTip>
       </p>
+      <div className="case-access-admin-search">
+        <label>
+          Szukaj sprawy
+          <input
+            type="search"
+            value={caseQuery}
+            placeholder="Nazwa sprawy, osoba lub login"
+            onChange={(event) => setCaseQuery(event.target.value)}
+          />
+        </label>
+        <label>
+          Utworzone od
+          <input type="date" value={caseRange.from} max={caseRange.to || undefined} onChange={(event) => setCaseRange({ ...caseRange, from: event.target.value })} />
+        </label>
+        <label>
+          do
+          <input type="date" value={caseRange.to} min={caseRange.from || undefined} onChange={(event) => setCaseRange({ ...caseRange, to: event.target.value })} />
+        </label>
+        <label>
+          Sortowanie
+          <select value={caseSort} onChange={(event) => setCaseSort(event.target.value as CaseSort)}>
+            {(Object.keys(CASE_SORT_LABELS) as CaseSort[]).map((key) => (
+              <option key={key} value={key}>
+                {CASE_SORT_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <fieldset className="case-access-admin-quick">
         <legend>
           Przypisz osobę do sprawy
@@ -486,7 +579,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           onChange={(event) => setQuick({ ...quick, caseId: event.target.value })}
         >
           <option value="">Sprawa…</option>
-          {assignableCases(cases).map((item) => {
+          {quickCaseOptions(cases, caseQuery, caseSort, quick.caseId, caseRange).map((item) => {
             const member = item.members.find((m) => m.userId === quick.userId);
             return (
               <option key={item.caseId} value={item.caseId}>
@@ -561,10 +654,10 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           <h3>Pozostałe sprawy ({visible.other.length})</h3>
           {visible.other.map((item) => renderCase(item, true))}
         </>
-      ) : cases.length ? (
-        cases.map((item) => renderCase(item, false))
+      ) : shown.length ? (
+        shown.map((item) => renderCase(item, false))
       ) : (
-        <p className="field-help">Brak spraw.</p>
+        <p className="field-help">{cases.length ? "Brak spraw pasujących do wyszukiwania lub zakresu dat." : "Brak spraw."}</p>
       )}
     </section>
   );

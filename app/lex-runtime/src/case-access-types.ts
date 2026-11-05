@@ -50,6 +50,7 @@ export type CaseAccessOverviewItem = {
   caseKind: CaseKind;
   displayName?: string;
   archivedAt?: string;
+  createdAt: string;
   updatedAt: string;
   viewerRole?: CaseRole;
   canManage: boolean;

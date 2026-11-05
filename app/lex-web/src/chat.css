@@ -3625,3 +3625,16 @@ mark.restored {
   flex: 1;
   min-width: 0;
 }
+
+.case-access-admin-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-access-admin-search label {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
