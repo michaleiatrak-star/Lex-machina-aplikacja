@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { InfoTip } from "./InfoTip";
 import { WokandaVerification } from "./WokandaVerification.js";
+import { DEPARTMENTS, EMPTY_SIGNATURE, composeSignature, repertoriesFor, signatureYears, splitSignature, type SignatureParts } from "./case-signature.js";
 import {
   addCaseScheduleEvent,
   checkCaseWokanda,
+  listCaseSchedule,
   getCaseCourt,
   listWokandaCourts,
   setCaseCourt,
   type CaseCourtInfo,
+  type CaseScheduleEvent,
   type WokandaCheck,
   type WokandaCourtInfo,
   type WokandaHearing
@@ -32,6 +35,12 @@ export function hearingStartsAt(hearing: Pick<WokandaHearing, "data" | "godzina"
   return new Date(`${hearing.data}T${time}:00`).toISOString();
 }
 
+/** A hearing already in the case's calendar: a court hearing at the same minute. */
+export function hearingInCalendar(hearing: Pick<WokandaHearing, "data" | "godzina">, events: readonly Pick<CaseScheduleEvent, "kind" | "startsAt">[]): boolean {
+  const at = new Date(hearingStartsAt(hearing)).getTime();
+  return events.some((event) => event.kind === "COURT_HEARING" && Math.abs(new Date(event.startsAt).getTime() - at) < 60_000);
+}
+
 export function hearingLine(hearing: WokandaHearing): string {
   return [
     `${hearing.data} ${hearing.godzina}`,
@@ -51,7 +60,10 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
   const [wokanda, setWokanda] = useState<WokandaCourtInfo | null>(null);
   const [courts, setCourts] = useState<WokandaCourtInfo[]>([]);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ nazwa: "", wydzial: "", sygnatura: "" });
+  const [draft, setDraft] = useState({ nazwa: "", wydzial: "" });
+  // The signature as the courts write it: department, repertory, number and year.
+  const [parts, setParts] = useState<SignatureParts>(EMPTY_SIGNATURE);
+  const [schedule, setSchedule] = useState<CaseScheduleEvent[]>([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [check, setCheck] = useState<WokandaCheck | null>(null);
@@ -65,7 +77,8 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
         if (!active) return;
         setCourt(result.court);
         setWokanda(result.wokanda);
-        setDraft({ nazwa: result.court?.nazwa ?? "", wydzial: result.court?.wydzial ?? "", sygnatura: result.court?.sygnatura ?? "" });
+        setDraft({ nazwa: result.court?.nazwa ?? "", wydzial: result.court?.wydzial ?? "" });
+        setParts((result.court?.sygnatura ? splitSignature(result.court.sygnatura) : null) ?? EMPTY_SIGNATURE);
       })
       .catch(() => undefined);
     return () => {
@@ -80,11 +93,18 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
 
   const courtNames = useMemo(() => courts.map((item) => item.nazwa).sort((a, b) => a.localeCompare(b, "pl")), [courts]);
 
+  const partsStarted = Object.values(parts).some((value) => value.trim());
+  const signature = composeSignature(parts);
+
   async function save(clear = false) {
+    if (!clear && partsStarted && !signature) {
+      setMessage("Uzupełnij sygnaturę: nr wydziału, repertorium, numer i rok (np. XI C 1768/26).");
+      return;
+    }
     setBusy("save");
     setMessage("");
     try {
-      const result = await setCaseCourt(caseId, clear ? {} : { nazwa: draft.nazwa.trim(), wydzial: draft.wydzial.trim(), sygnatura: draft.sygnatura.trim() });
+      const result = await setCaseCourt(caseId, clear ? {} : { nazwa: draft.nazwa.trim(), wydzial: draft.wydzial.trim(), ...(signature ? { sygnatura: signature } : {}) });
       setCourt(result.court);
       setWokanda(result.wokanda);
       setCheck(null);
@@ -107,7 +127,9 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
     setBusy("check");
     setMessage("");
     try {
-      setCheck(await checkCaseWokanda(caseId));
+      const [result, events] = await Promise.all([checkCaseWokanda(caseId), listCaseSchedule(caseId).catch(() => ({ events: [] as CaseScheduleEvent[] }))]);
+      setSchedule(events.events);
+      setCheck(result);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -126,6 +148,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
         notes: `Z wokandy sądu (${hearing.url}).${hearing.przewodniczacy ? ` Przewodniczący: ${hearing.przewodniczacy}.` : ""}`
       });
       setMessage(`Termin ${hearing.data} ${hearing.godzina} dodany do kalendarza sprawy.`);
+      setSchedule((await listCaseSchedule(caseId).catch(() => ({ events: schedule }))).events);
       onScheduleChanged?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -164,10 +187,56 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
             Wydział
             <input value={draft.wydzial} maxLength={120} placeholder="I Wydział Cywilny" onChange={(event) => setDraft({ ...draft, wydzial: event.target.value })} />
           </label>
-          <label>
-            Sygnatura
-            <input value={draft.sygnatura} maxLength={40} placeholder="I C 123/26" onChange={(event) => setDraft({ ...draft, sygnatura: event.target.value })} />
-          </label>
+          <fieldset className="case-signature-fields">
+            <legend>
+              Sygnatura akt
+              <InfoTip>Jak w sądzie: nr wydziału, repertorium, numer i rok. Zapis „XI C 1768/26” powstaje z tych pól.</InfoTip>
+            </legend>
+            <label>
+              Nr wydziału
+              <select value={parts.wydzial} onChange={(event) => setParts({ ...parts, wydzial: event.target.value })}>
+                <option value="">–</option>
+                {DEPARTMENTS.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Repertorium
+              <input
+                list={`repertoria-${caseId}`}
+                value={parts.repertorium}
+                maxLength={8}
+                placeholder="C"
+                onChange={(event) => setParts({ ...parts, repertorium: event.target.value.trim() })}
+              />
+              <datalist id={`repertoria-${caseId}`}>
+                {repertoriesFor(draft.nazwa).map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
+            </label>
+            <label>
+              Numer
+              <input inputMode="numeric" value={parts.numer} maxLength={6} placeholder="1768" onChange={(event) => setParts({ ...parts, numer: event.target.value.replace(/\D/gu, "") })} />
+            </label>
+            <label>
+              Rok
+              <select value={parts.rok} onChange={(event) => setParts({ ...parts, rok: event.target.value })}>
+                <option value="">–</option>
+                {signatureYears().map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <small className="case-signature-preview" aria-live="polite">
+              {signature ? `Sygnatura: ${signature}` : partsStarted ? "Uzupełnij wszystkie cztery pola." : "Bez sygnatury (sprawa jeszcze nie w sądzie)."}
+            </small>
+          </fieldset>
           <div className="case-court-actions">
             <button type="submit" className="chat-primary-action" disabled={Boolean(busy) || !draft.nazwa.trim()}>
               Zapisz
@@ -207,7 +276,16 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
           ) : null}
         </div>
       ) : null}
-      {check ? <WokandaCheckView check={check} canWrite={canWrite} busy={busy} onAdd={(hearing) => void addToCalendar(hearing)} onVerified={() => void runCheck()} /> : null}
+      {check ? (
+        <WokandaCheckView
+          check={check}
+          canWrite={canWrite}
+          busy={busy}
+          inCalendar={(hearing) => hearingInCalendar(hearing, schedule)}
+          onAdd={(hearing) => void addToCalendar(hearing)}
+          onVerified={() => void runCheck()}
+        />
+      ) : null}
       {message ? <p className="field-help">{message}</p> : null}
     </article>
   );
@@ -217,12 +295,14 @@ function WokandaCheckView({
   check,
   canWrite,
   busy,
+  inCalendar,
   onAdd,
   onVerified
 }: {
   check: WokandaCheck;
   canWrite: boolean;
   busy: string;
+  inCalendar: (hearing: WokandaHearing) => boolean;
   onAdd: (hearing: WokandaHearing) => void;
   onVerified: () => void;
 }) {
@@ -249,7 +329,9 @@ function WokandaCheckView({
                   <a href={hearing.url} target="_blank" rel="noreferrer">
                     szczegóły
                   </a>
-                  {canWrite ? (
+                  {inCalendar(hearing) ? (
+                    <small className="case-court-in-calendar">w kalendarzu sprawy</small>
+                  ) : canWrite ? (
                     <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => onAdd(hearing)}>
                       Dodaj do kalendarza
                     </button>
