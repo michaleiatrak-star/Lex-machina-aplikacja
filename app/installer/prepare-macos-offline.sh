@@ -77,6 +77,13 @@ for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medi
   [ -f "$OFFLINE/models/paddle/official_models/$name/inference.pdiparams" ] || fail "PADDLE_MODEL_MISSING:$name"
 done
 find "$OFFLINE" -name "__pycache__" -type d -prune -exec rm -rf {} +
+# Download caches and locks of the model hosts (.locks, .cache, *.lock, *.incomplete) are no part
+# of the bundle; some are created unreadable, and the app build reads every resource file.
+find "$OFFLINE" \( -name ".locks" -o -name ".cache" -o -name ".huggingface" \) -type d -prune -exec rm -rf {} +
+find "$OFFLINE" \( -name "*.lock" -o -name "*.incomplete" -o -name ".DS_Store" \) -type f -delete
+chmod -R u+rwX,go+rX "$OFFLINE"
+unreadable="$(find "$OFFLINE" ! -perm -u+r 2>/dev/null | head -5 || true)"
+[ -z "$unreadable" ] || fail "UNREADABLE_FILES:$unreadable"
 
 du -sh "$OFFLINE" "$OFFLINE"/* || true
 echo "OFFLINE_BUNDLE_READY $OFFLINE"
