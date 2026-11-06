@@ -458,6 +458,79 @@ function claudeResultPayload(stdout) {
 export function claudeResultReady(stdout) {
     return claudeResultPayload(stdout) !== null;
 }
+/**
+ * The text of the answer so far from Claude's partial-message events (--include-partial-messages):
+ * the text deltas of the message being written. A new message (after a tool round) starts over.
+ * Returns null for any other line (kept in the captured stdout).
+ */
+export function claudeLiveText() {
+    let text = "";
+    return (line) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("{") || !trimmed.includes('"stream_event"'))
+            return null;
+        let event;
+        try {
+            event = JSON.parse(trimmed);
+        }
+        catch {
+            return null;
+        }
+        if (event.type !== "stream_event")
+            return null;
+        const inner = event.event;
+        if (inner?.type === "message_start")
+            text = "";
+        if (inner?.type === "content_block_delta" && inner.delta?.type === "text_delta" && typeof inner.delta.text === "string") {
+            text += inner.delta.text;
+        }
+        return { text };
+    };
+}
+/** Text shown while it is written: never the tool-call protocol a text-only client emits. */
+export function liveDraft(text) {
+    const at = text.indexOf(TOOL_SENTINEL);
+    return (at >= 0 ? text.slice(0, at) : text).trimEnd();
+}
+/** The onStdoutLine hook for a Claude run: live text to `onText`, token events out of the capture. */
+export function claudeStdoutLines(onText) {
+    if (!onText)
+        return undefined;
+    const parse = claudeLiveText();
+    let shown = "";
+    return (line) => {
+        const live = parse(line);
+        if (!live)
+            return true;
+        const draft = liveDraft(live.text);
+        if (draft && draft !== shown) {
+            shown = draft;
+            onText(draft);
+        }
+        return false;
+    };
+}
+/**
+ * Live text of an account session as deltas for the chat preview (StreamCallbacks add them up).
+ * A message that does not continue the previous one (a new turn after a tool round) waits for
+ * `reset`, so the preview never shows two answers run together.
+ */
+export function liveTextSink(callbacks) {
+    if (!callbacks?.onContentDelta)
+        return undefined;
+    let sent = "";
+    return {
+        push: (text) => {
+            if (text === sent || !text.startsWith(sent))
+                return;
+            callbacks.onContentDelta(text.slice(sent.length));
+            sent = text;
+        },
+        reset: () => {
+            sent = "";
+        }
+    };
+}
 export function parseClaudeResult(stdout) {
     const payload = claudeResultPayload(stdout);
     if (!payload)
@@ -866,6 +939,8 @@ export function claudeHeadlessArgs(systemPrompt, tail = []) {
         "--output-format",
         "stream-json",
         "--verbose",
+        // Token events for the live preview; runDirect keeps them out of the parsed stdout.
+        "--include-partial-messages",
         "--restricted",
         "--strict-mcp-config",
         "--tools",
@@ -891,6 +966,7 @@ export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = []) {
         "--output-format",
         "stream-json",
         "--verbose",
+        "--include-partial-messages",
         "--restricted",
         "--strict-mcp-config",
         "--mcp-config",
@@ -1116,6 +1192,10 @@ function killProcessTree(child) {
     }
     child.kill();
 }
+/** The process runner itself, for tests of the line handling. */
+export function runDirectForTests(...args) {
+    return runDirect(...args);
+}
 function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal, settleOptions = {}) {
     return new Promise((resolve, reject) => {
         const child = spawnResolved(executable, args, cwd, env);
@@ -1159,8 +1239,25 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
             }, settleOptions.firstOutputTimeoutMs);
         }
         abortSignal?.addEventListener("abort", onAbort, { once: true });
+        let pendingLine = "";
         child.stdout.on("data", (chunk) => {
-            stdout = appendCapture(stdout, chunk);
+            if (settleOptions.onStdoutLine) {
+                const lines = (pendingLine + chunk.toString()).split("\n");
+                pendingLine = lines.pop() ?? "";
+                const kept = lines.filter((line) => {
+                    try {
+                        return settleOptions.onStdoutLine(line) !== false;
+                    }
+                    catch {
+                        return true;
+                    }
+                });
+                if (kept.length)
+                    stdout = appendCapture(stdout, kept.map((line) => `${line}\n`).join(""));
+            }
+            else {
+                stdout = appendCapture(stdout, chunk);
+            }
             if (!settled &&
                 settleOptions.settleOnStdout?.(stdout)) {
                 const captured = stdout;
@@ -1185,6 +1282,19 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
             finish(() => reject(new Error(`ACCOUNT_SESSION_CLI_SPAWN_FAILED:${errno}:${sanitizeAccountCliFailureDetail(`${executable}: ${error.message}`)}`)));
         });
         child.once("exit", (code) => {
+            // The last line without a newline (a final result printed without one).
+            if (pendingLine) {
+                let keep = true;
+                try {
+                    keep = settleOptions.onStdoutLine?.(pendingLine) !== false;
+                }
+                catch {
+                    keep = true;
+                }
+                if (keep)
+                    stdout = appendCapture(stdout, pendingLine);
+                pendingLine = "";
+            }
             finish(() => resolve({
                 code: code ?? 1,
                 stdout,
@@ -2633,7 +2743,11 @@ export class AccountSessionManager {
                 ...input.args,
                 ...(args.clientModel ? ["--model", args.clientModel] : []),
                 ...tail
-            ]), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, { settleOnStdout: claudeResultReady, firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS });
+            ]), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, {
+                settleOnStdout: claudeResultReady,
+                firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS,
+                ...(args.onText ? { onStdoutLine: claudeStdoutLines(args.onText) } : {})
+            });
             let result = null;
             const savedSessionId = args.fresh ? null : await readAccountSessionId("anthropic", args.continuityKey);
             if (savedSessionId) {
@@ -2775,7 +2889,9 @@ export class AccountSessionManager {
     clientModel = null, 
     // Fresh host session: no resume, no takeover of the latest CLI session, no
     // recorded thread (self-contained router and document-generator calls).
-    fresh = false) {
+    fresh = false, 
+    // Claude: the answer's text while it is written (chat preview).
+    onText) {
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-session-"));
         const allowExternalTakeover = !fresh &&
             (!continuityKey ||
@@ -2925,7 +3041,8 @@ export class AccountSessionManager {
                         ...tail
                     ], input.stdin, COMMAND_TIMEOUT_MS, hostCwd, abortSignal, {
                         settleOnStdout: claudeResultReady,
-                        firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS
+                        firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS,
+                        ...(onText ? { onStdoutLine: claudeStdoutLines(onText) } : {})
                     });
                     // An early-settled error result must still take the failure path
                     // (e.g. stale --resume id falls back to a fresh Lex session).
@@ -3040,14 +3157,25 @@ export async function streamAccountSession(manager, provider, params) {
     const allowedTools = new Set((params.tools ?? [])
         .map((tool) => tool.function.name));
     const toolTranscript = [];
+    // Claude writes the answer into the chat preview as it goes (other clients at the end).
+    const live = provider === "anthropic" ? liveTextSink(params.callbacks) : undefined;
     if (provider === "anthropic" && params.nativeCorpus && params.runTools) {
+        const onToolCall = params.callbacks?.onToolCallStart;
         const text = await manager.runClaudeWithCorpus({
             prompt: buildCorpusPrompt(params),
             images: messageImages(params),
             corpus: params.nativeCorpus,
             tools: params.tools ?? [],
             runTools: params.runTools,
-            ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
+            ...(onToolCall || live
+                ? {
+                    onToolCall: (call) => {
+                        live?.reset();
+                        onToolCall?.(call);
+                    }
+                }
+                : {}),
+            ...(live ? { onText: live.push } : {}),
             ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
             ...(params.continuityKey ? { continuityKey: params.continuityKey } : {}),
             clientModel: accountSessionClientModel(provider, params.model),
@@ -3055,7 +3183,10 @@ export async function streamAccountSession(manager, provider, params) {
         });
         if (!text.trim())
             throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
-        params.callbacks?.onContentDelta?.(text);
+        if (live)
+            live.push(text);
+        else
+            params.callbacks?.onContentDelta?.(text);
         return { fullText: text };
     }
     if (provider === "xai" && params.runTools && params.tools?.length && process.env.LEX_GROK_MCP?.trim() !== "0") {
@@ -3098,7 +3229,7 @@ export async function streamAccountSession(manager, provider, params) {
     const maxIterations = Math.max(1, Math.min(params.maxIterations ?? 10, 12));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
         let emptyRetried = false;
-        const runOnce = () => manager.runText(provider, buildAccountPrompt(params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none");
+        const runOnce = () => manager.runText(provider, buildAccountPrompt(params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none", live?.push);
         let output;
         for (let attempt = 0;; attempt += 1) {
             try {
@@ -3131,7 +3262,10 @@ export async function streamAccountSession(manager, provider, params) {
         }
         const calls = parseToolCalls(output);
         if (!calls) {
-            params.callbacks?.onContentDelta?.(output);
+            if (live)
+                live.push(output);
+            else
+                params.callbacks?.onContentDelta?.(output);
             return {
                 fullText: output
             };
@@ -3146,6 +3280,8 @@ export async function streamAccountSession(manager, provider, params) {
             }
             params.callbacks?.onToolCallStart?.(call);
         }
+        // The next round is a new answer: the preview starts over with it.
+        live?.reset();
         const results = await params.runTools(calls);
         for (const call of calls) {
             const result = results.find((item) => item.tool_use_id ===

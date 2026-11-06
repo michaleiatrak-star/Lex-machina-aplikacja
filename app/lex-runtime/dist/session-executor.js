@@ -47,7 +47,7 @@ const COVERAGE_SKILLS = new Set([
 ]);
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
@@ -743,6 +743,8 @@ restoreDocument) {
         }
     };
 }
+const RECOGNITION_CACHE_MS = 2 * 60_000;
+const RECOGNITION_CACHE_ENTRIES = 6;
 export const THREAD_SUMMARY_PROMPT = [
     "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
     "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
@@ -972,10 +974,40 @@ export class SafeSessionExecutor {
             this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
         return this.registryEnrichment;
     }
+    // Personal-data recognition of one text, kept for a short while: one turn reads the same text
+    // up to three times (the routing pre-pass of a local model, the assistant's example data, the
+    // anonymization itself), each a run of Stanza, the dictionaries and Morfeusz over the whole
+    // conversation. Keyed by the text's hash; failures are not kept.
+    recognitionCache = new Map();
     chatRecognizerFor(model) {
-        return this.chatNamedEntityRecognizer
-            ? privacyRecognizerFor(this.chatNamedEntityRecognizer, !model.startsWith("local/"))
-            : undefined;
+        if (!this.chatNamedEntityRecognizer)
+            return undefined;
+        const useLocalModel = !model.startsWith("local/");
+        const recognizer = privacyRecognizerFor(this.chatNamedEntityRecognizer, useLocalModel);
+        const cache = this.recognitionCache;
+        return {
+            recognize: (text) => {
+                // The skill selection line the application writes (and rewrites after routing) holds
+                // no personal data: the text under it is recognized, the same before and after routing.
+                const header = text.startsWith(SKILL_SELECTION_ENVELOPE_PREFIX) && text.includes("\n") ? text.slice(0, text.indexOf("\n") + 1) : "";
+                const body = text.slice(header.length);
+                const shift = (found) => found.map((span) => ({ ...span, start: span.start + header.length, end: span.end + header.length }));
+                const now = Date.now();
+                for (const [key, entry] of cache)
+                    if (now - entry.at > RECOGNITION_CACHE_MS)
+                        cache.delete(key);
+                const key = `${useLocalModel ? 1 : 0}:${createHash("sha256").update(body).digest("hex")}`;
+                const hit = cache.get(key);
+                if (hit)
+                    return hit.spans.then(shift);
+                const spans = recognizer.recognize(body);
+                cache.set(key, { at: now, spans });
+                while (cache.size > RECOGNITION_CACHE_ENTRIES)
+                    cache.delete(cache.keys().next().value);
+                spans.catch(() => cache.delete(key));
+                return spans.then(shift);
+            }
+        };
     }
     async resolveAutoRouting(request) {
         request = nfcRequest(request);
