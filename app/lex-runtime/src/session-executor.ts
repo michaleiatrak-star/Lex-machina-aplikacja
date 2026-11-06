@@ -4931,17 +4931,27 @@ export class SafeSessionExecutor implements SessionExecutor {
       gateITurn.result !==
         "PASS";
 
+    // Blocking is the last resort (user request 2026-11-06): a gate the corrective rounds did not
+    // settle is shown as a named warning over the answer; the answer itself is kept. Still blocked:
+    // after marking, a case-law claim without evidence or a verification marker that does not match
+    // its source; no skill corpus; a structured document (AST) the application must parse.
+    const structuredOutput = Boolean(request.documentAstOutput);
+    const softGateWarnings = [
+      ...(statusConsistencyBlocked ? ["ten sam przepis ma w odpowiedzi różne oznaczenia weryfikacji — przyjmij ostrożniejsze (⚠️)"] : []),
+      ...(workflowResourcesBlocked ? ["nie wszystkie materiały tego rodzaju pracy zostały wczytane"] : []),
+      ...(workflowOutputBlocked ? ["odpowiedź może nie mieć wszystkich części wymaganych dla tego rodzaju pracy"] : []),
+      ...(guideOutputBlocked ? ["przewodnik nie domknął kroku — odpowiedz na pytania z odpowiedzi"] : []),
+      ...(reportBlueprintBlocked ? ["raport przygotowano bez planu struktury — może wymagać uporządkowania"] : []),
+      ...(gateIWorkflowContractReport.checks.some((item) => item.subgate === "I-I_INPUT_COMPLETENESS" && item.result === "BLOCKED")
+        ? ["wiadomość mówi o załączniku, którego nie ma w rozmowie — dołącz plik, żeby odpowiedź go uwzględniła"]
+        : workflowContractExtensionBlocked
+          ? ["nie wszystkie kontrole przebiegu pracy zostały spełnione"]
+          : [])
+    ];
     const presentationBlocked =
-      // Still blocked after marking: a case-law claim without evidence or a
-      // verification marker that does not match its source.
       finalization.result === "BLOCKED" ||
-      statusConsistencyBlocked ||
       corpusBlocked ||
-      workflowResourcesBlocked ||
-      workflowOutputBlocked ||
-      guideOutputBlocked ||
-      reportBlueprintBlocked ||
-      workflowContractExtensionBlocked;
+      (structuredOutput && softGateWarnings.length > 0);
     audit.record(
       "gate",
       "G39H_WORKFLOW_FINALIZATION",
@@ -5051,11 +5061,19 @@ export class SafeSessionExecutor implements SessionExecutor {
             : [])
         ]
       : [];
+    // The user reads what to watch for; the gate names and step ids stay in the audit.
+    const userWarnings = [
+      ...(degradedReasons.length && legalAnswer(processedDocumentCitations.text) ? ["nie wszystkie kroki kontroli zostały wykonane — sprawdź kluczowe przepisy przed użyciem odpowiedzi"] : []),
+      ...(structuredOutput ? [] : softGateWarnings)
+    ];
     const presentedText = astLines
       ? astLines.restore(disclaimed.text)
-      : degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
-        ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+      : userWarnings.length && freeText
+        ? `⚠️ Uwaga: ${userWarnings.join("; ")}.\n\n${disclaimed.text}`
         : disclaimed.text;
+    if (softGateWarnings.length && !structuredOutput) {
+      audit.record("gate", "SOFT_GATE_WARNINGS", "DEGRADED", { warnings: softGateWarnings });
+    }
     if (mandatoryPath) {
       audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
         profile: mandatoryPath.profile,

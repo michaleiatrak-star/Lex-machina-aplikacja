@@ -36,6 +36,7 @@ it("names a mandatory resource it could not read, to the model and in the answer
   });
 
   expect(calls[0]!.systemPrompt).toContain("Aplikacja nie wczytała: shared/HIERARCHIA-ZRODEL.md");
-  expect(result.answer).toContain("⛔ TRYB ZDEGRADOWANY");
-  expect(result.answer).toContain("nie wczytano: shared/HIERARCHIA-ZRODEL.md");
+  // Named to the user in plain words; the resource itself stays in the audit and the path report.
+  expect(result.answer).toMatch(/^⚠️ Uwaga: nie wszystkie kroki kontroli zostały wykonane/u);
+  expect(result.answer).not.toContain("TRYB ZDEGRADOWANY");
 }, 120_000);

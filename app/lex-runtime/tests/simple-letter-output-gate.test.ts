@@ -212,8 +212,10 @@ describe(
         ).toBe(
           "SIMPLE_LETTER_V1"
         );
+        // The output gate still records the violation; the letter is shown with a warning.
         expect(result.status)
-          .toBe("BLOCKED");
+          .toBe("DRAFT_PRESENTABLE");
+        expect(result.answer).toContain("może nie mieć wszystkich części");
 
         const internal =
           (result as any)[

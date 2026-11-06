@@ -309,8 +309,10 @@ describe("SafeSessionExecutor", () => {
       ).toBe(
         "CLIENT_REPORT_V1"
       );
+      // A warning over the answer instead of a blocked turn (block only as the last resort).
       expect(result.status)
-        .toBe("BLOCKED");
+        .toBe("DRAFT_PRESENTABLE");
+      expect(result.answer).toContain("raport przygotowano bez planu struktury");
       expect(
         result.reportBlueprint
       ).toBeUndefined();
@@ -636,7 +638,9 @@ describe("SafeSessionExecutor", () => {
       query: "Użytkownik: Dzień dobry.\n\nAsystent: Dzień dobry.\n\nUżytkownik: Przeanalizuj umowę w załączniku."
     });
     expect(inputGate(current)?.status).toBe("BLOCKED");
-    expect(current.status).toBe("BLOCKED");
+    // The user is asked for the file instead of a blocked turn.
+    expect(current.status).toBe("DRAFT_PRESENTABLE");
+    expect(current.answer).toContain("dołącz plik");
   });
 
   it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
