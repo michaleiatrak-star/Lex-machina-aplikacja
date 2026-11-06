@@ -243,6 +243,51 @@ describe("AUTO with an attached judgment", () => {
   }, 60_000);
 });
 
+describe("AUTO with a demand and the agreement it relies on", () => {
+  it("whatever skill leads, the agreement gets the contract analyser's whole-document check (user report 2026-11-06)", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Analiza." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    await executor.execute({
+      query: "Czy żądanie zapłaty jest zasadne? Co mam zrobić?",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "LAIK",
+      documentAttachments: [
+        {
+          documentId: "doc_wezwanie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "WEZWANIE DO ZAPRZESTANIA NARUSZEŃ WRAZ Z WEZWANIEM DO ZAPŁATY\nwzywam do zapłaty kwoty 60.000,00 zł kary umownej" }]
+        },
+        {
+          documentId: "doc_porozumienie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "Porozumienie stron o rozwiązaniu umowy o pracę\nzawarte w dniu 9 października 2024 r.\nPracodawca i Pracownik zgodnie postanawiają, co następuje:\n5. Za każde naruszenie każda ze stron zapłaci karę 5.000,00 zł\n10. Pracownik zrzeka się wszystkich roszczeń przeszłych i przyszłych." }]
+        }
+      ]
+    });
+    const prompt = calls[0]!.systemPrompt ?? "";
+    expect(prompt).toContain("doc_porozumienie: porozumienie / ugoda");
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)");
+    expect(prompt).toContain("a) ZRZECZENIE");
+  }, 60_000);
+});
+
 describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
   const markdown = fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8");
   const combinations = parseCombinations(markdown);

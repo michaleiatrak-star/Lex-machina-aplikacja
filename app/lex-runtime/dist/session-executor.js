@@ -91,8 +91,12 @@ import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE_PREFIX, threadUserText } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { markdownSection } from "./checkpoint-skill-sections.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+// analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
+const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
+const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
 // The question the cited documents are judged against: the latest user message whole, and for a
@@ -1490,6 +1494,17 @@ export class SafeSessionExecutor {
                 documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
             });
             pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+            // A document between the parties is assessed as a whole whatever skill leads (a demand with
+            // the agreement it relies on): the contract analyser's CAL-GATE goes in with it (user report
+            // 2026-11-06: pkt 10 waiving all claims cancelled the employee's side of pkt 5, unseen).
+            if (recognisedDocuments.some((document) => document.category === "UMOWA")) {
+                const cal = markdownSection(this.readCorpus(CONTRACT_WHOLE_DOCUMENT_RESOURCE) ?? "", CONTRACT_WHOLE_DOCUMENT_HEADING);
+                if (cal) {
+                    // Only the section: the whole SKILL.md still comes in when the analyser is the executive skill.
+                    audit.record("resource_read", CONTRACT_WHOLE_DOCUMENT_RESOURCE, "OK", { detail: "runtime-preload;delivered-contract;CAL-GATE" });
+                    pathSections.push(`# MANDATORY PATH RESOURCE: ${CONTRACT_WHOLE_DOCUMENT_RESOURCE} — ${CONTRACT_WHOLE_DOCUMENT_HEADING.replace(/^#+\s*/u, "")}\n\n${cal}`);
+                }
+            }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
             if (roles)
                 pathSections.push(roles);
