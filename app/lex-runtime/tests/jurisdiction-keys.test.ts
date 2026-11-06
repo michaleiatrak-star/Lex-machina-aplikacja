@@ -12,7 +12,7 @@ describe("jurisdiction keys JUR: (migration of Polish law, E1)", () => {
 
   it("every key of the Polish manifest resolves to its module", () => {
     const modules = registry.jurisdictionModules();
-    expect(modules.size).toBeGreaterThanOrEqual(5);
+    expect(modules.size).toBeGreaterThanOrEqual(100);
     for (const [key, target] of modules) {
       const resolved = registry.resolveResource("analizator-dowodow-v3", key);
       expect(resolved, key).toBeTruthy();
