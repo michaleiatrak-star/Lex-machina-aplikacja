@@ -1076,6 +1076,17 @@ export class LegalFederationToolRuntime {
     LegalFederationAuditEvent[] =
       [];
 
+  /**
+   * The tools of a local model (Bielik, Mistral on the user's computer): one search over the
+   * sources, a document, a source's own tool, the web search and a page read — not the
+   * classification and coverage helpers an 11B model trips over. Before, a local model had
+   * no source but the core codes and the ELI check (comparison with the chat, 2026-11-06).
+   */
+  localSchemas():
+    NormalizedToolSchema[] {
+    return [SEARCH_SCHEMA, GET_SCHEMA, CALL_SCHEMA, FETCH_AUXILIARY_SOURCE_SCHEMA, WEB_SEARCH_SCHEMA];
+  }
+
   schemas():
     NormalizedToolSchema[] {
     return [

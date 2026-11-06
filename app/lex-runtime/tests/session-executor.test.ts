@@ -503,7 +503,7 @@ describe("SafeSessionExecutor", () => {
     expect(messages).not.toContain("anna.nowak");
   });
 
-  it("does not give MCP federation tools to local models (context budget), only to hosted ones", async () => {
+  it("local models get a small source tool set (search, document, source tool, web search, page read), hosted ones all", async () => {
     const seen: Record<string, string[]> = {};
     const adapter: ProviderAdapter = {
       id: "openai",
@@ -535,7 +535,10 @@ describe("SafeSessionExecutor", () => {
     }
     expect(seen["test"]).toContain("search_federated_legal_sources");
     expect(seen["local/bielik-test"]).toBeDefined();
-    expect(seen["local/bielik-test"]).not.toContain("search_federated_legal_sources");
+    // Comparison with the chat (2026-11-06): without them a local model had no source but the core codes.
+    expect(seen["local/bielik-test"]).toEqual(expect.arrayContaining(["search_federated_legal_sources", "get_federated_legal_document", "call_federated_legal_source", "fetch_auxiliary_legal_source", "web_search"]));
+    for (const helper of ["list_federated_legal_sources", "assess_legal_source", "federated_legal_coverage"]) expect(seen["local/bielik-test"]).not.toContain(helper);
+    expect(seen["test"]).toContain("federated_legal_coverage");
   });
 
   it("runtime-routed session (document generation): a guessed missing file is DEGRADED, a path escape still blocks", async () => {

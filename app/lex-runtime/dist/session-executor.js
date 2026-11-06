@@ -94,6 +94,7 @@ import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
 import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
 import { registryFactsText } from "./privacy/registry-enrichment.js";
+import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
@@ -1276,9 +1277,9 @@ export class SafeSessionExecutor {
         // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
-        const federationTools = request.model.startsWith("local/")
-            ? undefined
-            : this.legalFederationTools;
+        // Local models get the sources too (a smaller tool set and the short map of sources).
+        const federationTools = this.legalFederationTools;
+        const localFederation = request.model.startsWith("local/");
         // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
         const federationEvents = [];
         const auxiliarySources = [];
@@ -1458,7 +1459,7 @@ export class SafeSessionExecutor {
             ...reportTools.schemas(),
             ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
-                ? federationTools.schemas()
+                ? localFederation ? federationTools.localSchemas() : federationTools.schemas()
                 : []),
             ...(verificationTools ? verificationTools.schemas() : [])
         ];
@@ -1517,7 +1518,9 @@ export class SafeSessionExecutor {
         // The kind of every document the user sent (court decision, pleading, contract,
         // evidence...), recognised locally from its protected text; the router chooses
         // the skill also by what the user delivers (ACTIVATION-MATRIX).
-        const recognisedDocuments = mandatoryModel && legalTurn
+        // Every model, local ones included: Bielik and Mistral got no document kinds, no whole-
+        // document check, graph, checklist or register facts while this read the hosted path only.
+        const recognisedDocuments = legalTurn
             ? attachments
                 .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
                 .map((attachment) => ({
@@ -1990,7 +1993,8 @@ export class SafeSessionExecutor {
         // mandatory path and shared resources, tool contracts) goes first and is cached by
         // the provider; what this turn adds (mode, recognitions, act modules, evidence,
         // cited law, retrieval) goes after it.
-        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE]);
+        // Sections present only when this turn delivers such a document stay out of the cached head.
+        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE, CONTRACT_WHOLE_DOCUMENT_RESOURCE, OPPOSING_LETTER_RESOURCE]);
         const stablePath = (section) => {
             const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
             return Boolean(resource) && !turnScoped.has(resource);
@@ -2009,7 +2013,7 @@ export class SafeSessionExecutor {
             reportTools.systemPromptAppendix(),
             ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
             ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
-            ...(federationTools ? [federationTools.systemPromptAppendix()] : []),
+            ...(federationTools ? [localFederation ? SOURCES_BY_KIND : federationTools.systemPromptAppendix()] : []),
             ...(verificationTools ? [verificationTools.systemPromptAppendix()] : [])
         ].join("\n\n");
         const toolPromptTurn = [

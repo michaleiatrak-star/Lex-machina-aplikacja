@@ -558,7 +558,7 @@ describe("local quick legal lane", () => {
     expect(call.systemPrompt).not.toContain("TABELA NAWIGACYJNA");
     expect(call.systemPrompt).not.toContain("USZKODZENIE MIENIA");
     expect(call.systemPrompt).not.toContain("# FULL TOOL APPENDIX");
-    expect(call.tools?.map((tool) => tool.function.name)).toEqual(["search_core_law", "read_core_law_article"]);
+    expect(call.tools?.map((tool) => tool.function.name)).toEqual(["search_core_law", "read_core_law_article", "web_search"]);
     expect(call.maxIterations).toBe(3);
     expect(call.localMaxOutputTokens).toBe(900);
     expect(result.events.some((event) => event.target === "LOCAL_QUICK_LEGAL" && event.status === "OK")).toBe(true);
