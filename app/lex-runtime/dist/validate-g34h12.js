@@ -32,6 +32,8 @@ process.env.LEX_SKILLS_PATH =
 const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lex-g34h12-data-"));
 process.env.LEX_DATA_DIR =
     dataRoot;
+// The API is checked here, not the background ELI crawl of the mapped acts.
+process.env.LEX_CORE_LAW_REFRESH ??= "off";
 const zipPath = path.join(dataRoot, "fixture.zip");
 const zipScript = String.raw `
 import sys, zipfile

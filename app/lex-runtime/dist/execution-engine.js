@@ -26,6 +26,9 @@ import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+// A document the case mentions but nobody uploaded (or "I will add it later") is information,
+// not a stop (shared/CP-GATE.md §3B BRAK-DOK): every checkpoint workflow, as the pleading one.
+export const MISSING_DOCUMENT_INSTRUCTION = "Brak dokumentu (wspomniany, lecz nie wgrany; „uzupełnię później”) = BRAK-DOK (shared/CP-GATE.md §3B): pracuj na materiale, który jest, oznacz ustalenia oparte na brakującym dokumencie „według informacji strony”, wypisz brakujące pozycje w raporcie kroku i zakończ krok. Nie zatrzymuj kroku z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.";
 // A correcting round returns the answer for the user, not a report on the round: a preface
 // such as "Sprawdziłam wszystkie przepisy i przeszłam przez kwalifikator karny. Poniżej pełna,
 // poprawiona odpowiedź." (live C02-011) is dropped, and the prompt asks for none.
@@ -1054,6 +1057,7 @@ export class LexExecutionEngine {
                         "Execute only this court-analysis checkpoint in this turn.",
                         "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
                         "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1069,6 +1073,7 @@ export class LexExecutionEngine {
                         "Execute only this chronology checkpoint in this turn.",
                         "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
                         "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1087,6 +1092,7 @@ export class LexExecutionEngine {
                         "Do not claim completion of any later checkpoint.",
                         "The runtime, not the model, owns checkpoint order, required resources, source verification, citations, provenance and commit.",
                         "Return only the semantic work product needed for the active checkpoint.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1103,6 +1109,7 @@ export class LexExecutionEngine {
                         "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
                         "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
                         "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1559,6 +1566,8 @@ export class LexExecutionEngine {
         const promptCache = !args.model.startsWith("local/") && cachePrefix >= 4_096 && cachePrefix < systemPrompt.length
             ? {
                 systemPromptCachePrefix: cachePrefix,
+                // Every domain shares the instructions, the catalog and the router core.
+                ...(sharedPrefix.length + 2 < cachePrefix ? { systemPromptSharedPrefix: sharedPrefix.length + 2 } : {}),
                 promptCacheKey: promptCacheKeyFor("auto", systemPrompt.slice(0, cachePrefix)),
                 // The next question (often more than five minutes later) reads the shared prefix:
                 // one rewrite costs more than the dearer 1-hour write.

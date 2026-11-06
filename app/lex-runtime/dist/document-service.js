@@ -209,6 +209,7 @@ export class LocalPrivateDocumentService {
     stopTextModels;
     startTextModels;
     transcriber;
+    exclusiveTextModels;
     documents = new Map();
     detecting = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
@@ -225,7 +226,9 @@ export class LocalPrivateDocumentService {
     // "z lokalnym AI": the text model is started right before the detection of personal data.
     startTextModels, 
     // Recordings (audio, video): the local speech-to-text model writes the text.
-    transcriber) {
+    transcriber, 
+    // The vision step holds the local text model exclusively (LocalModelRuntime.withExclusiveModel).
+    exclusiveTextModels) {
         this.pdfIngestor = pdfIngestor;
         this.namedEntities = namedEntities;
         this.maxChunkChars = maxChunkChars;
@@ -241,18 +244,19 @@ export class LocalPrivateDocumentService {
         this.stopTextModels = stopTextModels;
         this.startTextModels = startTextModels;
         this.transcriber = transcriber;
+        this.exclusiveTextModels = exclusiveTextModels;
     }
     /**
      * A recording as a document: one page per 10 minutes, each line with the time it starts.
      * The pages are DIGITAL text (no scan to compare), so the privacy review works as for a letter.
      */
-    async transcribe(data, mediaType, onProgress) {
+    async transcribe(data, mediaType, onProgress, speakers) {
         if (!this.transcriber)
             throw new Error("TRANSCRIPTION_UNAVAILABLE");
         if (!this.transcriber.available())
             throw new Error("TRANSCRIPTION_MODEL_MISSING");
         onProgress?.({ stage: "TRANSCRIPTION", done: 0, total: 0 });
-        const transcript = await this.transcriber.transcribe(data, mediaType, (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }));
+        const transcript = await this.transcriber.transcribe(data, mediaType, (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }), ...(speakers !== undefined ? [{ speakers }] : []));
         const pages = transcriptPages(transcript).map((page) => ({
             page: page.page,
             text: page.text,
@@ -310,12 +314,12 @@ export class LocalPrivateDocumentService {
             chunks: chunkDocumentPages(pages, this.maxChunkChars)
         };
     }
-    async extract(data, mediaType, onProgress) {
+    async extract(data, mediaType, onProgress, speakers) {
         if (mediaType === "application/pdf") {
             return this.pdfIngestor.ingest(data, onProgress);
         }
         if (isRecordingMediaType(mediaType)) {
-            return this.transcribe(data, mediaType, onProgress);
+            return this.transcribe(data, mediaType, onProgress, speakers);
         }
         if (mediaType ===
             "text/plain" ||
@@ -394,7 +398,7 @@ export class LocalPrivateDocumentService {
         onProgress?.({ stage: "READING" });
         // The same file read before in this case (a retry, the file added again, a password typed
         // after the first attempt): its stored reading is used, no second OCR or transcription.
-        const cached = await this.storedReading(data, security);
+        const cached = security?.speakers !== undefined ? null : await this.storedReading(data, security);
         if (cached) {
             const vault = new PseudonymizationVault();
             this.documents.set(cached.documentId, {
@@ -408,7 +412,7 @@ export class LocalPrivateDocumentService {
                 return this.publicReview(cached.documentId, mediaType, cached.source, []);
             return this.detectSuggestions(cached.documentId, mediaType, cached.source, security);
         }
-        const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
+        const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress, security?.speakers));
         const spaced = await this.restoreSpacing(extracted);
         // Model-free cleanup on every OCR page (ligatures, look-alike letters, misread amounts;
         // each change kept in page.corrections), then, when asked for, the vision model on the
@@ -737,42 +741,53 @@ export class LocalPrivateDocumentService {
         }
         if (!this.visionReader)
             return source;
-        // The text model is started again only for the detection of personal data.
-        if (this.stopTextModels) {
+        const visionReader = this.visionReader;
+        const run = async () => {
+            // The text model is started again only for the detection of personal data.
+            if (this.stopTextModels) {
+                try {
+                    await this.stopTextModels();
+                }
+                catch (error) {
+                    process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+                }
+            }
+            const session = visionReader();
+            if (!session)
+                return source;
+            if (!enoughMemoryForVision(session.modelBytes)) {
+                process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
+                onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
+                return source;
+            }
+            let pages;
             try {
-                await this.stopTextModels();
+                pages = await correctWithVision(source.pages, session.readLine, (words) => morphology.knownWords(words), (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" }));
             }
             catch (error) {
-                process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+                process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+                return source;
             }
-        }
-        const session = this.visionReader();
-        if (!session)
-            return source;
-        if (!enoughMemoryForVision(session.modelBytes)) {
-            process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
-            onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
-            return source;
-        }
-        let pages;
-        try {
-            pages = await correctWithVision(source.pages, session.readLine, (words) => morphology.knownWords(words), (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" }));
-        }
-        catch (error) {
-            process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
-            return source;
-        }
-        finally {
-            session.stop();
-        }
-        if (pages.every((page, index) => page === source.pages[index]))
-            return source;
-        return {
-            ...source,
-            pages,
-            sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
-            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+            finally {
+                session.stop();
+            }
+            if (pages.every((page, index) => page === source.pages[index]))
+                return source;
+            return {
+                ...source,
+                pages,
+                sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+                chunks: chunkDocumentPages(pages, this.maxChunkChars)
+            };
         };
+        // Held exclusively: running chat answers on the local model end first, new ones wait for
+        // the vision step instead of losing the model in the middle of an answer.
+        return this.exclusiveTextModels
+            ? this.exclusiveTextModels(run, () => {
+                process.stderr.write("VISION_OCR_SKIPPED:CHAT_ANSWER_RUNNING\n");
+                return source;
+            })
+            : run();
     }
     /** Lines to check against the scan (handwriting, stamps): marked in the text and listed. */
     async markReview(source) {

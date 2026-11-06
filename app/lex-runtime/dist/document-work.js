@@ -15,6 +15,9 @@ import path from "node:path";
 export class DocumentWorkScheduler {
     pauseFile;
     foregroundRunning = 0;
+    // How many foreground works have started so far: background work measuring time (the OCR
+    // card benchmark) knows whether the user's work ran alongside and skewed it.
+    foregroundStarts = 0;
     foregroundTail = Promise.resolve();
     waiting = new Set();
     backgroundContext = new AsyncLocalStorage();
@@ -25,6 +28,7 @@ export class DocumentWorkScheduler {
     }
     async foreground(work) {
         this.foregroundRunning += 1;
+        this.foregroundStarts += 1;
         if (this.foregroundRunning === 1)
             this.writePause(true);
         const previous = this.foregroundTail;

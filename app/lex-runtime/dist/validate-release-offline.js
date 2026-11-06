@@ -19,7 +19,9 @@ const offlineZipExtractor = read("app/installer/extract-offline-zip.ps1");
 const hooks = read("app/lex-desktop/src-tauri/windows/hooks.nsh");
 const componentLock = read("app/installer/generate-component-lock.ps1");
 const checks = {
-    pullRequestGate: workflow.includes("pull_request:") &&
+    // On demand and from the release workflow (offline installer not shipped at present).
+    onDemandGate: workflow.includes("workflow_dispatch:") &&
+        workflow.includes("workflow_call:") &&
         workflow.includes("Build and accept standalone offline Windows EXE"),
     offlineWebView2: offlineConfig.bundle?.windows
         ?.webviewInstallMode?.type ===

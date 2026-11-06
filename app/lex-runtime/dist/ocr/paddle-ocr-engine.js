@@ -1,10 +1,69 @@
+import { ocrServePool } from "./ocr-serve-pool.js";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { evidenceBudget, ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 import { documentWork } from "../document-work.js";
+/** The passes of one document as one run: every worker's pages, the time the user waited. */
+export function mergeOcrRunStats(parts, pages, wallSeconds, workers) {
+    return {
+        at: parts.at(-1).at,
+        loadSeconds: Math.max(...parts.map((part) => part.loadSeconds)),
+        pageSeconds: parts.flatMap((part) => part.pageSeconds).slice(0, 500),
+        threads: parts[0].threads,
+        mkldnn: parts.every((part) => part.mkldnn),
+        mkldnnError: parts.find((part) => part.mkldnnError)?.mkldnnError ?? null,
+        accel: parts.find((part) => part.accel)?.accel ?? null,
+        workers,
+        pages,
+        wallSeconds: Math.round(wallSeconds * 10) / 10
+    };
+}
+let lastOcrRun = null;
+/** Where the last OCR pass's worker output is kept (no page text: codes, timings, library logs). */
+export function ocrRunLogPath(env = process.env) {
+    return env.LOCALAPPDATA
+        ? path.join(env.LOCALAPPDATA, "LexMachina", "ocr-last-run.log")
+        : path.join(os.tmpdir(), "LexMachina-ocr-last-run.log");
+}
+function writeOcrRunLog(pages, code, stderr) {
+    try {
+        const file = ocrRunLogPath();
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, `${new Date().toISOString()} pages ${pages[0]}-${pages.at(-1)} exit ${code ?? "signal"}\n${stderr.slice(-16_000)}\n`);
+    }
+    catch {
+        // The log only helps diagnose; OCR goes on without it.
+    }
+}
+export function lastOcrRunStats() {
+    return lastOcrRun ? { ...lastOcrRun, pageSeconds: [...lastOcrRun.pageSeconds] } : null;
+}
+export function parseOcrStats(line, workers, now = new Date()) {
+    const match = /^LEX_OCR_STATS (\{.*\})$/mu.exec(line);
+    if (!match)
+        return null;
+    try {
+        const raw = JSON.parse(match[1]);
+        const pages = Array.isArray(raw.pageSeconds) ? raw.pageSeconds.filter((value) => typeof value === "number").slice(0, 500) : [];
+        return {
+            at: now.toISOString(),
+            loadSeconds: typeof raw.loadSeconds === "number" ? raw.loadSeconds : 0,
+            pageSeconds: pages,
+            threads: typeof raw.threads === "number" ? raw.threads : null,
+            mkldnn: raw.mkldnn === true,
+            mkldnnError: typeof raw.mkldnnError === "string" ? raw.mkldnnError.slice(0, 200) : null,
+            accel: typeof raw.accel === "string" ? raw.accel.slice(0, 60) : null,
+            workers
+        };
+    }
+    catch {
+        return null;
+    }
+}
 // One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
 // each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
 // so an extra process needs free memory. Background OCR (files read ahead) stays at one process.
@@ -40,6 +99,9 @@ export class LocalPaddleOcrEngine {
     timeoutMs;
     lineCrops;
     workers;
+    acceleration;
+    persistent;
+    textModelResident;
     constructor(options = {}) {
         this.python =
             options.python ??
@@ -59,10 +121,30 @@ export class LocalPaddleOcrEngine {
             options.timeoutMs ?? 30 * 60 * 1000;
         this.lineCrops = options.lineCrops ?? (() => false);
         this.workers = options.workers;
+        this.acceleration = options.acceleration ?? (() => null);
+        this.persistent = (options.persistent ?? false) && process.env.LEX_OCR_PERSISTENT !== "off";
+        this.textModelResident = options.textModelResident ?? (() => false);
     }
     async recognizePages(data, pages, onPage) {
+        return this.read(data, pages, onPage, this.acceleration(), { used: false, failed: false }, this.persistent);
+    }
+    /** One reading with the card on or off, for the measurement of ocr-acceleration.ts. */
+    async benchmarkRead(data, pages, acceleration) {
+        const usage = { used: false, failed: false };
+        const started = performance.now();
+        // The measurement starts its own processes (the card's use is read from their start).
+        const results = await this.read(data, pages, undefined, acceleration, usage, false);
+        return {
+            seconds: (performance.now() - started) / 1000,
+            pages: results.map((result) => result.text),
+            used: usage.used && !usage.failed
+        };
+    }
+    async read(data, pages, onPage, acceleration, usage, persistent = false) {
         if (pages.length === 0)
             return [];
+        const started = performance.now();
+        const collected = [];
         const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lex-paddle-ocr-"));
         const input = path.join(tempRoot, "document.pdf");
         try {
@@ -73,7 +155,7 @@ export class LocalPaddleOcrEngine {
             // leaves a gap.
             const budget = evidenceBudget();
             const background = documentWork.inBackground();
-            const workers = ocrWorkerCount({
+            const counted = ocrWorkerCount({
                 pages: pages.length,
                 cpus: os.availableParallelism?.() ?? os.cpus().length,
                 freeMemory: os.freemem(),
@@ -81,6 +163,8 @@ export class LocalPaddleOcrEngine {
                 ...(this.workers !== undefined ? { requested: this.workers } : {}),
                 background
             });
+            // Processes sharing one graphics card.
+            const workers = acceleration ? Math.min(counted, acceleration.maxWorkers) : counted;
             const size = workers > 1 ? Math.min(OCR_BATCH_PAGES, Math.ceil(pages.length / workers)) : OCR_BATCH_PAGES;
             const batches = [];
             for (let start = 0; start < pages.length; start += size)
@@ -127,13 +211,16 @@ export class LocalPaddleOcrEngine {
                             done[index] = count;
                             report();
                         }
-                        : undefined, threads);
+                        : undefined, threads, acceleration, usage, workers, collected, persistent);
                     draining = draining.then(drain);
                     await draining;
                 }
             };
             await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, lane));
             await draining;
+            if (collected.length > 0) {
+                lastOcrRun = { ...mergeOcrRunStats(collected, pages.length, (performance.now() - started) / 1000, workers), textModelResident: this.textModelResident() };
+            }
             const requested = new Set(pages);
             const seen = new Set();
             for (const result of results) {
@@ -156,7 +243,7 @@ export class LocalPaddleOcrEngine {
             });
         }
     }
-    async recognizeBatch(input, batchDir, pages, onPage, threads) {
+    async recognizeBatch(input, batchDir, pages, onPage, threads, acceleration = null, usage, workerCount, collect, persistent = false) {
         await mkdir(batchDir, { recursive: true });
         const output = path.join(batchDir, "result.json");
         const args = [
@@ -183,13 +270,22 @@ export class LocalPaddleOcrEngine {
         // Background OCR waits between pages while the user's own document is worked on; the
         // time it waits does not count against the timeout.
         const background = documentWork.inBackground();
+        if (persistent) {
+            await this.recognizeBatchServed({ input, output, batchDir, pages, onPage, threads, acceleration, workerCount, collect, background });
+            return JSON.parse(await readFile(output, "utf8"));
+        }
         await new Promise((resolve, reject) => {
             const child = spawn(this.python, args, {
                 stdio: ["ignore", "ignore", "pipe"],
                 env: {
                     ...process.env,
                     PYTHONUNBUFFERED: "1",
-                    ...(threads ? { LEX_OCR_THREADS: threads } : {}),
+                    // The worker's share of the cores also for the libraries around Paddle (OpenMP,
+                    // MKL, OpenBLAS): without it each process starts its own threads on every core
+                    // (3 processes on 4 cores: 45 -> 40 s a page).
+                    ...(threads ? { LEX_OCR_THREADS: threads, OMP_NUM_THREADS: threads, MKL_NUM_THREADS: threads, OPENBLAS_NUM_THREADS: threads } : {}),
+                    // The card only when it is on here; never the worker's own guess.
+                    ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" }),
                     ...(background ? { LEX_OCR_PAUSE_FILE: documentWork.pauseFile } : {})
                 }
             });
@@ -212,6 +308,12 @@ export class LocalPaddleOcrEngine {
                     pagesDone += finished;
                     onPage(Math.min(pagesDone, pages.length));
                 }
+                if (usage) {
+                    if (/^LEX_OCR_ACCEL \S+ \d+$/mu.test(text))
+                        usage.used = true;
+                    if (/LEX_OCR_ACCEL_(?:RUN_)?FAILED/u.test(text))
+                        usage.failed = true;
+                }
                 stderr += text;
                 if (stderr.length > 32_000) {
                     stderr = stderr.slice(-32_000);
@@ -223,6 +325,13 @@ export class LocalPaddleOcrEngine {
             });
             child.once("exit", (code) => {
                 clearInterval(timer);
+                // From the whole output: a line can arrive split across two chunks.
+                const stats = parseOcrStats(stderr, workerCount ?? 1);
+                if (stats) {
+                    lastOcrRun = stats;
+                    collect?.push(stats);
+                }
+                writeOcrRunLog(pages, code, stderr);
                 if (code === 0)
                     resolve();
                 else {
@@ -231,5 +340,72 @@ export class LocalPaddleOcrEngine {
             });
         });
         return JSON.parse(await readFile(output, "utf8"));
+    }
+    /** One pass on a long-lived worker (ocr-serve-pool.ts): the models are already loaded. */
+    async recognizeBatchServed(args) {
+        const { pages, onPage, threads, acceleration } = args;
+        const env = {
+            ...process.env,
+            PYTHONUNBUFFERED: "1",
+            ...(threads ? { LEX_OCR_THREADS: threads, OMP_NUM_THREADS: threads, MKL_NUM_THREADS: threads, OPENBLAS_NUM_THREADS: threads } : {}),
+            ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
+        };
+        delete env.LEX_OCR_PAUSE_FILE;
+        const key = JSON.stringify({ python: this.python, worker: this.workerPath, threads: threads ?? null, accel: acceleration?.env ?? null, device: this.device ?? null });
+        let stderr = "";
+        let pagesDone = 0;
+        const run = ocrServePool.run({
+            key,
+            python: this.python,
+            workerArgs: [this.workerPath, "--serve"],
+            env,
+            job: {
+                input: args.input,
+                output: args.output,
+                pages: pages.join(","),
+                lang: "pl",
+                dpi: this.dpi,
+                ...(this.device ? { device: this.device } : {}),
+                evidenceDir: path.join(args.batchDir, "evidence"),
+                lineCrops: this.lineCrops(),
+                mode: "pdf",
+                pauseFile: args.background ? documentWork.pauseFile : ""
+            },
+            onStderr: (text) => {
+                const finished = text.match(/^LEX_OCR_PAGE \d+$/gm)?.length ?? 0;
+                if (finished && onPage) {
+                    pagesDone += finished;
+                    onPage(Math.min(pagesDone, pages.length));
+                }
+                stderr = (stderr + text).slice(-32_000);
+            }
+        });
+        let active = 0;
+        const timer = setInterval(() => {
+            if (!args.background || !documentWork.paused())
+                active += TIMEOUT_TICK_MS;
+            if (active >= this.timeoutMs)
+                run.kill();
+        }, TIMEOUT_TICK_MS);
+        try {
+            await run.done;
+        }
+        catch (error) {
+            writeOcrRunLog(pages, 1, stderr);
+            if (active >= this.timeoutMs) {
+                throw new Error(`OCR_ENGINE_TIMEOUT: Local PaddleOCR worker exceeded the configured timeout (pages ${pages[0]}-${pages.at(-1)}).`);
+            }
+            const code = error.exitCode ?? 1;
+            throw ocrWorkerFailure(stderr, code, "worker");
+        }
+        finally {
+            clearInterval(timer);
+        }
+        const stats = parseOcrStats(stderr, args.workerCount ?? 1);
+        if (stats) {
+            lastOcrRun = stats;
+            args.collect?.push(stats);
+        }
+        writeOcrRunLog(pages, 0, stderr);
     }
 }

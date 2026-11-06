@@ -1,3 +1,4 @@
+import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock } from "./chat-turn-journal.js";
 import { directImageNote } from "./direct-images.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
@@ -1008,12 +1009,50 @@ export class SafeSessionExecutor {
                 originalEnvelope.query
         };
     }
+    // Times of every chat turn by path and stage (chat-turn-journal.ts), on this computer.
+    turnJournal = process.env.VITEST ? null : new ChatTurnJournal();
     async execute(request) {
         request = nfcRequest(request);
-        // Tokens of every model call in this turn (benchmark and cost display).
-        const { result, usage } = await meterUsage(() => this.executeTurn(request));
-        result.usage = usage;
-        return result;
+        const started = performance.now();
+        const clock = new PhaseClock();
+        const report = request.onStep;
+        request = {
+            ...request,
+            onStep: (phase, detail) => {
+                clock.mark(phase);
+                report?.(phase, detail);
+            }
+        };
+        const record = (status, pathName, error) => {
+            clock.close();
+            this.turnJournal?.append({
+                at: new Date().toISOString(),
+                modelKind: modelKindOf(request.provider, request.model),
+                provider: request.provider,
+                path: pathName,
+                attachments: request.documentAttachments?.length ?? 0,
+                totalMs: Math.round(performance.now() - started),
+                phasesMs: clock.phasesMs,
+                status,
+                ...(error !== undefined ? { error: errorCode(error) } : {})
+            });
+        };
+        const basePath = request.processWorkflowContext
+            ? "workflow"
+            : request.conversationalOnly
+                ? "rozmowa"
+                : `czat ${request.mode}`;
+        try {
+            // Tokens of every model call in this turn (benchmark and cost display).
+            const { result, usage } = await meterUsage(() => this.executeTurn(request));
+            result.usage = usage;
+            record(result.status === "BLOCKED" ? "BLOCKED" : "OK", result.taskSkill ?? basePath);
+            return result;
+        }
+        catch (error) {
+            record("ERROR", basePath, error);
+            throw error;
+        }
     }
     async executeTurn(request) {
         const step = request.onStep ?? (() => undefined);

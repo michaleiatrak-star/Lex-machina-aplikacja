@@ -8,7 +8,7 @@ const MAX_FILES_PER_THREAD = 40;
 async function get(fetchImpl, token, url) {
     let response;
     try {
-        response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+        response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
     }
     catch {
         throw new GoogleIntegrationError("GOOGLE_NETWORK_ERROR", 502);

@@ -69,6 +69,45 @@ const STREET_MARK = /(?:^|\s)(?:ul\.|ulica|ulicy|al\.|aleja|alei|pl\.|plac|placu
 // The name of a court, prosecutor's office, police unit or other office runs up to the town:
 // "Prokuratura Rejonowa Katowice-Zachód w Katowicach", "Komisariat Policji VII w Katowicach".
 const INSTITUTION_BEFORE = /(?:\b(?:Sąd|Sądu|Sądem|Sądzie|Prokuratur|Komisariat|Komend|Urząd|Urzęd|Izb|Starostw|Komornik|Kuratori|Inspektorat|Oddział|Policji)\p{L}*)[^.;:\n]{0,70}$/u;
+// The address block of a court or an office ("Sąd Rejonowy w Zielonej Górze⏎I Wydział
+// Cywilny⏎Pl. Słowiański 2⏎65-069 Zielona Góra"): a public institution's address is no personal
+// data and the reader needs it (user report 2026-11-06: the court's postal code was masked).
+const INSTITUTION_LINE = /^\s*(?:\*\*)?(?:Sąd|Sądu|Prokuratur|Komisariat|Komend|Urząd|Urzędu|Izb[ay]|Starostw|Komornik|Kancelaria\s+Komornika|Kuratori|Inspektorat|Zakład\s+Ubezpieczeń|ZUS|Krajowa\s+Izba|Naczelny\s+Sąd|Wojewódzki\s+Sąd|Samorządowe\s+Kolegium|Ministerstw|Minister|Wojewoda|Prezydent\s+Miasta|Burmistrz|Wójt|Starosta|Marszałek)\p{L}*/u;
+// Lines that stay inside such a block: the division, the address, the contact data.
+const INSTITUTION_BLOCK_LINE = /^\s*(?:[IVXLC]+\s+)?(?:Wydział|Oddział|Biuro|Sekretariat|Zespół|Departament|Delegatura|Filia)(?!\p{L})|^\s*(?:ul\.|ulica|al\.|aleja|pl\.|plac|os\.)\s|^\s*\d{2}-\d{3}\s|^\s*(?:tel|fax|e-?mail|www)\b|^\s*\p{Lu}[\p{L} -]{1,40},\s*(?:dnia\s*)?\d{1,2}[.\s]/iu;
+// (the last: the letter's place and date set between the court's lines in an OCR read)
+/** An address in the address block of a court or a public office, not a person's or a firm's. */
+export function institutionAddress(text, start, value = "") {
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const ownLine = text.slice(lineStart, start);
+    // On the institution's own line: its street or postal address in the same sentence
+    // ("Komornik Sądowy przy SR w Toruniu, ul. Grudziądzka 45"), never a town further on.
+    const sentence = ownLine.split(/[.!?]\s+(?=\p{Lu})/u).at(-1) ?? "";
+    if (/\d/u.test(value) && INSTITUTION_LINE.test(sentence) && !LEGAL_FORM_WORDS.test(sentence))
+        return true;
+    if (ownLine.trim() && !INSTITUTION_BLOCK_LINE.test(ownLine))
+        return false;
+    const previous = text.slice(Math.max(0, lineStart - 400), Math.max(0, lineStart - 1)).split("\n").reverse();
+    for (const line of previous.slice(0, 5)) {
+        if (!line.trim())
+            return false;
+        if (INSTITUTION_LINE.test(line) && !LEGAL_FORM_WORDS.test(line))
+            return true;
+        if (!INSTITUTION_BLOCK_LINE.test(line))
+            return false;
+    }
+    return false;
+}
+// A housing community is named after its building ("Wspólnota Mieszkaniowa Piłsudskiego 45",
+// "Wspólnota Mieszkaniowa Nieruchomości przy ul. Lipowej 7"): the party's name, not a person or a
+// home address (user report 2026-11-06: the plaintiff masked, the analysis found no other party).
+// A housing cooperative too, with or without a number ("Spółdzielnia Mieszkaniowa Piłsudskiego 45",
+// "Spółdzielnia Mieszkaniowa „Przyszłość”").
+const HOUSING_COMMUNITY = /(?:Wsp[óo]lnot|Sp[óo]łdzielni)\p{L}*\s+Mieszkaniow\p{L}*(?:\s+Lokatorsko-Własnościow\p{L}*)?\s+(?:(?:Nieruchomo\p{L}*|Budynku)\s+)?(?:(?:przy|nr)\s+)?(?:(?:ul\.|ulicy|al\.|alei|pl\.|placu|os\.|osiedla)\s*)?(?:[„"]?\p{Lu}[\p{L}.-]*[”"]?(?:\s+|$)){1,4}(?:\d{1,4}[A-Za-z]?(?:\s*[/-]\s*\d{1,4}[A-Za-z]?)?)?/gu;
+export function housingCommunityNames(text) {
+    return [...text.matchAll(HOUSING_COMMUNITY)].map((match) => ({ start: match.index, end: match.index + match[0].length }));
+}
+const LEGAL_FORM_WORDS = /\bsp\.\s*z\s*o\.\s*o\.|\bspółk\p{L}*|\bS\.A\.|\bsp\.\s*k\./iu;
 /** A town inside an institution's name: before it the institution, or it starts "Katowice-Zachód". */
 export function institutionTown(text, start, end) {
     if (/^-\p{Lu}/u.test(text.slice(end, end + 2)))
@@ -928,7 +967,10 @@ export class LocalPolishPseudonymizer {
                 autoSpans.push({ start: match.index, end: match.index + match[0].length, kind: "PERSON", value: match[0], confidence: 1, source: "AUTO" });
             }
         }
-        const autoAllowed = autoSpans.filter((span) => !keep.some((item) => overlaps(span, item)) &&
+        const communities = housingCommunityNames(text);
+        const autoAllowed = autoSpans.filter((span) => !(span.kind === "ADDRESS" && institutionAddress(text, span.start, span.value)) &&
+            !((span.kind === "ADDRESS" || span.kind === "PERSON") && communities.some((name) => span.start >= name.start && span.end <= name.end)) &&
+            !keep.some((item) => overlaps(span, item)) &&
             !labelDirectives.some((item) => overlaps(span, item)) &&
             !manualPseudonyms.some((item) => overlaps(span, item)));
         const findings = nonOverlapping([

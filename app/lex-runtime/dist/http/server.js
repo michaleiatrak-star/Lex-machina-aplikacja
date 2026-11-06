@@ -1,5 +1,8 @@
+import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
+import { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
+import { TranscriptionAccelerationManager } from "../transcription-acceleration.js";
 import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
@@ -8,6 +11,7 @@ import { timingSafeEqual } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
@@ -16,12 +20,14 @@ import { certificateNames, ensureCertificate } from "./tls-certificate.js";
 import { localOnlyRoute } from "../server-mode/routes.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GoogleWorkspaceController } from "../google/workspace-controller.js";
+import { MicrosoftController } from "../microsoft/controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerQualityBenchmarkRoutes } from "./quality-benchmark-routes.js";
 import { QualityBenchmarkService } from "../quality-benchmark-service.js";
 import { LocalOfficeEditor } from "../office-edit.js";
+import { LocalPdfFormFiller } from "../pdf-form.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
 import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
@@ -37,6 +43,7 @@ import { registerServerModeRoutes } from "../server-mode/routes.js";
 import { EncryptedInvoiceStore } from "../invoice-store.js";
 import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
+import { warmChatPaths } from "../chat-warmup.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import { EnvironmentCredentialResolver, MemoryOverlayCredentialResolver } from "../providers/credentials.js";
 import { createLiveProviderRegistry } from "../providers/ai-sdk-adapter.js";
@@ -206,6 +213,8 @@ function resolveAccountSkillRoot(baseRoot) {
         return baseRoot;
     }
 }
+// A text model idle this long gives the card to OCR (ms).
+const LOCAL_MODEL_OCR_RELEASE_IDLE_MS = 60_000;
 export async function startLocalServer(options) {
     const host = options?.host ?? process.env.LEX_HOST ?? DEFAULT_HOST;
     const rawPort = options?.port ?? Number(process.env.LEX_PORT ?? DEFAULT_PORT);
@@ -295,6 +304,9 @@ export async function startLocalServer(options) {
     const maintenance = new MaintenanceService(updateDiscovery);
     const localModels = new LocalModelRuntime();
     const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
+    const ocrAcceleration = new OcrAccelerationManager(path.join(localModels.rootDir, "ocr-acceleration"));
+    const transcriptionAcceleration = new TranscriptionAccelerationManager(path.join(localModels.rootDir, "transcription-acceleration"));
+    transcriptionAcceleration.modelInstalled = () => transcriptionModel.installed();
     // Server mode (off by default; LEX_SERVER_MODE_FORCE=on|off fixes it for a container).
     const serverModeDir = path.join(caseFileStore.rootDir, "server");
     const serverMode = new ServerModeService(new ServerModeStore(serverModeDir), new ServerSecretBox({ keyPath: path.join(serverModeDir, "secret.key"), envKey: process.env.LEX_SERVER_SECRET_KEY }), authService, { forceEnv: process.env.LEX_SERVER_MODE_FORCE });
@@ -363,7 +375,68 @@ export async function startLocalServer(options) {
     // as the SN connector of the case-law search does.
     new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
-    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), registryEnrichmentFor(legalFederationTools), () => {
+    // OCR on the card: a text model idle for a minute gives the card back first (the next answer
+    // starts it again); during a series of documents, when it answers every few seconds, it stays.
+    const ocrCardEnvironment = () => {
+        const environment = ocrAcceleration.environment();
+        if (environment)
+            void localModels.releaseIfIdle(LOCAL_MODEL_OCR_RELEASE_IDLE_MS, "OCR");
+        return environment;
+    };
+    const caseOcrEngine = new LocalPaddleOcrEngine({
+        lineCrops: () => localModels.visionOcr() !== null,
+        acceleration: ocrCardEnvironment,
+        textModelResident: () => localModels.resident,
+        persistent: true
+    });
+    // After a series of documents or a conversation: the model's memory back after a quiet while.
+    const idleMinutes = Number(process.env.LEX_LOCAL_MODEL_IDLE_MINUTES ?? "5");
+    if (Number.isFinite(idleMinutes) && idleMinutes > 0) {
+        setInterval(() => {
+            void localModels.releaseIfIdle(idleMinutes * 60_000, "IDLE");
+        }, 60_000).unref();
+    }
+    // The measurement reads without the vision model's line images, like any plain OCR.
+    const benchmarkOcr = new LocalPaddleOcrEngine();
+    ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);
+    // The card is set up by the app itself, once: a few minutes after the start (not to slow
+    // the first minutes of work); the 6-hourly check only retries a failed attempt.
+    const autoOcrAcceleration = () => {
+        ocrAcceleration.autoSetup().catch((error) => {
+            process.stderr.write(`OCR_ACCEL_AUTO_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+        });
+    };
+    setTimeout(autoOcrAcceleration, 3 * 60_000).unref();
+    setInterval(autoOcrAcceleration, 6 * 60 * 60_000).unref();
+    // Transcription on an NVIDIA card: the same once-only setup, a little later than the OCR one
+    // (both measurements are background work and would only wait for each other).
+    const recordingTranscriber = new LocalWhisperTranscriber(() => transcriptionModel.dir, {
+        acceleration: () => transcriptionAcceleration.environment(),
+        speakersDir: () => (transcriptionModel.speakersInstalled() ? transcriptionModel.speakersDir : null),
+        speakerCount: () => transcriptionModel.speakerCount(),
+        mlxDir: () => (transcriptionModel.mlxInstalled() ? transcriptionModel.mlxDir : null)
+    });
+    // Speaker models (tens of MB) for a transcription model installed before they existed: fetched
+    // once in the background, checked against their SHA-256 (the administrator chose transcription).
+    // (and on Apple Silicon the GPU copy of the model)
+    if (!process.env.VITEST && transcriptionModel.installed() && !transcriptionModel.complete()) {
+        setTimeout(() => {
+            transcriptionModel.start().catch(() => undefined);
+        }, 20_000).unref();
+    }
+    transcriptionAcceleration.reader = (data, env) => recordingTranscriber.benchmark(data, "audio/opus", env);
+    const autoTranscriptionAcceleration = () => {
+        transcriptionAcceleration.autoSetup().catch((error) => {
+            process.stderr.write(`STT_ACCEL_AUTO_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+        });
+    };
+    setTimeout(autoTranscriptionAcceleration, 8 * 60_000).unref();
+    setInterval(autoTranscriptionAcceleration, 6 * 60 * 60_000).unref();
+    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), caseOcrEngine), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({
+        lineCrops: () => localModels.visionOcr() !== null,
+        acceleration: () => ocrAcceleration.environment(),
+        persistent: true
+    })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), registryEnrichmentFor(legalFederationTools), () => {
         const vision = localModels.visionOcr();
         return vision ? new LocalVisionLineReader(vision.executable, vision.model, { gpuOffload: vision.gpuOffload }) : null;
     }, 
@@ -377,13 +450,15 @@ export async function startLocalServer(options) {
         const modelId = localModels.configuredModelId();
         if (modelId && localModels.status().state !== "READY")
             await localModels.ensureRunning(modelId);
-    }, new LocalWhisperTranscriber(() => transcriptionModel.dir));
+    }, recordingTranscriber, (fn, fallback) => localModels.withExclusiveModel(fn, fallback));
     const coreApp = createLexHttpApp({
         registry,
         documentDecryptor: new LocalDocumentDecryptor(),
         // Off until a Google OAuth client is configured (see google/config.ts).
         googleRecovery: new GoogleRecoveryController(authService),
         googleWorkspace: new GoogleWorkspaceController(authService, caseFileStore.rootDir),
+        microsoft: new MicrosoftController(authService, caseFileStore.rootDir),
+        userGroups: new UserGroupStore(caseFileStore.rootDir, (userId) => authStore.getUserById(userId) !== undefined),
         personMorphology,
         modelCatalog,
         credentialResolver: credentials,
@@ -471,6 +546,7 @@ export async function startLocalServer(options) {
         workspace: workspaceStore,
         rootDir: caseFileStore.rootDir,
         officeEditor,
+        pdfForms: new LocalPdfFormFiller(),
         artifacts: secureCaseArtifactStore
     });
     registerMaintenanceRoutes(app, {
@@ -478,7 +554,9 @@ export async function startLocalServer(options) {
         localModels,
         maintenance,
         anomalyJournal,
-        transcriptionModel
+        transcriptionModel,
+        ocrAcceleration,
+        transcriptionAcceleration
     });
     registerCoreLawRoutes(app, {
         authService,
@@ -572,6 +650,14 @@ export async function startLocalServer(options) {
                 ? address.port
                 : port;
             selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
+            // Chat routing indexes built a few seconds after start (the UI's first requests first),
+            // not on the user's first question (chat-warmup.ts).
+            if (!process.env.VITEST && process.env.LEX_CHAT_WARMUP !== "off") {
+                setTimeout(() => {
+                    const ms = warmChatPaths(registry);
+                    process.stderr.write(`LEX_CHAT_WARMUP:${ms}ms\n`);
+                }, 3_000).unref();
+            }
             resolve({
                 host,
                 port: actualPort,
@@ -601,12 +687,44 @@ export async function startLocalServer(options) {
 // The parent at start (the desktop app); an orphan is re-parented, on macOS and Linux
 // to launchd/init (pid 1).
 const PARENT_AT_START = process.ppid;
+/** Where the runtime notes what nearly or did end it (no case text: the error and its stack). */
+export function runtimeCrashLogPath(env = process.env) {
+    return env.LOCALAPPDATA
+        ? path.join(env.LOCALAPPDATA, "LexMachina", "runtime-crash.log")
+        : path.join(os.tmpdir(), "LexMachina-runtime-crash.log");
+}
+function noteRuntimeFault(kind, error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ""}` : String(error);
+    const line = `--- ${new Date().toISOString()} ${kind}\n${detail.slice(0, 4000)}\n`;
+    process.stderr.write(`RUNTIME_${kind}:${detail.split("\n")[0]?.slice(0, 300)}\n`);
+    try {
+        const file = runtimeCrashLogPath();
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        const previous = fs.existsSync(file) ? fs.readFileSync(file, "utf8").slice(-60_000) : "";
+        fs.writeFileSync(file, previous + line);
+    }
+    catch {
+        // The note never adds a second failure.
+    }
+}
+export function installRuntimeCrashGuards() {
+    process.on("unhandledRejection", (reason) => noteRuntimeFault("UNHANDLED_REJECTION", reason));
+    process.on("uncaughtException", (error) => {
+        noteRuntimeFault("UNCAUGHT_EXCEPTION", error);
+        process.exit(70);
+    });
+}
 export function desktopParentGone(ppid = process.ppid, platform = process.platform) {
     return ppid !== PARENT_AT_START || (platform !== "win32" && ppid === 1);
 }
 if (process.argv[1] &&
     path.resolve(fileURLToPath(import.meta.url)) ===
         path.resolve(process.argv[1])) {
+    // One rejected promise nobody awaited (a background task, a timer) ended the whole runtime
+    // on Node 24: chat, OCR and transcription stopped at once and the app showed no server.
+    // It is logged and the runtime goes on; an uncaught exception still ends it (its state is
+    // unknown) and the desktop sidecar starts it again.
+    installRuntimeCrashGuards();
     const server = await startLocalServer();
     process.stdout.write(`Lex Machina runtime listening on http://${server.host}:${server.port}\n`);
     // Desktop: the runtime ends with the application that started it. On macOS an app
