@@ -21,6 +21,10 @@ REQUIREMENTS="$CODE_ROOT/release-requirements.txt"
 BOOTSTRAP="$CODE_ROOT/bootstrap"
 CACHE="$COMPONENTS_ROOT/.download-cache"
 LOGS="$COMPONENTS_ROOT/bootstrap-logs"
+# Offline package (build-macos-online.sh with LEX_MACOS_OFFLINE=1): the same components inside
+# the app, verified by the same SHA-256 pins; no download, no package index.
+OFFLINE="$CODE_ROOT/offline"
+[ -d "$OFFLINE" ] && echo "OFFLINE_BUNDLE: $OFFLINE"
 
 fail() {
   echo "BOOTSTRAP_FAILED:$1" >&2
@@ -46,8 +50,15 @@ verified_download() {
     return 0
   fi
   rm -f "$target" "$target.part"
-  echo "Downloading $label"
-  curl -fL --retry 4 --retry-delay 3 --connect-timeout 30 -o "$target.part" "$url" || fail "DOWNLOAD_FAILED:$label"
+  if [ -f "$OFFLINE/downloads/$(basename "$target")" ]; then
+    echo "Using offline bundle: $label"
+    cp "$OFFLINE/downloads/$(basename "$target")" "$target.part" || fail "OFFLINE_COPY_FAILED:$label"
+  elif [ -d "$OFFLINE" ]; then
+    fail "OFFLINE_COMPONENT_MISSING:$label"
+  else
+    echo "Downloading $label"
+    curl -fL --retry 4 --retry-delay 3 --connect-timeout 30 -o "$target.part" "$url" || fail "DOWNLOAD_FAILED:$label"
+  fi
   local actual
   actual="$(shasum -a 256 "$target.part" | cut -d' ' -f1)"
   [ "$actual" = "$expected" ] || { rm -f "$target.part"; fail "HASH_MISMATCH:$label expected=$expected actual=$actual"; }
@@ -83,8 +94,10 @@ export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 echo "[3/6] Pinned Python/ML packages"
 if ! "$PYTHON" -X utf8 "$BOOTSTRAP/verify-python-package-set.py" "$MANIFEST" >"$LOGS/package-verifier.log" 2>&1; then
+  offline_index=()
+  [ -d "$OFFLINE/wheels" ] && offline_index=(--no-index --find-links "$OFFLINE/wheels")
   "$PYTHON" -X utf8 -m pip install --quiet --no-warn-script-location --upgrade-strategy only-if-needed \
-    -r "$REQUIREMENTS" >"$LOGS/pip-install.log" 2>&1 || { tail -40 "$LOGS/pip-install.log" >&2; fail "PYTHON_PACKAGES_FAILED"; }
+    ${offline_index[@]+"${offline_index[@]}"} -r "$REQUIREMENTS" >"$LOGS/pip-install.log" 2>&1 || { tail -40 "$LOGS/pip-install.log" >&2; fail "PYTHON_PACKAGES_FAILED"; }
   "$PYTHON" -X utf8 "$BOOTSTRAP/verify-python-package-set.py" "$MANIFEST" >"$LOGS/package-verifier.log" 2>&1 \
     || { cat "$LOGS/package-verifier.log" >&2; fail "PYTHON_PACKAGE_VERSION_MISMATCH"; }
 fi
@@ -102,7 +115,14 @@ models_ready() {
     [ -f "$MODELS/paddle/official_models/$name/inference.yml" ] || return 1
   done
 }
-if ! models_ready latin_PP-OCRv5_mobile_rec; then
+if ! models_ready latin_PP-OCRv5_mobile_rec && [ -d "$OFFLINE/models" ]; then
+  echo "Using offline bundle: models"
+  mkdir -p "$MODELS"
+  ditto "$OFFLINE/models" "$MODELS" || fail "OFFLINE_MODELS_COPY_FAILED"
+fi
+if ! models_ready latin_PP-OCRv5_mobile_rec && [ -d "$OFFLINE" ]; then
+  models_ready || fail "OFFLINE_MODELS_INCOMPLETE"
+elif ! models_ready latin_PP-OCRv5_mobile_rec; then
   mkdir -p "$MODELS"
   # PaddleX treats an existing model directory as downloaded: drop partial ones.
   for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medium_det PP-OCRv6_medium_rec latin_PP-OCRv5_mobile_rec; do
