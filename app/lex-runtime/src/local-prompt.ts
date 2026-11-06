@@ -158,9 +158,10 @@ export function compactLocalPrompt(prompt: string, question = ""): string {
       out.push(shortened(domainRules(part), LOCAL_DOMAIN_MAX));
       continue;
     }
-    if (/^# MANDATORY PATH RESOURCE: analizator-umow-v1\/SKILL\.md — KONTROLA CAŁOŚCIOWA/u.test(head)) {
-      // The whole-document check of a delivered agreement, whole: cut at 1 200 characters it
-      // lost its patterns, and Bielik read pkt 5 and pkt 10 apart (user report 2026-11-06).
+    if (/^# (?:MANDATORY PATH RESOURCE: [^\n]+ — |GRAF RELACJI POSTANOWIEŃ)/u.test(head)) {
+      // A skill section the application put in for this turn (the whole-document check, the
+      // checklist of an opposing letter) and an agreement's relation graph, whole: cut at 1 200
+      // characters they lost their patterns, and Bielik read pkt 5 and pkt 10 apart (2026-11-06).
       out.push(shortened(part, 5_000));
       continue;
     }

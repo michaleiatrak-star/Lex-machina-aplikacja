@@ -280,12 +280,16 @@ import {
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
+import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
 const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
+// analiza-sadowa-v6 6.19: the checklist for every letter of the opposing party.
+const OPPOSING_LETTER_RESOURCE = "analiza-sadowa-v6/SKILL.md";
+const OPPOSING_LETTER_HEADING = "## PISMO PRZECIWNIKA / WEZWANIE — LISTA PP";
 
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
@@ -2581,6 +2585,27 @@ export class SafeSessionExecutor implements SessionExecutor {
           // Only the section: the whole SKILL.md still comes in when the analyser is the executive skill.
           audit.record("resource_read", CONTRACT_WHOLE_DOCUMENT_RESOURCE, "OK", { detail: "runtime-preload;delivered-contract;CAL-GATE" });
           pathSections.push(`# MANDATORY PATH RESOURCE: ${CONTRACT_WHOLE_DOCUMENT_RESOURCE} — ${CONTRACT_WHOLE_DOCUMENT_HEADING.replace(/^#+\s*/u, "")}\n\n${cal}`);
+        }
+      }
+      // A demand or a pleading delivered: the checklist for a letter of the opposing party
+      // (analiza-sadowa-v6, PP-1…PP-8): facts, construction, arithmetic, the provisions it
+      // cites, court, sender, case law (comparison of the app with the chat, 2026-11-06).
+      if (recognisedDocuments.some((document) => document.kind === "WEZWANIE" || document.category === "PISMO_PROCESOWE")) {
+        const checklist = markdownSection(this.readCorpus(OPPOSING_LETTER_RESOURCE) ?? "", OPPOSING_LETTER_HEADING);
+        if (checklist) {
+          audit.record("resource_read", OPPOSING_LETTER_RESOURCE, "OK", { detail: "runtime-preload;delivered-letter;PP" });
+          pathSections.push(`# MANDATORY PATH RESOURCE: ${OPPOSING_LETTER_RESOURCE} — ${OPPOSING_LETTER_HEADING.replace(/^#+\s*/u, "")}\n\n${checklist}`);
+        }
+      }
+      if (recognisedDocuments.some((document) => document.category === "UMOWA")) {
+        // The relation graph of each such document, read from its words: the model confirms
+        // or corrects its edges instead of finding the relations alone (user report 2026-11-06).
+        for (const document of recognisedDocuments.filter((item) => item.category === "UMOWA").slice(0, 3)) {
+          const attachment = attachments.find((item) => item.documentId === document.documentId);
+          const graph = attachment ? contractGraph(attachment.chunks.map((chunk) => chunk.text).join("\n")) : null;
+          if (!graph) continue;
+          audit.record("gate", "CONTRACT_GRAPH", "OK", { documentId: document.documentId, nodes: graph.nodes.length, edges: graph.edges.length });
+          pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", `# GRAF RELACJI POSTANOWIEŃ: ${document.documentId}`));
         }
       }
       const roles = replyRolesPrompt(request.query, recognisedDocuments);

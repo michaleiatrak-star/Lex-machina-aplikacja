@@ -277,7 +277,7 @@ describe("AUTO with a demand and the agreement it relies on", () => {
           documentId: "doc_porozumienie",
           selectedByUser: true,
           totalPages: 1,
-          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "Porozumienie stron o rozwiązaniu umowy o pracę\nzawarte w dniu 9 października 2024 r.\nPracodawca i Pracownik zgodnie postanawiają, co następuje:\n5. Za każde naruszenie każda ze stron zapłaci karę 5.000,00 zł\n10. Pracownik zrzeka się wszystkich roszczeń przeszłych i przyszłych." }]
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "Porozumienie stron o rozwiązaniu umowy o pracę\nzawarte w dniu 9 października 2024 r. pomiędzy X, zwaną dalej „Pracodawcą”, a Y, zwanym dalej „Pracownikiem”.\nPracodawca i Pracownik zgodnie postanawiają, co następuje:\n1. Umowa o pracę zostaje rozwiązana z dniem 31 października 2024 r.\n2. Pracodawca zwalnia Pracownika z obowiązku świadczenia pracy z zachowaniem prawa do wynagrodzenia.\n3. Strony zobowiązują się do zachowania poufności.\n4. Za każde naruszenie każda ze stron zobowiązana będzie do zapłaty kary w kwocie 5.000,00 zł\n5. Pracownik zrzeka się wszystkich roszczeń przeszłych i przyszłych." }]
         }
       ]
     });
@@ -285,6 +285,10 @@ describe("AUTO with a demand and the agreement it relies on", () => {
     expect(prompt).toContain("doc_porozumienie: porozumienie / ugoda");
     expect(prompt).toContain("# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)");
     expect(prompt).toContain("a) ZRZECZENIE");
+    // The agreement's relation graph, and the checklist for the opposing party's demand.
+    expect(prompt).toContain("# GRAF RELACJI POSTANOWIEŃ: doc_porozumienie");
+    expect(prompt).toMatch(/\| pkt 5 \| ZNOSI PRAWO \| pkt 4 \|/u);
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analiza-sadowa-v6/SKILL.md — PISMO PRZECIWNIKA / WEZWANIE — LISTA PP");
   }, 60_000);
 });
 
