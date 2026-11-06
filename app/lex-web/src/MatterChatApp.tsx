@@ -246,7 +246,8 @@ import {
   plainStepLabel,
   saveDeveloperMode,
   skillLabel,
-  visibleContent
+  visibleContent,
+  draftDisplayText
 } from "./developer-mode.js";
 
 type TabId =
@@ -6548,7 +6549,7 @@ export default function MatterChatApp({
                         Wersja robocza — odpowiedź powstaje, weryfikacja źródeł jeszcze trwa
                       </div>
                       <div className="chat-draft-text">
-                        {draftText}
+                        {draftDisplayText(draftText, developerMode)}
                       </div>
                     </div>
                   ) : null}

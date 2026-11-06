@@ -488,6 +488,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- Case-law discovery policy: (a) signature known -> look it up by repertory in the official registry (verify_case_reference / CBOSA / court portal); no web search, no SAOS. " +
         "(b) Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018, or rulings of the last 2-3 years) -> web_search (when available) with an abstract legal phrase, never case data, to find signatures in secondary sources, in parallel with the official full-text search (search_case_law source=SN / source=CBOSA) using the topic in its legal terms and the provision (e.g. 'zorganizowana grupa przestępcza', 'art. 258 k.k.'), then a second phrasing if the first gives nothing usable. SAOS does not hold these rulings. " +
         "(c) Older rulings or common courts -> search_case_law source=SAOS plus web_search; SAOS also serves as a citator. " +
+        "(d) Every topic search covers the courts that decide such cases, not only the top court: in labour, civil, family and commercial matters search the common courts (search_case_law source=SAOS, courtType=COMMON) alongside SN; the appellate courts' lines are leads with full text. A source that refuses (captcha, HTTP 403, timeout) never ends the search: go on with the next source and say which one failed. " +
         "Secondary sources (web pages, commentaries, news) give only the signature: the thesis and any quote come only from the verified official text. Every signature found on the web or in SAOS is checked with verify_case_reference before it is cited; a web snippet is never a source.",
     "- Form of the decision: when the user asks for a judgment (wyrok), pass form=wyrok (SN) or judgmentType=SENTENCE (SAOS) and never present a postanowienie or uchwała as a wyrok; if only another form exists, say so plainly.",
     "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
@@ -556,6 +557,7 @@ export function snVerificationNeeded(reason) {
 const SN_VERIFICATION_INSTRUCTION = "SN_WERYFIKACJA_WYMAGANA: sn.pl requires a person to pass its check (captcha). The application shows the user the sn.pl verification window and repeats the question once it is passed. " +
     "Say so in one sentence; never say SN has no such decision and never conclude that the ruling does not exist. " +
     "Meanwhile use web_search (abstract legal phrase, never case data) for leads to signatures in secondary sources; search source=SAOS only for SN rulings issued before 2017 (SAOS holds SN decisions only up to 2016). " +
+    "Do not stop at SN: search the common courts in SAOS too (source=SAOS, courtType=COMMON; appellate and regional courts, current, full text), the same topic in its legal terms and the provision; a common court's ruling is cited as such (court, date, signature), never as SN. " +
     "Mark every such hit as an unverified candidate; the thesis and quotes come only from the verified sn.pl text.";
 export class LegalVerificationToolRuntime {
     ledger;
