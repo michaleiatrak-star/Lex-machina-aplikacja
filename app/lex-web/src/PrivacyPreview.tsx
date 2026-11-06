@@ -12,7 +12,8 @@ import { TranscriptEditor } from "./TranscriptEditor.js";
 import { isTranscript } from "./transcript.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
-import { replaceOcrLine } from "./ocr-line-fix.js";
+import { keepOpenReview, replaceOcrLine } from "./ocr-line-fix.js";
+import { ScanSnippet } from "./ScanSnippet.js";
 
 /**
  * The preview every processed document passes before it is finalized: what to decide first
@@ -85,6 +86,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   // Corrections typed straight in the "Niepewne" list, by page and line.
   const [lineFixes, setLineFixes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // The doubtful line whose scan fragment is shown in a bubble (a click on it or its field).
+  const [snippetKey, setSnippetKey] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ page: number; start: number; end: number } | null>(null);
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [error, setError] = useState("");
@@ -265,7 +268,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       const result = await editDocumentPage(props.caseId, review.documentId, target.page, target.text);
       const nextReview = {
         ...review,
-        pages: review.pages.map((page) => (page.page === target.page ? result.page : page)),
+        pages: review.pages.map((page) => (page.page === target.page ? keepOpenReview(page, result.page) : page)),
         suggestions: [...review.suggestions.filter((item) => item.page !== target.page), ...result.suggestions]
       };
       // Offsets of the old text no longer apply.
@@ -517,11 +520,23 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               </small>
               <ul>
                 {doubtful.map((line, index) => {
-                  const key = `${line.page}:${line.line}:${index}`;
+                  // By the line, not its place in the list: a saved line leaves it, the rest keep their typing.
+                  const key = `${line.page}:${line.line}:${line.text}`;
                   const value = lineFixes[key] ?? line.text;
                   return (
                   <li key={`ocr-${line.page}-${index}`}>
-                    <span>s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”</span>
+                    <button
+                      type="button"
+                      className="privacy-preview-line-label"
+                      aria-expanded={scanned ? snippetKey === key : undefined}
+                      onClick={() => setSnippetKey(snippetKey === key ? null : key)}
+                      title={scanned ? "Pokaż ten fragment skanu" : undefined}
+                    >
+                      s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”
+                    </button>
+                    {scanned && snippetKey === key ? (
+                      <ScanSnippet caseId={props.caseId} documentId={review.documentId} page={line.page} line={line.line} onClose={() => setSnippetKey(null)} />
+                    ) : null}
                     {line.stamp ? null : (
                       <span className="privacy-preview-line-fix">
                         <input
@@ -530,7 +545,10 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                           aria-label={`Poprawka linii: ${line.text}`}
                           value={value}
                           disabled={saving}
-                          onFocus={() => (scanned ? showOnScan(line.page, { line: line.line }) : undefined)}
+                          onFocus={() => {
+                            setSnippetKey(key);
+                            if (scanned) showOnScan(line.page, { line: line.line });
+                          }}
                           onChange={(event) => setLineFixes((current) => ({ ...current, [key]: event.target.value }))}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {

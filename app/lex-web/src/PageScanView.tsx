@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { getDocumentPageScan, type DocumentPageScan } from "./api.js";
+import type { DocumentPageScan } from "./api.js";
+import { loadPageScan } from "./page-scan-cache.js";
 
 /**
  * The scan of one page next to its text in the preview: the user compares the reading with
@@ -33,7 +34,7 @@ export function PageScanView(props: {
       return;
     }
     setScan(undefined);
-    getDocumentPageScan(props.caseId, props.documentId, props.page).then(
+    loadPageScan(props.caseId, props.documentId, props.page, props.revision ?? 0).then(
       (result) => {
         cache.current.set(key, result);
         if (active) setScan(result);

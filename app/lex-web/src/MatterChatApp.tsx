@@ -5098,7 +5098,10 @@ export default function MatterChatApp({
     <div className="chat-app-shell matter-chat-app">
       {privacyPreview ? (
         <div className="privacy-preview-overlay" role="dialog" aria-modal="true">
+          {/* One preview per document: without the key two files confirmed one after another kept the
+              first file's text and decisions on screen while the second was confirmed (user report 2026-11-06). */}
           <PrivacyPreview
+            key={privacyPreview.request.review.documentId}
             {...privacyPreview.request}
             busy={privacyPreviewBusy}
             confirmError={privacyPreviewError}
