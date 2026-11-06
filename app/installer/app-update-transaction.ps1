@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$ReceiptPath,
   [Parameter(Mandatory=$true)][string]$RuntimeRoot,
   [Parameter(Mandatory=$true)][string]$InstallRoot,
@@ -33,7 +33,87 @@ function Full-Path([string]$Value) {
   return [IO.Path]::GetFullPath($Value)
 }
 
+# A visible progress window while the application is closed for the update (user report
+# 2026-11-06: the update ran hidden after the app closed and the user did not know what was
+# happening). Its own STA runspace; any failure to show it never touches the update itself.
+$script:UpdateProgress = $null
+$UpdateProgressSteps = @{
+  PREPARED = @(10, "Przygotowanie aktualizacji…")
+  BACKED_UP = @(30, "Kopia zapasowa gotowa. Instaluję nową wersję…")
+  INSTALLING = @(50, "Instaluję nową wersję Lex Machina…")
+  VERIFYING = @(85, "Sprawdzam zainstalowaną wersję…")
+  COMMITTED = @(100, "Aktualizacja zainstalowana. Uruchamiam Lex Machina…")
+  ROLLING_BACK = @(60, "Aktualizacja się nie powiodła. Przywracam poprzednią wersję…")
+  ROLLED_BACK = @(100, "Przywrócono poprzednią wersję. Uruchamiam Lex Machina…")
+  ROLLBACK_FAILED = @(100, "Nie udało się przywrócić poprzedniej wersji. Zainstaluj Lex Machina ponownie z instalatora.")
+  ABORTED_BEFORE_INSTALL = @(100, "Aktualizacja przerwana przed instalacją. Uruchamiam Lex Machina…")
+  REJECTED = @(100, "Pobrany instalator nie przeszedł weryfikacji. Aktualizacja nie została zainstalowana.")
+}
+
+function Start-UpdateProgress([string]$TargetVersion) {
+  if ($script:UpdateProgress -or $env:LEX_UPDATE_NO_PROGRESS_WINDOW -eq "1" -or -not [Environment]::UserInteractive) { return }
+  try {
+    $sync = [hashtable]::Synchronized(@{ CloseAt = $null; Text = "Przygotowanie aktualizacji…"; Value = 5; Title = "Aktualizacja Lex Machina do wersji $TargetVersion" })
+    $runspace = [runspacefactory]::CreateRunspace()
+    $runspace.ApartmentState = "STA"
+    $runspace.ThreadOptions = "ReuseThread"
+    $runspace.Open()
+    $runspace.SessionStateProxy.SetVariable("sync", $sync)
+    $shell = [powershell]::Create()
+    $shell.Runspace = $runspace
+    [void]$shell.AddScript({
+      Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+      $form = New-Object System.Windows.Forms.Form
+      $form.Text = $sync.Title
+      $form.Width = 460; $form.Height = 170
+      $form.StartPosition = "CenterScreen"
+      $form.FormBorderStyle = "FixedDialog"
+      $form.ControlBox = $false
+      $form.TopMost = $true
+      $label = New-Object System.Windows.Forms.Label
+      $label.Left = 20; $label.Top = 20; $label.Width = 410; $label.Height = 40
+      $label.Text = $sync.Text
+      $bar = New-Object System.Windows.Forms.ProgressBar
+      $bar.Left = 20; $bar.Top = 70; $bar.Width = 410; $bar.Height = 22
+      $bar.Minimum = 0; $bar.Maximum = 100; $bar.Value = $sync.Value
+      $hint = New-Object System.Windows.Forms.Label
+      $hint.Left = 20; $hint.Top = 100; $hint.Width = 410; $hint.Height = 20
+      $hint.Text = "Nie wyłączaj komputera. Okno zamknie się samo."
+      $form.Controls.AddRange([System.Windows.Forms.Control[]]@($label, $bar, $hint))
+      $timer = New-Object System.Windows.Forms.Timer
+      $timer.Interval = 300
+      $timer.Add_Tick({
+        $label.Text = $sync.Text
+        $bar.Value = [Math]::Max(0, [Math]::Min(100, [int]$sync.Value))
+        if ($sync.CloseAt -and [DateTime]::UtcNow -ge $sync.CloseAt) { $timer.Stop(); $form.Close() }
+      })
+      $timer.Start()
+      [void]$form.ShowDialog()
+    })
+    [void]$shell.BeginInvoke()
+    $script:UpdateProgress = $sync
+  } catch {
+    $script:UpdateProgress = $null
+  }
+}
+
+function Set-UpdateProgress([string]$State) {
+  if (-not $script:UpdateProgress -or -not $UpdateProgressSteps.ContainsKey($State)) { return }
+  try {
+    $step = $UpdateProgressSteps[$State]
+    $script:UpdateProgress.Value = $step[0]
+    $script:UpdateProgress.Text = $step[1]
+    # A final state closes the window by itself; a failure stays readable a little longer.
+    if ($step[0] -ge 100) {
+      $seconds = if ($State -in @("ROLLBACK_FAILED", "REJECTED")) { 10 } else { 2 }
+      $script:UpdateProgress.CloseAt = [DateTime]::UtcNow.AddSeconds($seconds)
+    }
+  } catch { }
+}
+
 function Write-JsonAtomic([string]$Path, [object]$Value) {
+  # Every journal state is a step of the progress window.
+  if ($Value -is [System.Collections.IDictionary] -and $Value.Contains("state")) { Set-UpdateProgress ([string]$Value["state"]) }
   $parent = Split-Path -Parent $Path
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
   $temporary = $Path + ".tmp"
@@ -306,6 +386,8 @@ if ($receiptVerification -eq "AUTHENTICODE") {
 } catch {
   Exit-Rejected $_.Exception.Message $offeredVersion
 }
+
+Start-UpdateProgress $targetVersion.ToString()
 
 $backupBase = if ($env:LOCALAPPDATA) {
   Join-Path $env:LOCALAPPDATA "LexMachina\update-backups"
