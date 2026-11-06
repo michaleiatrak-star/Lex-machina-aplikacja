@@ -89,6 +89,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [error, setError] = useState("");
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
+  // The preview opens where the user is: a read file waited below the chat for a decision while
+  // the user did not know what to wait for (user report 2026-11-06).
+  const previewRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    previewRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [props.fileName]);
   // Scanned pages: the original is shown next to the text, the page in view follows the text.
   const scanned = review.pages.some((page) => page.source === "OCR");
   const [scanPage, setScanPage] = useState(() => (review.pages.find((page) => page.source === "OCR") ?? review.pages[0])?.page ?? 1);
@@ -365,7 +371,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   );
 
   return (
-    <section className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
+    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
       <header className="privacy-preview-head">
         <div>
           <strong>Podgląd przed zatwierdzeniem: {props.fileName}</strong>

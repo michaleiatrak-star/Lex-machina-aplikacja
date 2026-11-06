@@ -132,6 +132,9 @@ export function checkpointPrompt(
     `# CHECKPOINT ${checkpoint} — KONTRAKT (CP-REJESTR, shared/CP-GATE.md; AUTOMAT-STANOW)`,
     `- Zakończ odpowiedź raportem [${checkpoint}] w formacie skilla; aplikacja zamknie ${checkpoint} tylko z tym raportem.`,
     "- Brak dokumentu (nie wgrany, „uzupełnię później”, pozycja rejestru bez treści) = BRAK-DOK (shared/CP-GATE.md §3B): wypisz brakujące pozycje w raporcie i zamknij checkpoint jako ZAMKNIĘTY Z BRAKAMI. Nie odmawiaj zamknięcia z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.",
+    // C09-026 (live 2026-11-01): CP-1a refused to close for facts not given, and every "kontynuuj"
+    // repeated the same questions at the cost of a whole model turn.
+    "- Brak faktu lub danych (strona, data doręczenia, kwota, stanowisko klienta) = BRAK-FAKT: przyjmij to, co wynika z akt (np. powód z „z powództwa …”, pozwany z „przeciwko …”), oznacz założenie, zadaj pytania jednym blokiem „Pytania do klienta” i zamknij checkpoint jako ZAMKNIĘTY Z BRAKAMI. Brak danych nie blokuje kroku; „kontynuuj” bez odpowiedzi oznacza: idź dalej na założeniach, nie powtarzaj pytań.",
     ...(CONDITIONAL_CHECKPOINTS.has(checkpoint)
       ? [`- ${checkpoint} jest warunkowy: gdy warunek techniczny nie zachodzi, napisz wprost „[${checkpoint}] N/A — <powód>” (N/A wyłącznie per warunek techniczny, ZAKAZ-14).`]
       : [`- ${checkpoint} jest obowiązkowy: N/A niedozwolone.`]),

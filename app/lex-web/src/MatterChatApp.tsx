@@ -430,6 +430,8 @@ const CASE_OVERVIEW_REQUEST =
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
+// How long "Konto połączone." stays after the account connects.
+const ACCOUNT_CONNECTED_NOTICE_MS = 4000;
 const KNOWN_EXECUTION_SKILLS = new Set([
   "analiza-sadowa-v6",
   "analizator-dowodow-v3",
@@ -1709,6 +1711,13 @@ export default function MatterChatApp({
     useState("");
   const [accountConnectPhase, setAccountConnectPhase] =
     useState<AccountConnectPhase | null>(null);
+  // "Konto połączone." is a moment, not a fixture: the step list stayed over every view
+  // after the first connection (user report 2026-11-06).
+  useEffect(() => {
+    if (accountConnectPhase?.kind !== "done") return;
+    const timer = window.setTimeout(() => setAccountConnectPhase((current) => (current?.kind === "done" ? null : current)), ACCOUNT_CONNECTED_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [accountConnectPhase]);
   const [providerAccountMessage, setProviderAccountMessage] =
     useState("");
   const [claudeOAuthToken, setClaudeOAuthTokenInput] =
@@ -2688,6 +2697,13 @@ export default function MatterChatApp({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, executing]);
 
+  // Files dropped: the reading and the decision about them are shown at once, not below the chat.
+  const documentFlowRef = useRef<HTMLElement | null>(null);
+  const documentFlowShown = documentDropQueue.total > 0;
+  useEffect(() => {
+    if (documentFlowShown) documentFlowRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [documentFlowShown]);
+
   useEffect(() => {
     if (!settingsRequest) {
       return;
@@ -2762,18 +2778,23 @@ export default function MatterChatApp({
     };
   }, [executing]);
 
+  // The first message of a new case waits for the files dropped with it (read, anonymized,
+  // confirmed): sent before them it reached the model alone ("nie mam żadnego materiału",
+  // user report 2026-11-06) and the guard in executeMessage then dropped it.
+  const firstMessageFilesPending = documentDropQueue.files.length > 0 || documentStaging.items.length > 0;
   useEffect(() => {
     if (
       pendingFirstMessage &&
       caseId &&
       !threadLoading &&
-      !executing
+      !executing &&
+      !firstMessageFilesPending
     ) {
       const pending = pendingFirstMessage;
       setPendingFirstMessage(null);
       void executeMessage(pending);
     }
-  }, [pendingFirstMessage, caseId, threadLoading, executing]);
+  }, [pendingFirstMessage, caseId, threadLoading, executing, firstMessageFilesPending]);
 
   // The switch is sent once the thread's action shows the new skill (fresh routing state).
   useEffect(() => {
@@ -5834,7 +5855,7 @@ export default function MatterChatApp({
         ) : null}
 
         {documentDropQueue.total > 0 ? (
-          <section className="chat-card-stack chat-document-flow" aria-label="Odczyt plików i ochrona danych">
+          <section ref={documentFlowRef} className="chat-card-stack chat-document-flow" aria-label="Odczyt plików i ochrona danych">
             <article className="chat-card">
               <p className="eyebrow">
                 Dodawanie plików
@@ -6639,7 +6660,7 @@ export default function MatterChatApp({
                   disabled={!canSend}
                   onClick={() => void sendMessage()}
                 >
-                  {executing || pendingFirstMessage ? "Wysyłanie…" : "Wyślij"}
+                  {pendingFirstMessage && firstMessageFilesPending ? "Czeka na pliki…" : executing || pendingFirstMessage ? "Wysyłanie…" : "Wyślij"}
                 </button>
               </div>
               {caseFilePickerOpen ? (
