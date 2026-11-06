@@ -1,6 +1,6 @@
 import { euAct } from "./eu-law-verifier.js";
 import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, DOTTED_STATUTE, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations, withStatuteTitles } from "./legal-act-abbreviations.js";
-import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
+import { amountMarkerSpans, amountMatches, evidenceHasAmount, factSumKeys, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
@@ -739,7 +739,7 @@ export class FinalizationGate {
                 claims = references.filter((reference) => reference.kind === "statute").map((reference) => reference.claim);
             const lineRecords = claims.map(statuteRecord).filter((record) => Boolean(record));
             const marked = amountMarkerSpans(lineText);
-            const facts = new Set(ledger.factAmountKeys());
+            const facts = new Set([...ledger.factAmountKeys(), ...factSumKeys(ledger.factAmountKeys())]);
             for (const amount of amounts) {
                 if (facts.has(amount.key))
                     continue;

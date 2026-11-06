@@ -414,3 +414,22 @@ describe("local auth service", () => {
     service.close();
   });
 });
+
+describe("account kind (PROFESSIONAL / INDIVIDUAL)", () => {
+  it("a new account is professional; only the administrator sets the kind", async () => {
+    const root = tempRoot();
+    const { store, service } = serviceAt(root);
+    const admin = await service.bootstrap({ loginName: "ewa", displayName: "Ewa", password: "Ewa ma bezpieczne dlugie haslo 2026" });
+    const adminContext = service.authenticateAuthorization(`Bearer ${admin.sessionToken}`);
+    expect(adminContext.user.accountKind).toBe("PROFESSIONAL");
+    const jan = await service.createUser(adminContext, { loginName: "jan", displayName: "Jan", password: "Jan ma bezpieczne dlugie haslo 2026", accountKind: "INDIVIDUAL" });
+    expect(jan.accountKind).toBe("INDIVIDUAL");
+    expect(service.setAccountKind(adminContext, admin.user.userId, "INDIVIDUAL").accountKind).toBe("INDIVIDUAL");
+    expect(store.getUserById(admin.user.userId)?.accountKind).toBe("INDIVIDUAL");
+    const janLogged = await service.login({ loginName: "jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    const janContext = service.authenticateAuthorization(`Bearer ${janLogged.sessionToken}`);
+    expect(() => service.setAccountKind(janContext, jan.userId, "PROFESSIONAL")).toThrow("AUTHORIZATION_DENIED");
+    expect(service.setAccountKind(adminContext, jan.userId, "PROFESSIONAL").accountKind).toBe("PROFESSIONAL");
+    service.close();
+  });
+});

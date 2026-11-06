@@ -14,7 +14,8 @@ export const FORMAT_MEDIA_TYPE = {
     odt: "application/vnd.oasis.opendocument.text",
     xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     csv: "text/csv",
-    tsv: "text/tab-separated-values"
+    tsv: "text/tab-separated-values",
+    pdf: "application/pdf"
 };
 const EXTENSION_MEDIA_TYPE = {
     docx: FORMAT_MEDIA_TYPE.docx,
@@ -56,10 +57,12 @@ export class LocalOfficeEditor {
         const output = await this.run(["read", "--media-type", mediaType], data);
         return JSON.parse(output.toString("utf8"));
     }
-    async write(format, model, delimiter) {
+    async write(format, model, delimiter, track) {
         if (!(format in FORMAT_MEDIA_TYPE))
             throw new Error("OFFICE_EDIT_FORMAT_UNSUPPORTED");
-        return await this.run(["write"], Buffer.from(JSON.stringify({ format, model, ...(delimiter ? { delimiter } : {}) }), "utf8"));
+        if (format === "pdf" && model.kind !== "document")
+            throw new Error("OFFICE_EDIT_FORMAT_UNSUPPORTED");
+        return await this.run(["write"], Buffer.from(JSON.stringify({ format, model, ...(delimiter ? { delimiter } : {}), ...(track && format === "docx" ? { track } : {}) }), "utf8"));
     }
     run(args, input) {
         return new Promise((resolve, reject) => {

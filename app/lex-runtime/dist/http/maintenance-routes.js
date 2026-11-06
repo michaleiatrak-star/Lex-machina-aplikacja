@@ -1,3 +1,5 @@
+import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister } from "../courts/wokanda.js";
+import { ChatTurnJournal } from "../chat-turn-journal.js";
 import { AuthError } from "../auth/service.js";
 import { isSkillChannel } from "../skill-channel.js";
 function authenticated(req, authService) {
@@ -49,7 +51,162 @@ function sendMaintenanceError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMaintenanceRoutes(app, dependencies) {
-    const { authService, localModels, maintenance, anomalyJournal, transcriptionModel } = dependencies;
+    const { authService, localModels, maintenance, anomalyJournal, transcriptionModel, ocrAcceleration, transcriptionAcceleration } = dependencies;
+    // Times of the chat turns on this computer by path and stage (chat-turn-journal.ts): no text.
+    app.get("/api/diagnostics/chat-turns", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        res.json(new ChatTurnJournal().summary());
+    });
+    // Wokandy of the common courts (courts/wokanda.ts): the register with each court's status as
+    // this computer last saw it; re-checked on the administrator's request (one page per court).
+    app.get("/api/courts/wokanda", (req, res) => {
+        try {
+            authenticated(req, authService);
+            res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView() });
+        }
+        catch (error) {
+            if (error instanceof AuthError) {
+                res.status(error.httpStatus).json({ error: error.code });
+                return;
+            }
+            throw error;
+        }
+    });
+    app.post("/api/courts/wokanda/recheck", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const names = Array.isArray(req.body?.courts) ? req.body.courts.filter((name) => typeof name === "string").slice(0, 400) : null;
+        try {
+            res.json({ courts: await recheckWokandaCourts(names && names.length ? names : null, dependencies.wokandaFetch) });
+        }
+        catch (error) {
+            res.status(500).json({ error: "WOKANDA_RECHECK_FAILED", detail: error instanceof Error ? error.message.slice(0, 200) : "" });
+        }
+    });
+    // A court's browser verification passed by the user in the court's window (as for sn.pl): the
+    // window's cookies probed against the court's wokanda; kept for this user's checks when the
+    // portal answers. Cookies are neither returned nor logged.
+    app.post("/api/courts/wokanda/session/probe", async (req, res) => {
+        try {
+            authenticated(req, authService);
+        }
+        catch (error) {
+            if (error instanceof AuthError) {
+                res.status(error.httpStatus).json({ error: error.code });
+                return;
+            }
+            throw error;
+        }
+        const domain = typeof req.body?.domain === "string" ? req.body.domain : "";
+        const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+        const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+        try {
+            res.json(await probeWokandaSession(domain, cookie, userAgent, dependencies.wokandaFetch));
+        }
+        catch (error) {
+            res.status(400).json({ error: error instanceof Error ? error.message : "WOKANDA_SESSION_INVALID" });
+        }
+    });
+    // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.
+    if (ocrAcceleration) {
+        app.get("/api/local-models/ocr-acceleration", (req, res) => {
+            try {
+                authenticated(req, authService);
+                res.json(ocrAcceleration.status());
+            }
+            catch (error) {
+                if (error instanceof AuthError) {
+                    res.status(error.httpStatus).json({ error: error.code });
+                    return;
+                }
+                throw error;
+            }
+        });
+        app.post("/api/local-models/ocr-acceleration/install", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                void ocrAcceleration.start();
+                res.status(202).json(ocrAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+        app.post("/api/local-models/ocr-acceleration/measure", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                void ocrAcceleration.measure();
+                res.status(202).json(ocrAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+        app.post("/api/local-models/ocr-acceleration/remove", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                ocrAcceleration.remove();
+                res.json(ocrAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+    }
+    // Transcription on an NVIDIA card (see transcription-acceleration.ts): set up by the app itself;
+    // the buttons are for an administrator (developer mode).
+    if (transcriptionAcceleration) {
+        app.get("/api/local-models/transcription-acceleration", (req, res) => {
+            try {
+                authenticated(req, authService);
+                res.json(transcriptionAcceleration.status());
+            }
+            catch (error) {
+                if (error instanceof AuthError) {
+                    res.status(error.httpStatus).json({ error: error.code });
+                    return;
+                }
+                throw error;
+            }
+        });
+        app.post("/api/local-models/transcription-acceleration/install", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                void transcriptionAcceleration.start();
+                res.status(202).json(transcriptionAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+        app.post("/api/local-models/transcription-acceleration/measure", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                void transcriptionAcceleration.measure();
+                res.status(202).json(transcriptionAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+        app.post("/api/local-models/transcription-acceleration/remove", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                transcriptionAcceleration.remove();
+                res.json(transcriptionAcceleration.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+    }
     // Speech-to-text model for recordings (see transcription.ts): downloaded on request.
     if (transcriptionModel) {
         app.get("/api/local-models/transcription", (req, res) => {
@@ -75,6 +232,18 @@ export function registerMaintenanceRoutes(app, dependencies) {
             catch (error) {
                 sendMaintenanceError(res, error);
             }
+        });
+        // How many people speak in recordings: 0 = estimated, 2-12 = known (a hearing: 3), more accurate.
+        app.post("/api/local-models/transcription/speakers", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            const count = Number(req.body?.count);
+            if (!Number.isInteger(count) || count < 0 || count > 12 || count === 1) {
+                res.status(400).json({ error: "TRANSCRIPTION_SPEAKERS_INVALID" });
+                return;
+            }
+            transcriptionModel.setSpeakerCount(count);
+            res.json(transcriptionModel.status());
         });
         app.post("/api/local-models/transcription/remove", (req, res) => {
             if (!requireAdmin(req, res, authService))

@@ -1,3 +1,4 @@
+import { pdfFormValues } from "../pdf-form.js";
 import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks } from "../process-pleading-draft.js";
 import { FORMAT_MEDIA_TYPE, editableMediaType } from "../office-edit.js";
 import { randomBytes } from "node:crypto";
@@ -31,6 +32,9 @@ function draftView(draft) {
 }
 function caseIdFrom(req) {
     return String(req.params.caseId ?? "").trim();
+}
+function isPdf(mediaType, filename) {
+    return mediaType.split(";")[0].trim().toLowerCase() === "application/pdf" || /\.pdf$/iu.test(filename);
 }
 function errorCode(error) {
     return error instanceof Error ? error.message : "WORKSPACE_OPERATION_FAILED";
@@ -72,7 +76,9 @@ function sendError(res, error) {
         code.includes("TOO_LARGE") ||
         code.includes("LIMIT_EXCEEDED") ||
         code.includes("TRANSITION") ||
-        (code.startsWith("OFFICE_EDIT_") && code.includes("UNSUPPORTED"))) {
+        (code.startsWith("OFFICE_EDIT_") && code.includes("UNSUPPORTED")) ||
+        // A form the user can correct: unknown field, value not allowed, encrypted or no fields.
+        (code.startsWith("PDF_FORM_") && !code.startsWith("PDF_FORM_FAILED") && code !== "PDF_FORM_TIMEOUT")) {
         res.status(422).json({ error: code });
         return;
     }
@@ -1379,7 +1385,12 @@ export function registerWorkspaceRoutes(app, dependencies) {
                 throw new Error("OFFICE_EDIT_INVALID_REQUEST");
             }
             const delimiter = typeof req.body?.delimiter === "string" ? req.body.delimiter.slice(0, 1) : undefined;
-            output = await dependencies.officeEditor.write(format, model, delimiter);
+            // Tracked changes: the author is the signed-in user, never a name sent by the client.
+            const baseline = req.body?.trackChanges?.baseline;
+            const track = format === "docx" && baseline && typeof baseline === "object" && baseline.kind === "document"
+                ? { baseline, author: actor.user.displayName, date: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z") }
+                : undefined;
+            output = await dependencies.officeEditor.write(format, model, delimiter, track);
             res.setHeader("Content-Type", FORMAT_MEDIA_TYPE[format]);
             res.setHeader("Cache-Control", "no-store");
             sendAndWipe(res, output);
@@ -1389,6 +1400,56 @@ export function registerWorkspaceRoutes(app, dependencies) {
             sendError(res, error);
         }
         finally {
+            output?.fill(0);
+        }
+    });
+    // Fields of a PDF form in the case files.
+    app.get("/api/cases/:caseId/workspace/items/:itemId/form", async (req, res) => {
+        let payload;
+        try {
+            if (!dependencies.pdfForms)
+                throw new Error("PDF_FORM_UNAVAILABLE");
+            const actor = actorFor(req);
+            const item = await readItem(actor, caseIdFrom(req), String(req.params.itemId ?? ""), PREVIEW_MAX_BYTES);
+            payload = item.data;
+            if (!isPdf(item.mediaType, item.filename))
+                throw new Error("PDF_FORM_MEDIA_TYPE_UNSUPPORTED");
+            res.setHeader("Cache-Control", "no-store");
+            res.json({ filename: item.filename, fields: await dependencies.pdfForms.fields(payload) });
+        }
+        catch (error) {
+            sendError(res, error);
+        }
+        finally {
+            payload?.fill(0);
+        }
+    });
+    // The form filled in as a new PDF; the client stores it as a new case file.
+    app.post("/api/cases/:caseId/workspace/items/:itemId/form/fill", async (req, res) => {
+        let payload;
+        let output;
+        try {
+            if (!dependencies.pdfForms)
+                throw new Error("PDF_FORM_UNAVAILABLE");
+            const actor = actorFor(req);
+            const caseId = caseIdFrom(req);
+            dependencies.caseAccessService.assertAccess(actor, caseId, "WRITE");
+            const values = pdfFormValues(req.body?.values);
+            const item = await readItem(actor, caseId, String(req.params.itemId ?? ""), PREVIEW_MAX_BYTES);
+            payload = item.data;
+            if (!isPdf(item.mediaType, item.filename))
+                throw new Error("PDF_FORM_MEDIA_TYPE_UNSUPPORTED");
+            output = await dependencies.pdfForms.fill(payload, values, req.body?.flatten === true);
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Cache-Control", "no-store");
+            sendAndWipe(res, output);
+            output = undefined;
+        }
+        catch (error) {
+            sendError(res, error);
+        }
+        finally {
+            payload?.fill(0);
             output?.fill(0);
         }
     });

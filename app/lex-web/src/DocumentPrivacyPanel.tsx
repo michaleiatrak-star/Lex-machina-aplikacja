@@ -24,7 +24,7 @@ import { documentFailure, type DocumentFailure } from "./document-errors.js";
 import type { DocumentDropOutcome } from "./document-drop-queue.js";
 import { PrivacyPreview } from "./PrivacyPreview.js";
 import { InfoTip } from "./InfoTip";
-import { replaceOcrLine } from "./ocr-line-fix.js";
+import { keepOpenReview, replaceOcrLine } from "./ocr-line-fix.js";
 
 /**
  * Whether a read file needs the preview: personal or health data found, a doubtful OCR line,
@@ -220,7 +220,7 @@ export function DocumentPrivacyPanel({
                 ...item,
                 review: {
                   ...item.review,
-                  pages: item.review.pages.map((page) => (page.page === line.page ? result.page : page)),
+                  pages: item.review.pages.map((page) => (page.page === line.page ? keepOpenReview(page, result.page) : page)),
                   suggestions: [...item.review.suggestions.filter((suggestion) => suggestion.page !== line.page), ...result.suggestions]
                 },
                 // Offsets of the old text no longer apply on that page.
@@ -879,7 +879,7 @@ export function DocumentPrivacyPanel({
                     <ul>
                       {draft.review.pages.flatMap((page) =>
                         (page.review ?? []).map((line, index) => {
-                          const key = `${draft.review.documentId}:${page.page}:${line.line}:${index}`;
+                          const key = `${draft.review.documentId}:${page.page}:${line.line}:${line.text}`;
                           const value = batchLineFixes[key] ?? line.text;
                           const stamp = line.reason === "STAMP";
                           return (

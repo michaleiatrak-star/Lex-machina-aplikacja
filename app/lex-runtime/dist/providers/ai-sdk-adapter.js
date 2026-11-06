@@ -1108,14 +1108,17 @@ export function anthropicSystem(model, params) {
     const split = params.systemPromptCachePrefix ?? 0;
     if (!isAnthropicModel(model) || split < 4_096 || split >= params.systemPrompt.length)
         return params.systemPrompt;
+    const cacheControl = { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" } : {}) };
+    // The part every domain shares, then the domain's own stable part (systemPromptSharedPrefix):
+    // three system breakpoints and the moving one of the conversation, Anthropic's limit of four.
+    const shared = params.systemPromptSharedPrefix ?? 0;
+    const bounds = shared >= 4_096 && shared < split ? [0, shared, split] : [0, split];
     return [
-        {
+        ...bounds.slice(0, -1).map((start, index) => ({
             role: "system",
-            content: params.systemPrompt.slice(0, split),
-            providerOptions: {
-                anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" } : {}) } }
-            }
-        },
+            content: params.systemPrompt.slice(start, bounds[index + 1]),
+            providerOptions: { anthropic: { cacheControl } }
+        })),
         // A second breakpoint at the end of the system prompt: a correcting round over the same
         // prompt (tools not callable, so its messages are cached apart) reads all of it. Five
         // minutes: the case's part serves this turn; a 1-hour write costs twice the input price.
@@ -1298,6 +1301,75 @@ export class AiSdkProviderAdapter {
             return this.id === "anthropic";
         return true;
     }
+    /** A chat answer on the local model, inside the lease of withGeneration. */
+    async streamLocal(localModels, params) {
+        const configuredModel = await localModels
+            .ensureRunning(params.model);
+        const localStatus = localModels
+            .status();
+        const contextTokens = localStatus
+            .configuredContextTokens ??
+            configuredModel.contextWindow;
+        const conservativeCharsPerToken = localStatus
+            .qualification
+            ?.tokenizerCalibration
+            ?.conservativeCharsPerToken ??
+            2;
+        const localParams = {
+            ...params,
+            model: configuredModel.id,
+            reasoning: "none"
+        };
+        if (params.localTransport ===
+            "json") {
+            try {
+                const direct = await directLocalJsonCompletion(localStatus.endpoint, configuredModel.id, params.systemPrompt, params.messages, params.localMaxOutputTokens ??
+                    128, params.abortSignal);
+                direct.fullText =
+                    stripLocalReasoning(direct.fullText);
+                params.callbacks
+                    ?.onContentDelta?.(direct.fullText);
+                return direct;
+            }
+            catch (error) {
+                const detail = error instanceof Error
+                    ? error.message
+                    : String(error);
+                throw new Error(`${classifyLocalInferenceFailure(detail)}:${detail
+                    .replace(/[\r\n]+/g, " ")
+                    .slice(-800)}`);
+            }
+        }
+        try {
+            return await streamLocalModel(localStatus.endpoint, configuredModel.id, contextTokens, conservativeCharsPerToken, localParams);
+        }
+        catch (error) {
+            const minimumContextTokens = configuredModel
+                .minimumContextWindow;
+            if (!shouldRetryLocalAtMinimumContext(error, contextTokens, minimumContextTokens)) {
+                throw error;
+            }
+            await localModels
+                .reconfigureContext(configuredModel.id, minimumContextTokens);
+            const recoveredModel = await localModels
+                .ensureRunning(configuredModel.id);
+            const recoveredStatus = localModels
+                .status();
+            const recoveredContextTokens = recoveredStatus
+                .configuredContextTokens ??
+                recoveredModel
+                    .contextWindow;
+            const recoveredCharsPerToken = recoveredStatus
+                .qualification
+                ?.tokenizerCalibration
+                ?.conservativeCharsPerToken ??
+                conservativeCharsPerToken;
+            return await streamLocalModel(recoveredStatus.endpoint, recoveredModel.id, recoveredContextTokens, recoveredCharsPerToken, {
+                ...localParams,
+                model: recoveredModel.id
+            });
+        }
+    }
     async stream(params) {
         if (isAccountSessionModel(this.id, params.model)) {
             if (!accountSessionBackendAllowed(this.id)) {
@@ -1312,72 +1384,8 @@ export class AiSdkProviderAdapter {
             if (this.id !== "openai" || !this.localModels) {
                 throw new Error("LOCAL_MODEL_RUNTIME_UNAVAILABLE");
             }
-            const configuredModel = await this.localModels
-                .ensureRunning(params.model);
-            const localStatus = this.localModels
-                .status();
-            const contextTokens = localStatus
-                .configuredContextTokens ??
-                configuredModel.contextWindow;
-            const conservativeCharsPerToken = localStatus
-                .qualification
-                ?.tokenizerCalibration
-                ?.conservativeCharsPerToken ??
-                2;
-            const localParams = {
-                ...params,
-                model: configuredModel.id,
-                reasoning: "none"
-            };
-            if (params.localTransport ===
-                "json") {
-                try {
-                    const direct = await directLocalJsonCompletion(localStatus.endpoint, configuredModel.id, params.systemPrompt, params.messages, params.localMaxOutputTokens ??
-                        128, params.abortSignal);
-                    direct.fullText =
-                        stripLocalReasoning(direct.fullText);
-                    params.callbacks
-                        ?.onContentDelta?.(direct.fullText);
-                    return direct;
-                }
-                catch (error) {
-                    const detail = error instanceof Error
-                        ? error.message
-                        : String(error);
-                    throw new Error(`${classifyLocalInferenceFailure(detail)}:${detail
-                        .replace(/[\r\n]+/g, " ")
-                        .slice(-800)}`);
-                }
-            }
-            try {
-                return await streamLocalModel(localStatus.endpoint, configuredModel.id, contextTokens, conservativeCharsPerToken, localParams);
-            }
-            catch (error) {
-                const minimumContextTokens = configuredModel
-                    .minimumContextWindow;
-                if (!shouldRetryLocalAtMinimumContext(error, contextTokens, minimumContextTokens)) {
-                    throw error;
-                }
-                await this.localModels
-                    .reconfigureContext(configuredModel.id, minimumContextTokens);
-                const recoveredModel = await this.localModels
-                    .ensureRunning(configuredModel.id);
-                const recoveredStatus = this.localModels
-                    .status();
-                const recoveredContextTokens = recoveredStatus
-                    .configuredContextTokens ??
-                    recoveredModel
-                        .contextWindow;
-                const recoveredCharsPerToken = recoveredStatus
-                    .qualification
-                    ?.tokenizerCalibration
-                    ?.conservativeCharsPerToken ??
-                    conservativeCharsPerToken;
-                return await streamLocalModel(recoveredStatus.endpoint, recoveredModel.id, recoveredContextTokens, recoveredCharsPerToken, {
-                    ...localParams,
-                    model: recoveredModel.id
-                });
-            }
+            const localModels = this.localModels;
+            return localModels.withGeneration(() => this.streamLocal(localModels, params));
         }
         const apiKey = await this.credentials.getApiKey(this.id);
         if (!apiKey) {

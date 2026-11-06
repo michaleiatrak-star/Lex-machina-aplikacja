@@ -16,7 +16,8 @@ const EXPORTS = {
 async function call(fetchImpl, token, url) {
     let response;
     try {
-        response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+        // Downloads included: long enough for a large file, not forever.
+        response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(300_000) });
     }
     catch {
         throw new GoogleIntegrationError("GOOGLE_NETWORK_ERROR", 502);

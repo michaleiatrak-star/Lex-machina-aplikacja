@@ -8,6 +8,9 @@ const repositoryRoot = path.resolve(here, "../../..");
 process.env.LEX_SKILLS_PATH = path.join(repositoryRoot, "Wersja rozwojowa rozpakowana");
 const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lex-g13-data-"));
 process.env.LEX_DATA_DIR = dataRoot;
+// The API is checked here, not the ELI crawl of every mapped act the runtime starts in the
+// background (with its pauses it kept this check running for 40 minutes after it passed).
+process.env.LEX_CORE_LAW_REFRESH ??= "off";
 const server = await startLocalServer({
     host: "127.0.0.1",
     port: 0

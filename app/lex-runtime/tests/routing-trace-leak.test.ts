@@ -35,3 +35,15 @@ describe("the model's KROK 3A trace in the answer", () => {
     expect(withoutModelRoutingTrace(fields)).toBe(fields);
   });
 });
+
+describe("a single developer line in the answer", () => {
+  it("the router version and resolver line is removed (user report 2026-11-06)", () => {
+    const text = ["Sprawdza, czy odpowiedź prowadzi do konkretnego rozwiązania.", "", "• **WERSJA ROUTERA i RESOLVER:** wynik aplikacji, nie podano ich w tej turze", "", "Nie powołałem żadnych przepisów."].join("\n");
+    expect(withoutModelRoutingTrace(text)).toBe(["Sprawdza, czy odpowiedź prowadzi do konkretnego rozwiązania.", "", "Nie powołałem żadnych przepisów."].join("\n"));
+  });
+
+  it("a sentence that only mentions a resolver keeps its line", () => {
+    const text = "Resolver DNS w umowie: dostawca odpowiada za jego dostępność.";
+    expect(withoutModelRoutingTrace(text)).toBe(text);
+  });
+});

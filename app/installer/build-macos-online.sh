@@ -4,6 +4,8 @@
 #   ad-hoc signed (no Apple Developer ID), wrapped in a .pkg whose postinstall
 #   runs macos-online-bootstrap.sh as the logged-in user.
 # Usage: build-macos-online.sh <output.pkg>
+# LEX_MACOS_OFFLINE=1: the offline package - Node, Python, the Python packages and the OCR/NER
+# models are inside the app (prepare-macos-offline.sh) and the install needs no network.
 set -euo pipefail
 
 OUTPUT="${1:?usage: build-macos-online.sh <output.pkg>}"
@@ -72,6 +74,9 @@ for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-releas
   cp "$INSTALLER/$file" "$PAYLOAD/bootstrap/$file"
 done
 chmod +x "$PAYLOAD/bootstrap/macos-online-bootstrap.sh"
+if [ "${LEX_MACOS_OFFLINE:-0}" = 1 ]; then
+  bash "$INSTALLER/prepare-macos-offline.sh" "$PAYLOAD"
+fi
 
 echo "[3/6] Native runtime sidecar"
 (cd "$DESKTOP" && cargo build --release --bin lex-runtime-sidecar --manifest-path src-tauri/Cargo.toml)
@@ -88,6 +93,11 @@ for required in app/dist/http/server.js app/web/index.html lex-runtime-sidecar r
   bootstrap/macos-online-bootstrap.sh bootstrap/generate-component-lock.py corpus/prawny-router-v3/SKILL.md; do
   [ -e "$RUNTIME/$required" ] || { echo "PAYLOAD_REQUIRED_FILE_MISSING:$required" >&2; exit 1; }
 done
+if [ "${LEX_MACOS_OFFLINE:-0}" = 1 ]; then
+  for required in offline/downloads offline/wheels offline/models/stanza/pl; do
+    [ -e "$RUNTIME/$required" ] || { echo "OFFLINE_PAYLOAD_MISSING:$required" >&2; exit 1; }
+  done
+fi
 chmod +x "$RUNTIME/lex-runtime-sidecar" "$RUNTIME/bootstrap/macos-online-bootstrap.sh"
 
 echo "[5/6] Ad-hoc signature"

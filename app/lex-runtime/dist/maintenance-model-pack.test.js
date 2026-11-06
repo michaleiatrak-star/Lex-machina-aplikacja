@@ -127,10 +127,14 @@ function service(args) {
         false) {
         delete result.modelPackSignature;
     }
+    const indexUrl = result.modelPackIndex.url;
+    if (args?.indexPublished === false) {
+        delete result.modelPackIndex;
+        delete result.modelPackSignature;
+    }
     const payloads = new Map([
         [
-            result
-                .modelPackIndex.url,
+            indexUrl,
             indexBytes
         ],
         ...(result.modelPackSignature
@@ -147,6 +151,14 @@ function service(args) {
         "SIGNED_REQUIRED");
 }
 describe("signed model-pack update policy", () => {
+    it("a release without a model pack: the installer's model is current, not an invalid index", async () => {
+        const status = await service({ indexPublished: false }).modelPackStatus({
+            modelId: "local/bielik-11b-v3-q4km",
+            sha256: "a".repeat(64)
+        });
+        expect(status).toMatchObject({ status: "UP_TO_DATE", packPublished: false, modelFamily: "BIELIK" });
+        expect(status.blockedReason).toBeUndefined();
+    });
     it("blocks updates when the model-pack signer trust root is not configured", async () => {
         const maintenance = service({
             trustReady: false

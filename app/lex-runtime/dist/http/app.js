@@ -85,11 +85,15 @@ import { completeChronologyExecution, requireChronologyExecutionPermit } from ".
 import { chronologyTemporalGateRequired } from "../chronology-date-trigger.js";
 import { nextContractCheckpoint } from "../contract-analysis-state.js";
 import { completeContractExecution, requireContractExecutionPermit } from "../contract-analysis-execution-gate.js";
+import { shareWithGroup, UserGroupError } from "../user-groups.js";
+import { registerMicrosoftPublicRoutes, registerMicrosoftRoutes } from "../microsoft/http-routes.js";
 import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes, registerGoogleWorkspaceRoutes } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { overviewBlock, overviewFromAnswer, overviewRequested, queryWithOverviewTemplate } from "../case-overview.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues } from "../case-work.js";
 import { addresseeCourt, courtOfCaseDocuments } from "../courts/case-court.js";
+import { courtByName } from "../courts/court-base.js";
+import { checkWokanda, defaultFetchText, effectiveWokandaCourt, parseCommonSignature } from "../courts/wokanda.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
@@ -877,6 +881,10 @@ export function applyNonLegalChatGate(registry, request, attachmentCount, caseMa
     delete request.modelSelectsSkills;
     return true;
 }
+/** People speaking in a recording asked for at processing: 0 (estimated) or 2-12; else none. */
+export function transcriptSpeakers(value) {
+    return typeof value === "number" && Number.isInteger(value) && (value === 0 || (value >= 2 && value <= 12)) ? value : undefined;
+}
 /**
  * X-Lex-Processing on a raw document upload: "local-ai" (the local model also
  * checks personal data) and "ocr-fix" (the local model corrects OCR errors),
@@ -1539,6 +1547,9 @@ export function createLexHttpApp(options) {
             res.status(204).end();
         });
     }
+    if (options.microsoft) {
+        registerMicrosoftPublicRoutes(app, options.microsoft);
+    }
     if (options.googleRecovery) {
         registerGooglePublicRoutes(app, options.googleRecovery, options.googleWorkspace);
     }
@@ -1716,6 +1727,30 @@ export function createLexHttpApp(options) {
                 });
             }, sendCaseAccessError);
         }
+        if (options.microsoft &&
+            options.caseAccessService &&
+            options.secureCaseUploadStore) {
+            const access = options.caseAccessService;
+            const store = options.secureCaseUploadStore;
+            registerMicrosoftRoutes(app, options.microsoft, responseAuthContext, async (context, caseId, files) => {
+                access.assertAccess(context, caseId, "WRITE");
+                const caseView = access.openCase(context, caseId);
+                return await access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => {
+                    const stored = [];
+                    for (const file of files) {
+                        stored.push(await store.saveUpload({
+                            caseId,
+                            filename: file.filename,
+                            mediaType: file.mediaType,
+                            data: file.data,
+                            caseDataKey,
+                            keyVersion: caseView.keyVersion
+                        }));
+                    }
+                    return stored;
+                });
+            }, sendCaseAccessError);
+        }
         app.post("/api/auth/recovery-code", async (req, res) => {
             const password = typeof req.body?.password ===
                 "string"
@@ -1863,7 +1898,8 @@ export function createLexHttpApp(options) {
                 .createUser(responseAuthContext(res), {
                 loginName,
                 displayName,
-                password
+                password,
+                ...(req.body?.accountKind === "INDIVIDUAL" ? { accountKind: "INDIVIDUAL" } : {})
             });
             res.status(201).json({
                 user
@@ -1908,6 +1944,26 @@ export function createLexHttpApp(options) {
                     error: "USER_STATUS_UPDATE_FAILED"
                 });
             }
+        }
+    });
+    // Account kind, set by the administrator (INDIVIDUAL: chat only).
+    app.patch("/api/admin/users/:userId/account-kind", (req, res) => {
+        if (!options.authService) {
+            res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+            return;
+        }
+        const accountKind = req.body?.accountKind === "INDIVIDUAL" || req.body?.accountKind === "PROFESSIONAL" ? req.body.accountKind : null;
+        if (!accountKind) {
+            res.status(400).json({ error: "INVALID_USER_REQUEST" });
+            return;
+        }
+        try {
+            const user = options.authService.setAccountKind(responseAuthContext(res), String(req.params.userId ?? "").trim(), accountKind);
+            res.json({ user });
+        }
+        catch (error) {
+            if (!sendAuthError(res, error))
+                res.status(500).json({ error: "USER_UPDATE_FAILED" });
         }
     });
     app.delete("/api/admin/users/:userId", (req, res) => {
@@ -2290,6 +2346,74 @@ export function createLexHttpApp(options) {
                 res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
         }
     });
+    // The court and signature of a case (courts/case-court.ts), set by the user: documents do not
+    // replace it. The court must be one of the common courts of the court base.
+    app.get("/api/cases/:caseId/court", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore.getCaseMemory(key));
+            const court = memory.court ?? null;
+            res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+        }
+    });
+    app.patch("/api/cases/:caseId/court", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        const body = (req.body ?? {});
+        const name = typeof body.nazwa === "string" ? body.nazwa.trim() : "";
+        const known = name ? courtByName(name) : null;
+        const wydzial = typeof body.wydzial === "string" ? body.wydzial.trim().slice(0, 120) : "";
+        const sygnatura = typeof body.sygnatura === "string" ? body.sygnatura.replace(/\s+/gu, " ").trim() : "";
+        if (name && !known) {
+            res.status(400).json({ error: "CASE_COURT_UNKNOWN" });
+            return;
+        }
+        if (sygnatura && (sygnatura.length > 40 || !parseCommonSignature(sygnatura))) {
+            res.status(400).json({ error: "CASE_SIGNATURE_INVALID" });
+            return;
+        }
+        try {
+            const court = known
+                ? { nazwa: known.nazwa, ...(wydzial ? { wydzial } : {}), ...(sygnatura ? { sygnatura } : {}), zrodlo: "UZYTKOWNIK", at: new Date().toISOString() }
+                : null;
+            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, court }));
+            res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
+        }
+    });
+    // The case's hearings on its court's wokanda, on the user's request (courts/wokanda.ts): one
+    // search by the signature and the details of each hearing; never in the background.
+    app.post("/api/cases/:caseId/wokanda", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore.getCaseMemory(key));
+            const court = memory.court;
+            if (!court?.sygnatura) {
+                res.status(409).json({ error: court ? "CASE_SIGNATURE_MISSING" : "CASE_COURT_MISSING" });
+                return;
+            }
+            res.json(await checkWokanda(court.nazwa, court.sygnatura, options.wokandaFetch ?? defaultFetchText, () => new Date(), (name) => effectiveWokandaCourt(name)));
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "WOKANDA_CHECK_FAILED" });
+        }
+    });
     app.patch("/api/cases/:caseId/memory/summary", async (req, res) => {
         if (!options.caseMemoryStore || !options.caseAccessService) {
             res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
@@ -2637,6 +2761,91 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    if (options.userGroups && options.caseAccessService) {
+        const groups = options.userGroups;
+        const access = options.caseAccessService;
+        const groupError = (res, error) => {
+            if (error instanceof UserGroupError) {
+                res.status(error.httpStatus).json({ error: error.code });
+                return;
+            }
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "USER_GROUP_FAILED" });
+        };
+        const admin = (res) => {
+            if (responseAuthContext(res).user.appRole === "ADMIN")
+                return true;
+            res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+            return false;
+        };
+        // Every signed-in user sees the groups (to share a case); only an administrator changes them.
+        app.get("/api/user-groups", async (_req, res) => {
+            try {
+                responseAuthContext(res);
+                res.json({ groups: await groups.list() });
+            }
+            catch (error) {
+                groupError(res, error);
+            }
+        });
+        app.post("/api/user-groups", async (req, res) => {
+            if (!admin(res))
+                return;
+            try {
+                res.status(201).json(await groups.create({ name: req.body?.name, memberUserIds: req.body?.memberUserIds }));
+            }
+            catch (error) {
+                groupError(res, error);
+            }
+        });
+        app.patch("/api/user-groups/:groupId", async (req, res) => {
+            if (!admin(res))
+                return;
+            try {
+                res.json(await groups.update(String(req.params.groupId ?? ""), {
+                    ...(req.body?.name !== undefined ? { name: req.body.name } : {}),
+                    ...(req.body?.memberUserIds !== undefined ? { memberUserIds: req.body.memberUserIds } : {})
+                }));
+            }
+            catch (error) {
+                groupError(res, error);
+            }
+        });
+        app.delete("/api/user-groups/:groupId", async (req, res) => {
+            if (!admin(res))
+                return;
+            try {
+                await groups.remove(String(req.params.groupId ?? ""));
+                res.json({ deleted: true });
+            }
+            catch (error) {
+                groupError(res, error);
+            }
+        });
+        // The case shared with each member of a group (the case owner's or manager's own grant).
+        app.post("/api/cases/:caseId/access/group", async (req, res) => {
+            const role = typeof req.body?.role === "string" ? req.body.role : "";
+            if (!["EDITOR", "ANALYST", "VIEWER"].includes(role) || typeof req.body?.canReidentify !== "boolean" || typeof req.body?.groupId !== "string") {
+                res.status(400).json({ error: "INVALID_CASE_ACCESS_REQUEST" });
+                return;
+            }
+            try {
+                const context = responseAuthContext(res);
+                const caseId = String(req.params.caseId ?? "");
+                const group = await groups.get(req.body.groupId);
+                const current = new Set(access.listAccess(context, caseId).map((entry) => entry.user.userId));
+                res.json(await shareWithGroup({
+                    group,
+                    actorUserId: context.user.userId,
+                    hasAccess: (userId) => current.has(userId),
+                    grant: (userId) => access.grantAccess(context, caseId, { userId, role: role, canReidentify: req.body.canReidentify })
+                }));
+            }
+            catch (error) {
+                groupError(res, error);
+            }
+        });
+    }
     app.get("/api/cases/:caseId/access", (req, res) => {
         if (!options.caseAccessService) {
             res.status(503).json({
@@ -2913,6 +3122,7 @@ export function createLexHttpApp(options) {
                 ...(req.body?.localAi === true ? { localAi: true } : {}),
                 ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                 ...(req.body?.detect === false ? { detect: false } : {}),
+                ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers) } : {}),
                 background: true,
                 storeUnderLock: (save) => access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => save({ caseDataKey, keyVersion: access.openCase(context, caseId).keyVersion }))
             });
@@ -3060,7 +3270,8 @@ export function createLexHttpApp(options) {
                         ...(req.body?.localAi === true ? { localAi: true } : {}),
                         ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                         // OCR only now; personal data later (POST /api/documents/:id/detect).
-                        ...(req.body?.detect === false ? { detect: false } : {})
+                        ...(req.body?.detect === false ? { detect: false } : {}),
+                        ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers) } : {})
                     });
                 }
                 finally {
@@ -6509,7 +6720,7 @@ export function createLexHttpApp(options) {
             }
             // A case's documents name its court (a court's letter, a judgment): found once and kept,
             // the documents of this turn first, then the case's files by a court's head and signature.
-            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA") {
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA" && caseCourt?.zrodlo !== "UZYTKOWNIK") {
                 try {
                     const actor = responseAuthContext(res);
                     const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);

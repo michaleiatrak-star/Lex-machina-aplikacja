@@ -8,6 +8,8 @@ import {
   deleteAdminUser,
   listAdminUsers,
   setAdminUserStatus,
+  setAccountKind,
+  type AccountKind,
   type AuthenticatedUser
 } from "./api.js";
 
@@ -52,6 +54,15 @@ function errorMessage(
   return failure.code;
 }
 
+const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
+  ["PROFESSIONAL", "Kancelaria (sprawy i narzędzia)"],
+  ["INDIVIDUAL", "Użytkownik indywidualny (sam czat)"]
+];
+
+function accountKindLabel(kind: AccountKind | undefined): string {
+  return kind === "INDIVIDUAL" ? "indywidualny" : "kancelaria";
+}
+
 export function AdminUsersPanel({
   currentUserId
 }: {
@@ -65,6 +76,9 @@ export function AdminUsersPanel({
     useState("");
   const [password, setPassword] =
     useState("");
+  // Account kind, set by the administrator: a firm's account or an individual user's chat.
+  const [accountKind, setNewAccountKind] =
+    useState<AccountKind>("PROFESSIONAL");
   const [busy, setBusy] =
     useState(false);
   const [error, setError] =
@@ -104,7 +118,8 @@ export function AdminUsersPanel({
       await createAdminUser({
         loginName,
         displayName,
-        password
+        password,
+        accountKind
       });
       setLoginName("");
       setDisplayName("");
@@ -117,6 +132,28 @@ export function AdminUsersPanel({
       setError(
         errorMessage(failure)
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeKind(
+    user: AuthenticatedUser,
+    kind: AccountKind
+  ): Promise<void> {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await setAccountKind(user.userId, kind);
+      await refresh();
+      setMessage(
+        user.userId === currentUserId
+          ? "Typ konta zmieniony. Widok zmieni się po ponownym zalogowaniu."
+          : "Typ konta zmieniony. Użytkownik zobaczy zmianę po ponownym zalogowaniu."
+      );
+    } catch (failure) {
+      setError(errorMessage(failure));
     } finally {
       setBusy(false);
     }
@@ -235,6 +272,17 @@ export function AdminUsersPanel({
             }
           />
         </label>
+        <label>
+          Typ konta
+          <select
+            value={accountKind}
+            onChange={(event) => setNewAccountKind(event.target.value as AccountKind)}
+          >
+            {ACCOUNT_KINDS.map(([kind, label]) => (
+              <option key={kind} value={kind}>{label}</option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           disabled={
@@ -273,9 +321,21 @@ export function AdminUsersPanel({
                 {user.displayName}
               </strong>
               <span>
-                @{user.loginName} · {user.appRole} · {user.status}
+                @{user.loginName} · {user.appRole} · {user.status} · {accountKindLabel(user.accountKind)}
               </span>
             </div>
+            <label className="admin-user-kind">
+              Typ konta
+              <select
+                value={user.accountKind ?? "PROFESSIONAL"}
+                disabled={busy}
+                onChange={(event) => void changeKind(user, event.target.value as AccountKind)}
+              >
+                {ACCOUNT_KINDS.map(([kind, label]) => (
+                  <option key={kind} value={kind}>{label}</option>
+                ))}
+              </select>
+            </label>
             {user.userId !==
               currentUserId &&
               user.appRole ===

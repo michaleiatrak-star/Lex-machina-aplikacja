@@ -11,7 +11,7 @@ export function validCaseCourt(value) {
     if (!value || typeof value !== "object")
         return null;
     const raw = value;
-    if (typeof raw.nazwa !== "string" || !courtByName(raw.nazwa) || (raw.zrodlo !== "AKTA" && raw.zrodlo !== "PISMO") || typeof raw.at !== "string")
+    if (typeof raw.nazwa !== "string" || !courtByName(raw.nazwa) || (raw.zrodlo !== "AKTA" && raw.zrodlo !== "PISMO" && raw.zrodlo !== "UZYTKOWNIK") || typeof raw.at !== "string")
         return null;
     return {
         nazwa: courtByName(raw.nazwa).nazwa,
@@ -75,8 +75,8 @@ export function caseCourtPrompt(court) {
     return [
         "# SĄD SPRAWY (rejestr aplikacji)",
         `${court.nazwa}${court.wydzial ? `, ${court.wydzial}` : ""}${address}${court.sygnatura ? `; sygn. akt ${court.sygnatura}` : ""}.`,
-        court.zrodlo === "AKTA"
-            ? "Źródło: dokumenty sprawy. Pismo w toczącym się postępowaniu kieruj do tego sądu i wydziału, z tą sygnaturą."
+        court.zrodlo === "AKTA" || court.zrodlo === "UZYTKOWNIK"
+            ? (court.zrodlo === "UZYTKOWNIK" ? "Źródło: wpisane przez użytkownika w sprawie. " : "Źródło: dokumenty sprawy. ") + "Pismo w toczącym się postępowaniu kieruj do tego sądu i wydziału, z tą sygnaturą."
             : "Źródło: sąd ustalony przez aplikację dla pierwszego pisma (court_for_address). Kolejne pisma w tej sprawie kieruj do niego; sygnaturę podaj dopiero z pisma sądu.",
         "Pismo wszczynające odrębne postępowanie (inny pozwany, inna podstawa właściwości): sąd ponownie przez court_for_address."
     ].join("\n");

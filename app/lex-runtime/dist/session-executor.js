@@ -1,3 +1,4 @@
+import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock } from "./chat-turn-journal.js";
 import { directImageNote } from "./direct-images.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
@@ -90,8 +91,12 @@ import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE_PREFIX, threadUserText } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { markdownSection } from "./checkpoint-skill-sections.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+// analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
+const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
+const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
 // The question the cited documents are judged against: the latest user message whole, and for a
@@ -1008,12 +1013,50 @@ export class SafeSessionExecutor {
                 originalEnvelope.query
         };
     }
+    // Times of every chat turn by path and stage (chat-turn-journal.ts), on this computer.
+    turnJournal = process.env.VITEST ? null : new ChatTurnJournal();
     async execute(request) {
         request = nfcRequest(request);
-        // Tokens of every model call in this turn (benchmark and cost display).
-        const { result, usage } = await meterUsage(() => this.executeTurn(request));
-        result.usage = usage;
-        return result;
+        const started = performance.now();
+        const clock = new PhaseClock();
+        const report = request.onStep;
+        request = {
+            ...request,
+            onStep: (phase, detail) => {
+                clock.mark(phase);
+                report?.(phase, detail);
+            }
+        };
+        const record = (status, pathName, error) => {
+            clock.close();
+            this.turnJournal?.append({
+                at: new Date().toISOString(),
+                modelKind: modelKindOf(request.provider, request.model),
+                provider: request.provider,
+                path: pathName,
+                attachments: request.documentAttachments?.length ?? 0,
+                totalMs: Math.round(performance.now() - started),
+                phasesMs: clock.phasesMs,
+                status,
+                ...(error !== undefined ? { error: errorCode(error) } : {})
+            });
+        };
+        const basePath = request.processWorkflowContext
+            ? "workflow"
+            : request.conversationalOnly
+                ? "rozmowa"
+                : `czat ${request.mode}`;
+        try {
+            // Tokens of every model call in this turn (benchmark and cost display).
+            const { result, usage } = await meterUsage(() => this.executeTurn(request));
+            result.usage = usage;
+            record(result.status === "BLOCKED" ? "BLOCKED" : "OK", result.taskSkill ?? basePath);
+            return result;
+        }
+        catch (error) {
+            record("ERROR", basePath, error);
+            throw error;
+        }
     }
     async executeTurn(request) {
         const step = request.onStep ?? (() => undefined);
@@ -1451,6 +1494,17 @@ export class SafeSessionExecutor {
                 documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
             });
             pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+            // A document between the parties is assessed as a whole whatever skill leads (a demand with
+            // the agreement it relies on): the contract analyser's CAL-GATE goes in with it (user report
+            // 2026-11-06: pkt 10 waiving all claims cancelled the employee's side of pkt 5, unseen).
+            if (recognisedDocuments.some((document) => document.category === "UMOWA")) {
+                const cal = markdownSection(this.readCorpus(CONTRACT_WHOLE_DOCUMENT_RESOURCE) ?? "", CONTRACT_WHOLE_DOCUMENT_HEADING);
+                if (cal) {
+                    // Only the section: the whole SKILL.md still comes in when the analyser is the executive skill.
+                    audit.record("resource_read", CONTRACT_WHOLE_DOCUMENT_RESOURCE, "OK", { detail: "runtime-preload;delivered-contract;CAL-GATE" });
+                    pathSections.push(`# MANDATORY PATH RESOURCE: ${CONTRACT_WHOLE_DOCUMENT_RESOURCE} — ${CONTRACT_WHOLE_DOCUMENT_HEADING.replace(/^#+\s*/u, "")}\n\n${cal}`);
+                }
+            }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
             if (roles)
                 pathSections.push(roles);
@@ -3049,9 +3103,16 @@ export class SafeSessionExecutor {
             ...(reportQuestion ? { waitingForUser: true } : {}),
             toolEvents: reportAudit.length
         });
-        const finalizationText = reportBlueprint
+        const blueprintText = reportBlueprint
             ? blueprintFinalizationText(processedDocumentCitations.text, reportBlueprint.blueprint, ledger)
-            : processedDocumentCitations.text;
+            : null;
+        // A value of the report's plan without a source is marked as in the chat (⚠️), so the report is
+        // a draft with a warning instead of a blocked turn (live C09-062: a client report blocked for
+        // "84 dni" and invoice sums; user request 2026-11-06: block only as the last resort).
+        const blueprintCheck = blueprintText ? new FinalizationGate().evaluate(blueprintText, ledger) : null;
+        const finalizationText = blueprintText && blueprintCheck?.result === "BLOCKED"
+            ? addMissingVerificationMarkers(markUnverifiedReferences(blueprintText, blueprintCheck, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), blueprintCheck, verifiedLedgerMarkers(ledger))
+            : blueprintText ?? processedDocumentCitations.text;
         step("VERIFY", "przepisy, orzeczenia i cytaty w odpowiedzi");
         const finalization = this.finalizer.finalize({
             text: finalizationText,
@@ -3298,17 +3359,26 @@ export class SafeSessionExecutor {
             gateIBlocked ||
             gateITurn.result !==
                 "PASS";
-        const presentationBlocked = 
-        // Still blocked after marking: a case-law claim without evidence or a
-        // verification marker that does not match its source.
-        finalization.result === "BLOCKED" ||
-            statusConsistencyBlocked ||
+        // Blocking is the last resort (user request 2026-11-06): a gate the corrective rounds did not
+        // settle is shown as a named warning over the answer; the answer itself is kept. Still blocked:
+        // after marking, a case-law claim without evidence or a verification marker that does not match
+        // its source; no skill corpus; a structured document (AST) the application must parse.
+        const structuredOutput = Boolean(request.documentAstOutput);
+        const softGateWarnings = [
+            ...(statusConsistencyBlocked ? ["ten sam przepis ma w odpowiedzi różne oznaczenia weryfikacji — przyjmij ostrożniejsze (⚠️)"] : []),
+            ...(workflowResourcesBlocked ? ["nie wszystkie materiały tego rodzaju pracy zostały wczytane"] : []),
+            ...(workflowOutputBlocked ? ["odpowiedź może nie mieć wszystkich części wymaganych dla tego rodzaju pracy"] : []),
+            ...(guideOutputBlocked ? ["przewodnik nie domknął kroku — odpowiedz na pytania z odpowiedzi"] : []),
+            ...(reportBlueprintBlocked ? ["raport przygotowano bez planu struktury — może wymagać uporządkowania"] : []),
+            ...(gateIWorkflowContractReport.checks.some((item) => item.subgate === "I-I_INPUT_COMPLETENESS" && item.result === "BLOCKED")
+                ? ["wiadomość mówi o załączniku, którego nie ma w rozmowie — dołącz plik, żeby odpowiedź go uwzględniła"]
+                : workflowContractExtensionBlocked
+                    ? ["nie wszystkie kontrole przebiegu pracy zostały spełnione"]
+                    : [])
+        ];
+        const presentationBlocked = finalization.result === "BLOCKED" ||
             corpusBlocked ||
-            workflowResourcesBlocked ||
-            workflowOutputBlocked ||
-            guideOutputBlocked ||
-            reportBlueprintBlocked ||
-            workflowContractExtensionBlocked;
+            (structuredOutput && softGateWarnings.length > 0);
         audit.record("gate", "G39H_WORKFLOW_FINALIZATION", workflowFinalizationBlocked ? "BLOCKED" : "OK", {
             workflow: execution.workflowPlan.id,
             finalization: finalization.result,
@@ -3407,11 +3477,19 @@ export class SafeSessionExecutor {
                     : [])
             ]
             : [];
+        // The user reads what to watch for; the gate names and step ids stay in the audit.
+        const userWarnings = [
+            ...(degradedReasons.length && legalAnswer(processedDocumentCitations.text) ? ["nie wszystkie kroki kontroli zostały wykonane — sprawdź kluczowe przepisy przed użyciem odpowiedzi"] : []),
+            ...(structuredOutput ? [] : softGateWarnings)
+        ];
         const presentedText = astLines
             ? astLines.restore(disclaimed.text)
-            : degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
-                ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+            : userWarnings.length && freeText
+                ? `⚠️ Uwaga: ${userWarnings.join("; ")}.\n\n${disclaimed.text}`
                 : disclaimed.text;
+        if (softGateWarnings.length && !structuredOutput) {
+            audit.record("gate", "SOFT_GATE_WARNINGS", "DEGRADED", { warnings: softGateWarnings });
+        }
         if (mandatoryPath) {
             audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
                 profile: mandatoryPath.profile,

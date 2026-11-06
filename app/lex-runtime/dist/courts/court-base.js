@@ -4,11 +4,33 @@
 // app/courts/check_court_base_prg.py. Where PRG disagrees (its court layer lags behind the
 // regulation: Czeladź, Grójec, Sławno…), the regulation decides.
 import { COURT_BASE } from "./court-base-data.js";
+import { COURT_BASE_AMENDMENTS } from "./court-base-amendments.js";
 export const CASE_KINDS = [
     "cywilne", "rodzinne", "karne", "pracy", "ubezpieczen_spolecznych", "gospodarcze", "upadlosciowe",
     "krs", "rejestr_zastawow", "ksiegi_wieczyste", "lustracyjne", "wlasnosc_intelektualna", "rejestr_prasy"
 ];
-export const COURT_ACT = "rozporządzenie Ministra Sprawiedliwości z 28.12.2018 r. (t.j. Dz.U. 2026 poz. 492)";
+// Amendments in force today, applied over the consolidated text (court-base-amendments.ts).
+// Read once at start: the desktop runtime starts at least daily.
+export function amendmentsInForce(on = new Date()) {
+    const day = on.toISOString().slice(0, 10);
+    return COURT_BASE_AMENDMENTS.filter((amendment) => amendment.od <= day);
+}
+/** The base with the amendments in force on that day (the base itself is changed). */
+export function applyCourtAmendments(base, on = new Date()) {
+    for (const amendment of amendmentsInForce(on)) {
+        const court = base.sr.find((item) => item.nazwa === amendment.court);
+        if (!court)
+            continue;
+        if (amendment.obszar_tekst)
+            court.obszar_tekst = amendment.obszar_tekst;
+        if (amendment.gminy)
+            court.obszar = { ...court.obszar, gminy: amendment.gminy };
+    }
+    return base;
+}
+applyCourtAmendments(COURT_BASE);
+const inForce = amendmentsInForce();
+export const COURT_ACT = `rozporządzenie Ministra Sprawiedliwości z 28.12.2018 r. (t.j. Dz.U. 2026 poz. 492${inForce.map((amendment) => `, zm. Dz.U. ${amendment.eli.slice(3, 7)} poz. ${amendment.eli.slice(8)}`).join("")})`;
 const key = (text) => text
     .normalize("NFKC")
     .replace(/[–—]/gu, "-")

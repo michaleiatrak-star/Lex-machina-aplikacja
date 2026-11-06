@@ -35,6 +35,9 @@ jobs:
     name: G39G installer state machine self-test
     runs-on: windows-latest
     timeout-minutes: 10
+    # No progress window in the unattended self-test.
+    env:
+      LEX_UPDATE_NO_PROGRESS_WINDOW: "1"
 
     steps:
       - name: Checkout

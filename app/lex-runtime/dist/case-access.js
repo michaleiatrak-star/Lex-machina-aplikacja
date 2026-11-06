@@ -805,6 +805,7 @@ export class LocalCaseAccessService {
                 caseKind: record.caseKind,
                 ...(record.displayName ? { displayName: record.displayName } : {}),
                 ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
+                createdAt: record.createdAt,
                 updatedAt: record.updatedAt,
                 ...(viewer ? { viewerRole: viewer.role } : {}),
                 canManage: viewer?.role === "OWNER",

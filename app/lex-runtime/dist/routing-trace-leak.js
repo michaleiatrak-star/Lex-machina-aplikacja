@@ -8,6 +8,9 @@
 const TRACE_LINE = /^\s*(?:[-*•]\s*)?(?:\*\*)?(?:TRYB|PRIMARY|SECONDARY|ODRZUCONE|PROFIL|ODROCZONE|WERSJA ROUTERA|BLUEPRINT|KROK 3A|ŚLAD ROUTINGU)(?:\*\*)?\s*[:—-]/iu;
 const TRACE_HEADING = /^\s*(?:#+\s*)?(?:\*\*)?(?:KROK 3A|Ślad routingu|Routing)(?:\*\*)?\s*:?\s*$/iu;
 const ROUTER_FIELD = /^\s*(?:[-*•]\s*)?(?:\*\*)?(?:PRIMARY|WERSJA ROUTERA)(?:\*\*)?\s*:/iu;
+// A single line naming the router's or resolver's own data ("• WERSJA ROUTERA i RESOLVER: wynik
+// aplikacji, nie podano ich w tej turze", user report 2026-11-06): developer data, never the user's.
+const DEVELOPER_LINE = /^\s*(?:[-*•]\s*)?(?:\*\*)?(?:WERSJA ROUTERA|RESOLVER|ROUTER-WCZYTANY|ŚLAD ROUTINGU)(?:\s+(?:i|oraz)\s+(?:\*\*)?(?:RESOLVER|WERSJA ROUTERA)\b)?[^:\n]{0,40}(?:\*\*)?\s*:|ROUTER-WCZYTANY\s*:/u;
 export function withoutModelRoutingTrace(text) {
     const lines = text.split("\n");
     const drop = new Set();
@@ -33,6 +36,10 @@ export function withoutModelRoutingTrace(text) {
         }
         index = end;
     }
+    lines.forEach((line, at) => {
+        if (DEVELOPER_LINE.test(line))
+            drop.add(at);
+    });
     if (drop.size === 0)
         return text;
     return lines

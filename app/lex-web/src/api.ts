@@ -8,11 +8,15 @@ export type AuthStatusResponse = {
   temporaryAdminCredentialsActive: boolean;
 };
 
+export type AccountKind = "PROFESSIONAL" | "INDIVIDUAL";
+
 export type AuthenticatedUser = {
   userId: string;
   loginName: string;
   displayName: string;
   appRole: "ADMIN" | "USER";
+  // INDIVIDUAL: a private person's chat only (automatic mode, conversations instead of cases).
+  accountKind?: AccountKind;
   status: "ACTIVE" | "DISABLED";
   passwordSetupPending?: boolean;
   createdAt: string;
@@ -1680,6 +1684,7 @@ export function createAdminUser(input: {
   loginName: string;
   displayName: string;
   password: string;
+  accountKind?: AccountKind;
 }): Promise<{
   user: AuthenticatedUser;
 }> {
@@ -1692,6 +1697,16 @@ export function createAdminUser(input: {
       body: JSON.stringify(input)
     }
   );
+}
+
+export function setAccountKind(
+  userId: string,
+  accountKind: AccountKind
+): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/account-kind`, {
+    method: "PATCH",
+    body: JSON.stringify({ accountKind })
+  });
 }
 
 export function setAdminUserStatus(

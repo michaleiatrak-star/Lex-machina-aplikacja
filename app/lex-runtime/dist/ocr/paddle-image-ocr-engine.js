@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
+import { ocrServePool } from "./ocr-serve-pool.js";
 function defaultWorkerPath() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     return path.resolve(here, "../../../ocr/paddle_worker.py");
@@ -20,6 +21,8 @@ export class LocalPaddleImageOcrEngine {
     device;
     timeoutMs;
     lineCrops;
+    acceleration;
+    persistent;
     constructor(options = {}) {
         this.python =
             options.python ??
@@ -35,11 +38,14 @@ export class LocalPaddleImageOcrEngine {
         this.timeoutMs =
             options.timeoutMs ?? 10 * 60 * 1000;
         this.lineCrops = options.lineCrops ?? (() => false);
+        this.acceleration = options.acceleration ?? (() => null);
+        this.persistent = (options.persistent ?? false) && process.env.LEX_OCR_PERSISTENT !== "off";
     }
     async recognizeImage(data, mediaType) {
         const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lex-paddle-image-"));
         const input = path.join(tempRoot, "image" + EXTENSION[mediaType]);
         const output = path.join(tempRoot, "result.json");
+        const acceleration = this.acceleration();
         try {
             await writeFile(input, data);
             const args = [
@@ -63,38 +69,45 @@ export class LocalPaddleImageOcrEngine {
             if (this.lineCrops()) {
                 args.push("--line-crops");
             }
-            await new Promise((resolve, reject) => {
-                const child = spawn(this.python, args, {
-                    stdio: ["ignore", "ignore", "pipe"],
-                    env: {
-                        ...process.env,
-                        PYTHONUNBUFFERED: "1"
-                    }
+            if (this.persistent) {
+                await this.recognizeServed(input, output, path.join(tempRoot, "evidence"), acceleration);
+            }
+            else
+                await new Promise((resolve, reject) => {
+                    const child = spawn(this.python, args, {
+                        stdio: ["ignore", "ignore", "pipe"],
+                        env: {
+                            ...process.env,
+                            PYTHONUNBUFFERED: "1",
+                            // Photos and image scans on the card too: before, the worker got no card
+                            // settings and read every image on the processor.
+                            ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
+                        }
+                    });
+                    let stderr = "";
+                    const timer = setTimeout(() => {
+                        child.kill("SIGKILL");
+                        reject(new Error("OCR_ENGINE_TIMEOUT: Local PaddleOCR image worker exceeded the configured timeout."));
+                    }, this.timeoutMs);
+                    child.stderr.on("data", (chunk) => {
+                        stderr += chunk.toString("utf8");
+                        if (stderr.length > 32_000) {
+                            stderr = stderr.slice(-32_000);
+                        }
+                    });
+                    child.once("error", (error) => {
+                        clearTimeout(timer);
+                        reject(new Error(`OCR_ENGINE_START_FAILED: ${error.message}`));
+                    });
+                    child.once("exit", (code) => {
+                        clearTimeout(timer);
+                        if (code === 0)
+                            resolve();
+                        else {
+                            reject(ocrWorkerFailure(stderr, code, "image worker"));
+                        }
+                    });
                 });
-                let stderr = "";
-                const timer = setTimeout(() => {
-                    child.kill("SIGKILL");
-                    reject(new Error("OCR_ENGINE_TIMEOUT: Local PaddleOCR image worker exceeded the configured timeout."));
-                }, this.timeoutMs);
-                child.stderr.on("data", (chunk) => {
-                    stderr += chunk.toString("utf8");
-                    if (stderr.length > 32_000) {
-                        stderr = stderr.slice(-32_000);
-                    }
-                });
-                child.once("error", (error) => {
-                    clearTimeout(timer);
-                    reject(new Error(`OCR_ENGINE_START_FAILED: ${error.message}`));
-                });
-                child.once("exit", (code) => {
-                    clearTimeout(timer);
-                    if (code === 0)
-                        resolve();
-                    else {
-                        reject(ocrWorkerFailure(stderr, code, "image worker"));
-                    }
-                });
-            });
             const parsed = await readOcrPages(JSON.parse(await readFile(output, "utf8")), path.join(tempRoot, "evidence"));
             if (parsed.length !== 1 ||
                 parsed[0]?.page !== 1) {
@@ -107,6 +120,54 @@ export class LocalPaddleImageOcrEngine {
                 recursive: true,
                 force: true
             });
+        }
+    }
+    /** One image on a long-lived worker: no model loading per photo. */
+    async recognizeServed(input, output, evidenceDir, acceleration) {
+        const env = {
+            ...process.env,
+            PYTHONUNBUFFERED: "1",
+            ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
+        };
+        delete env.LEX_OCR_PAUSE_FILE;
+        // The same key as a PDF pass with all cores: an image reuses that worker's models.
+        const key = JSON.stringify({ python: this.python, worker: this.workerPath, threads: null, accel: acceleration?.env ?? null, device: this.device ?? null });
+        let stderr = "";
+        const run = ocrServePool.run({
+            key,
+            python: this.python,
+            workerArgs: [this.workerPath, "--serve"],
+            env,
+            job: {
+                input,
+                output,
+                pages: "1",
+                lang: "pl",
+                ...(this.device ? { device: this.device } : {}),
+                evidenceDir,
+                lineCrops: this.lineCrops(),
+                mode: "image",
+                pauseFile: ""
+            },
+            onStderr: (text) => {
+                stderr = (stderr + text).slice(-32_000);
+            }
+        });
+        let timedOut = false;
+        const timer = setTimeout(() => {
+            timedOut = true;
+            run.kill();
+        }, this.timeoutMs);
+        try {
+            await run.done;
+        }
+        catch (error) {
+            if (timedOut)
+                throw new Error("OCR_ENGINE_TIMEOUT: Local PaddleOCR image worker exceeded the configured timeout.");
+            throw ocrWorkerFailure(stderr, error.exitCode ?? 1, "image worker");
+        }
+        finally {
+            clearTimeout(timer);
         }
     }
 }

@@ -89,8 +89,40 @@ function Test-RebootPending {
   )
 }
 
+# App-local Visual C++ runtime, as in the online installer: when the system runtime is older
+# than required and cannot be upgraded (MSI 1603 after a cleaned Package Cache), the runtime
+# bundled at build time (prerequisites\vc-applocal) goes next to the executables. Windows loads
+# DLLs from the executable's folder first. A file already in place is left untouched: it is
+# covered by the component lock made at build time.
+$script:VcAppLocalDir = $null
+function Get-DllVersion([string]$path) {
+  $info = (Get-Item -LiteralPath $path).VersionInfo
+  return [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
+}
+function Get-VcRuntimeAppLocal([string]$runtimeRoot, [Version]$required) {
+  $dir = Join-Path $runtimeRoot "prerequisites\vc-applocal"
+  foreach ($needed in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+    $path = Join-Path $dir $needed
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "VC_APPLOCAL_NOT_BUNDLED:$needed" }
+    $version = Get-DllVersion $path
+    if ($version -lt $required) { throw "VC_APPLOCAL_TOO_OLD:${needed}:$version<$required" }
+  }
+  return $dir
+}
+function Copy-VcRuntimeAppLocal([string]$dllDir, [string[]]$targets) {
+  foreach ($target in $targets) {
+    if (-not $target -or -not (Test-Path -LiteralPath $target -PathType Container)) { continue }
+    Get-ChildItem -LiteralPath $dllDir -File -Filter "*.dll" | ForEach-Object {
+      $destination = Join-Path $target $_.Name
+      if (-not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $_.FullName -Destination $destination }
+    }
+    Write-Host "Visual C++ runtime (app-local) placed in $target"
+  }
+}
+
 # Runs vc_redist with a log; on failure accepts an already working runtime
-# (>= floor) and otherwise explains the cause instead of a bare exit code.
+# (>= floor), then deploys the required runtime app-local, and otherwise
+# explains the cause instead of a bare exit code.
 function Install-VcRuntime([string]$installer, [Version]$required, [string]$logDir, [string]$errorPrefix, [int]$timeoutMs = 600000) {
   New-Item -ItemType Directory -Force -Path $logDir | Out-Null
   $log = Join-Path $logDir ("vc_redist-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
@@ -102,13 +134,24 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
   if (-not (Test-IsAdministrator)) {
     $startArgs.Verb = "RunAs"
   }
-  $process = Start-Process @startArgs
-  if (-not $process.WaitForExit($timeoutMs)) {
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    throw "${errorPrefix}_TIMEOUT"
+  # A declined UAC prompt throws instead of returning a code: 1223 (ERROR_CANCELLED)
+  # takes the same fallback as a failed upgrade.
+  $process = $null
+  try {
+    $process = Start-Process @startArgs
+  } catch {
+    Write-Warning "vc_redist did not start: $($_.Exception.Message)"
   }
-  $process.Refresh()
-  $code = $process.ExitCode
+  if ($process) {
+    if (-not $process.WaitForExit($timeoutMs)) {
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      throw "${errorPrefix}_TIMEOUT"
+    }
+    $process.Refresh()
+    $code = $process.ExitCode
+  } else {
+    $code = 1223
+  }
   # 0 ok, 3010 ok after restart, 1638 a newer version is already installed.
   if ($code -in @(0, 1638, 3010)) { return $code }
   $present = Get-VcRuntimeVersion
@@ -119,6 +162,14 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
   if ($present -and $present -ge $script:VcRuntimeFloor) {
     Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); using installed $present (>= $($script:VcRuntimeFloor))"
     return $code
+  }
+  # The system runtime stays older: the required version goes next to the application instead.
+  try {
+    $script:VcAppLocalDir = Get-VcRuntimeAppLocal $runtime $script:VcRuntimeFloor
+    Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); installed $(if ($present) { $present } else { 'none' }) stays, the required runtime is deployed next to the application"
+    return $code
+  } catch {
+    Write-Warning "App-local Visual C++ runtime unavailable: $($_.Exception.Message)"
   }
   $logText = ""
   Get-ChildItem -LiteralPath $logDir -Filter ([IO.Path]::GetFileNameWithoutExtension($log) + "*") -ErrorAction SilentlyContinue |
@@ -245,6 +296,14 @@ try {
     Write-Host "Installing verified bundled Visual C++ runtime"
     $vcExit = Install-VcRuntime $vcInstaller ([Version]$vc.version) (Join-Path $env:LOCALAPPDATA "LexMachina\logs") "OFFLINE_BUNDLE_VC_RUNTIME"
     Write-Host "Bundled Visual C++ runtime fallback exercised; exit=$vcExit"
+  }
+  if ($script:VcAppLocalDir) {
+    $vcTargets = @($runtime) + @(
+      Get-ChildItem -LiteralPath $runtime -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '\\(prerequisites|bootstrap)\\' } |
+        ForEach-Object { $_.DirectoryName }
+    ) | Sort-Object -Unique
+    Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
   }
 
   $selfTest = Join-Path $runtime "bootstrap\windows-payload-selftest.ps1"

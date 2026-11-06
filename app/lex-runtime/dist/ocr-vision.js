@@ -345,7 +345,10 @@ export class LocalVisionLineReader {
     options;
     child = null;
     port = 0;
-    constructor(executable, model, options = {}) {
+    constructor(executable, model, 
+    // readTimeoutMs: one line, the first one with the model's warm-up. Without it a server that
+    // never answers held the document step, and with it the paused background OCR, for good.
+    options = {}) {
         this.executable = executable;
         this.model = model;
         this.options = options;
@@ -382,7 +385,8 @@ export class LocalVisionLineReader {
             if (child.exitCode !== null)
                 throw new Error(`VISION_MODEL_START_FAILED:${stderr.trim().split("\n").at(-1) ?? ""}`);
             try {
-                const health = await fetch(`http://127.0.0.1:${this.port}/health`);
+                // A server that accepts but does not answer must not stall the start loop past its deadline.
+                const health = await fetch(`http://127.0.0.1:${this.port}/health`, { signal: AbortSignal.timeout(5_000) });
                 if (health.ok)
                     return;
             }
@@ -396,23 +400,33 @@ export class LocalVisionLineReader {
     }
     readLine = async (jpegBase64, ocrText) => {
         await this.start();
-        const response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
-                            { type: "text", text: PROMPT.replace("{ocr}", ocrText) }
-                        ]
-                    }
-                ],
-                temperature: 0,
-                max_tokens: 200
-            })
-        });
+        const timeoutMs = this.options.readTimeoutMs ?? 120_000;
+        let response;
+        try {
+            response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
+                signal: AbortSignal.timeout(timeoutMs),
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
+                                { type: "text", text: PROMPT.replace("{ocr}", ocrText) }
+                            ]
+                        }
+                    ],
+                    temperature: 0,
+                    max_tokens: 200
+                })
+            });
+        }
+        catch (error) {
+            // The step stops here (correctWithVision does not catch): the document keeps its OCR reading.
+            this.stop();
+            throw new Error(error.name === "TimeoutError" ? `VISION_MODEL_TIMEOUT:${timeoutMs}` : `VISION_MODEL_FAILED:${String(error).slice(0, 200)}`);
+        }
         if (!response.ok)
             throw new Error(`VISION_MODEL_FAILED:${response.status}`);
         const body = (await response.json());

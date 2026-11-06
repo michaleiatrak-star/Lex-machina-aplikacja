@@ -26,10 +26,18 @@ import {
  * ProductVersion) and hands it over: Windows runs the update transaction (backup, health check,
  * rollback, restart), macOS opens the .pkg in the system Installer.
  */
+const UPDATE_STEPS = (macos: boolean): string[] =>
+  macos
+    ? ["Pobieranie i sprawdzenie instalatora", "Instalator macOS: przejdź jego kroki", "Uruchom Lex Machina po instalacji"]
+    : ["Pobieranie i sprawdzenie instalatora", "Instalacja — okno z paskiem postępu pokaże kolejne etapy", "Lex Machina uruchomi się sama po instalacji"];
+
 export function UpdatePrompt() {
   const [store] = useState(updateStore);
   const [offer, setOffer] = useState(() => startupUpdate(store));
   const [busy, setBusy] = useState(false);
+  // The update's steps on screen until the app hands over to the installer (user report
+  // 2026-11-06: the update went on in the background and the user did not know what happened).
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [lastAttempt, setLastAttempt] = useState<UpdateStatusResponse["lastAttempt"]>();
@@ -92,8 +100,10 @@ export function UpdatePrompt() {
     setBusy(true);
     setError("");
     setMessage("Pobieram instalator i sprawdzam jego sumę kontrolną SHA-256…");
+    setStage(1);
     try {
       const staged = await downloadApplicationUpdate();
+      setStage(2);
       setMessage(
         macos
           ? "Otwieram instalator macOS. Lex Machina zamknie się teraz; przejdź kroki instalatora."
@@ -118,6 +128,7 @@ export function UpdatePrompt() {
       setMessage("");
       setError(friendlyError(problem));
       setBusy(false);
+      setStage(0);
     }
   }
 
@@ -135,6 +146,18 @@ export function UpdatePrompt() {
           </p>
         ) : null}
         {message ? <p className="update-prompt-status" role="status">{message}</p> : null}
+        {stage > 0 ? (
+          <div className="update-prompt-progress">
+            <progress aria-label="Postęp aktualizacji" />
+            <ol>
+              {UPDATE_STEPS(macos).map((label, index) => (
+                <li key={label} className={index + 1 < stage ? "done" : index + 1 === stage ? "current" : undefined}>
+                  {label}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
         {error ? <p className="update-prompt-error" role="alert">{error}</p> : null}
         <div className="update-prompt-actions">
           <button type="button" className="update-prompt-primary" disabled={busy} onClick={() => void update()}>
