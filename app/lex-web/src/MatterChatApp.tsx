@@ -137,6 +137,7 @@ import {
   resetCaseWorkflow,
   type ContractAnalysisMode
 } from "./api.js";
+import { noModelAvailable } from "./model-availability.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
@@ -1705,6 +1706,27 @@ export default function MatterChatApp({
   });
   const [providerAccountBusy, setProviderAccountBusy] =
     useState(false);
+  // No model at all after the first start: the model settings open at once, instead of a chat
+  // that cannot answer (user request 2026-11-06).
+  const [localModelInstalled, setLocalModelInstalled] = useState<boolean | undefined>(undefined);
+  const noModelRedirected = useRef(false);
+  useEffect(() => {
+    if (serverMode) return;
+    let cancelled = false;
+    getLocalModels()
+      .then((result) => { if (!cancelled) setLocalModelInstalled(result.models.some((item) => item.installed)); })
+      .catch(() => { if (!cancelled) setLocalModelInstalled(false); });
+    return () => { cancelled = true; };
+  }, [serverMode]);
+  useEffect(() => {
+    if (serverMode || noModelRedirected.current) return;
+    if (!noModelAvailable(providerConfiguration, providerAccounts, localModelInstalled)) return;
+    noModelRedirected.current = true;
+    setActiveTab("settings");
+    setSettingsSection("models");
+    setProviderAccountMessage("Nie ma jeszcze połączonego modelu. Wybierz dostawcę i połącz konto, wklej klucz API albo zainstaluj model lokalny, a potem wróć do rozmowy.");
+  }, [serverMode, providerConfiguration, providerAccounts, localModelInstalled]);
+
   const [localStartBusy, setLocalStartBusy] =
     useState(false);
   const [localStartMessage, setLocalStartMessage] =
