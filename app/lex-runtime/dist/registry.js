@@ -109,6 +109,13 @@ export class LexSkillRegistry {
         const normalized = semanticPath.replaceAll("\\", "/").trim();
         if (!normalized)
             return null;
+        // "JUR:terminy-procesowe": national law named by key (shared/UNIVERSAL-RUNTIME-ADAPTER.md §1B),
+        // resolved through the active jurisdiction's manifest (Polish law: prawo-polskie-v2).
+        const key = /^JUR:([a-z0-9-]+)$/u.exec(normalized.replace(/^view\s+/u, ""));
+        if (key) {
+            const target = this.jurisdictionModules().get(`JUR:${key[1]}`);
+            return target ? this.resolveResource(skillName, target) : null;
+        }
         let candidate;
         if (normalized.startsWith("shared/") ||
             normalized.startsWith("references/") ||
@@ -140,6 +147,24 @@ export class LexSkillRegistry {
         }
         const safe = assertInside(this.root, candidate);
         return isFile(safe) || isDirectory(safe) ? safe : null;
+    }
+    jurisdictionCache = null;
+    /** The active jurisdiction's keys → modules (LEX_JURISDICTION_PACK, default prawo-polskie-v2). */
+    jurisdictionModules() {
+        if (this.jurisdictionCache?.root === this.root)
+            return this.jurisdictionCache.modules;
+        const modules = new Map();
+        const pack = process.env.LEX_JURISDICTION_PACK?.trim() || "prawo-polskie-v2";
+        try {
+            const manifest = fs.readFileSync(assertInside(this.root, path.join(this.root, pack, "JURYSDYKCJA.md")), "utf8");
+            for (const match of manifest.matchAll(/^\|\s*`(JUR:[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gmu))
+                modules.set(match[1], match[2]);
+        }
+        catch {
+            // No manifest: a key resolves to nothing (TRYB ZDEGRADOWANY in the skill), never to a guess.
+        }
+        this.jurisdictionCache = { root: this.root, modules };
+        return modules;
     }
     validateDeclarations() {
         const issues = [];
