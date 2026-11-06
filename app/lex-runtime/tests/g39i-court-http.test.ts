@@ -48,6 +48,7 @@ import {
 import {
   SecureCaseArtifactStore
 } from "../src/case-artifact-store.js";
+import { FIXTURE_JURISDICTION, writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR =
@@ -58,6 +59,11 @@ function writeFile(
   relative: string,
   content: string
 ): void {
+  // JUR:<key>: the module the jurisdiction manifest addresses (as prawo-polskie-v2 in the corpus).
+  if (relative.startsWith("JUR:")) {
+    writeJurisdictionManifest(root);
+    relative = FIXTURE_JURISDICTION[relative]!;
+  }
   const target =
     path.join(
       root,
@@ -125,7 +131,7 @@ function registry():
   for (
     const relative of [
       "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
-      "shared/PRAWO-HARDGATE.md",
+      "JUR:weryfikacja-przepisow-kanon",
       "analiza-sadowa-v6/references/WERYFIKACJA-DOWODOW.md"
     ]
   ) {

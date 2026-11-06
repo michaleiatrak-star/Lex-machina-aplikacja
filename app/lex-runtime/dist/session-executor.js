@@ -1507,7 +1507,7 @@ export class SafeSessionExecutor {
         // and the core legal resources.
         const contextResources = new Set([
             ...(request.modelSelectsSkills ? [`${ROUTER_SKILL}/SKILL.md`] : []),
-            "shared/PRAWO-HARDGATE.md",
+            "JUR:weryfikacja-przepisow-kanon",
             `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
             `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
             // Route-based path: the engine puts the qualifier in the prompt itself.

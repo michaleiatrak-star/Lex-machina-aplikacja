@@ -95,11 +95,11 @@ describe("AUTO: the router's executive skill is loaded mechanically", () => {
       mode: "PRAWNIK"
     });
     const prompt = calls[0]!.systemPrompt ?? "";
-    for (const resource of ["shared/PRAWO-HARDGATE.md", "prawny-router-v3/references/KROK0A-anonimizer.md", "prawny-router-v3/references/KROK1-detekcja.md"]) {
+    for (const resource of ["JUR:weryfikacja-przepisow-kanon", "prawny-router-v3/references/KROK0A-anonimizer.md", "prawny-router-v3/references/KROK1-detekcja.md"]) {
       expect(prompt).toContain(`# ${resource} (już wczytany - nie czytaj ponownie)`);
     }
     // The body, not only a header: the HARD GATE's own heading.
-    const hardGate = fs.readFileSync(path.join(CORPUS, "shared", "PRAWO-HARDGATE.md"), "utf8");
+    const hardGate = fs.readFileSync(path.join(CORPUS, "prawo-polskie-v2", "krajowe", "shared", "PRAWO-HARDGATE.md"), "utf8");
     const heading = hardGate.split("\n").find((line) => line.startsWith("# "))!;
     expect(prompt).toContain(heading);
     const core = result.mandatoryPath!.steps.filter((step) => /^R-[234]/u.test(step.id));

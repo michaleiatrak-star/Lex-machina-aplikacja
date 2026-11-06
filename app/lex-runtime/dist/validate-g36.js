@@ -127,7 +127,7 @@ async function readWholeResource(runtime, skill, resourcePath) {
 }
 try {
     makeSkill("shared", "# shared");
-    makeSkill("prawny-router-v3", "# router\nview shared/PRAWO-HARDGATE.md");
+    makeSkill("prawny-router-v3", "# router\nview JUR:weryfikacja-przepisow-kanon");
     makeSkill("prawo-polskie-v2", "# prawo");
     makeSkill(DR, "# DR\nview modules/mod-KC.md");
     fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# G36 HARD GATE CONTENT\n");
@@ -225,7 +225,7 @@ try {
             "BLOCKED" &&
         result.status ===
             "DRAFT_PRESENTABLE" &&
-        prompt.includes("# CORE LEGAL RESOURCE: shared/PRAWO-HARDGATE.md") &&
+        prompt.includes("# CORE LEGAL RESOURCE: JUR:weryfikacja-przepisow-kanon") &&
         prompt.includes("G36 HARD GATE CONTENT") &&
         prompt.includes("LOCAL LEGAL CORPUS ACCESS") &&
         [

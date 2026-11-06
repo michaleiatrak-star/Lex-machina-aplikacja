@@ -17,6 +17,7 @@ import {
   type SessionExecutionResponse
 } from "../src/session-executor.js";
 import type { VerificationRecord } from "../src/verification-ledger.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
 const roots: string[] = [];
@@ -55,6 +56,7 @@ function registry(): LexSkillRegistry {
   }
   fs.mkdirSync(path.join(root, "shared"), { recursive: true });
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+  writeJurisdictionManifest(root);
   fs.writeFileSync(path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"), DR + "\n");
   const result = new LexSkillRegistry(root);
   result.scan();

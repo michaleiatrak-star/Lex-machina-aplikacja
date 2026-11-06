@@ -2,8 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { draftingSchema, parseSchemaCatalog } from "./skill-schema-catalog.js";
 const MAP_HEADING = /MODUŁ|MODUL|WCZYT|REFERENCES|LAZY|MAPA/iu;
-// A path of another skill: an executive skill (…-v3, …-min90) or a domain skill (dr-02-…).
-const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b/g;
+// A path of another skill: an executive skill (…-v3, …-min90) or a domain skill (dr-02-…); national
+// law by key (JUR:<key>, resolved through the active jurisdiction's manifest) or a module of the
+// jurisdiction package (<pakiet>/krajowe/…, how domain skills name it).
+const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b|[a-z0-9-]+-v\d+\/krajowe\/[A-Za-z0-9._\-/]+?\.md\b|JUR:[a-z0-9-]+/g;
 const STAGE = /\b(W[1-6])(?:\.\d+[a-z]?)?\b/u;
 const STOP = new Set(["umowa", "umowy", "każdy", "każda", "wczytaj", "moduł", "ścieżka", "sprawa", "sprawy", "gdy", "przed", "pismo", "pisma", "zawsze", "obowiązkowe",
     // Words of any letter's description („Oświadczenie o skorzystaniu z …”): never the case alone.
@@ -11,7 +13,7 @@ const STOP = new Set(["umowa", "umowy", "każdy", "każda", "wczytaj", "moduł",
 const cache = new Map();
 // "references/X.md" belongs to the skill; "shared/…", "…-v3/…" and "dr-02-…/…" are kept whole.
 function corpusPath(skill, raw) {
-    return raw.startsWith("shared/") || raw.startsWith(`${skill}/`) || /^(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\//u.test(raw) ? raw : `${skill}/${raw}`;
+    return raw.startsWith("JUR:") || raw.startsWith("shared/") || raw.startsWith(`${skill}/`) || /^(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\//u.test(raw) ? raw : `${skill}/${raw}`;
 }
 export function moduleMap(registry, skill) {
     const record = registry.get(skill);

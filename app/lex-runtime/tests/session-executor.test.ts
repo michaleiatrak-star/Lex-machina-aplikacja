@@ -23,6 +23,7 @@ import {
 } from "../src/session-executor.js";
 import { LegalFederationToolRuntime } from "../src/legal-federation-tool-runtime.js";
 import { validateLocalHybridDocument } from "../src/document-generation-validation.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -53,6 +54,7 @@ function fixture(
     path.join(root, "shared", "PRAWO-HARDGATE.md"),
     "# hard gate\n"
   );
+  writeJurisdictionManifest(root);
 
   const router = path.join(root, "prawny-router-v3");
   fs.mkdirSync(path.join(router, "references"), { recursive: true });
@@ -236,7 +238,7 @@ describe("SafeSessionExecutor", () => {
                 input: {
                   skill: "shared",
                   path:
-                    "shared/PRAWO-HARDGATE.md"
+                    "JUR:weryfikacja-przepisow-kanon"
                 }
               },
               {
@@ -342,7 +344,7 @@ describe("SafeSessionExecutor", () => {
                 input: {
                   skill: "shared",
                   path:
-                    "shared/PRAWO-HARDGATE.md"
+                    "JUR:weryfikacja-przepisow-kanon"
                 }
               },
               {
@@ -942,7 +944,7 @@ describe("SafeSessionExecutor", () => {
     expect(
       captured?.systemPrompt
     ).toContain(
-      "# CORE LEGAL RESOURCE: shared/PRAWO-HARDGATE.md"
+      "# CORE LEGAL RESOURCE: JUR:weryfikacja-przepisow-kanon"
     );
     expect(
       captured?.systemPrompt

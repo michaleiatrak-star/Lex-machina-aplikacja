@@ -78,7 +78,7 @@ const RESOURCE_READ_SCHEMA = {
                 },
                 path: {
                     type: "string",
-                    description: "Semantic path, e.g. modules/mod-KC.md, references/CHECKLIST.md, shared/PRAWO-HARDGATE.md or another-skill/SKILL.md."
+                    description: "Semantic path, e.g. modules/mod-KC.md, references/CHECKLIST.md, JUR:weryfikacja-przepisow-kanon or another-skill/SKILL.md."
                 },
                 offset: {
                     type: "integer",

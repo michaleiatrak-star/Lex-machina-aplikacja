@@ -4,14 +4,14 @@ import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import fs from "node:fs";
 const LEGAL_GUIDE_RESOURCES = [
     "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "shared/DOMAIN-LOCK.md",
     "shared/RATE-COMPLETENESS.md",
     "przewodnik-prawny-v2/references/TRYB-SUROWA-ANALIZA.md"
 ];
 const SIMPLE_LETTER_RESOURCES = [
-    "shared/NAZEWNICTWO-STRON.md",
+    "JUR:nazewnictwo-stron",
     "pisma-proste-v2/references/M1-zasady.md",
     "pisma-proste-v2/references/M2-intake.md",
     "pisma-proste-v2/references/M4-struktura.md",
@@ -27,11 +27,11 @@ const PROCESS_PLEADING_RESOURCES = [
 ];
 const COURT_ANALYSIS_RESOURCES = [
     "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "analiza-sadowa-v6/references/WERYFIKACJA-DOWODOW.md"
 ];
 const EVIDENCE_ANALYSIS_RESOURCES = [
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
     "shared/MOD-STEP-TRACKER.md",
     "shared/DOMAIN-LOCK.md",
@@ -39,18 +39,18 @@ const EVIDENCE_ANALYSIS_RESOURCES = [
 ];
 const STATUTE_ANALYSIS_RESOURCES = [
     "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-    "shared/PRAWO-HARDGATE.md",
-    "shared/HIERARCHIA-ZRODEL.md",
+    "JUR:weryfikacja-przepisow-kanon",
+    "JUR:hierarchia-zrodel",
     "shared/SELF-CHECK-ANTY-FASADA.md"
 ];
 const CONTRACT_ANALYSIS_RESOURCES = [
     "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "shared/MOD-STEP-TRACKER.md"
 ];
 const CHRONOLOGY_RESOURCES = [
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "chronologia-sprawy-v1/references/ekstrakcja-zdarzen.md",
     "chronologia-sprawy-v1/references/sprzecznosci-dat.md",
@@ -58,25 +58,25 @@ const CHRONOLOGY_RESOURCES = [
 ];
 const CASE_LAW_RESOURCES = [
     "shared/MCP-INTEGRACJA.md",
-    "shared/SYGNATURY.md",
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:sygnatury-repertoria",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md"
 ];
 const WITNESS_QUESTIONING_RESOURCES = [
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
     "shared/MOD-STEP-TRACKER.md",
     "przesluchanie-swiadkow-v2-min90/references/WITNESS-INTELLIGENCE.md"
 ];
 const CLIENT_REPORT_RESOURCES = [
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "raport-klienta-v1/references/jezyk-klienta.md",
     "raport-klienta-v1/references/BLUEPRINT-SCHEMA.md"
 ];
 const SITUATION_REPORT_RESOURCES = [
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md",
     "shared/MOD-WIDGET-IO.md"
 ];

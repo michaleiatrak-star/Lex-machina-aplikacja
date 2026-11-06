@@ -16,6 +16,7 @@ import type {
   ProviderStreamParams,
   ProviderStreamResult
 } from "../src/providers/types.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR02 = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -47,6 +48,7 @@ function fixture(options?: {
 
   fs.mkdirSync(path.join(root, "shared"), { recursive: true });
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+  writeJurisdictionManifest(root);
 
   const router = path.join(root, "prawny-router-v3");
   fs.mkdirSync(path.join(router, "references"), { recursive: true });
@@ -96,7 +98,7 @@ describe("local core resource prompt", () => {
     const resources =
       new Map([
         [
-          "shared/PRAWO-HARDGATE.md",
+          "JUR:weryfikacja-przepisow-kanon",
           huge
         ],
         [

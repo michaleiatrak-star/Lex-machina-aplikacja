@@ -241,7 +241,7 @@ try {
   );
   makeSkill(
     "prawny-router-v3",
-    "# router\nview shared/PRAWO-HARDGATE.md"
+    "# router\nview JUR:weryfikacja-przepisow-kanon"
   );
   makeSkill(
     "prawo-polskie-v2",
@@ -472,7 +472,7 @@ try {
     result.status ===
       "DRAFT_PRESENTABLE" &&
     prompt.includes(
-      "# CORE LEGAL RESOURCE: shared/PRAWO-HARDGATE.md"
+      "# CORE LEGAL RESOURCE: JUR:weryfikacja-przepisow-kanon"
     ) &&
     prompt.includes(
       "G36 HARD GATE CONTENT"

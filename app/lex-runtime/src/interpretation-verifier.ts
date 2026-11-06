@@ -1,7 +1,7 @@
 import type { VerificationRecord } from "./verification-ledger.js";
 
 // Interpretacje podatkowe (KIS, MF) wg PRAWO-HARDGATE: sygnatura sprawdzana w EUREKA
-// (RZĄD 2A, shared/HIERARCHIA-ZRODEL.md) przed powołaniem, jak sygnatura orzeczenia.
+// (RZĄD 2A, JUR:hierarchia-zrodel) przed powołaniem, jak sygnatura orzeczenia.
 // ✅ [VER] potwierdza istnienie i treść interpretacji; status aktualności EUREKA idzie
 // do znacznika, a interpretacja nadal nie jest źródłem prawa (brzmienie przepisu z ELI).
 

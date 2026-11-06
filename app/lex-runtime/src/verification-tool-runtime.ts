@@ -170,7 +170,7 @@ const TOOL_SCHEMA: NormalizedToolSchema = {
 };
 
 const SUBSTITUTE_HINT =
-  "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
+  "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (JUR:hierarchia-zrodel) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
 
 
 const CASE_LIBRARY_TOOL_SCHEMA: NormalizedToolSchema = {
@@ -663,7 +663,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
   "- " + STATUS_CONSISTENCY_INSTRUCTION,
   "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
-  "- Source canon E-1…E-5 (shared/HIERARCHIA-ZRODEL.md): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
+  "- Source canon E-1…E-5 (JUR:hierarchia-zrodel): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
   "- Never invent a verification marker, source URL, or tool result.",
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",

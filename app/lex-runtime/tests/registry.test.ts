@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { LexSkillRegistry } from "../src/registry.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const temporaryRoots: string[] = [];
 
@@ -12,6 +13,7 @@ function fixture(): string {
 
   fs.mkdirSync(path.join(root, "shared"), { recursive: true });
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# gate\n");
+  writeJurisdictionManifest(root);
 
   fs.mkdirSync(path.join(root, "prawny-router-v3", "references"), { recursive: true });
   fs.writeFileSync(
@@ -26,7 +28,7 @@ dependencies:
   requires:
     - shared
 required_modules:
-  - shared/PRAWO-HARDGATE.md
+  - JUR:weryfikacja-przepisow-kanon
   - references/KROK1-detekcja.md
 ---
 # Router
@@ -49,7 +51,7 @@ describe("LexSkillRegistry", () => {
     expect(registry.scan()).toEqual([]);
     expect(registry.get("prawny-router-v3")).toBeDefined();
     expect(
-      registry.resolveResource("prawny-router-v3", "shared/PRAWO-HARDGATE.md")
+      registry.resolveResource("prawny-router-v3", "JUR:weryfikacja-przepisow-kanon")
     ).toBe(path.join(root, "shared", "PRAWO-HARDGATE.md"));
     expect(
       registry.resolveResource("prawny-router-v3", "references/KROK1-detekcja.md")

@@ -1,5 +1,5 @@
 // How much instruction text a turn sends to the model, by top-level section
-// ("# MANDATORY PATH RESOURCE: shared/HIERARCHIA-ZRODEL.md", "# SKILL WYKONAWCZY ..."):
+// ("# MANDATORY PATH RESOURCE: JUR:hierarchia-zrodel", "# SKILL WYKONAWCZY ..."):
 // the measure for moving procedural skill text into the application.
 
 export type PromptBudget = { chars: number; sections: Array<{ label: string; chars: number }> };

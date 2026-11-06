@@ -3,18 +3,22 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHECKPOINT_RESOURCES, evaluateCheckpointOutput, processStepDone, readAtOtherCheckpoint } from "../src/process-checkpoint-contract.js";
 import { PROCESS_PLEADING_CHECKPOINTS, createProcessPleadingState, acceptProcessPleadingStart } from "../src/process-pleading-state.js";
+import { LexSkillRegistry } from "../src/registry.js";
 import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../src/process-pleading-execution-gate.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 
 describe("pisma-procesowe-v3 checkpoint contract", () => {
   it("covers every checkpoint of CP-REJESTR with existing files", () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
     const register = fs.readFileSync(path.join(CORPUS, "shared/CP-GATE.md"), "utf8");
     const ids = [...new Set([...register.matchAll(/^\s*\[(CP-[A-Za-z0-9-]+)\]/gm)].map((match) => match[1]))];
     expect([...ids].sort()).toEqual([...PROCESS_PLEADING_CHECKPOINTS].sort());
     for (const checkpoint of PROCESS_PLEADING_CHECKPOINTS) {
       expect(CHECKPOINT_RESOURCES[checkpoint].length).toBeGreaterThan(0);
-      for (const resource of CHECKPOINT_RESOURCES[checkpoint]) expect(fs.existsSync(path.join(CORPUS, resource))).toBe(true);
+      // As the application loads them: through the registry (JUR:<key> by the jurisdiction manifest).
+      for (const resource of CHECKPOINT_RESOURCES[checkpoint]) expect(registry.resolveResource("pisma-procesowe-v3", resource), resource).toBeTruthy();
     }
   });
 
