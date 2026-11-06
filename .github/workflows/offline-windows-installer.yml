@@ -429,13 +429,17 @@ jobs:
           # the state this step reproduces.
           $short = ($python.version -split "\.")[0..1] -join "."
           $registered = Get-ItemProperty -Path "HKCU:\Software\Python\PythonCore\$short\InstallPath" -ErrorAction SilentlyContinue
-          if ($registered -and $registered.'(default)' -and (Test-Path -LiteralPath (Join-Path $registered.'(default)' "python.exe"))) {
-            $foreignExe = Join-Path $registered.'(default)' "python.exe"
-            $foreignVersion = (& $foreignExe --version 2>&1 | Select-Object -First 1).ToString().Trim()
-            if ($foreignVersion -ne "Python $($python.version)") {
-              throw "ACCEPTANCE_FOREIGN_PYTHON_VERSION_INVALID:$foreignVersion"
+          # The registration is the state under test; the build's payload directory it points to
+          # has been packaged away by now, so its python.exe may be gone.
+          if ($registered) {
+            $foreignExe = Join-Path ([string]$registered.'(default)') "python.exe"
+            if (Test-Path -LiteralPath $foreignExe -PathType Leaf) {
+              $foreignVersion = (& $foreignExe --version 2>&1 | Select-Object -First 1).ToString().Trim()
+              if ($foreignVersion -ne "Python $($python.version)") {
+                throw "ACCEPTANCE_FOREIGN_PYTHON_VERSION_INVALID:$foreignVersion"
+              }
             }
-            Write-Host "Pre-existing registered Python ready (registered by the build): $($registered.'(default)')"
+            Write-Host "Pre-existing registered Python $short (registered by the build): $($registered.'(default)')"
             exit 0
           }
           $foreignRoot = Join-Path $env:RUNNER_TEMP ("Foreign Python " + $python.version)
