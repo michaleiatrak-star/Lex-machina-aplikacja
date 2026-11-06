@@ -143,6 +143,12 @@ describe("G39I status consistency gate", () => {
         expect(result.status).toBe("PASS");
         expect(result.text).toBe(`Art. 233 KK chroni wymiar sprawiedliwości. ${VER_233}`);
     });
+    // Bielik 2026-11-06: "VERIFIED (tekst jednolity) ✅ ✅ [VER: …]" and "✅ ✅ [VER: …]" after a bare ✅.
+    it("one ✅ per marker: the model's own ✅ before the ledger marker goes", () => {
+        expect(finalize(`Art. 234 KK: VERIFIED ✅ ${VER_234}`, ledgerWithKk()).text).toBe(`Art. 234 KK: VERIFIED ${VER_234}`);
+        const bare = finalize(`Art. 233 KK chroni wymiar sprawiedliwości. ✅`, ledgerWithKk()).text;
+        expect(bare).toBe(`Art. 233 KK chroni wymiar sprawiedliwości. ${VER_233}`);
+    });
     it("keeps a ledger marker the model copied exactly", () => {
         const text = `Art. 234 KK ${VER_234} dotyczy fałszywego oskarżenia.`;
         expect(stripUnbackedVerificationMarkers(text, ledgerWithKk())).toEqual({ text, removed: 0 });

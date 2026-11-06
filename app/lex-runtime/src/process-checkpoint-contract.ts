@@ -18,9 +18,9 @@ export const CHECKPOINT_RESOURCES: Readonly<Record<ProcessPleadingCheckpoint, re
   "CP-1d-anomalie": ["shared/MOD-DOKUMENT-ANOMALIE_v1.1.0.md"],
   "CP-1d": ["shared/MOD-POSZLAKI-KONTEKST.md"],
   "CP-W1": ["pisma-procesowe-v3/references/W1-SZCZEGOLY.md"],
-  "CP-PRE-W2": ["shared/PRE-W2-VERIFICATION-GATE.md"],
+  "CP-PRE-W2": ["JUR:pre-w2-verification-gate"],
   "CP-ATAK": ["shared/MOD-ATAK-NA-DRAFT.md", "pisma-procesowe-v3/references/W2-SZCZEGOLY.md"],
-  "CP-PODMIOT": ["pisma-procesowe-v3/references/W3-PODMIOT-GATE.md"],
+  "CP-PODMIOT": ["JUR:pisma-w3-podmiot-gate"],
   "CP-QUALITY": ["shared/LEGAL-QUALITY-GATE.md", "shared/MOD-WALIDACJA_v2.md", "pisma-procesowe-v3/references/W3-WERYFIKACJA.md"],
   "CP-AUDYT": ["shared/AUDYT-KONCOWY.md"],
   "CP-PEER": ["shared/MOD-PEER-REVIEW.md", "shared/POST-VALIDATION.md"]

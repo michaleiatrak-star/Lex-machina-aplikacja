@@ -8,6 +8,13 @@ import { SafeSessionExecutor } from "../src/session-executor.js";
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 
 describe("prompt modelu lokalnego (Bielik, Mistral)", () => {
+  it("the turn's question last, the whole-document check whole (Bielik, user report 2026-11-06)", () => {
+    const cal = "# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)\n" + "x ".repeat(900) + "\n  h) REGULAMIN / WZORZEC";
+    const compact = compactLocalPrompt(`# ZASADY\nzasady\n\n${cal}`, "a czy porozumienie samo w sobie nie jest wewnętrznie sprzeczne?");
+    expect(compact).toContain("h) REGULAMIN / WZORZEC");
+    expect(compact.trimEnd()).toMatch(/# PYTANIE TEJ TURY\n„a czy porozumienie samo w sobie nie jest wewnętrznie sprzeczne\?”[\s\S]*Nie powtarzaj poprzedniej odpowiedzi[\s\S]*$/u);
+  });
+
   it("zostają zasady, dziedzina, moduł (skrót ze ścieżką) i dane tury; odpada to, czego model lokalny nie wykonuje", () => {
     const full = [
       "[LEGENDA] [LMPII:D01:PERSON:0001] = osoba",
@@ -71,4 +78,13 @@ describe("prompt modelu lokalnego (Bielik, Mistral)", () => {
     expect(hosted!.length).toBeGreaterThan(50_000);
     expect(hosted).toContain("MULTI-SKILL ORCHESTRATION");
   }, 60_000);
+});
+
+describe("the map of sources by kind (comparison with the chat, 2026-11-06)", () => {
+  it("reaches a local model whole and names interpretations, authorities and the search engine's role", async () => {
+    const { SOURCES_BY_KIND } = await import("../src/legal-federation-tool-runtime.js");
+    const compact = compactLocalPrompt(`# FEDERATED LEGAL RESEARCH\n${"x ".repeat(2000)}\n\n${SOURCES_BY_KIND}`, "pytanie");
+    expect(compact).toContain(SOURCES_BY_KIND);
+    for (const item of ["verify_interpretation", "site:zus.pl", "site:uokik.gov.pl", "sp (Portal Orzeczeń)", "tylko trop", "nigdy wniosek „nie ma”"]) expect(SOURCES_BY_KIND).toContain(item);
+  });
 });

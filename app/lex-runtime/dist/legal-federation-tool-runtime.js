@@ -201,6 +201,22 @@ const CALL_TOOL = "call_federated_legal_source";
 const COVERAGE_TOOL = "federated_legal_coverage";
 const ASSESS_SOURCE_TOOL = "assess_legal_source";
 const FETCH_AUXILIARY_SOURCE_TOOL = "fetch_auxiliary_legal_source";
+// One map from the kind of source to where it is searched and where it is confirmed: case
+// law, interpretations, authorities' positions and registers, with the search engine as a
+// way to a lead, never as evidence. Short and a section of its own, so a local model gets it
+// whole (the federation note above is cut for it). Comparison of the app with the chat,
+// 2026-11-06: the app stopped at sn.pl and had no path for interpretations outside EUREKA or
+// for the positions of authorities.
+export const SOURCES_BY_KIND = [
+    "# ŹRÓDŁA WEDŁUG RODZAJU (aplikacja)",
+    "- Przepis: verify_legal_reference (ELI). Projekt, uzasadnienie ustawy: ISAP, sejm.gov.pl.",
+    "- SN: źródło sn → verify_case_*. Sądy powszechne: sp (Portal Orzeczeń) i SAOS. NSA/WSA: cbosa (🟨, brak trafień = OUT_OF_SCOPE). TK: tk. KIO: kio. TSUE: eurlex. ETPC: etpcz. Szukaj w sądach, które takie sprawy rozstrzygają, nie tylko w najwyższym.",
+    "- Interpretacje KIS: eureka → verify_interpretation. Interpretacje ogólne i objaśnienia podatkowe MF, interpretacje ZUS: web_search site:gov.pl / site:zus.pl → fetch_auxiliary_legal_source na tej domenie.",
+    "- Decyzje i stanowiska organów: UODO (uodo), UOKiK (site:uokik.gov.pl), PIP, KNF, URE, UKE, RPO, EROD (site:edpb.europa.eu): web_search z site: domeny organu → dokument z domeny organu. Status: stanowisko organu, nie prawo powszechnie obowiązujące.",
+    "- Podmiot: krs, ceidg, wl (biała lista VAT); kursy: nbp.",
+    "- Wyszukiwarka (web_search): tylko trop — sygnatura, numer, tytuł, adres; treść, tezę i cytat bierz z dokumentu u źródła. Frazy ogólne, nigdy fakty sprawy ani symbole [PII].",
+    "- Pusty wynik lub odmowa źródła (captcha, 403, limit czasu): inna fraza, następne źródło z tej listy, web_search, federated_legal_coverage; nigdy wniosek „nie ma”. Napisz, które źródło zawiodło."
+].join("\n");
 const WEB_SEARCH_TOOL = "web_search";
 const LIST_SCHEMA = {
     type: "function",
@@ -725,6 +741,15 @@ export class LegalFederationToolRuntime {
         }
     }
     events = [];
+    /**
+     * The tools of a local model (Bielik, Mistral on the user's computer): one search over the
+     * sources, a document, a source's own tool, the web search and a page read — not the
+     * classification and coverage helpers an 11B model trips over. Before, a local model had
+     * no source but the core codes and the ELI check (comparison with the chat, 2026-11-06).
+     */
+    localSchemas() {
+        return [SEARCH_SCHEMA, GET_SCHEMA, CALL_SCHEMA, FETCH_AUXILIARY_SOURCE_SCHEMA, WEB_SEARCH_SCHEMA];
+    }
     schemas() {
         return [
             LIST_SCHEMA,
@@ -769,7 +794,9 @@ export class LegalFederationToolRuntime {
             "A business identifier of the case (NIP, REGON, KRS, account number as [PII:...] symbol) may be sent only to the register that answers for it: source krs, wl, ceidg or sudop; Lex puts the value back. Never send PESEL, ID card, e-mail or phone to any source.",
             "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the MCP connectors (they call public APIs). Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
             "If a federated result conflicts with a native official-source verifier, the native official verification path is authoritative; fail closed until the conflict is resolved.",
-            "Do not expose connector implementation details or treat a source_unavailable error as absence of law."
+            "Do not expose connector implementation details or treat a source_unavailable error as absence of law.",
+            "",
+            SOURCES_BY_KIND
         ].join("\n");
     }
     async close() {

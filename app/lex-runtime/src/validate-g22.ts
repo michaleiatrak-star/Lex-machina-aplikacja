@@ -45,8 +45,8 @@ const DR02 =
 
 const CASE_LAW_WORKFLOW_RESOURCES = [
   "shared/MCP-INTEGRACJA.md",
-  "shared/SYGNATURY.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:sygnatury-repertoria",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md"
 ] as const;
 
@@ -299,8 +299,8 @@ implements ProviderAdapter {
 
     const requiredReads = [
       "shared/MCP-INTEGRACJA.md",
-      "shared/SYGNATURY.md",
-      "shared/PRAWO-HARDGATE.md",
+      "JUR:sygnatury-repertoria",
+      "JUR:weryfikacja-przepisow-kanon",
       "shared/SELF-CHECK-ANTY-FASADA.md"
     ];
 

@@ -199,8 +199,9 @@ compact = (body) => body) {
         .join("\n\n---\n\n");
 }
 // R-2..R-4 of the mandatory core, given in full to a model that chooses its skills.
+// The HARD GATE is national law (the verification canon): named by key, the active jurisdiction's module.
 const AUTO_CORE_RESOURCES = [
-    ["shared", "PRAWO-HARDGATE.md"],
+    ["prawny-router-v3", "JUR:weryfikacja-przepisow-kanon"],
     ["prawny-router-v3", "references/KROK0A-anonimizer.md"],
     ["prawny-router-v3", "references/KROK1-detekcja.md"]
 ];
@@ -1422,10 +1423,10 @@ export class LexExecutionEngine {
         if (onPreloaded && preloaded.length) {
             for (const [skillName, file] of AUTO_CORE_RESOURCES) {
                 const skill = this.registry.get(skillName);
-                const absolute = skill ? path.join(skill.directory, file) : "";
-                if (!skill || !fs.existsSync(absolute))
+                const absolute = skill ? this.registry.resolveResource(skillName, file) ?? "" : "";
+                if (!skill || !absolute || !fs.existsSync(absolute))
                     continue;
-                const relative = `${path.basename(skill.directory)}/${file}`;
+                const relative = file.startsWith("JUR:") ? file : `${path.basename(skill.directory)}/${file}`;
                 onPreloaded(relative);
                 const compact = compactForModel(fs.readFileSync(absolute, "utf8"));
                 if (compact.compacted.length) {

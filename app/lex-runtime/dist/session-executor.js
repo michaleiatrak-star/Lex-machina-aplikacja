@@ -47,7 +47,7 @@ const COVERAGE_SKILLS = new Set([
 ]);
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
@@ -92,11 +92,17 @@ import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE_PREFIX, threadUserText } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
+import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
+import { registryFactsText } from "./privacy/registry-enrichment.js";
+import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
 const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
+// analiza-sadowa-v6 6.19: the checklist for every letter of the opposing party.
+const OPPOSING_LETTER_RESOURCE = "analiza-sadowa-v6/SKILL.md";
+const OPPOSING_LETTER_HEADING = "## PISMO PRZECIWNIKA / WEZWANIE — LISTA PP";
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
 // The question the cited documents are judged against: the latest user message whole, and for a
@@ -725,6 +731,8 @@ restoreDocument) {
         const visible = raw.replace(DRAFT_PARTIAL_TOKEN_TAIL, "");
         onDraft(visible.replace(DRAFT_PII_TOKEN, (token, kind, sequence, requestedCase) => {
             const base = `[PII:${kind}:${sequence}]`;
+            if (process.env.LEX_DEBUG_DRAFT === "1" && !vault.hasToken(base))
+                process.stderr.write(`DRAFT_TOKEN_UNRESTORED:${token}:vault=${vault.snapshot().tokens.length}\n`);
             return vault.hasToken(base)
                 ? vault.restore(base, requestedCase ?? null).text
                 : token;
@@ -743,6 +751,8 @@ restoreDocument) {
         }
     };
 }
+const RECOGNITION_CACHE_MS = 2 * 60_000;
+const RECOGNITION_CACHE_ENTRIES = 6;
 export const THREAD_SUMMARY_PROMPT = [
     "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
     "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
@@ -972,10 +982,40 @@ export class SafeSessionExecutor {
             this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
         return this.registryEnrichment;
     }
+    // Personal-data recognition of one text, kept for a short while: one turn reads the same text
+    // up to three times (the routing pre-pass of a local model, the assistant's example data, the
+    // anonymization itself), each a run of Stanza, the dictionaries and Morfeusz over the whole
+    // conversation. Keyed by the text's hash; failures are not kept.
+    recognitionCache = new Map();
     chatRecognizerFor(model) {
-        return this.chatNamedEntityRecognizer
-            ? privacyRecognizerFor(this.chatNamedEntityRecognizer, !model.startsWith("local/"))
-            : undefined;
+        if (!this.chatNamedEntityRecognizer)
+            return undefined;
+        const useLocalModel = !model.startsWith("local/");
+        const recognizer = privacyRecognizerFor(this.chatNamedEntityRecognizer, useLocalModel);
+        const cache = this.recognitionCache;
+        return {
+            recognize: (text) => {
+                // The skill selection line the application writes (and rewrites after routing) holds
+                // no personal data: the text under it is recognized, the same before and after routing.
+                const header = text.startsWith(SKILL_SELECTION_ENVELOPE_PREFIX) && text.includes("\n") ? text.slice(0, text.indexOf("\n") + 1) : "";
+                const body = text.slice(header.length);
+                const shift = (found) => found.map((span) => ({ ...span, start: span.start + header.length, end: span.end + header.length }));
+                const now = Date.now();
+                for (const [key, entry] of cache)
+                    if (now - entry.at > RECOGNITION_CACHE_MS)
+                        cache.delete(key);
+                const key = `${useLocalModel ? 1 : 0}:${createHash("sha256").update(body).digest("hex")}`;
+                const hit = cache.get(key);
+                if (hit)
+                    return hit.spans.then(shift);
+                const spans = recognizer.recognize(body);
+                cache.set(key, { at: now, spans });
+                while (cache.size > RECOGNITION_CACHE_ENTRIES)
+                    cache.delete(cache.keys().next().value);
+                spans.catch(() => cache.delete(key));
+                return spans.then(shift);
+            }
+        };
     }
     async resolveAutoRouting(request) {
         request = nfcRequest(request);
@@ -1237,9 +1277,9 @@ export class SafeSessionExecutor {
         // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
-        const federationTools = request.model.startsWith("local/")
-            ? undefined
-            : this.legalFederationTools;
+        // Local models get the sources too (a smaller tool set and the short map of sources).
+        const federationTools = this.legalFederationTools;
+        const localFederation = request.model.startsWith("local/");
         // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
         const federationEvents = [];
         const auxiliarySources = [];
@@ -1419,7 +1459,7 @@ export class SafeSessionExecutor {
             ...reportTools.schemas(),
             ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
-                ? federationTools.schemas()
+                ? localFederation ? federationTools.localSchemas() : federationTools.schemas()
                 : []),
             ...(verificationTools ? verificationTools.schemas() : [])
         ];
@@ -1467,7 +1507,7 @@ export class SafeSessionExecutor {
         // and the core legal resources.
         const contextResources = new Set([
             ...(request.modelSelectsSkills ? [`${ROUTER_SKILL}/SKILL.md`] : []),
-            "shared/PRAWO-HARDGATE.md",
+            "JUR:weryfikacja-przepisow-kanon",
             `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
             `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
             // Route-based path: the engine puts the qualifier in the prompt itself.
@@ -1478,7 +1518,9 @@ export class SafeSessionExecutor {
         // The kind of every document the user sent (court decision, pleading, contract,
         // evidence...), recognised locally from its protected text; the router chooses
         // the skill also by what the user delivers (ACTIVATION-MATRIX).
-        const recognisedDocuments = mandatoryModel && legalTurn
+        // Every model, local ones included: Bielik and Mistral got no document kinds, no whole-
+        // document check, graph, checklist or register facts while this read the hosted path only.
+        const recognisedDocuments = legalTurn
             ? attachments
                 .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
                 .map((attachment) => ({
@@ -1503,6 +1545,49 @@ export class SafeSessionExecutor {
                     // Only the section: the whole SKILL.md still comes in when the analyser is the executive skill.
                     audit.record("resource_read", CONTRACT_WHOLE_DOCUMENT_RESOURCE, "OK", { detail: "runtime-preload;delivered-contract;CAL-GATE" });
                     pathSections.push(`# MANDATORY PATH RESOURCE: ${CONTRACT_WHOLE_DOCUMENT_RESOURCE} — ${CONTRACT_WHOLE_DOCUMENT_HEADING.replace(/^#+\s*/u, "")}\n\n${cal}`);
+                }
+            }
+            // A demand or a pleading delivered: the checklist for a letter of the opposing party
+            // (analiza-sadowa-v6, PP-1…PP-8): facts, construction, arithmetic, the provisions it
+            // cites, court, sender, case law (comparison of the app with the chat, 2026-11-06).
+            if (recognisedDocuments.some((document) => document.kind === "WEZWANIE" || document.category === "PISMO_PROCESOWE")) {
+                const checklist = markdownSection(this.readCorpus(OPPOSING_LETTER_RESOURCE) ?? "", OPPOSING_LETTER_HEADING);
+                if (checklist) {
+                    audit.record("resource_read", OPPOSING_LETTER_RESOURCE, "OK", { detail: "runtime-preload;delivered-letter;PP" });
+                    pathSections.push(`# MANDATORY PATH RESOURCE: ${OPPOSING_LETTER_RESOURCE} — ${OPPOSING_LETTER_HEADING.replace(/^#+\s*/u, "")}\n\n${checklist}`);
+                }
+            }
+            if (recognisedDocuments.some((document) => document.category === "UMOWA")) {
+                // The relation graph of each such document, read from its words: the model confirms
+                // or corrects its edges instead of finding the relations alone (user report 2026-11-06).
+                for (const document of recognisedDocuments.filter((item) => item.category === "UMOWA").slice(0, 3)) {
+                    const attachment = attachments.find((item) => item.documentId === document.documentId);
+                    const graph = attachment ? contractGraph(attachment.chunks.map((chunk) => chunk.text).join("\n")) : null;
+                    if (!graph)
+                        continue;
+                    audit.record("gate", "CONTRACT_GRAPH", "OK", { documentId: document.documentId, nodes: graph.nodes.length, edges: graph.edges.length });
+                    pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", `# GRAF RELACJI POSTANOWIEŃ: ${document.documentId}`));
+                }
+            }
+            // A firm named by its NIP or KRS in the material: what KRS and the VAT white list say
+            // about it (exists, not struck off, legal form, VAT status, its accounts), as a checked
+            // fact under the documents' tokens. The registers are the ones that answer for these
+            // numbers (the federation's rule); nothing else of the case goes out.
+            const registry = this.registryForms();
+            if (registry) {
+                const numbers = chatPrivacyVault
+                    .knownIdentifierValues()
+                    .filter((item) => item.kind === "NIP" || item.kind === "KRS")
+                    .map((item) => item.value)
+                    .slice(0, 6);
+                if (numbers.length) {
+                    await Promise.all(numbers.map((value) => registry.forms(value).catch(() => [])));
+                    const factsText = registryFactsText(registry.facts(numbers));
+                    if (factsText) {
+                        const protectedFacts = await chatPseudonymizer.pseudonymize(factsText);
+                        audit.record("gate", "REGISTRY_FACTS", "OK", { firms: registry.facts(numbers).length });
+                        pathSections.push(protectedFacts.text);
+                    }
                 }
             }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
@@ -1908,7 +1993,8 @@ export class SafeSessionExecutor {
         // mandatory path and shared resources, tool contracts) goes first and is cached by
         // the provider; what this turn adds (mode, recognitions, act modules, evidence,
         // cited law, retrieval) goes after it.
-        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE]);
+        // Sections present only when this turn delivers such a document stay out of the cached head.
+        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE, CONTRACT_WHOLE_DOCUMENT_RESOURCE, OPPOSING_LETTER_RESOURCE]);
         const stablePath = (section) => {
             const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
             return Boolean(resource) && !turnScoped.has(resource);
@@ -1927,7 +2013,7 @@ export class SafeSessionExecutor {
             reportTools.systemPromptAppendix(),
             ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
             ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
-            ...(federationTools ? [federationTools.systemPromptAppendix()] : []),
+            ...(federationTools ? [localFederation ? SOURCES_BY_KIND : federationTools.systemPromptAppendix()] : []),
             ...(verificationTools ? [verificationTools.systemPromptAppendix()] : [])
         ].join("\n\n");
         const toolPromptTurn = [

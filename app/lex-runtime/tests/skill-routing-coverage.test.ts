@@ -66,11 +66,11 @@ describe("pisma-proste-v2: every category of its schema catalogue", () => {
 
   it("loads the always-modules (M1, M2, M4, M8, M9) and the one schema", () => {
     const modules = skillModules(registry, "pisma-proste-v2", { text: "Napisz sprzeciw od nakazu zapłaty" }).map((item) => item.resource);
-    expect(modules[0]).toBe("pisma-proste-v2/references/SPA-sprzeciw.md");
+    expect(modules[0]).toBe("JUR:pisma-proste-spa-sprzeciw");
     for (const code of ["M1-zasady", "M2-intake", "M4-struktura", "M8-checklista", "M9-format"]) {
       expect(modules).toContain(`pisma-proste-v2/references/${code}.md`);
     }
-    expect(modules.filter((resource) => /\/SP[A-Z]/.test(resource))).toHaveLength(1);
+    expect(modules.filter((resource) => /\/SP[A-Z]|^JUR:pisma-proste-sp/.test(resource))).toHaveLength(1);
   });
 });
 
@@ -100,8 +100,8 @@ describe("drafting a letter vs analysing one", () => {
     ["Przeanalizuj to wezwanie i przygotuj odpowiedź.", [demand], "analizator-umow-v1 | pisma-proste-v2"],
     ["Czy kara umowna z tego wezwania jest zasadna?", [demand], "analizator-umow-v1"],
     ["Przeanalizuj nakaz zapłaty", [order], "analiza-sadowa-v6"],
-    ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | SPA-sprzeciw.md"],
-    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | JUR:pisma-proste-spa-sprzeciw"],
+    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | JUR:pisma-proste-spa-sprzeciw"],
     // The user's own contract is redacted by the contract skill, not by Test A of pleadings.
     ["Popraw zapisy o karach umownych w mojej umowie.", [], "analizator-umow-v1"],
     // analizator-umow-v1: assessing correctness, redacting and drafting documents of its generators.
@@ -111,7 +111,7 @@ describe("drafting a letter vs analysing one", () => {
     ["Przygotuj uchwałę zgromadzenia wspólników o podziale zysku.", [], "analizator-umow-v1"],
     ["Popraw pozew o zapłatę.", [], "pisma-procesowe-v3"],
     // pisma-proste-v2, obowiązkowa eskalacja: więcej niż jedna podstawa prawna.
-    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia.", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia.", [], "pisma-proste-v2 | JUR:pisma-proste-spa-sprzeciw"],
     ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia, potrącenia i braku legitymacji czynnej.", [], "pisma-procesowe-v3"],
     ["Napisz zarzuty od nakazu zapłaty: niewymagalność i potrącenie wzajemnej wierzytelności.", [], "pisma-procesowe-v3"]
   ] as const)("%s", (question, materials, expected) => {
@@ -162,7 +162,7 @@ describe("executive skills: required dependencies, coded modules, load instructi
     );
     const map = moduleMap(registry, "analizator-dowodow-v3");
     expect(map.find((entry) => entry.resource.endsWith("MD1-klasyfikacja.md"))?.condition).toMatch(/dowody do oceny/);
-    expect(map.some((entry) => entry.resource.endsWith("MX-dziedziny.md"))).toBe(true);
+    expect(map.some((entry) => entry.resource === "JUR:dowody-mx-dziedziny")).toBe(true);
     const modules = skillModules(registry, "analizator-dowodow-v3", { text: "Oceń te maile.\nmateriał zawiera dowody do oceny (dokumenty)" }).map((item) => item.resource);
     expect(modules).toEqual(expect.arrayContaining(["analizator-dowodow-v3/modules/MD1-klasyfikacja.md", "analizator-dowodow-v3/modules/MD2-scoring.md"]));
   });

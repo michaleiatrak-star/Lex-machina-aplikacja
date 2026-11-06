@@ -37,7 +37,9 @@ export function parseSchemaCatalog(markdown, skill) {
         const code = /\*\*\s*(SP[A-Z](?:-[A-Z]+)?)\b/u.exec(cells[1])?.[1];
         if (!code)
             continue;
-        const own = [...cells[2].matchAll(/(?:references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b/g)].map((match) => `${skill}/${match[0]}`);
+        // The schema file in the skill, or national law named by key (JUR:<key>, resolved by the registry
+        // through the active jurisdiction's manifest).
+        const own = [...cells[2].matchAll(/(?:references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|JUR:[a-z0-9-]+/g)].map((match) => match[0].startsWith("JUR:") ? match[0] : `${skill}/${match[0]}`);
         // "UWAGA: wczytaj najpierw <dr-.../modules/...md>": read before the schema.
         const first = [...cells[3].matchAll(/[a-z0-9-]+-v?\d*[a-z0-9-]*\/(?:modules|references)\/[A-Za-z0-9._\-/]+?\.md\b/g)].map((match) => match[0]);
         // The kind of letter, without the remarks after " — " (UWAGA, "kod ... zajęty").

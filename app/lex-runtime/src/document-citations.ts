@@ -2,6 +2,7 @@ import type {
   SessionDocumentAttachment
 } from "./session-executor.js";
 import { CASE_MATERIAL_MARKER_TEXT } from "./finalization-gate.js";
+import { classifyDocument } from "./document-kind.js";
 
 export type PublicDocumentCitation = {
   citationId: string;
@@ -39,7 +40,9 @@ export type ProcessedDocumentCitations = {
 export const QUOTE_MISMATCH_MARKER = "⚠️ [CYTAT NIEZGODNY Z DOKUMENTEM]";
 export const QUOTE_UNSOURCED_MARKER = "⚠️ [CYTAT NIEODNALEZIONY W AKTACH]";
 
-const MARKER = /\[\[LEXDOC:([^:\]\r\n]{1,180}):(\d{1,7})\]\]/g;
+// ":u<N>" is the application's own: a numbered unit ("pkt 5") of the document, highlighted.
+// ":a<N>" likewise: an anchor of the answer (a §, an exhibit, an amount, a date) found in it.
+const MARKER = /\[\[LEXDOC:([^:\]\r\n]{1,180}):(\d{1,7})(?::(u|a)(\d{1,4}))?\]\]/g;
 const MAX_QUOTE_SCAN = 4_500;
 
 function quoteBefore(text: string, markerStart: number): string | undefined {
@@ -260,6 +263,179 @@ function linkCaseMaterialSignatures(text: string, entries: ChunkEntry[]): string
   return output + text.slice(cursor);
 }
 
+// A numbered unit of a case document: "5. Za każde nieuprawnione naruszenie…" up to the next
+// unit or a blank line. Only units at the start of a line count ("12.W sytuacji" included).
+function unitLocation(text: string, unit: number): { start: number; end: number } | undefined {
+  const number = String(unit);
+  // "5.000,00 zł" at the start of a line is an amount, not unit 5.
+  const head = new RegExp(`(?:^|\\n)[ \\t]*${number}[ \\t]*[.)](?!\\d)[ \\t]*(?=\\S)`, "u").exec(text);
+  if (!head) return undefined;
+  const begin = head.index + head[0].indexOf(number);
+  const rest = text.slice(begin + number.length);
+  const next = /\n[ \t]*\d{1,3}[ \t]*[.)](?!\d)[ \t]*\S|\n\s*\n/u.exec(rest);
+  return { start: begin, end: Math.min(begin + number.length + (next ? next.index : rest.length), begin + 900) };
+}
+
+// "pkt 5", "punkt 10", "pkt 2, 5 i 10", "pkt. 6": a numbered unit of a case document, not of a
+// statute ("art. 187 § 1 pkt 3 KPC", "ust. 2 pkt 4" stay with the provision gates).
+const UNIT_REFERENCE = /(?<![\p{L}])(pkt\.?|punkt(?:u|em|cie|y|ów|ach|ami)?|Punkt(?:u|em|cie|y)?)\s*(\d{1,3})((?:\s*(?:,|i|oraz|lub|albo|–|-)\s*\d{1,3}(?![\d.,]\d))*)/gu;
+const STATUTE_CONTEXT = /(?:\bart\.|§|\bust\.|\bDz\.\s?U|\bpoz\.)[^.;\n]{0,40}$/u;
+
+// The user report of 2026-11-06: Bielik wrote "Punkt 5 nakłada karę" with no quote and no
+// marker, so nothing showed where pkt 5 is or what it says. Each such reference gets a link
+// to its document and page, the unit highlighted, when exactly one case document has it.
+function linkDocumentUnits(text: string, entries: ChunkEntry[]): { text: string; linked: number } {
+  if (!entries.length || /^\s*[{[]/u.test(text)) return { text, linked: 0 };
+  const cache = new Map<number, ChunkEntry | null>();
+  const owner = (unit: number): ChunkEntry | null => {
+    if (cache.has(unit)) return cache.get(unit)!;
+    const found = entries.filter((entry) => unitLocation(entry.chunk.text, unit));
+    const documents = new Set(found.map((entry) => entry.attachment.documentId));
+    const result = documents.size === 1 ? found[0]! : null;
+    cache.set(unit, result);
+    return result;
+  };
+  let output = "";
+  let cursor = 0;
+  let linked = 0;
+  // One link per unit and paragraph: a list of five mentions of pkt 10 is not five links.
+  let paragraphStart = 0;
+  const seen = new Set<number>();
+  UNIT_REFERENCE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = UNIT_REFERENCE.exec(text)) !== null) {
+    const paragraph = text.lastIndexOf("\n\n", match.index);
+    if (paragraph !== paragraphStart) {
+      paragraphStart = paragraph;
+      seen.clear();
+    }
+    if (STATUTE_CONTEXT.test(text.slice(Math.max(0, match.index - 60), match.index))) continue;
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 30);
+    // "pkt 3 KPC", "pkt 2 ustawy": a statute's unit after all.
+    if (/^\s*(?:K[A-Z]{1,3}\b|k\.[a-z]|ustaw|rozporządz|Kodeks|u\.[a-z])/u.test(after)) continue;
+    if (/^\s*\[\[LEXDOC/u.test(after)) continue;
+    const head = match[1]!.length + match[0].slice(match[1]!.length).search(/\d/u);
+    const numbers = [...match[0].slice(head).matchAll(/\d{1,3}/gu)].map((item) => ({ value: Number(item[0]), end: head + item.index! + item[0].length }));
+    let local = "";
+    let localCursor = 0;
+    for (const number of numbers) {
+      if (seen.has(number.value)) continue;
+      const entry = owner(number.value);
+      if (!entry) continue;
+      seen.add(number.value);
+      local += match[0].slice(localCursor, number.end) + ` [[LEXDOC:${entry.attachment.documentId}:${entry.chunk.index}:u${number.value}]]`;
+      localCursor = number.end;
+      linked += 1;
+    }
+    if (!local) continue;
+    output += text.slice(cursor, match.index) + local + match[0].slice(localCursor);
+    cursor = match.index + match[0].length;
+  }
+  return { text: output + text.slice(cursor), linked };
+}
+
+type Anchor = { label: string; key: string; locate: (text: string) => { start: number; end: number } | undefined };
+
+const MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"];
+const MONEY = /(?<![\p{L}\d,.])\d{1,3}(?:[ .  ]\d{3})*(?:,\d{1,2})?\s*(?:zł|złotych|PLN)(?![\p{L}])/gu;
+const DATE = new RegExp(`(?<![\\d.])(\\d{1,2})(?:\\.(\\d{1,2})\\.|\\s+(${MONTHS.join("|")})\\s+)(\\d{4})(?!\\d)`, "giu");
+
+function moneyKey(text: string): string {
+  return text.replace(/\s*(?:zł|złotych|PLN)$/u, "").replace(/[ .  ]/gu, "").replace(/,0+$/u, "");
+}
+function dateKey(match: RegExpExecArray): string {
+  const month = match[2] ? Number(match[2]) : MONTHS.indexOf(match[3]!.toLocaleLowerCase("pl")) + 1;
+  return `${match[4]}-${String(month).padStart(2, "0")}-${match[1]!.padStart(2, "0")}`;
+}
+function firstMatching(pattern: RegExp, key: (match: RegExpExecArray) => string, wanted: string) {
+  return (text: string) => {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) if (key(match) === wanted) return { start: match.index, end: match.index + match[0].length };
+    return undefined;
+  };
+}
+function phrase(pattern: RegExp) {
+  return (text: string) => {
+    const match = pattern.exec(text);
+    if (!match) return undefined;
+    // The line that holds it: "Załącznik nr 3 – umowa najmu z 1.02.2024 r."
+    const start = text.lastIndexOf("\n", match.index) + 1;
+    const lineEnd = text.indexOf("\n", match.index + match[0].length);
+    return { start, end: Math.min(lineEnd < 0 ? text.length : lineEnd, start + 400) };
+  };
+}
+
+// What the answer takes from the case documents besides quotes and points (user report
+// 2026-11-06: "powołanie się na dowód, pismo przeciwnika czy inne dokumenty" showed no place):
+// "§ 4" of a contract or rules, "załącznik nr 3", "dowód nr 2", an amount ("60 000 zł") and a
+// date ("3 grudnia 2024 r."). Linked when exactly one case document has it; a statute's "§"
+// and values no document holds stay as they are.
+function linkDocumentAnchors(text: string, entries: ChunkEntry[]): { text: string; list: Anchor[] } {
+  const list: Anchor[] = [];
+  if (!entries.length || /^\s*[{[]/u.test(text)) return { text, list };
+  const candidates: Array<{ end: number; anchor: Anchor }> = [];
+  const add = (end: number, anchor: Anchor) => candidates.push({ end, anchor });
+  for (const match of text.matchAll(/(?<![\p{L}])§\s*(\d{1,3})(?!\s*(?:ust|pkt)\.?\s*\d)(?![\d])/gu)) {
+    const before = text.slice(Math.max(0, match.index! - 40), match.index!);
+    if (/\bart\.\s*\d+[\p{L}\d^¹²³⁴⁵⁶⁷⁸⁹⁰]*\s*$/u.test(before)) continue;
+    const after = text.slice(match.index! + match[0].length, match.index! + match[0].length + 25);
+    if (/^\s*(?:ust\.|pkt|K[A-Z]{1,3}\b|k\.[a-z]|ustaw|rozporządz|regulaminu\s+(?:urzędowania|sądów))/u.test(after)) continue;
+    const unit = match[1]!;
+    add(match.index! + match[0].length, { label: `§ ${unit}`, key: `§${unit}`, locate: phrase(new RegExp(`(?:^|\\n)[ \\t]*§[ \\t]*${unit}(?!\\d)`, "u")) });
+  }
+  for (const match of text.matchAll(/(?<![\p{L}])(załącznik\p{L}*|dowod\p{L}*|dowód)\s+(?:nr|numer)\s*(\d{1,3})(?!\d)/giu)) {
+    const kind = /^za/iu.test(match[1]!) ? "Załącznik" : "Dowód";
+    add(match.index! + match[0].length, { label: `${kind.toLowerCase()} nr ${match[2]}`, key: `${kind}${match[2]}`, locate: phrase(new RegExp(`(?<![\\p{L}])${kind === "Załącznik" ? "załącznik\\p{L}*" : "dow[óo]d\\p{L}*"}\\s+(?:nr|numer)\\s*${match[2]}(?!\\d)`, "iu")) });
+  }
+  for (const match of text.matchAll(MONEY)) {
+    const key = moneyKey(match[0]);
+    add(match.index! + match[0].length, { label: match[0].replace(/\s+/gu, " "), key: `zł${key}`, locate: firstMatching(MONEY, (found) => moneyKey(found[0]), key) });
+  }
+  const dates = new RegExp(DATE.source, DATE.flags);
+  let date: RegExpExecArray | null;
+  while ((date = dates.exec(text)) !== null) {
+    const key = dateKey(date);
+    add(date.index + date[0].length, { label: date[0], key: `d${key}`, locate: firstMatching(DATE, dateKey, key) });
+  }
+  // A quote is linked as a quote (linkUnmarkedQuotes, the model's marker): nothing inside it twice.
+  const quotes = [...text.matchAll(/„[^„”]*”|“[^“”]*”/gu)].map((quote) => ({ start: quote.index!, end: quote.index! + quote[0].length }));
+  const inQuote = (end: number) => quotes.some((quote) => end > quote.start && end <= quote.end);
+  candidates.sort((left, right) => left.end - right.end);
+  const owners = new Map<string, ChunkEntry | null>();
+  const owner = (anchor: Anchor): ChunkEntry | null => {
+    if (!owners.has(anchor.key)) {
+      const found = entries.filter((entry) => anchor.locate(entry.chunk.text));
+      owners.set(anchor.key, new Set(found.map((entry) => entry.attachment.documentId)).size === 1 ? found[0]! : null);
+    }
+    return owners.get(anchor.key)!;
+  };
+  let output = "";
+  let cursor = 0;
+  let paragraphStart = -2;
+  const seen = new Set<string>();
+  for (const { end, anchor } of candidates) {
+    if (end < cursor || inQuote(end)) continue;
+    const paragraph = text.lastIndexOf("\n\n", end);
+    if (paragraph !== paragraphStart) {
+      paragraphStart = paragraph;
+      seen.clear();
+    }
+    if (seen.has(anchor.key) || /^\s*\[\[LEXDOC/u.test(text.slice(end, end + 12))) continue;
+    // Inside a verification marker or a link ("[VER: …, 2026-10-25]") a date is no anchor.
+    const lineStart = text.lastIndexOf("\n", end) + 1;
+    const line = text.slice(lineStart, end);
+    if (/\[(?:VER|NIEWERYFIKOWANE)[^\]]*$|\]\([^)]*$/u.test(line)) continue;
+    const entry = owner(anchor);
+    if (!entry) continue;
+    seen.add(anchor.key);
+    output += text.slice(cursor, end) + ` [[LEXDOC:${entry.attachment.documentId}:${entry.chunk.index}:a${list.length}]]`;
+    list.push(anchor);
+    cursor = end;
+  }
+  return { text: output + text.slice(cursor), list };
+}
+
 // Quotes without a marker: linked when found in a case document; flagged when attributed to
 // a document yet found neither there nor in the thread or the case law read in this turn.
 function linkUnmarkedQuotes(
@@ -321,6 +497,19 @@ export function documentCitationSystemPrompt(
   ].join("\n");
 }
 
+// Which document a point or an amount is in, by its recognised kind ("porozumienie",
+// "wezwanie"): a file name may carry personal data and is not sent.
+const documentNames = new WeakMap<SessionDocumentAttachment, string>();
+function documentName(attachment: SessionDocumentAttachment): string {
+  let name = documentNames.get(attachment);
+  if (!name) {
+    const kind = classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 6_000) });
+    name = kind.category === "INNE" ? "dokument" : kind.label.split(/\s*[/(]/u)[0]!.trim();
+    documentNames.set(attachment, name);
+  }
+  return name;
+}
+
 export function processDocumentCitationMarkers(
   modelText: string,
   attachments: SessionDocumentAttachment[],
@@ -341,7 +530,9 @@ export function processDocumentCitationMarkers(
   }
   const entries = [...chunks.values()];
   const linked = linkUnmarkedQuotes(linkCaseMaterialSignatures(modelText, entries), entries, options.otherTexts ?? []);
-  const text = linked.text;
+  const units = linkDocumentUnits(linked.text, entries);
+  const anchors = linkDocumentAnchors(units.text, entries);
+  const text = anchors.text;
   let mismatched = 0;
 
   const citations: PublicDocumentCitation[] = [];
@@ -364,9 +555,15 @@ export function processDocumentCitationMarkers(
 
     const citationId = `docref_${citations.length + 1}`;
     const marker = `[[LEXDOCREF:${citationId}]]`;
-    const quote = quoteBefore(text, match.index);
+    const unit = match[3] === "u" ? Number(match[4]) : undefined;
+    const anchor = match[3] === "a" ? anchors.list[Number(match[4])] : undefined;
+    const quote = unit === undefined && !anchor ? quoteBefore(text, match.index) : undefined;
     let resolved = cited;
-    let location = locateQuote(cited.chunk.text, quote);
+    let location = unit !== undefined
+      ? unitLocation(cited.chunk.text, unit)
+      : anchor
+        ? anchor.locate(cited.chunk.text)
+        : locateQuote(cited.chunk.text, quote);
     if (quote && !location) {
       // Cited the wrong chunk: the link goes where the words actually are.
       const elsewhere = findQuoteChunk(entries, quote, documentId);
@@ -395,7 +592,11 @@ export function processDocumentCitationMarkers(
     const citation: PublicDocumentCitation = {
       citationId,
       marker,
-      label: `Dokument ${citations.length + 1}, ${pageLabel}`,
+      label: unit !== undefined
+        ? `${documentName(resolved.attachment)}, pkt ${unit}, ${pageLabel}`
+        : anchor
+          ? `${documentName(resolved.attachment)}, ${anchor.label}, ${pageLabel}`
+          : `Dokument ${citations.length + 1}, ${pageLabel}`,
       ...(resolved.attachment.caseId
         ? { caseId: resolved.attachment.caseId }
         : {}),
@@ -424,7 +625,7 @@ export function processDocumentCitationMarkers(
     citations,
     rejectedMarkers,
     quoteFindings: {
-      autoLinked: linked.autoLinked,
+      autoLinked: linked.autoLinked + units.linked + anchors.list.length,
       mismatched,
       unsourced: linked.unsourced
     }

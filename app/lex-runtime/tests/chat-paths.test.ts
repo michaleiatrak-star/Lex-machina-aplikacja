@@ -42,6 +42,8 @@ type Call = {
   last: string;
 };
 const calls: Call[] = [];
+// Texts the personal-data recognizer was run on.
+const recognized: string[] = [];
 let app: express.Express;
 let authorization = "";
 let root = "";
@@ -129,7 +131,7 @@ beforeAll(async () => {
       courtAnalysisWorkflowStore: workspace,
       orderedCaseWorkflowStore: workspace,
       secureCaseArtifactStore: new SecureCaseArtifactStore({ rootDir: root }),
-      sessionExecutor: new SafeSessionExecutor(registry, new ProviderGateway(providers))
+      sessionExecutor: new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, undefined, { recognize: async (text: string) => { recognized.push(text); return []; } } as never)
     } as never)
   );
   const boot = await request(app).post("/api/auth/bootstrap").send({ loginName: "chat-paths", displayName: "Owner", password: "Chat paths strong password 2026" });
@@ -193,6 +195,22 @@ describe("chat paths over HTTP", () => {
     expect(local.status).toBe(200);
     expect(local.calls[0]!.systemPrompt.startsWith(ROUTER)).toBe(true);
     expect(local.calls.at(-1)!.systemPrompt.length).toBeLessThan(20_000);
+  }, 120_000);
+
+  it("personal data of a turn is recognized once, also with a local model's routing pre-pass", async () => {
+    const history = "Użytkownik: Sąsiad Jan Kowalski zalał mi mieszkanie w Krakowie.\n\nAsystent: Przysługuje odszkodowanie z art. 415 KC.\n\nUżytkownik: ";
+    for (const [model, provider, question] of [
+      ["claude-sim", "anthropic", "A jaki jest termin przedawnienia roszczenia?"],
+      ["local/bielik-11b-v3-q4km", "openai", "Czy mogę żądać odsetek od tej kwoty?"]
+    ] as const) {
+      recognized.length = 0;
+      const result = await turn({ query: envelope(`${history}${question}`), provider, model, primarySkill: "AUTO", mode: "PRAWNIK" });
+      expect(result.calls.length, model).toBeGreaterThan(0);
+      // Before: twice with history (the assistant's example data, the anonymization), three
+      // times with a local model (its routing pre-pass too).
+      expect(recognized, model).toHaveLength(1);
+      expect(recognized[0], model).not.toContain("__LEX_SKILLS_V1__");
+    }
   }, 120_000);
 
   it("a long conversation: the runtime's own time stays small", async () => {

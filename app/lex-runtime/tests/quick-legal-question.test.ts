@@ -111,6 +111,28 @@ describe("local reasoning is never shown", () => {
     expect(stripLocalReasoning(leaked)).toBe("Informacja o kwalifikacji kradzieży nie pochodzi z pamięci modelu.");
     expect(stripLocalReasoning("This whole answer is English and there is nothing else to show here at all.")).toContain("English");
   });
+
+  it("Bielik's reasoning with Polish terms inside, one sentence per line (user report 2026-11-06)", async () => {
+    const { stripLocalReasoning, localDraftForwarder } = await import("../src/providers/ai-sdk-adapter.js");
+    const leaked = [
+      "Got it, let's tackle this question. The user is asking if the employment termination agreement (porozumienie o rozwiązaniu umowy o pracę) is internally inconsistent.",
+      "From the document, the agreement includes a non-competition clause (pkt 11), confidentiality obligations (pkt 6-7), and high penalty clauses (5,000 zł and 20,000 zł).",
+      "* Punkt 5 imposes a 5,000 zł fine for breaching confidentiality.",
+      "So, the answer is that the agreement isn't internally inconsistent.",
+      "Odpowiedź na pytanie użytkownika:",
+      "Porozumienie jest wewnętrznie sprzeczne: pkt 10 znosi roszczenie pracownika z pkt 5."
+    ].join("\n");
+    expect(stripLocalReasoning(leaked)).toBe("Porozumienie jest wewnętrznie sprzeczne: pkt 10 znosi roszczenie pracownika z pkt 5.");
+    const polish = "Analiza klauzul z porozumienia (pkt 2, 5, 10):\n\nPunkt 5 nakłada karę 5 000 zł na każdą ze stron.";
+    expect(stripLocalReasoning(polish)).toBe(polish);
+    // The live draft never shows the reasoning either.
+    const shown: string[] = [];
+    const draft = localDraftForwarder((text) => shown.push(text));
+    for (const piece of leaked.match(/[\s\S]{1,23}/gu)!) draft.push(piece);
+    draft.finish(leaked);
+    expect(shown.join("")).not.toMatch(/Got it|The user is asking|internally inconsistent/u);
+    expect(shown.join("")).toContain("Porozumienie jest wewnętrznie sprzeczne");
+  });
 });
 
 describe("HARD GATE finalization marking", () => {

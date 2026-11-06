@@ -21,6 +21,7 @@ import {
   SafeSessionExecutor,
   SESSION_EXECUTION_INTERNAL
 } from "../src/session-executor.js";
+import { FIXTURE_JURISDICTION, writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR =
@@ -31,6 +32,11 @@ function write(
   relative: string,
   content = "# fixture\n"
 ): void {
+  // JUR:<key>: the module the jurisdiction manifest addresses (as prawo-polskie-v2 in the corpus).
+  if (relative.startsWith("JUR:")) {
+    writeJurisdictionManifest(root);
+    relative = FIXTURE_JURISDICTION[relative]!;
+  }
   const target =
     path.join(
       root,
@@ -101,7 +107,7 @@ function fixture():
 
   write(
     root,
-    "shared/PRAWO-HARDGATE.md"
+    "JUR:weryfikacja-przepisow-kanon"
   );
   write(
     root,
@@ -120,7 +126,7 @@ function fixture():
   for (
     const resource
     of [
-      "shared/NAZEWNICTWO-STRON.md",
+      "JUR:nazewnictwo-stron",
       "pisma-proste-v2/references/M1-zasady.md",
       "pisma-proste-v2/references/M2-intake.md",
       "pisma-proste-v2/references/M4-struktura.md",

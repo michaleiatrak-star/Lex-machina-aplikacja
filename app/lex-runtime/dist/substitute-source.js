@@ -1,7 +1,7 @@
 import { htmlToText } from "./core-law-index.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
 // Źródła zastępcze przy BRAKU-AKTU w RZĘDZIE 1 (Sejm ELI nie działa), wg kanonu
-// E-1…E-5 (shared/HIERARCHIA-ZRODEL.md) i 🟨 KOTWICA URZĘDOWA (PRAWO-HARDGATE-BLOKADA):
+// E-1…E-5 (JUR:hierarchia-zrodel) i 🟨 KOTWICA URZĘDOWA (PRAWO-HARDGATE-BLOKADA):
 //   E-3  RZĄD 2A (urzędowe bazy; LEX/Legalis przy dostępie) -> ✅ [VER: źródło, data]
 //   E-4  RZĄD 2B: dwa niezależne portale, zgodne, ze znacznikiem t.j. zgodnym z K-1
 //        -> 🟨 [KOTWICA-URZĘDOWA: …] + 📚 [TREŚĆ: RZĄD 2B — …]

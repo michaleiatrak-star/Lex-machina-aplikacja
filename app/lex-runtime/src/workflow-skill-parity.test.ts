@@ -67,6 +67,8 @@ function read(
   root: string,
   relative: string
 ): string {
+  // JUR:<key>: the module of the active jurisdiction's manifest (the registry's resolution).
+  if (relative.startsWith("JUR:")) relative = new LexSkillRegistry(root).jurisdictionModules().get(relative) ?? relative;
   return fs.readFileSync(
     path.join(
       root,

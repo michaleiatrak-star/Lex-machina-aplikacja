@@ -29,7 +29,7 @@ describe("a delivered contract-like document is assessed as a whole", () => {
   it("the section the runtime loads exists in analizator-umow-v1 and names every pattern", () => {
     const section = markdownSection(readFileSync(join(CORPUS, "analizator-umow-v1/SKILL.md"), "utf8"), "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)");
     expect(section).toContain("CAL-2");
-    for (const pattern of ["a) ZRZECZENIE", "b) PODWÓJNA SANKCJA", "c) ASYMETRIA", "h) REGULAMIN"]) expect(section).toContain(pattern);
+    for (const pattern of ["a) ZRZECZENIE", "ZNOSI PRAWO", "PODWÓJNA SANKCJA", "ASYMETRIA", "h) regulamin", "bilans", "GRAF RELACJI"]) expect(section).toContain(pattern);
     expect(section).toContain("Relacje między postanowieniami");
     expect(section.length).toBeLessThan(6000);
   });

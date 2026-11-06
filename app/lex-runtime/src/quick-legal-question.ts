@@ -188,7 +188,9 @@ export const QUICK_LOCAL_TOOLS = new Set([
   "list_federated_legal_sources",
   "search_federated_legal_sources",
   "get_federated_legal_document",
-  "call_federated_legal_source"
+  "call_federated_legal_source",
+  "fetch_auxiliary_legal_source",
+  "web_search"
 ]);
 
 /**
