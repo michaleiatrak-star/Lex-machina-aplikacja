@@ -40,6 +40,7 @@ function publicUser(user) {
         loginName: user.loginName,
         displayName: user.displayName,
         appRole: user.appRole,
+        accountKind: user.accountKind ?? "PROFESSIONAL",
         status: user.status,
         passwordSetupPending: user.passwordSetupPending === true,
         createdAt: user.createdAt,
@@ -373,6 +374,7 @@ export class LocalAuthService {
                 normalizedLoginName,
                 displayName,
                 appRole: "USER",
+                accountKind: input.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL",
                 status: "ACTIVE",
                 createdAt: now,
                 updatedAt: now,
@@ -426,6 +428,22 @@ export class LocalAuthService {
         return this.store
             .listUsers()
             .map(publicUser);
+    }
+    /** Only the administrator sets an account's kind, as the other account settings. */
+    setAccountKind(actor, userId, accountKind) {
+        if (!/^user_[a-f0-9]{32}$/.test(userId) || !["PROFESSIONAL", "INDIVIDUAL"].includes(accountKind)) {
+            throw new AuthError("INVALID_USER_REQUEST", 400);
+        }
+        if (actor.user.appRole !== "ADMIN") {
+            throw new AuthError("AUTHORIZATION_DENIED", 403);
+        }
+        const target = this.store.getUserById(userId);
+        if (!target)
+            throw new AuthError("USER_NOT_FOUND", 404);
+        if ((target.accountKind ?? "PROFESSIONAL") === accountKind)
+            return publicUser(target);
+        this.store.setAccountKind(userId, accountKind, new Date(this.clock.now()).toISOString());
+        return publicUser(this.store.getUserById(userId));
     }
     setUserStatus(actor, userId, status) {
         if (actor.user.appRole !==

@@ -1898,7 +1898,8 @@ export function createLexHttpApp(options) {
                 .createUser(responseAuthContext(res), {
                 loginName,
                 displayName,
-                password
+                password,
+                ...(req.body?.accountKind === "INDIVIDUAL" ? { accountKind: "INDIVIDUAL" } : {})
             });
             res.status(201).json({
                 user
@@ -1943,6 +1944,26 @@ export function createLexHttpApp(options) {
                     error: "USER_STATUS_UPDATE_FAILED"
                 });
             }
+        }
+    });
+    // Account kind, set by the administrator (INDIVIDUAL: chat only).
+    app.patch("/api/admin/users/:userId/account-kind", (req, res) => {
+        if (!options.authService) {
+            res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+            return;
+        }
+        const accountKind = req.body?.accountKind === "INDIVIDUAL" || req.body?.accountKind === "PROFESSIONAL" ? req.body.accountKind : null;
+        if (!accountKind) {
+            res.status(400).json({ error: "INVALID_USER_REQUEST" });
+            return;
+        }
+        try {
+            const user = options.authService.setAccountKind(responseAuthContext(res), String(req.params.userId ?? "").trim(), accountKind);
+            res.json({ user });
+        }
+        catch (error) {
+            if (!sendAuthError(res, error))
+                res.status(500).json({ error: "USER_UPDATE_FAILED" });
         }
     });
     app.delete("/api/admin/users/:userId", (req, res) => {

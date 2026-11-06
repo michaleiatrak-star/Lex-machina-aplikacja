@@ -349,6 +349,20 @@ export class LocalAuthStore {
       );
     }
 
+    if (
+      !userColumns.some(
+        (column) =>
+          column.name ===
+            "account_kind"
+      )
+    ) {
+      this.db.exec(
+        "ALTER TABLE users " +
+        "ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'PROFESSIONAL' " +
+        "CHECK (account_kind IN ('PROFESSIONAL','INDIVIDUAL'))"
+      );
+    }
+
     const caseColumns =
       this.db.prepare(
         "PRAGMA table_info(cases)"
@@ -575,6 +589,7 @@ export class LocalAuthStore {
         normalized_login_name,
         display_name,
         app_role,
+        account_kind,
         status,
         password_setup_pending,
         created_at,
@@ -594,7 +609,7 @@ export class LocalAuthStore {
         umk_wrap_tag,
         umk_key_version
       ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,
+        ?,?,?,?,?,?,?,?,?,?,?,?,
         ?,?,?,?,?,?,?,
         ?,?,?,?,?
       )
@@ -604,6 +619,7 @@ export class LocalAuthStore {
       user.normalizedLoginName,
       user.displayName,
       user.appRole,
+      user.accountKind ?? "PROFESSIONAL",
       user.status,
       user.passwordSetupPending
         ? 1
@@ -714,6 +730,7 @@ export class LocalAuthStore {
         "display_name"
       ),
       appRole: role,
+      accountKind: row.account_kind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL",
       status,
       passwordSetupPending:
         numberValue(
@@ -762,6 +779,19 @@ export class LocalAuthStore {
         "umk_key_version"
       )
     };
+  }
+
+  setAccountKind(
+    userId: string,
+    accountKind: "PROFESSIONAL" | "INDIVIDUAL",
+    at: string
+  ): void {
+    this.db.prepare(`
+      UPDATE users
+      SET account_kind = ?,
+          updated_at = ?
+      WHERE user_id = ?
+    `).run(accountKind, at, userId);
   }
 
   updateLastLogin(

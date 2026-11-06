@@ -230,6 +230,12 @@ export class LocalAuthStore {
                 "ADD COLUMN password_setup_pending INTEGER NOT NULL DEFAULT 0 " +
                 "CHECK (password_setup_pending IN (0,1))");
         }
+        if (!userColumns.some((column) => column.name ===
+            "account_kind")) {
+            this.db.exec("ALTER TABLE users " +
+                "ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'PROFESSIONAL' " +
+                "CHECK (account_kind IN ('PROFESSIONAL','INDIVIDUAL'))");
+        }
         const caseColumns = this.db.prepare("PRAGMA table_info(cases)").all();
         if (!caseColumns.some((column) => column.name ===
             "archived_at")) {
@@ -371,6 +377,7 @@ export class LocalAuthStore {
         normalized_login_name,
         display_name,
         app_role,
+        account_kind,
         status,
         password_setup_pending,
         created_at,
@@ -390,11 +397,11 @@ export class LocalAuthStore {
         umk_wrap_tag,
         umk_key_version
       ) VALUES (
-        ?,?,?,?,?,?,?,?,?,?,?,
+        ?,?,?,?,?,?,?,?,?,?,?,?,
         ?,?,?,?,?,?,?,
         ?,?,?,?,?
       )
-    `).run(user.userId, user.loginName, user.normalizedLoginName, user.displayName, user.appRole, user.status, user.passwordSetupPending
+    `).run(user.userId, user.loginName, user.normalizedLoginName, user.displayName, user.appRole, user.accountKind ?? "PROFESSIONAL", user.status, user.passwordSetupPending
             ? 1
             : 0, user.createdAt, user.updatedAt, user.lastLoginAt ?? null, user.authEpoch, user.kdf.algorithm, user.kdf.memoryKiB, user.kdf.iterations, user.kdf.parallelism, user.kdf.keyLength, user.kdf.version, user.kdfSalt, "AES-256-GCM", user.umkWrapNonce, user.umkWrapCiphertext, user.umkWrapTag, user.umkKeyVersion);
     }
@@ -437,6 +444,7 @@ export class LocalAuthStore {
             normalizedLoginName: textValue(row.normalized_login_name, "normalized_login_name"),
             displayName: textValue(row.display_name, "display_name"),
             appRole: role,
+            accountKind: row.account_kind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL",
             status,
             passwordSetupPending: numberValue(row.password_setup_pending, "password_setup_pending") === 1,
             createdAt: textValue(row.created_at, "created_at"),
@@ -454,6 +462,14 @@ export class LocalAuthStore {
             umkWrapTag: bufferValue(row.umk_wrap_tag, "umk_wrap_tag"),
             umkKeyVersion: numberValue(row.umk_key_version, "umk_key_version")
         };
+    }
+    setAccountKind(userId, accountKind, at) {
+        this.db.prepare(`
+      UPDATE users
+      SET account_kind = ?,
+          updated_at = ?
+      WHERE user_id = ?
+    `).run(accountKind, at, userId);
     }
     updateLastLogin(userId, at) {
         this.db.prepare(`

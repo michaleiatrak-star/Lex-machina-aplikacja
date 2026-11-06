@@ -58,6 +58,7 @@
 }
 
 .matter-thread-list,
+.conversation-list,
 .case-switcher {
   display: grid;
   gap: 9px;
@@ -3845,4 +3846,49 @@ mark.restored {
 .court-picker-empty {
   color: var(--lm-t11);
   cursor: default;
+}
+
+/* Individual account: the conversations instead of the case switcher. */
+.conversation-list ul {
+  display: grid;
+  gap: 4px;
+  max-height: 50vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.conversation-item:hover,
+.conversation-item.selected {
+  background: rgb(var(--lm-o1-rgb) / 0.08);
+}
+
+.conversation-item.selected {
+  font-weight: 600;
+}
+
+.admin-user-kind {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
 }

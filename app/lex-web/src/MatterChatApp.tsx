@@ -137,6 +137,7 @@ import {
   resetCaseWorkflow,
   type ContractAnalysisMode
 } from "./api.js";
+import { conversationTitle } from "./conversation-title.js";
 import { noModelAvailable } from "./model-availability.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
@@ -310,6 +311,13 @@ const WELCOME: CaseChatMessage = {
   role: "system",
   content:
     "Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze."
+};
+
+const WELCOME_INDIVIDUAL: CaseChatMessage = {
+  id: "welcome",
+  role: "system",
+  content:
+    "Opisz swoją sprawę albo zadaj pytanie prawne. Możesz dołączyć pismo lub zdjęcie dokumentu. Rozmowa dostanie nazwę od Twojego pierwszego pytania."
 };
 
 const PROVIDERS: Array<{
@@ -1789,6 +1797,15 @@ export default function MatterChatApp({
     workMode,
     setWorkMode
   ] = useState<ChatWorkMode>("AUTO");
+  // Account kind (user request 2026-11-06): an individual user has the chat in the automatic
+  // mode only, conversations named from the question instead of cases, no firm tools.
+  // Set by the administrator (Ustawienia > Użytkownicy), at creation or later.
+  const individual = user.accountKind === "INDIVIDUAL";
+  useEffect(() => {
+    if (!individual) return;
+    if (workMode !== "AUTO") setWorkMode("AUTO");
+    if (deterministicAction) setDeterministicAction("");
+  }, [individual, workMode, deterministicAction]);
   const [caseTypeSkills, setCaseTypeSkills] = useState<string[]>([]);
   // null = every DR module is selected. Kept as null rather than a filled list
   // so the default sends no restriction at all and routing stays unchanged
@@ -1856,7 +1873,7 @@ export default function MatterChatApp({
     updateMessage,
     loading: threadLoading,
     error: threadError
-  } = useCaseThread(caseId, WELCOME);
+  } = useCaseThread(caseId, user.accountKind === "INDIVIDUAL" ? WELCOME_INDIVIDUAL : WELCOME);
 
   const [documentAttachments, setDocumentAttachments] = useState<
     DocumentAttachmentSelection[]
@@ -1898,6 +1915,14 @@ export default function MatterChatApp({
     () => cases.filter((item) => item.caseKind === "MATTER"),
     [cases]
   );
+  // Individual: the conversations, newest first; only the chat and the settings are tabs.
+  const conversations = useMemo(
+    () => matterCases.filter((item) => !item.archivedAt).sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
+    [matterCases]
+  );
+  useEffect(() => {
+    if (individual && activeTab !== "chat" && activeTab !== "settings") setActiveTab("chat");
+  }, [individual, activeTab]);
   // Sidebar case switcher: the current case, a search and the most recently changed cases.
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherQuery, setSwitcherQuery] = useState("");
@@ -2846,6 +2871,19 @@ export default function MatterChatApp({
     const label = DETERMINISTIC_ACTIONS.find((item) => item.id === action)?.label ?? action;
     selectDeterministicAction(action);
     setPendingSkillSwitch({ caseId: current.caseId, action, text: switchMessage(current.offer), label });
+  }
+
+  /** A new conversation (individual account): no case until the first question names it. */
+  function startNewConversation(): void {
+    if (caseBusy || executing) return;
+    setPendingFirstMessage(null);
+    setDocumentStaging(createDocumentStagingState());
+    setExecutionError("");
+    setGeneratedDocumentMessage("");
+    setPendingFinalDocument(null);
+    setCaseFilePickerOpen(false);
+    setCaseId("");
+    setActiveTab("chat");
   }
 
   function switchToCase(
@@ -4828,7 +4866,7 @@ export default function MatterChatApp({
     if (!caseId || !selectedCase || selectedCase.archivedAt) {
       setQuery("");
       setPendingFirstMessage(plain);
-      await createLocalCase(newCaseName.trim() || suggestedCaseName(plain));
+      await createLocalCase(individual ? conversationTitle(plain) : newCaseName.trim() || suggestedCaseName(plain));
       return;
     }
     await executeMessage(plain);
@@ -5088,10 +5126,42 @@ export default function MatterChatApp({
           <span className="chat-brand-mark">LM</span>
           <div>
             <strong>Lex Machina</strong>
-            <small>1 wątek = 1 sprawa<InfoTip>Każdy wątek czatu to osobna sprawa z własnymi dokumentami, pamięcią i terminami.</InfoTip></small>
+            {individual ? (
+              <small>Rozmowy<InfoTip>Każda rozmowa ma własną historię i pliki; nazwę dostaje od pierwszego pytania.</InfoTip></small>
+            ) : (
+              <small>1 wątek = 1 sprawa<InfoTip>Każdy wątek czatu to osobna sprawa z własnymi dokumentami, pamięcią i terminami.</InfoTip></small>
+            )}
           </div>
         </div>
 
+        {individual ? (
+          <div className="conversation-list">
+            <div className="matter-thread-heading">
+              <strong>Rozmowy</strong>
+              <button type="button" disabled={caseBusy || executing} onClick={startNewConversation}>
+                + Nowa rozmowa
+              </button>
+            </div>
+            <ul aria-label="Rozmowy">
+              {conversations.map((item) => (
+                <li key={item.caseId}>
+                  <button
+                    type="button"
+                    className={item.caseId === caseId ? "conversation-item selected" : "conversation-item"}
+                    aria-current={item.caseId === caseId ? "true" : undefined}
+                    disabled={caseBusy || executing}
+                    onClick={() => switchToCase(item.caseId)}
+                  >
+                    {executingCaseId === item.caseId ? (
+                      <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                    ) : null}
+                    {item.displayName || "Rozmowa"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
         <div className="case-switcher" ref={switcherRef}>
           <div className="matter-thread-heading">
             <strong>Sprawa</strong>
@@ -5272,13 +5342,16 @@ export default function MatterChatApp({
             </div>
           ) : null}
         </div>
+        )}
 
         <nav className="chat-tabs" aria-label="Sekcje aplikacji">
-          {([
-            ["Ta sprawa", [["chat", "Rozmowa"], ["case", "Akta i dokumenty"]]],
-            ["Kancelaria", [["home", "Start"], ["calendar", "Kalendarz"], ["firm", "Wzory i wiedza"], ["search", "Wyszukiwanie"], ["invoices", "Faktury"]]],
-            ["", [["settings", "Ustawienia"]]]
-          ] as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
+          {((individual
+            ? [["", [["chat", "Rozmowa"], ["settings", "Ustawienia"]]]]
+            : [
+                ["Ta sprawa", [["chat", "Rozmowa"], ["case", "Akta i dokumenty"]]],
+                ["Kancelaria", [["home", "Start"], ["calendar", "Kalendarz"], ["firm", "Wzory i wiedza"], ["search", "Wyszukiwanie"], ["invoices", "Faktury"]]],
+                ["", [["settings", "Ustawienia"]]]
+              ]) as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
             <div key={group || "app"} className="chat-tab-group" role="group" aria-label={group || "Aplikacja"}>
               {group ? <small className="chat-tab-group-label">{group}</small> : null}
               {tabs.map(([id, label]) => (
@@ -5561,7 +5634,7 @@ export default function MatterChatApp({
           <div>
             <p className="eyebrow">
               {activeTab === "chat" || activeTab === "case"
-                ? selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"
+                ? selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"
                 : "Cała kancelaria"}
             </p>
             <h1>
@@ -5971,7 +6044,7 @@ export default function MatterChatApp({
                 );
               }}
             />
-            {conversationIsNew ? (
+            {conversationIsNew && !individual ? (
               <section
                 className="chat-pipeline-picker"
                 aria-label="Tryb pracy dla nowej rozmowy"
@@ -6502,12 +6575,14 @@ export default function MatterChatApp({
                 </div>
               ) : null}
               <div className="chat-composer-meta">
-                <span>Sprawa: {selectedCase?.displayName || "utworzy się przy pierwszej wiadomości"}</span>
-                <span>
-                  Działanie: {selectedDeterministicAction
-                    ? selectedDeterministicAction.label
-                    : developerMode ? "AUTO · prawny router" : "automatycznie"}
-                </span>
+                <span>{individual ? "Rozmowa" : "Sprawa"}: {selectedCase?.displayName || (individual ? "nazwa z pierwszego pytania" : "utworzy się przy pierwszej wiadomości")}</span>
+                {individual ? null : (
+                  <span>
+                    Działanie: {selectedDeterministicAction
+                      ? selectedDeterministicAction.label
+                      : developerMode ? "AUTO · prawny router" : "automatycznie"}
+                  </span>
+                )}
                 <span>Załączniki: {selectedFileCount}</span>
                 {directImages.map((image) => (
                   <span key={image.id} className="chat-direct-image" title="Wysyłany w oryginale: bez OCR i bez anonimizacji">
@@ -6627,7 +6702,9 @@ export default function MatterChatApp({
                     ? "Sprawa archiwalna jest tylko do odczytu."
                     : workMode === "MECHANICAL" && selectedDeterministicAction
                       ? selectedDeterministicAction.question
-                      : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
+                      : individual
+                        ? "Opisz swoją sprawę albo zadaj pytanie…"
+                        : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
                 }
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -7356,7 +7433,7 @@ export default function MatterChatApp({
             {/* Case overview first, as in the UI demo: documents, the next date, the conversation. */}
             <article className="chat-card matter-overview">
               <p className="eyebrow">Przegląd sprawy</p>
-              <h2>{selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"}</h2>
+              <h2>{selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"}</h2>
               {selectedCase ? (
                 <div className="matter-case-meta">
                   <span>ID katalogu: {selectedCase.caseId}</span>
