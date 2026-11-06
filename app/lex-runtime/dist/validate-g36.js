@@ -131,6 +131,9 @@ try {
     makeSkill("prawo-polskie-v2", "# prawo");
     makeSkill(DR, "# DR\nview modules/mod-KC.md");
     fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# G36 HARD GATE CONTENT\n");
+    // The HARD GATE is national law named by key: the jurisdiction manifest addresses it.
+    fs.mkdirSync(path.join(root, "prawo-polskie-v2"), { recursive: true });
+    fs.writeFileSync(path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"), "| `JUR:weryfikacja-przepisow-kanon` | `shared/PRAWO-HARDGATE.md` | test |\n");
     const routerRefs = path.join(root, "prawny-router-v3", "references");
     fs.mkdirSync(routerRefs, { recursive: true });
     fs.writeFileSync(path.join(routerRefs, "KROK0A-anonimizer.md"), "# G36 ANON CONTENT\n");

@@ -55,6 +55,11 @@ function makeRegistry(): {
     ),
     "# hard gate\n"
   );
+  // The HARD GATE is national law named by key: the jurisdiction manifest addresses it.
+  fs.writeFileSync(
+    path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"),
+    "| `JUR:weryfikacja-przepisow-kanon` | `shared/PRAWO-HARDGATE.md` | test |\n"
+  );
 
   const router = path.join(
     root,

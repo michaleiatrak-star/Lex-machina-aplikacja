@@ -260,6 +260,12 @@ try {
     ),
     "# G36 HARD GATE CONTENT\n"
   );
+  // The HARD GATE is national law named by key: the jurisdiction manifest addresses it.
+  fs.mkdirSync(path.join(root, "prawo-polskie-v2"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"),
+    "| `JUR:weryfikacja-przepisow-kanon` | `shared/PRAWO-HARDGATE.md` | test |\n"
+  );
 
   const routerRefs =
     path.join(
