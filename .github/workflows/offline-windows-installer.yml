@@ -424,6 +424,20 @@ jobs:
             throw "ACCEPTANCE_FOREIGN_PYTHON_HASH_MISMATCH expected=$($python.sha256) actual=$actualHash"
           }
 
+          # The offline build installs this very version per-user to make the wheels: the
+          # registration is already there (a second install of it ends in MSI 1603), and it is
+          # the state this step reproduces.
+          $short = ($python.version -split "\.")[0..1] -join "."
+          $registered = Get-ItemProperty -Path "HKCU:\Software\Python\PythonCore\$short\InstallPath" -ErrorAction SilentlyContinue
+          if ($registered -and $registered.'(default)' -and (Test-Path -LiteralPath (Join-Path $registered.'(default)' "python.exe"))) {
+            $foreignExe = Join-Path $registered.'(default)' "python.exe"
+            $foreignVersion = (& $foreignExe --version 2>&1 | Select-Object -First 1).ToString().Trim()
+            if ($foreignVersion -ne "Python $($python.version)") {
+              throw "ACCEPTANCE_FOREIGN_PYTHON_VERSION_INVALID:$foreignVersion"
+            }
+            Write-Host "Pre-existing registered Python ready (registered by the build): $($registered.'(default)')"
+            exit 0
+          }
           $foreignRoot = Join-Path $env:RUNNER_TEMP ("Foreign Python " + $python.version)
           $foreignArgs = @(
             "/quiet",

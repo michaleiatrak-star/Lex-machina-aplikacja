@@ -8,6 +8,13 @@ import { SafeSessionExecutor } from "../src/session-executor.js";
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 
 describe("prompt modelu lokalnego (Bielik, Mistral)", () => {
+  it("the turn's question last, the whole-document check whole (Bielik, user report 2026-11-06)", () => {
+    const cal = "# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)\n" + "x ".repeat(900) + "\n  h) REGULAMIN / WZORZEC";
+    const compact = compactLocalPrompt(`# ZASADY\nzasady\n\n${cal}`, "a czy porozumienie samo w sobie nie jest wewnętrznie sprzeczne?");
+    expect(compact).toContain("h) REGULAMIN / WZORZEC");
+    expect(compact.trimEnd()).toMatch(/# PYTANIE TEJ TURY\n„a czy porozumienie samo w sobie nie jest wewnętrznie sprzeczne\?”[\s\S]*Nie powtarzaj poprzedniej odpowiedzi[\s\S]*$/u);
+  });
+
   it("zostają zasady, dziedzina, moduł (skrót ze ścieżką) i dane tury; odpada to, czego model lokalny nie wykonuje", () => {
     const full = [
       "[LEGENDA] [LMPII:D01:PERSON:0001] = osoba",

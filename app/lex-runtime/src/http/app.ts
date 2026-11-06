@@ -772,9 +772,14 @@ export type LexHttpAppOptions = {
 };
 
 /** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+// Lookups whose refusal is already in the answer (the provision or judgment marked ⚠️): a
+// local model asking for a provision that does not exist held every step of the workflow,
+// with a "powtórz etap" notice on each answer (Bielik, user report 2026-11-06).
+const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_law_library|verify_case_law)\b/u;
+
 export function blockedAuditSteps(result: SessionExecutionResponse): string[] {
   return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
-    .filter((event) => event.status === "BLOCKED")
+    .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
     .map((event) => String(event.target).slice(0, 120))
     .slice(0, 8);
 }

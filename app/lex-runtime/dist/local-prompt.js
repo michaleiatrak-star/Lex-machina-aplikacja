@@ -154,10 +154,24 @@ export function compactLocalPrompt(prompt, question = "") {
             out.push(shortened(domainRules(part), LOCAL_DOMAIN_MAX));
             continue;
         }
+        if (/^# MANDATORY PATH RESOURCE: analizator-umow-v1\/SKILL\.md — KONTROLA CAŁOŚCIOWA/u.test(head)) {
+            // The whole-document check of a delivered agreement, whole: cut at 1 200 characters it
+            // lost its patterns, and Bielik read pkt 5 and pkt 10 apart (user report 2026-11-06).
+            out.push(shortened(part, 5_000));
+            continue;
+        }
         // Everything else (the model's identity, the placeholder legend, a long letter's rule, a
         // checkpoint, the person-case protocol, the document policy): kept, long ones shortened.
         out.push(/DŁUGIE PISMO|\[LMPII:|\[PII:|CZEKAM NA ODPOWIEDŹ/u.test(part) ? part : shortened(part, LOCAL_SECTION_MAX));
     }
     flushModules();
+    const asked = question.trim();
+    if (asked) {
+        // Last in the prompt, where an 11B model still sees it: Bielik answered a follow-up
+        // ("a czy porozumienie nie jest wewnętrznie sprzeczne?") with the previous analysis again.
+        out.push("# PYTANIE TEJ TURY\n" +
+            `„${shortened(asked.replace(/\s+/gu, " "), 600)}”\n` +
+            "Zacznij od bezpośredniej odpowiedzi na to pytanie (pierwsze zdanie: odpowiedź, potem uzasadnienie z treści dokumentu). Nie powtarzaj poprzedniej odpowiedzi; gdy użytkownik wskazuje punkty, zestaw je ze sobą, a nie każdy osobno. Pisz wyłącznie po polsku, bez opisu własnego toku rozumowania.");
+    }
     return out.join("\n\n");
 }

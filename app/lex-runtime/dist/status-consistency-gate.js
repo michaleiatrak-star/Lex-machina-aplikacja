@@ -441,7 +441,9 @@ export function stripUnbackedVerificationMarkers(text, ledger) {
             removed += 1;
             return "";
         }));
-    return { text: removed > 0 ? lines.join("\n") : text, removed };
+    const stripped = removed > 0 ? lines.join("\n") : text;
+    // "✅ ✅ [VER: …]": a model's own ✅ before the marker it copied (user report 2026-11-06).
+    return { text: stripped.replace(/✅(?:[ \t]*✅)+/gu, "✅"), removed };
 }
 /**
  * A provision whose occurrences still carry both ✅ and ⚠️ after reconciliation, with no

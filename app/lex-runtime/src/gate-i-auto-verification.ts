@@ -631,8 +631,10 @@ export function applyAutomaticVerificationMarkers(
           }
           inserted +=
             missingMarkers.length;
+          // A bare ✅ the model left (its own marker, or the remainder of one stripped as
+          // unbacked) goes: the ledger's marker carries it ("✅ ✅ [VER: …]", user report 2026-11-06).
           return [
-            line.trimEnd(),
+            line.trimEnd().replace(/(?:\s*✅)+$/u, ""),
             ...missingMarkers
           ].join(" ");
         }
