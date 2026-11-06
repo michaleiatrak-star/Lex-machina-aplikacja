@@ -79,3 +79,12 @@ describe("prompt modelu lokalnego (Bielik, Mistral)", () => {
     expect(hosted).toContain("MULTI-SKILL ORCHESTRATION");
   }, 60_000);
 });
+
+describe("the map of sources by kind (comparison with the chat, 2026-11-06)", () => {
+  it("reaches a local model whole and names interpretations, authorities and the search engine's role", async () => {
+    const { SOURCES_BY_KIND } = await import("../src/legal-federation-tool-runtime.js");
+    const compact = compactLocalPrompt(`# FEDERATED LEGAL RESEARCH\n${"x ".repeat(2000)}\n\n${SOURCES_BY_KIND}`, "pytanie");
+    expect(compact).toContain(SOURCES_BY_KIND);
+    for (const item of ["verify_interpretation", "site:zus.pl", "site:uokik.gov.pl", "sp (Portal Orzeczeń)", "tylko trop", "nigdy wniosek „nie ma”"]) expect(SOURCES_BY_KIND).toContain(item);
+  });
+});

@@ -55,7 +55,7 @@ function shortened(text, max, rest) {
     return `${cut.slice(0, boundary > max * 0.5 ? boundary : max).trimEnd()}\n[…skrót${rest ? `; całość: read_legal_resource ${rest}` : ""}]`;
 }
 // Sections the application writes itself: the end of the preloaded modules' block.
-const APP_SECTION = /^# (?:ACTIVE |AKTA SPRAWY|BRZMIENIE PRZEPISÓW|CORE LEGAL|DETERMINISTIC|DOSTĘPNE SKILLE|FEDERATED|LEX MACHINA|LOCAL |LOKALNE TEKSTY|MAPA-AKTOW:|MAPA WIEDZY|MATERIAŁY KANCELARII|MODEL TEJ SESJI|MODUŁ AKTU|MULTI-SKILL|OBRAZY JAKO|RDZEŃ PRAWA|ROZPOZNANIE APLIKACJI|SEMANTIC CONTRACT|SKILL \(DIGEST\)|SKILLE PRAWNE|STRUCTURED REPORT|SĄD WŁAŚCIWY|GATE I|DR-\d{2}\b|KROK CZEKAJĄCY|DŁUGIE PISMO|ZASADY|KORPUS|JUŻ USTALONE)/u;
+const APP_SECTION = /^# (?:ACTIVE |AKTA SPRAWY|BRZMIENIE PRZEPISÓW|CORE LEGAL|DETERMINISTIC|DOSTĘPNE SKILLE|FEDERATED|LEX MACHINA|LOCAL |LOKALNE TEKSTY|MAPA-AKTOW:|MAPA WIEDZY|MATERIAŁY KANCELARII|MODEL TEJ SESJI|MODUŁ AKTU|MULTI-SKILL|OBRAZY JAKO|RDZEŃ PRAWA|ROZPOZNANIE APLIKACJI|SEMANTIC CONTRACT|SKILL \(DIGEST\)|SKILLE PRAWNE|STRUCTURED REPORT|SĄD WŁAŚCIWY|GATE I|DR-\d{2}\b|KROK CZEKAJĄCY|DŁUGIE PISMO|ZASADY|KORPUS|JUŻ USTALONE|ŹRÓDŁA WEDŁUG RODZAJU|GRAF RELACJI|PODMIOTY W REJESTRACH)/u;
 // A module of that block: its own header, or the criminal qualifier's nodes (kept whole).
 const MODULE_START = /^# (?:RUNTIME-PRELOADED SEMANTIC CONTEXT: |KWALIFIKATOR KARNOMATERIALNY)/u;
 /**
@@ -154,7 +154,7 @@ export function compactLocalPrompt(prompt, question = "") {
             out.push(shortened(domainRules(part), LOCAL_DOMAIN_MAX));
             continue;
         }
-        if (/^# (?:MANDATORY PATH RESOURCE: [^\n]+ — |GRAF RELACJI POSTANOWIEŃ)/u.test(head)) {
+        if (/^# (?:MANDATORY PATH RESOURCE: [^\n]+ — |GRAF RELACJI POSTANOWIEŃ|ŹRÓDŁA WEDŁUG RODZAJU|PODMIOTY W REJESTRACH)/u.test(head)) {
             // A skill section the application put in for this turn (the whole-document check, the
             // checklist of an opposing letter) and an agreement's relation graph, whole: cut at 1 200
             // characters they lost their patterns, and Bielik read pkt 5 and pkt 10 apart (2026-11-06).

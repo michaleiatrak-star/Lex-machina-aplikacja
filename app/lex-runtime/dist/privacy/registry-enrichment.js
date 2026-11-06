@@ -231,6 +231,8 @@ export class RegistryEnrichment {
     cache = new Map();
     // The latest lookups (no identifiers): which register answered and how many forms it gave.
     events = [];
+    // The register facts of the numbers looked up, by NIP and by KRS.
+    factsById = new Map();
     constructor(call, options = {}) {
         this.call = call;
         this.options = options;
@@ -243,6 +245,58 @@ export class RegistryEnrichment {
             if (!unique.has(`${form.kind}\u0000${form.text}`))
                 unique.set(`${form.kind}\u0000${form.text}`, form);
         return [...unique.values()];
+    }
+    /** Register facts of the firms whose NIP or KRS is among these values (as written in the documents). */
+    facts(values) {
+        const found = new Set();
+        for (const value of values) {
+            const digits = value.replace(/\D/gu, "");
+            const facts = this.factsById.get(digits) ?? this.factsById.get(digits.padStart(10, "0"));
+            if (facts)
+                found.add(facts);
+        }
+        return [...found];
+    }
+    remember(source, row) {
+        const result = row.result && typeof row.result === "object" ? row.result : null;
+        if (row.status !== "FOUND" || !result)
+            return;
+        const nip = text(result.nip)?.replace(/\D/gu, "");
+        const krs = text(result.krs)?.replace(/\D/gu, "") ?? (/KRS\s*(\d{10})/u.exec(text(result.identyfikator) ?? "")?.[1]);
+        const known = (nip && this.factsById.get(nip)) || (krs && this.factsById.get(krs)) || { checkedAt: new Date(this.now()).toISOString().slice(0, 10), sources: [] };
+        const next = {
+            ...known,
+            ...(nip ? { nip } : {}),
+            ...(krs ? { krs } : {}),
+            ...(text(result.tytul_lub_nazwa) ? { name: text(result.tytul_lub_nazwa) } : {}),
+            sources: [...new Set([...known.sources, source])]
+        };
+        if (source === "krs") {
+            if (text(result.rejestr))
+                next.register = text(result.rejestr);
+            if (text(result.status_rejestru))
+                next.registerStatus = text(result.status_rejestru);
+            if (text(result.forma_prawna))
+                next.legalForm = text(result.forma_prawna);
+            if (text(result.stan_z_dnia))
+                next.extractDate = text(result.stan_z_dnia);
+        }
+        if (source === "wl") {
+            if (text(result.status_vat))
+                next.vatStatus = text(result.status_vat);
+            if (text(result.data_rejestracji_vat))
+                next.vatRegistered = text(result.data_rejestracji_vat);
+            if (text(result.data_wykreslenia))
+                next.vatStruckOff = text(result.data_wykreslenia);
+            if (Array.isArray(result.rachunki))
+                next.accounts = result.rachunki.filter((item) => typeof item === "string");
+        }
+        if (nip)
+            this.factsById.set(nip, next);
+        if (krs)
+            this.factsById.set(krs, next);
+        if (this.factsById.size > 400)
+            this.factsById.delete(this.factsById.keys().next().value);
     }
     record(event) {
         this.events.push(event);
@@ -296,11 +350,13 @@ export class RegistryEnrichment {
     async resolve(source, id) {
         if (source === "krs") {
             const krs = await this.ask("krs", "krs_lookup", { numerKrs: id });
+            this.remember("krs", krs.row);
             const forms = [...krsForms(krs.row), ...(await this.board(id))];
             this.record({ source: "krs", status: krs.status === "UNAVAILABLE" ? "ERROR" : krs.status, forms: forms.length });
             return { forms, retry: this.retryAfter([krs]) };
         }
         const list = await this.ask("wl", "wl_sprawdz_nip", { nip: id });
+        this.remember("wl", list.row);
         const listForms = whiteListForms(list.row);
         this.record({ source: "wl", status: list.status === "UNAVAILABLE" ? "ERROR" : list.status, forms: listForms.length });
         // A company in KRS is fully described by the white list; a sole trader (or a NIP the
@@ -347,4 +403,27 @@ export function registryEnrichmentFor(runtime) {
     if (!runtime || /^(off|0|false)$/i.test(process.env.LEX_REGISTRY_ENRICHMENT?.trim() ?? ""))
         return undefined;
     return new RegistryEnrichment((request) => runtime.direct(request));
+}
+/** The facts as the analysis reads them, in plain text (the caller protects it like any text). */
+export function registryFactsText(facts) {
+    if (!facts.length)
+        return "";
+    const lines = [
+        "# PODMIOTY W REJESTRACH (aplikacja — odczyt z rejestrów, sprawdzone)",
+        "Dane pobrane przez aplikację z KRS i z białej listy VAT dla numerów z materiałów: traktuj jako sprawdzone (KROK 0D: ⬛ → ✅ dla tych pól, ze źródłem i datą). Reprezentacja i pełnomocnictwa: krs_reprezentacja.",
+    ];
+    for (const item of facts) {
+        const parts = [
+            item.name ? `${item.name}` : "podmiot",
+            item.krs ? `KRS ${item.krs}` : "",
+            item.nip ? `NIP ${item.nip}` : "",
+            item.legalForm ? `forma: ${item.legalForm.toLocaleLowerCase("pl")}` : "",
+            item.registerStatus ? `KRS: ${item.registerStatus}${item.extractDate ? ` (odpis aktualny, stan z ${item.extractDate})` : ""}` : "",
+            item.vatStatus ? `VAT: ${item.vatStatus}${item.vatRegistered ? ` od ${item.vatRegistered}` : ""}${item.vatStruckOff ? `, wykreślony ${item.vatStruckOff}` : ""}` : "",
+            item.accounts?.length ? `rachunki na białej liście: ${item.accounts.join(", ")}` : ""
+        ].filter(Boolean);
+        lines.push(`- ${parts.join("; ")} — źródła: ${item.sources.map((source) => (source === "krs" ? "KRS (api-krs.ms.gov.pl)" : "biała lista VAT (wl-api.mf.gov.pl)")).join(", ")}, odczyt ${item.checkedAt}.`);
+    }
+    lines.push("Rachunek podany w piśmie, którego nie ma na białej liście, wskaż wprost (płatność na rachunek spoza wykazu).");
+    return lines.join("\n");
 }

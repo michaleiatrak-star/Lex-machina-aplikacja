@@ -93,6 +93,7 @@ import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE
 import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
 import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
+import { registryFactsText } from "./privacy/registry-enrichment.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
@@ -729,6 +730,8 @@ restoreDocument) {
         const visible = raw.replace(DRAFT_PARTIAL_TOKEN_TAIL, "");
         onDraft(visible.replace(DRAFT_PII_TOKEN, (token, kind, sequence, requestedCase) => {
             const base = `[PII:${kind}:${sequence}]`;
+            if (process.env.LEX_DEBUG_DRAFT === "1" && !vault.hasToken(base))
+                process.stderr.write(`DRAFT_TOKEN_UNRESTORED:${token}:vault=${vault.snapshot().tokens.length}\n`);
             return vault.hasToken(base)
                 ? vault.restore(base, requestedCase ?? null).text
                 : token;
@@ -1561,6 +1564,27 @@ export class SafeSessionExecutor {
                         continue;
                     audit.record("gate", "CONTRACT_GRAPH", "OK", { documentId: document.documentId, nodes: graph.nodes.length, edges: graph.edges.length });
                     pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", `# GRAF RELACJI POSTANOWIEŃ: ${document.documentId}`));
+                }
+            }
+            // A firm named by its NIP or KRS in the material: what KRS and the VAT white list say
+            // about it (exists, not struck off, legal form, VAT status, its accounts), as a checked
+            // fact under the documents' tokens. The registers are the ones that answer for these
+            // numbers (the federation's rule); nothing else of the case goes out.
+            const registry = this.registryForms();
+            if (registry) {
+                const numbers = chatPrivacyVault
+                    .knownIdentifierValues()
+                    .filter((item) => item.kind === "NIP" || item.kind === "KRS")
+                    .map((item) => item.value)
+                    .slice(0, 6);
+                if (numbers.length) {
+                    await Promise.all(numbers.map((value) => registry.forms(value).catch(() => [])));
+                    const factsText = registryFactsText(registry.facts(numbers));
+                    if (factsText) {
+                        const protectedFacts = await chatPseudonymizer.pseudonymize(factsText);
+                        audit.record("gate", "REGISTRY_FACTS", "OK", { firms: registry.facts(numbers).length });
+                        pathSections.push(protectedFacts.text);
+                    }
                 }
             }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
