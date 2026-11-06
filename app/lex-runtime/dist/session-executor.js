@@ -3088,9 +3088,16 @@ export class SafeSessionExecutor {
             ...(reportQuestion ? { waitingForUser: true } : {}),
             toolEvents: reportAudit.length
         });
-        const finalizationText = reportBlueprint
+        const blueprintText = reportBlueprint
             ? blueprintFinalizationText(processedDocumentCitations.text, reportBlueprint.blueprint, ledger)
-            : processedDocumentCitations.text;
+            : null;
+        // A value of the report's plan without a source is marked as in the chat (⚠️), so the report is
+        // a draft with a warning instead of a blocked turn (live C09-062: a client report blocked for
+        // "84 dni" and invoice sums; user request 2026-11-06: block only as the last resort).
+        const blueprintCheck = blueprintText ? new FinalizationGate().evaluate(blueprintText, ledger) : null;
+        const finalizationText = blueprintText && blueprintCheck?.result === "BLOCKED"
+            ? addMissingVerificationMarkers(markUnverifiedReferences(blueprintText, blueprintCheck, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), blueprintCheck, verifiedLedgerMarkers(ledger))
+            : blueprintText ?? processedDocumentCitations.text;
         step("VERIFY", "przepisy, orzeczenia i cytaty w odpowiedzi");
         const finalization = this.finalizer.finalize({
             text: finalizationText,
