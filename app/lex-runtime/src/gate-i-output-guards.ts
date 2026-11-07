@@ -1,4 +1,5 @@
 import { ARTICLE_LEAD, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { domainSkillPrefix } from "./jurisdiction.js";
 
 export type DomainLockReport = {
   gate: "G39I_DOMAIN_LOCK";
@@ -53,9 +54,7 @@ export function evaluateDomainLock(args: {
   const criminalDomainLoaded =
     args.loadedSkills.some(
       (skill) =>
-        skill.startsWith(
-          "dr-03-"
-        )
+        skill.startsWith(`${domainSkillPrefix()}-03-`)
     );
   const criminalLegalReferences =
     unique(
