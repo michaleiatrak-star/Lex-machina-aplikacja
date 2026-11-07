@@ -438,3 +438,21 @@ describe("case law next to a provision (ACTIVATION-MATRIX: orzeczenia-sadowe-v2 
     expect(decision?.then ?? null).toBe(then);
   });
 });
+
+describe("a request with the document pasted after it (test przeglądu umowy 2026-11-07)", () => {
+  const matrix = parseActivationMatrix(fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8"));
+  const contract = [
+    "UMOWA NR 14/2026 O WYKONANIE I UTRZYMANIE SYSTEMU",
+    "§ 1. Wykonawca wykona System.",
+    "§ 4. Wady nieistotne nie uprawniają do odmowy odbioru. O tym, czy wada jest istotna, rozstrzyga Wykonawca.",
+    "§ 11. Wykonawca może wypowiedzieć umowę w każdym czasie z 7-dniowym okresem wypowiedzenia.",
+    "Spory rozstrzyga sąd właściwy dla siedziby Wykonawcy."
+  ].join("\n");
+
+  it.each([
+    `Przejrzyj umowę i wskaż ryzyka dla Zamawiającego.\n\nTreść umowy:\n\n${contract}`,
+    `Jestem prawnikiem Zamawiającego. Przejrzyj umowę i zaproponuj zmiany.\n\n${contract}`
+  ])("the contract's own sentences do not route to a letter: %#", (question) => {
+    expect(decideTask(routes, matrix, question)?.primary).toBe("analizator-umow-v1");
+  });
+});
