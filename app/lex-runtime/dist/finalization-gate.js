@@ -731,6 +731,10 @@ export class FinalizationGate {
                 ...statuteClaimsInLine(text)
             ];
             let claims = claimsOf(index + 1, lineText);
+            // Proposed or quoted contract wording ("> 1. … w terminie 10 dni roboczych …", test przeglądu
+            // umowy 2026-11-07): the parties' own terms, no claim about the law, unless it cites a provision.
+            if (claims.length === 0 && /^\s*>/u.test(lineText))
+                return;
             for (let above = index - 1; claims.length === 0 && above >= 0; above -= 1)
                 claims = claimsOf(above + 1, lines[above]);
             // Nagłówek lub wstęp nad przepisem ("## Termin przedawnienia: 2 lata"): przepisy całej odpowiedzi;
