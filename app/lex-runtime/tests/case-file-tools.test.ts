@@ -14,6 +14,7 @@ import {
   namespaceChunkTokens,
   namespaceDocumentAttachmentTokens
 } from "../src/session-executor.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
 const CASE = "case_0123456789abcdef0123456789abcdef";
@@ -35,6 +36,7 @@ function registry(): LexSkillRegistry {
   }
   fs.mkdirSync(path.join(root, "shared"), { recursive: true });
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+  writeJurisdictionManifest(root);
   fs.mkdirSync(path.join(root, "prawny-router-v3", "references"), { recursive: true });
   fs.writeFileSync(path.join(root, "prawny-router-v3", "references", "KROK0A-anonimizer.md"), "# anon\n");
   fs.writeFileSync(path.join(root, "prawny-router-v3", "references", "KROK1-detekcja.md"), "# detect\n");

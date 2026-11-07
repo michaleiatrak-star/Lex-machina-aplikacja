@@ -98,6 +98,7 @@ import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage,
 import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
+import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
 const LOCAL_CASE_MEMORY_CHARS = 4_000;
@@ -267,9 +268,13 @@ function loopbackOriginGuard(req, res, next) {
     });
 }
 /** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+// Lookups whose refusal is already in the answer (the provision or judgment marked ⚠️): a
+// local model asking for a provision that does not exist held every step of the workflow,
+// with a "powtórz etap" notice on each answer (Bielik, user report 2026-11-06).
+const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_law_library|verify_case_law)\b/u;
 export function blockedAuditSteps(result) {
     return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
-        .filter((event) => event.status === "BLOCKED")
+        .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
         .map((event) => String(event.target).slice(0, 120))
         .slice(0, 8);
 }
@@ -640,7 +645,7 @@ function publicSkill(skill) {
         ...(typeof fm.description === "string"
             ? { description: fm.description }
             : {}),
-        category: /^dr-\d{2}-/.test(skill.name)
+        category: isDomainSkill(skill.name)
             ? "domain"
             : "execution"
     };
@@ -807,11 +812,11 @@ export function applyTrivialChatGate(registry, request, attachmentCount) {
         !isTrivialChatCommand(envelope.query)) {
         return false;
     }
-    const domain = request.primarySkill.startsWith("dr-") &&
+    const domain = isDomainSkill(request.primarySkill) &&
         registry.get(request.primarySkill)
         ? request.primarySkill
         : [...registry.skills.keys()]
-            .filter((name) => name.startsWith("dr-"))
+            .filter((name) => isDomainSkill(name))
             .sort()[0];
     if (!domain)
         return false;
@@ -836,9 +841,9 @@ export function applyFactCorrectionGate(registry, request) {
     const envelope = parseSkillSelectionEnvelope(request.query);
     if (envelope.manualSkills.length > 0 || !isFactCorrection(envelope.query))
         return false;
-    const domain = request.primarySkill.startsWith("dr-") && registry.get(request.primarySkill)
+    const domain = isDomainSkill(request.primarySkill) && registry.get(request.primarySkill)
         ? request.primarySkill
-        : [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+        : [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
     if (!domain)
         return false;
     request.primarySkill = domain;
@@ -867,7 +872,7 @@ export function applyNonLegalChatGate(registry, request, attachmentCount, caseMa
         !isNonLegalMessage(envelope.query, registryFlashRoutes(registry))) {
         return false;
     }
-    const domain = [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+    const domain = [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
     if (!domain)
         return false;
     request.primarySkill = domain;
@@ -1212,7 +1217,7 @@ export function createLexHttpApp(options) {
             !request.model.startsWith("local/");
         if (modelSelectsSkills) {
             const placeholder = [...options.registry.skills.keys()]
-                .filter((name) => name.startsWith("dr-") &&
+                .filter((name) => isDomainSkill(name) &&
                 (!autoEnvelope.domainRestrictionActive ||
                     autoEnvelope.domainAllowList.includes(name)))
                 .sort()[0];
@@ -6506,7 +6511,7 @@ export function createLexHttpApp(options) {
             const actor = responseAuthContext(res);
             // The guide pinned in the chat's envelope (the route is a DR then) as the only
             // executive skill runs LEGAL_GUIDE_V1 too and needs its session state (E2E: 422).
-            const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== "prawo-polskie-v2" && name !== "shared");
+            const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !isDomainSkill(name) && name !== "prawny-router-v3" && name !== activeJurisdictionPack() && name !== "shared");
             if (request.primarySkill ===
                 "przewodnik-prawny-v2" ||
                 (pinnedExecutive.length === 1 && pinnedExecutive[0] === "przewodnik-prawny-v2")) {

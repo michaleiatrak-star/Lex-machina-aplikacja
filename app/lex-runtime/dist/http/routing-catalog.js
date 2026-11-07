@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "../jurisdiction.js";
 export class RoutingCatalog {
     registry;
     constructor(registry) {
@@ -6,11 +7,11 @@ export class RoutingCatalog {
     }
     listDrSkills() {
         return [...this.registry.skills.keys()]
-            .filter((name) => /^dr-\d{2}-/.test(name))
+            .filter((name) => isDomainSkill(name))
             .sort();
     }
     validate(primarySkill) {
-        if (!/^dr-\d{2}-/.test(primarySkill)) {
+        if (!isDomainSkill(primarySkill)) {
             return {
                 valid: false,
                 primarySkill,
@@ -24,7 +25,7 @@ export class RoutingCatalog {
                 reason: "SKILL_NOT_FOUND"
             };
         }
-        const routingMap = this.registry.resolveResource("prawo-polskie-v2", "prawo-polskie-v2/ROUTING-MAP.md");
+        const routingMap = this.registry.resolveResource(activeJurisdictionPack(), jurisdictionDomainMap(this.registry.root));
         if (!routingMap) {
             return {
                 valid: false,

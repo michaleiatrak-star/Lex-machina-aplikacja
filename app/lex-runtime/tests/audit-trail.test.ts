@@ -8,7 +8,7 @@ function fixedAudit(): AuditTrail {
 function completeBase(audit: AuditTrail): void {
   audit.start();
   audit.record("skill_read", "prawny-router-v3");
-  audit.record("resource_read", "shared/PRAWO-HARDGATE.md");
+  audit.record("resource_read", "JUR:weryfikacja-przepisow-kanon");
   audit.record("skill_read", "prawo-polskie-v2");
   audit.record("route", "dr-02-prawo-cywilne-rodzinne-gospodarcze");
   audit.record("skill_read", "dr-02-prawo-cywilne-rodzinne-gospodarcze");

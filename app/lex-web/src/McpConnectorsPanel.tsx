@@ -23,7 +23,7 @@ const ERRORS: Record<string, string> = {
   CEIDG_KEY_REQUIRED: "CEIDG wymaga klucza API. Najpierw wklej i zatwierdź klucz poniżej.",
   CLAUDE_DESKTOP_NOT_INSTALLED: "Na tym komputerze nie znaleziono Claude Desktop — odznacz synchronizację.",
   CLAUDE_DESKTOP_CONFIG_INVALID: "Plik claude_desktop_config.json jest uszkodzony (niepoprawny JSON) — popraw go ręcznie.",
-  LEX_MCP_PACKAGE_MISSING: "Brak pakietu serwerów MCP (audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli.",
+  LEX_MCP_PACKAGE_MISSING: "Brak pakietu serwerów MCP wybranej jurysdykcji (prawo polskie: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli.",
   LEX_MCP_PROBE_TIMEOUT: "Serwer MCP nie odpowiedział w 30 s — instalacja przerwana.",
   LEX_MCP_PROBE_NO_TOOLS: "Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana.",
   AUTHORIZATION_DENIED: "Konektorami MCP zarządza administrator aplikacji."
@@ -192,7 +192,7 @@ export function McpConnectorsPanel() {
       <h2>
         Konektory MCP Lex Machina
         <InfoTip>
-          Serwery z <code>audyt-systemu-v4/mcp-servers</code>. Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane
+          Serwery wybranej jurysdykcji (prawo polskie: <code>prawo-polskie-v2/mcp-servers</code>). Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane
           źródła są dostępne w czacie.
         </InfoTip>
       </h2>
@@ -203,7 +203,7 @@ export function McpConnectorsPanel() {
       {status?.packageAvailable ? (
         <p className={status.package.integrity === "MATCH" ? "field-help" : "alert alert-error"}>
           Pakiet serwerów{status.package.version ? ` ${status.package.version}` : ""}
-          {status.package.skillVersion ? ` (audyt-systemu-v4 ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
+          {status.package.skillVersion ? ` (pakiet jurysdykcji ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
         </p>
       ) : null}
 

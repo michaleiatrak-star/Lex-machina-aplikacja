@@ -98,6 +98,7 @@ import { SensitiveDownloadTicketManager } from "../sensitive-download-ticket.js"
 import { LegalDocumentAstGenerator } from "../legal-document-ast-generator.js";
 import { LocalSupportService } from "../support-service.js";
 import { GuideSessionStateStore } from "../guide-session-state.js";
+import { configureJurisdiction } from "../jurisdiction.js";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 4317;
 export function assertLoopbackHost(host) {
@@ -234,6 +235,7 @@ export async function startLocalServer(options) {
     configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
     // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
     configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
+    configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
     const authStore = new LocalAuthStore({
         rootDir: caseFileStore.rootDir
     });

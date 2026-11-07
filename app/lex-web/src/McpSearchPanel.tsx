@@ -442,7 +442,7 @@ export function McpSearchPanel() {
         {packageInfo ? (
           <p className="field-help">
             Pakiet serwerów{packageInfo.version ? ` ${packageInfo.version}` : ""}
-            {packageInfo.skillVersion ? ` (audyt-systemu-v4 ${packageInfo.skillVersion})` : ""}: {INTEGRITY_TEXT[packageInfo.integrity]}.
+            {packageInfo.skillVersion ? ` (pakiet jurysdykcji ${packageInfo.skillVersion})` : ""}: {INTEGRITY_TEXT[packageInfo.integrity]}.
           </p>
         ) : null}
 

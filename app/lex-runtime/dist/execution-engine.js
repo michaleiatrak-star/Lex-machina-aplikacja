@@ -20,12 +20,13 @@ import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
 import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources } from "./quick-legal-question.js";
 import { assessMatterComplexity } from "./matter-complexity.js";
-import { MANDATORY_SESSION_SKILLS, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills, threadUserText } from "./skill-selection.js";
+import { mandatorySessionSkills, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills, threadUserText } from "./skill-selection.js";
 export { latestUserTurn };
 import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./deterministic-workflow.js";
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
 // A document the case mentions but nobody uploaded (or "I will add it later") is information,
 // not a stop (shared/CP-GATE.md §3B BRAK-DOK): every checkpoint workflow, as the pleading one.
 export const MISSING_DOCUMENT_INSTRUCTION = "Brak dokumentu (wspomniany, lecz nie wgrany; „uzupełnię później”) = BRAK-DOK (shared/CP-GATE.md §3B): pracuj na materiale, który jest, oznacz ustalenia oparte na brakującym dokumencie „według informacji strony”, wypisz brakujące pozycje w raporcie kroku i zakończ krok. Nie zatrzymuj kroku z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.";
@@ -199,8 +200,9 @@ compact = (body) => body) {
         .join("\n\n---\n\n");
 }
 // R-2..R-4 of the mandatory core, given in full to a model that chooses its skills.
+// The HARD GATE is national law (the verification canon): named by key, the active jurisdiction's module.
 const AUTO_CORE_RESOURCES = [
-    ["shared", "PRAWO-HARDGATE.md"],
+    ["prawny-router-v3", "JUR:weryfikacja-przepisow-kanon"],
     ["prawny-router-v3", "references/KROK0A-anonimizer.md"],
     ["prawny-router-v3", "references/KROK1-detekcja.md"]
 ];
@@ -297,19 +299,22 @@ export class LexExecutionEngine {
             !args.orderedCaseWorkflowContext) {
             return await this.executeModelSelectedSkills(args, skillEnvelope, effectiveQuery, events, emit);
         }
-        const polishLaw = this.registry.get("prawo-polskie-v2");
+        // The chosen jurisdiction's facade and domain map (Polish law: prawo-polskie-v2, ROUTING-MAP.md).
+        const facade = activeJurisdictionPack();
+        const domainMap = jurisdictionDomainMap(this.registry.root);
+        const polishLaw = this.registry.get(facade);
         if (!polishLaw) {
-            emit("skill_read", "prawo-polskie-v2", "BLOCKED");
-            throw new LexExecutionError("prawo-polskie-v2 is required for Polish-law routing.", "prawo-polskie-v2", [...events]);
+            emit("skill_read", facade, "BLOCKED");
+            throw new LexExecutionError(`${facade} is required for the jurisdiction's routing.`, facade, [...events]);
         }
-        emit("skill_read", "prawo-polskie-v2", "OK");
-        const routingMap = this.registry.resolveResource("prawo-polskie-v2", "prawo-polskie-v2/ROUTING-MAP.md");
+        emit("skill_read", facade, "OK");
+        const routingMap = this.registry.resolveResource(facade, domainMap);
         if (!routingMap) {
-            emit("resource_read", "prawo-polskie-v2/ROUTING-MAP.md", "BLOCKED");
-            throw new LexExecutionError("The central Polish-law routing map is unavailable.", "prawo-polskie-v2/ROUTING-MAP.md", [...events]);
+            emit("resource_read", domainMap, "BLOCKED");
+            throw new LexExecutionError("The jurisdiction's central routing map is unavailable.", domainMap, [...events]);
         }
-        emit("resource_read", "prawo-polskie-v2/ROUTING-MAP.md", "OK");
-        if (!args.route.primarySkill.startsWith("dr-")) {
+        emit("resource_read", domainMap, "OK");
+        if (!isDomainSkill(args.route.primarySkill)) {
             emit("route", args.route.primarySkill, "BLOCKED", "INVALID_PRIMARY_SKILL");
             throw new LexExecutionError("A Polish-law route must select one primary DR skill.", args.route.primarySkill, [...events]);
         }
@@ -762,7 +767,7 @@ export class LexExecutionEngine {
         // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
         if (!args.model.startsWith("local/")) {
             const domains = [...new Set([args.route.primarySkill, ...skillSelection.domainSkills])]
-                .filter((name) => /^dr-\d{2}-/.test(name))
+                .filter((name) => isDomainSkill(name))
                 .map((skill) => ({
                 skill,
                 matched: ["dziedzina wybrana dla tej sprawy"],
@@ -1022,10 +1027,10 @@ export class LexExecutionEngine {
         // contracts, executive skills, core resources, mandatory path) open the prompt; the
         // domain's SKILL and the turn's own parts follow. The model reads the same text.
         const skillCompaction = (body) => compactForModel(body, undefined, new Set(args.instructionCompaction?.inactive ?? []), args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined, new Set(args.instructionCompaction?.optIn ?? []), stageTail).text;
-        const stableSkillPrompt = combineSkillPrompt(this.registry, ["prawny-router-v3", "prawo-polskie-v2", ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))], localModel, skillCompaction);
+        const stableSkillPrompt = combineSkillPrompt(this.registry, ["prawny-router-v3", activeJurisdictionPack(), ...skillSelection.additionalSkills.filter((name) => !isDomainSkill(name))], localModel, skillCompaction);
         const baseSystemPrompt = combineSkillPrompt(this.registry, [
             args.route.primarySkill,
-            ...skillSelection.additionalSkills.filter((name) => name.startsWith("dr-"))
+            ...skillSelection.additionalSkills.filter((name) => isDomainSkill(name))
         ], localModel, (body) => compactForModel(body, undefined, new Set(args.instructionCompaction?.inactive ?? []), args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined, new Set(args.instructionCompaction?.optIn ?? [])).text);
         const coreResourcePrompt = buildCoreLegalResourcePrompt(session.loadedResources, localModel);
         // Workflow state of this turn (active checkpoint): the only part that changes
@@ -1374,13 +1379,13 @@ export class LexExecutionEngine {
             throw new LexExecutionError("Model skill selection requires the Lex corpus tools.", "MODEL_SKILL_SELECTION", [...events]);
         }
         const allowed = (name) => {
-            if (name.startsWith("dr-")) {
+            if (isDomainSkill(name)) {
                 return !envelope.domainRestrictionActive ||
                     envelope.domainAllowList.includes(name);
             }
             return !envelope.executionRestrictionActive ||
                 envelope.executionAllowList.includes(name) ||
-                MANDATORY_SESSION_SKILLS.includes(name);
+                mandatorySessionSkills().includes(name);
         };
         const native = args.nativeCorpus;
         const catalog = [...this.registry.skills.values()]
@@ -1400,7 +1405,7 @@ export class LexExecutionEngine {
         // two tool rounds less on every legal question.
         const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
         const preloaded = onPreloaded
-            ? ["prawny-router-v3", "prawo-polskie-v2"].flatMap((name) => {
+            ? ["prawny-router-v3", activeJurisdictionPack()].flatMap((name) => {
                 const skill = this.registry.get(name);
                 if (!skill || !allowed(name))
                     return [];
@@ -1422,10 +1427,10 @@ export class LexExecutionEngine {
         if (onPreloaded && preloaded.length) {
             for (const [skillName, file] of AUTO_CORE_RESOURCES) {
                 const skill = this.registry.get(skillName);
-                const absolute = skill ? path.join(skill.directory, file) : "";
-                if (!skill || !fs.existsSync(absolute))
+                const absolute = skill ? this.registry.resolveResource(skillName, file) ?? "" : "";
+                if (!skill || !absolute || !fs.existsSync(absolute))
                     continue;
-                const relative = `${path.basename(skill.directory)}/${file}`;
+                const relative = file.startsWith("JUR:") ? file : `${path.basename(skill.directory)}/${file}`;
                 onPreloaded(relative);
                 const compact = compactForModel(fs.readFileSync(absolute, "utf8"));
                 if (compact.compacted.length) {
@@ -1444,7 +1449,7 @@ export class LexExecutionEngine {
             preloaded.length
                 ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`
                 : `Sprawa lub pytanie prawne: NAJPIERW wczytaj ${native ? "Read prawny-router-v3/SKILL.md" : "read_legal_resource skill=prawny-router-v3 path=SKILL.md"} i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla).`,
-            `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === "prawo-polskie-v2") ? " i prawo-polskie-v2" : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
+            `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === activeJurisdictionPack()) ? ` i ${activeJurisdictionPack()}` : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
             `Nie wczytuj skilli i modułów, do których ani router, ani wczytane skille nie kierują dla tego pytania; nie zgaduj nazw plików (nazwy nie znasz: ${listTool}) i nie przeglądaj całych katalogów.${native ? "" : " Gdy ścieżka lub nazwa skilla jest błędna, runtime w tej samej rundzie poda jedyny pasujący plik (pole requestedPath) albo listę kandydatów (NOT_FOUND, candidates) - wybierz z niej, nie zgaduj dalej."} Nie udawaj, że przeczytałeś plik, którego nie wczytałeś.`
         ];
         const toolNames = new Set(args.tools.map((tool) => tool.function.name));

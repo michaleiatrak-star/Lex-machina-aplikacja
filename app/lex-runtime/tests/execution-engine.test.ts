@@ -16,6 +16,7 @@ import type {
   ProviderStreamParams,
   ProviderStreamResult
 } from "../src/providers/types.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR02 = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -47,6 +48,7 @@ function fixture(options?: {
 
   fs.mkdirSync(path.join(root, "shared"), { recursive: true });
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+  writeJurisdictionManifest(root);
 
   const router = path.join(root, "prawny-router-v3");
   fs.mkdirSync(path.join(router, "references"), { recursive: true });
@@ -96,7 +98,7 @@ describe("local core resource prompt", () => {
     const resources =
       new Map([
         [
-          "shared/PRAWO-HARDGATE.md",
+          "JUR:weryfikacja-przepisow-kanon",
           huge
         ],
         [
@@ -558,7 +560,7 @@ describe("local quick legal lane", () => {
     expect(call.systemPrompt).not.toContain("TABELA NAWIGACYJNA");
     expect(call.systemPrompt).not.toContain("USZKODZENIE MIENIA");
     expect(call.systemPrompt).not.toContain("# FULL TOOL APPENDIX");
-    expect(call.tools?.map((tool) => tool.function.name)).toEqual(["search_core_law", "read_core_law_article"]);
+    expect(call.tools?.map((tool) => tool.function.name)).toEqual(["search_core_law", "read_core_law_article", "web_search"]);
     expect(call.maxIterations).toBe(3);
     expect(call.localMaxOutputTokens).toBe(900);
     expect(result.events.some((event) => event.target === "LOCAL_QUICK_LEGAL" && event.status === "OK")).toBe(true);

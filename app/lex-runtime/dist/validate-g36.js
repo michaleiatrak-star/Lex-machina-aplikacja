@@ -127,10 +127,13 @@ async function readWholeResource(runtime, skill, resourcePath) {
 }
 try {
     makeSkill("shared", "# shared");
-    makeSkill("prawny-router-v3", "# router\nview shared/PRAWO-HARDGATE.md");
+    makeSkill("prawny-router-v3", "# router\nview JUR:weryfikacja-przepisow-kanon");
     makeSkill("prawo-polskie-v2", "# prawo");
     makeSkill(DR, "# DR\nview modules/mod-KC.md");
     fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# G36 HARD GATE CONTENT\n");
+    // The HARD GATE is national law named by key: the jurisdiction manifest addresses it.
+    fs.mkdirSync(path.join(root, "prawo-polskie-v2"), { recursive: true });
+    fs.writeFileSync(path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"), "| `JUR:weryfikacja-przepisow-kanon` | `shared/PRAWO-HARDGATE.md` | test |\n");
     const routerRefs = path.join(root, "prawny-router-v3", "references");
     fs.mkdirSync(routerRefs, { recursive: true });
     fs.writeFileSync(path.join(routerRefs, "KROK0A-anonimizer.md"), "# G36 ANON CONTENT\n");
@@ -225,7 +228,7 @@ try {
             "BLOCKED" &&
         result.status ===
             "DRAFT_PRESENTABLE" &&
-        prompt.includes("# CORE LEGAL RESOURCE: shared/PRAWO-HARDGATE.md") &&
+        prompt.includes("# CORE LEGAL RESOURCE: JUR:weryfikacja-przepisow-kanon") &&
         prompt.includes("G36 HARD GATE CONTENT") &&
         prompt.includes("LOCAL LEGAL CORPUS ACCESS") &&
         [

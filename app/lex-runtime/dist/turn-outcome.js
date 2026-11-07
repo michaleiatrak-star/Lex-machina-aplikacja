@@ -12,6 +12,7 @@ import { threadUserText } from "./skill-selection.js";
 import { parseFlashRouting } from "./domain-module-map.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 const DOCUMENT_SKILLS = new Set(["pisma-proste-v2", "pisma-procesowe-v3"]);
 const ANALYSIS_SKILLS = new Set([
     "analiza-sadowa-v6",
@@ -38,7 +39,7 @@ export class TurnOutcomeModel {
         this.router = new TurnRouter(corpusRoot);
         this.signals = parseModeSignals(read("prawny-router-v3/references/KROK1-detekcja.md"));
         this.routes = parseRoutingTable(read("prawny-router-v3/SKILL.md"));
-        this.flash = parseFlashRouting(read("prawo-polskie-v2/SKILL.md"));
+        this.flash = parseFlashRouting(read(`${activeJurisdictionPack()}/SKILL.md`));
         this.accents = buildAccentMap(executiveSkillTexts(this.router.registry));
     }
     /** `query`: the conversation as the chat sends it; `message`: the latest message (auxiliaryText). */

@@ -23,6 +23,7 @@ import {
 } from "./use-floating-panel.js";
 import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
+import { JurisdictionSection } from "./JurisdictionSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
 import { useDeveloperMode } from "./developer-mode.js";
@@ -609,6 +610,7 @@ export function MaintenancePanel({
         <CoreLawUpdatesSection user={user} />
 
         <CaseLawLibrarySection />
+        <JurisdictionSection />
         <DomainFallbackSection />
 
         {developer ? <AnomalyJournalSection user={user} /> : null}

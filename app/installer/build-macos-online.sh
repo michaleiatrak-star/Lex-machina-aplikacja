@@ -58,8 +58,8 @@ cp -R "$REPO/app/storage" "$PAYLOAD/storage"
 cp -R "$REPO/Wersja rozwojowa rozpakowana" "$PAYLOAD/corpus"
 find "$PAYLOAD" -name "__pycache__" -type d -prune -exec rm -rf {} +
 # MCP connector package must match the skill's CHECKSUMS.sha256 byte for byte.
-expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpus/audyt-systemu-v4/CHECKSUMS.sha256")"
-actual="$(shasum -a 256 "$PAYLOAD/corpus/audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs" | cut -d' ' -f1)"
+expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpus/prawo-polskie-v2/CHECKSUMS.sha256")"
+actual="$(shasum -a 256 "$PAYLOAD/corpus/prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs" | cut -d' ' -f1)"
 [ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "MCP_BUNDLE_CHECKSUM_MISMATCH: $actual != $expected" >&2; exit 1; }
 cp "$REPO/LICENSE" "$PAYLOAD/LICENSE.txt"
 cp "$REPO/POLITYKA-PRYWATNOSCI.md" "$PAYLOAD/POLITYKA-PRYWATNOSCI.md"

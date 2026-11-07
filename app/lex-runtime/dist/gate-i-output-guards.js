@@ -1,4 +1,5 @@
 import { ARTICLE_LEAD, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { domainSkillPrefix } from "./jurisdiction.js";
 // Na tekście po compactActAbbreviations: "art. 148 k.k." -> "art. 148 KK".
 const CRIMINAL_REFERENCE = new RegExp(`${ARTICLE_LEAD}\\d+[a-ząćęłńóśźż]*(?:\\s*§\\s*\\d+[a-z]*)?\\s+(?:KK|KPK|KKS|KKW|KW|KPW)\\b`, "giu");
 const HIGH_RISK_CRIMINAL_SIGNAL = /\b(?:zawiadomieni[ae]\s+o\s+(?:możliwości\s+)?popełnieni[ua]\s+przestępstwa|odpowiedzialność\s+karna|kwalifikacja\s+karna)\b/giu;
@@ -9,7 +10,7 @@ function unique(values) {
     ];
 }
 export function evaluateDomainLock(args) {
-    const criminalDomainLoaded = args.loadedSkills.some((skill) => skill.startsWith("dr-03-"));
+    const criminalDomainLoaded = args.loadedSkills.some((skill) => skill.startsWith(`${domainSkillPrefix()}-03-`));
     const criminalLegalReferences = unique([
         ...compactActAbbreviations(args.text).matchAll(CRIMINAL_REFERENCE)
     ].map((match) => match[0] ?? ""));

@@ -47,7 +47,7 @@ const COVERAGE_SKILLS = new Set([
 ]);
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
@@ -92,11 +92,19 @@ import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE_PREFIX, threadUserText } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
+import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
+import { registryFactsText } from "./privacy/registry-enrichment.js";
+import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
 const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
+// analiza-sadowa-v6 6.19: the checklist for every letter of the opposing party.
+const OPPOSING_LETTER_RESOURCE = "analiza-sadowa-v6/SKILL.md";
+const OPPOSING_LETTER_HEADING = "## PISMO PRZECIWNIKA / WEZWANIE — LISTA PP";
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
 // The question the cited documents are judged against: the latest user message whole, and for a
@@ -118,6 +126,10 @@ const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 // A follow-up this short ("ok, robisz to.") carries no task of its own.
 const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
+// The qualifier is a module of Polish law (dr-03): read only while Polish law is the chosen jurisdiction.
+const criminalQualifierActive = () => isDomainSkill(CRIMINAL_QUALIFIER_RESOURCE.split("/")[0]);
+// A domain skill by its number in the chosen jurisdiction ("dr-03-" for Polish law, its analogue elsewhere).
+const domainNumber = (number) => `${domainSkillPrefix()}-${number}-`;
 /(?<![\p{L}])(?:związ\p{L}*\s+przyczynow\p{L}*|przyczynowo[-\s]skutkow\p{L}*|co\s+z\s+czego\s+wynika|post\s+hoc|csqn|conditio\s+sine\s+qua\s+non|(?:czy|co)\s+(?:\p{L}+\s+){0,6}(?:spowodował\p{L}*|doprowadził\p{L}*|wywołał\p{L}*)|przerw\p{L}*\s+(?:\p{L}+\s+){0,2}związ\p{L}*|wyklucz\p{L}*\s+(?:\p{L}+\s+){0,3}(?:związ\p{L}*|przyczyn\p{L}*)|łańcuch\p{L}*\s+przyczyn\p{L}*)(?![\p{L}])/iu;
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
 // Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
@@ -725,6 +737,8 @@ restoreDocument) {
         const visible = raw.replace(DRAFT_PARTIAL_TOKEN_TAIL, "");
         onDraft(visible.replace(DRAFT_PII_TOKEN, (token, kind, sequence, requestedCase) => {
             const base = `[PII:${kind}:${sequence}]`;
+            if (process.env.LEX_DEBUG_DRAFT === "1" && !vault.hasToken(base))
+                process.stderr.write(`DRAFT_TOKEN_UNRESTORED:${token}:vault=${vault.snapshot().tokens.length}\n`);
             return vault.hasToken(base)
                 ? vault.restore(base, requestedCase ?? null).text
                 : token;
@@ -743,6 +757,8 @@ restoreDocument) {
         }
     };
 }
+const RECOGNITION_CACHE_MS = 2 * 60_000;
+const RECOGNITION_CACHE_ENTRIES = 6;
 export const THREAD_SUMMARY_PROMPT = [
     "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
     "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
@@ -879,10 +895,12 @@ export class SafeSessionExecutor {
     flashRoutesCache = null;
     // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
     flashRoutes() {
-        if (this.flashRoutesCache?.root === this.registry.root)
+        const facade = activeJurisdictionPack();
+        if (this.flashRoutesCache?.root === `${this.registry.root}:${facade}`)
             return this.flashRoutesCache.rows;
-        const rows = parseFlashRouting(this.readCorpus("prawo-polskie-v2/SKILL.md") ?? "");
-        this.flashRoutesCache = { root: this.registry.root, rows };
+        // The chosen jurisdiction's facade (Polish law: prawo-polskie-v2) holds its flash routing.
+        const rows = parseFlashRouting(this.readCorpus(`${facade}/SKILL.md`) ?? "");
+        this.flashRoutesCache = { root: `${this.registry.root}:${facade}`, rows };
         return rows;
     }
     combinationsCache = null;
@@ -972,10 +990,40 @@ export class SafeSessionExecutor {
             this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
         return this.registryEnrichment;
     }
+    // Personal-data recognition of one text, kept for a short while: one turn reads the same text
+    // up to three times (the routing pre-pass of a local model, the assistant's example data, the
+    // anonymization itself), each a run of Stanza, the dictionaries and Morfeusz over the whole
+    // conversation. Keyed by the text's hash; failures are not kept.
+    recognitionCache = new Map();
     chatRecognizerFor(model) {
-        return this.chatNamedEntityRecognizer
-            ? privacyRecognizerFor(this.chatNamedEntityRecognizer, !model.startsWith("local/"))
-            : undefined;
+        if (!this.chatNamedEntityRecognizer)
+            return undefined;
+        const useLocalModel = !model.startsWith("local/");
+        const recognizer = privacyRecognizerFor(this.chatNamedEntityRecognizer, useLocalModel);
+        const cache = this.recognitionCache;
+        return {
+            recognize: (text) => {
+                // The skill selection line the application writes (and rewrites after routing) holds
+                // no personal data: the text under it is recognized, the same before and after routing.
+                const header = text.startsWith(SKILL_SELECTION_ENVELOPE_PREFIX) && text.includes("\n") ? text.slice(0, text.indexOf("\n") + 1) : "";
+                const body = text.slice(header.length);
+                const shift = (found) => found.map((span) => ({ ...span, start: span.start + header.length, end: span.end + header.length }));
+                const now = Date.now();
+                for (const [key, entry] of cache)
+                    if (now - entry.at > RECOGNITION_CACHE_MS)
+                        cache.delete(key);
+                const key = `${useLocalModel ? 1 : 0}:${createHash("sha256").update(body).digest("hex")}`;
+                const hit = cache.get(key);
+                if (hit)
+                    return hit.spans.then(shift);
+                const spans = recognizer.recognize(body);
+                cache.set(key, { at: now, spans });
+                while (cache.size > RECOGNITION_CACHE_ENTRIES)
+                    cache.delete(cache.keys().next().value);
+                spans.catch(() => cache.delete(key));
+                return spans.then(shift);
+            }
+        };
     }
     async resolveAutoRouting(request) {
         request = nfcRequest(request);
@@ -1237,9 +1285,9 @@ export class SafeSessionExecutor {
         // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
-        const federationTools = request.model.startsWith("local/")
-            ? undefined
-            : this.legalFederationTools;
+        // Local models get the sources too (a smaller tool set and the short map of sources).
+        const federationTools = this.legalFederationTools;
+        const localFederation = request.model.startsWith("local/");
         // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
         const federationEvents = [];
         const auxiliarySources = [];
@@ -1419,7 +1467,7 @@ export class SafeSessionExecutor {
             ...reportTools.schemas(),
             ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
-                ? federationTools.schemas()
+                ? localFederation ? federationTools.localSchemas() : federationTools.schemas()
                 : []),
             ...(verificationTools ? verificationTools.schemas() : [])
         ];
@@ -1432,7 +1480,7 @@ export class SafeSessionExecutor {
             legal: legalTurn,
             // AUTO: primarySkill is a placeholder until the model reads a domain skill,
             // so the criminal matter comes from the question itself.
-            criminal: (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
+            criminal: (!request.modelSelectsSkills && request.primarySkill.startsWith(domainNumber("03"))) ||
                 criminalMatter(withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query))) ||
                 // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
                 // sends the latest message apart (auxiliaryText), so the thread is read as well.
@@ -1467,18 +1515,20 @@ export class SafeSessionExecutor {
         // and the core legal resources.
         const contextResources = new Set([
             ...(request.modelSelectsSkills ? [`${ROUTER_SKILL}/SKILL.md`] : []),
-            "shared/PRAWO-HARDGATE.md",
+            "JUR:weryfikacja-przepisow-kanon",
             `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
             `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
             // Route-based path: the engine puts the qualifier in the prompt itself.
-            ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
+            ...(pathFacts.criminal && !request.modelSelectsSkills && criminalQualifierActive() ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
         ]);
         corpusTools.setInContext(contextResources);
         const pathSections = [];
         // The kind of every document the user sent (court decision, pleading, contract,
         // evidence...), recognised locally from its protected text; the router chooses
         // the skill also by what the user delivers (ACTIVATION-MATRIX).
-        const recognisedDocuments = mandatoryModel && legalTurn
+        // Every model, local ones included: Bielik and Mistral got no document kinds, no whole-
+        // document check, graph, checklist or register facts while this read the hosted path only.
+        const recognisedDocuments = legalTurn
             ? attachments
                 .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
                 .map((attachment) => ({
@@ -1505,6 +1555,49 @@ export class SafeSessionExecutor {
                     pathSections.push(`# MANDATORY PATH RESOURCE: ${CONTRACT_WHOLE_DOCUMENT_RESOURCE} — ${CONTRACT_WHOLE_DOCUMENT_HEADING.replace(/^#+\s*/u, "")}\n\n${cal}`);
                 }
             }
+            // A demand or a pleading delivered: the checklist for a letter of the opposing party
+            // (analiza-sadowa-v6, PP-1…PP-8): facts, construction, arithmetic, the provisions it
+            // cites, court, sender, case law (comparison of the app with the chat, 2026-11-06).
+            if (recognisedDocuments.some((document) => document.kind === "WEZWANIE" || document.category === "PISMO_PROCESOWE")) {
+                const checklist = markdownSection(this.readCorpus(OPPOSING_LETTER_RESOURCE) ?? "", OPPOSING_LETTER_HEADING);
+                if (checklist) {
+                    audit.record("resource_read", OPPOSING_LETTER_RESOURCE, "OK", { detail: "runtime-preload;delivered-letter;PP" });
+                    pathSections.push(`# MANDATORY PATH RESOURCE: ${OPPOSING_LETTER_RESOURCE} — ${OPPOSING_LETTER_HEADING.replace(/^#+\s*/u, "")}\n\n${checklist}`);
+                }
+            }
+            if (recognisedDocuments.some((document) => document.category === "UMOWA")) {
+                // The relation graph of each such document, read from its words: the model confirms
+                // or corrects its edges instead of finding the relations alone (user report 2026-11-06).
+                for (const document of recognisedDocuments.filter((item) => item.category === "UMOWA").slice(0, 3)) {
+                    const attachment = attachments.find((item) => item.documentId === document.documentId);
+                    const graph = attachment ? contractGraph(attachment.chunks.map((chunk) => chunk.text).join("\n")) : null;
+                    if (!graph)
+                        continue;
+                    audit.record("gate", "CONTRACT_GRAPH", "OK", { documentId: document.documentId, nodes: graph.nodes.length, edges: graph.edges.length });
+                    pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", `# GRAF RELACJI POSTANOWIEŃ: ${document.documentId}`));
+                }
+            }
+            // A firm named by its NIP or KRS in the material: what KRS and the VAT white list say
+            // about it (exists, not struck off, legal form, VAT status, its accounts), as a checked
+            // fact under the documents' tokens. The registers are the ones that answer for these
+            // numbers (the federation's rule); nothing else of the case goes out.
+            const registry = this.registryForms();
+            if (registry) {
+                const numbers = chatPrivacyVault
+                    .knownIdentifierValues()
+                    .filter((item) => item.kind === "NIP" || item.kind === "KRS")
+                    .map((item) => item.value)
+                    .slice(0, 6);
+                if (numbers.length) {
+                    await Promise.all(numbers.map((value) => registry.forms(value).catch(() => [])));
+                    const factsText = registryFactsText(registry.facts(numbers));
+                    if (factsText) {
+                        const protectedFacts = await chatPseudonymizer.pseudonymize(factsText);
+                        audit.record("gate", "REGISTRY_FACTS", "OK", { firms: registry.facts(numbers).length });
+                        pathSections.push(protectedFacts.text);
+                    }
+                }
+            }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
             if (roles)
                 pathSections.push(roles);
@@ -1512,7 +1605,7 @@ export class SafeSessionExecutor {
         }
         // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
         if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {
-            const qualifier = this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE);
+            const qualifier = criminalQualifierActive() ? this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE) : null;
             if (qualifier) {
                 contextResources.add(CRIMINAL_QUALIFIER_RESOURCE);
                 audit.record("resource_read", CRIMINAL_QUALIFIER_RESOURCE, "OK", { detail: "runtime-preload;mandatory-path;criminal-question" });
@@ -1555,7 +1648,7 @@ export class SafeSessionExecutor {
             // domain (word overlap with skill descriptions — "art. 415 KC" read as DR-01) gives way
             // to the act the question cites, then to a routing phrase. A domain the user picked
             // (a DR in the selection, or the domain allow-list) stays.
-            const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => name.startsWith("dr-"));
+            const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => isDomainSkill(name));
             if (!mechanical && (!request.modelSelectsSkills || !workflowContext))
                 return request.primarySkill;
             // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
@@ -1568,12 +1661,12 @@ export class SafeSessionExecutor {
                 .slice(0, 30_000);
             const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
                 .modules.map((item) => item.skill)
-                .find((skill) => skill.startsWith("dr-"));
+                .find((skill) => isDomainSkill(skill));
             const phrased = (text) => {
                 const ranked = rankDomains(this.registry, this.flashRoutes(), text);
                 return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
             };
-            const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+            const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith(domainNumber("16")));
             if (mechanical) {
                 const allowed = (skill) => skill && (!mechanicalEnvelope.domainRestrictionActive || mechanicalEnvelope.domainAllowList.includes(skill)) ? skill : undefined;
                 // A court named in the question (NSA, SN, WSA) tells the procedure, not the matter:
@@ -1710,6 +1803,8 @@ export class SafeSessionExecutor {
         // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
         // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
         const unreadableResources = [];
+        const jurisdiction = legalTurn ? activeJurisdiction(this.registry.root) : null;
+        const jurisdictionNotice = jurisdiction ? jurisdictionDegradedNotice(jurisdictionStatus(jurisdiction)) : null;
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
@@ -1730,6 +1825,10 @@ export class SafeSessionExecutor {
                     "Nie odtwarzaj ich reguł z pamięci. Wskaż w odpowiedzi, której kontroli z tych zasobów nie wykonano."
                 ].join("\n"));
             }
+            // The chosen jurisdiction without an application provider for some component (jurisdiction.ts):
+            // named to the model and in the answer, never served by another country's component.
+            if (jurisdictionNotice)
+                pathSections.push(`# ⛔ TRYB ZDEGRADOWANY — JURYSDYKCJA (ustalone przez aplikację)\n${jurisdictionNotice}`);
             step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length - unreadableResources.length} plików`);
             pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
         }
@@ -1743,7 +1842,7 @@ export class SafeSessionExecutor {
         // one a "next stage" choice under the answer. The pinned skill still answers this turn.
         let mechanicalTask = null;
         if (mechanicalTurn(request) && legalTurn) {
-            const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !name.startsWith("dr-"));
+            const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !isDomainSkill(name));
             const letters = { skill: "pisma-proste-v2", entries: schemaCatalog(this.registry, "pisma-proste-v2") };
             const decided = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [...recognisedDocuments], this.redactionTest(), letters);
             // The request itself (without the delivered files' own rows) asks the pinned skill's work:
@@ -1908,7 +2007,8 @@ export class SafeSessionExecutor {
         // mandatory path and shared resources, tool contracts) goes first and is cached by
         // the provider; what this turn adds (mode, recognitions, act modules, evidence,
         // cited law, retrieval) goes after it.
-        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE]);
+        // Sections present only when this turn delivers such a document stay out of the cached head.
+        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE, CONTRACT_WHOLE_DOCUMENT_RESOURCE, OPPOSING_LETTER_RESOURCE]);
         const stablePath = (section) => {
             const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
             return Boolean(resource) && !turnScoped.has(resource);
@@ -1927,7 +2027,7 @@ export class SafeSessionExecutor {
             reportTools.systemPromptAppendix(),
             ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
             ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
-            ...(federationTools ? [federationTools.systemPromptAppendix()] : []),
+            ...(federationTools ? [localFederation ? SOURCES_BY_KIND : federationTools.systemPromptAppendix()] : []),
             ...(verificationTools ? [verificationTools.systemPromptAppendix()] : [])
         ].join("\n\n");
         const toolPromptTurn = [
@@ -2527,7 +2627,7 @@ export class SafeSessionExecutor {
         // still missing after it degrades the answer (⛔ TRYB ZDEGRADOWANY).
         // The profile after the answer: a criminal domain the model read makes it PEŁNY.
         // Gate modules not yet in the context are loaded for the correcting round.
-        const criminalAfter = pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith("dr-03-"));
+        const criminalAfter = pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith(domainNumber("03")));
         const effectiveProfile = pathProfile({
             mode: request.modeDecision?.mode ?? request.mode,
             simple: request.matterComplexity?.level === "SIMPLE",
@@ -2552,7 +2652,7 @@ export class SafeSessionExecutor {
         let modelOutput = execution.output;
         const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
-        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
+        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== activeJurisdictionPack());
         const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
         const correctionEligible = Boolean(mandatoryModel &&
             legalTurn &&
@@ -3472,6 +3572,7 @@ export class SafeSessionExecutor {
             ? [
                 ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
                 ...(unreadableResources.length ? [`nie wczytano: ${unreadableResources.join(", ")}`] : []),
+                ...(jurisdictionNotice && jurisdiction ? [`jurysdykcja ${jurisdiction.name}: ${jurisdictionStatus(jurisdiction).missing.map((item) => COMPONENT_LABELS[item.component]).join(", ")} bez dostawcy`] : []),
                 ...(mandatoryPath.degraded
                     ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
                     : [])
@@ -3603,7 +3704,7 @@ export class SafeSessionExecutor {
         // silently but offered as the next stage (chronologia-sprawy-v1 next to a pleading).
         const pinnedLater = mechanicalTurn(request) && !switchOffered
             ? parseSkillSelectionEnvelope(request.query)
-                .manualSkills.filter((name) => !name.startsWith("dr-") && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
+                .manualSkills.filter((name) => !isDomainSkill(name) && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
                 // Both letter skills pinned: the stricter pleading workflow controls (no offer of the simple one).
                 .filter((name) => !(name === "pisma-proste-v2" && execution.workflowPlan.executionSkill === "pisma-procesowe-v3"))
                 .filter((name) => name !== mechanicalChoice?.skill && !choicesShown.some((choice) => choice.skill === name))

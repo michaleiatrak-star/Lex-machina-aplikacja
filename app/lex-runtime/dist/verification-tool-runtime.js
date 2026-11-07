@@ -106,7 +106,7 @@ const TOOL_SCHEMA = {
         }
     }
 };
-const SUBSTITUTE_HINT = "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
+const SUBSTITUTE_HINT = "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (JUR:hierarchia-zrodel) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
 const CASE_LIBRARY_TOOL_SCHEMA = {
     type: "function",
     function: {
@@ -481,13 +481,14 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
     "- " + STATUS_CONSISTENCY_INSTRUCTION,
     "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
-    "- Source canon E-1…E-5 (shared/HIERARCHIA-ZRODEL.md): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
+    "- Source canon E-1…E-5 (JUR:hierarchia-zrodel): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
     "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
     "- Case-law discovery policy: (a) signature known -> look it up by repertory in the official registry (verify_case_reference / CBOSA / court portal); no web search, no SAOS. " +
         "(b) Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018, or rulings of the last 2-3 years) -> web_search (when available) with an abstract legal phrase, never case data, to find signatures in secondary sources, in parallel with the official full-text search (search_case_law source=SN / source=CBOSA) using the topic in its legal terms and the provision (e.g. 'zorganizowana grupa przestępcza', 'art. 258 k.k.'), then a second phrasing if the first gives nothing usable. SAOS does not hold these rulings. " +
         "(c) Older rulings or common courts -> search_case_law source=SAOS plus web_search; SAOS also serves as a citator. " +
+        "(d) Every topic search covers the courts that decide such cases, not only the top court: in labour, civil, family and commercial matters search the common courts (the court portal, federated source sp, and search_case_law source=SAOS, courtType=COMMON) alongside SN; the appellate courts' lines are leads with full text. A source that refuses (captcha, HTTP 403, timeout) never ends the search: go on with the next source and say which one failed. " +
         "Secondary sources (web pages, commentaries, news) give only the signature: the thesis and any quote come only from the verified official text. Every signature found on the web or in SAOS is checked with verify_case_reference before it is cited; a web snippet is never a source.",
     "- Form of the decision: when the user asks for a judgment (wyrok), pass form=wyrok (SN) or judgmentType=SENTENCE (SAOS) and never present a postanowienie or uchwała as a wyrok; if only another form exists, say so plainly.",
     "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
@@ -556,6 +557,7 @@ export function snVerificationNeeded(reason) {
 const SN_VERIFICATION_INSTRUCTION = "SN_WERYFIKACJA_WYMAGANA: sn.pl requires a person to pass its check (captcha). The application shows the user the sn.pl verification window and repeats the question once it is passed. " +
     "Say so in one sentence; never say SN has no such decision and never conclude that the ruling does not exist. " +
     "Meanwhile use web_search (abstract legal phrase, never case data) for leads to signatures in secondary sources; search source=SAOS only for SN rulings issued before 2017 (SAOS holds SN decisions only up to 2016). " +
+    "Do not stop at SN: search the common courts in SAOS too (source=SAOS, courtType=COMMON; appellate and regional courts, current, full text), the same topic in its legal terms and the provision; a common court's ruling is cited as such (court, date, signature), never as SN. " +
     "Mark every such hit as an unverified candidate; the thesis and quotes come only from the verified sn.pl text.";
 export class LegalVerificationToolRuntime {
     ledger;

@@ -110,9 +110,9 @@ describe("text that selects modules", () => {
     };
     expect(triggeredModules([entry], { text: "Umowa o roboty budowlane, umowach stron." })).toHaveLength(0);
     expect(triggeredModules([entry], { text: "Pracodawca zmienił nazwę spółki w trakcie zatrudnienia." })).toHaveLength(1);
-    // A list of single examples after the trigger still needs one of them (shared/terminy.md).
+    // A list of single examples after the trigger still needs one of them (JUR:terminy-procesowe).
     const termin = skillModules(registry, "pisma-proste-v2", { text: "Napisz sprzeciw od nakazu zapłaty" });
-    expect(termin.map((item) => item.resource)).toContain("shared/terminy.md");
+    expect(termin.map((item) => item.resource)).toContain("JUR:terminy-procesowe");
   });
 });
 

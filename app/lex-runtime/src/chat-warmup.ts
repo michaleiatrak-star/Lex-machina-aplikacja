@@ -5,6 +5,7 @@ import { criminalMatter } from "./matter-signals.js";
 import type { LexSkillRegistry } from "./registry.js";
 import { resolveAdditionalSkills } from "./skill-selection.js";
 import { registryFlashRoutes } from "./turn-gate.js";
+import { isDomainSkill } from "./jurisdiction.js";
 
 // Measured 2026-11-04 (simulated model, HTTP path): the first legal question after start spent
 // 2.5-4 s in the runtime before the model call - the act-map index of all MAPA-AKTOW.md files
@@ -22,7 +23,7 @@ export function warmChatPaths(registry: LexSkillRegistry, sample = SAMPLE): numb
     () => rankDomains(registry, registryFlashRoutes(registry), sample),
     () => criminalMatter(sample),
     () => {
-      const domain = [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+      const domain = [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
       return domain ? resolveAdditionalSkills(registry, sample, domain, true, []) : null;
     }
   ];

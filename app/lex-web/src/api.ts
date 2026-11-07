@@ -4108,6 +4108,26 @@ export function setDomainFallback(choice: DomainFallbackChoice): Promise<{ choic
   return json("/api/settings/domain-fallback", { method: "PUT", body: JSON.stringify({ choice }) });
 }
 
+export type JurisdictionOption = {
+  pack: string;
+  country: string;
+  name: string;
+  language: string;
+  currency: string;
+  connectors: string[];
+  missing: string[];
+};
+
+export type JurisdictionSettings = { active: string; jurisdictions: JurisdictionOption[] };
+
+export function getJurisdiction(): Promise<JurisdictionSettings> {
+  return json("/api/settings/jurisdiction");
+}
+
+export function setJurisdiction(pack: string): Promise<JurisdictionSettings> {
+  return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ pack }) });
+}
+
 export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {
   return json("/api/case-law/library/remove", { method: "POST", body: JSON.stringify({ cardUrl }) });
 }

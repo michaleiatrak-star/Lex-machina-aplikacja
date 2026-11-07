@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LegalFederationToolRuntime } from "./legal-federation-tool-runtime.js";
 import { LEX_MCP_SERVER_IDS, LexMcpConnectorStore } from "./lex-mcp-connectors.js";
-// G40 — konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs):
+// G40 — konektory MCP Lex Machina (pakiet jurysdykcji, PL: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs):
 // każdy serwer bez klucza musi odpowiedzieć listą narzędzi; EUREKA dodatkowo zapytaniem na żywo.
 const skillsRoot = process.env.LEX_SKILLS_PATH?.trim() ||
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../Wersja rozwojowa rozpakowana");

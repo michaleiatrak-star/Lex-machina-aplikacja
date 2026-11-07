@@ -8,6 +8,7 @@ import {
   LegalSession,
   LegalSessionBootstrapError
 } from "../src/legal-session.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 
@@ -27,7 +28,7 @@ dependencies:
   requires:
     - shared
 required_modules:
-  - shared/PRAWO-HARDGATE.md
+  - JUR:weryfikacja-przepisow-kanon
   - references/KROK0A-anonimizer.md
   - references/KROK1-detekcja.md
 ---
@@ -36,7 +37,7 @@ required_modules:
   );
 
   const resources: Record<string, string> = {
-    "shared/PRAWO-HARDGATE.md": path.join(root, "shared", "PRAWO-HARDGATE.md"),
+    "JUR:weryfikacja-przepisow-kanon": path.join(root, "shared", "PRAWO-HARDGATE.md"),
     "references/KROK0A-anonimizer.md": path.join(
       router,
       "references",
@@ -53,6 +54,7 @@ required_modules:
     if (options?.omit === semantic) continue;
     fs.writeFileSync(file, `# ${semantic}\n`);
   }
+  writeJurisdictionManifest(root);
 
   return root;
 }
@@ -99,7 +101,7 @@ describe("LegalSession", () => {
   });
 
   it("fails closed when a mandatory core resource is missing", () => {
-    const missing = "shared/PRAWO-HARDGATE.md";
+    const missing = "JUR:weryfikacja-przepisow-kanon";
     const root = makeCorpus({ omit: missing });
     const registry = new LexSkillRegistry(root);
     registry.scan();

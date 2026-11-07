@@ -76,7 +76,7 @@ describe("mandatory path model from the corpus", () => {
       profile: "PELNY",
       contextResources: new Set([
         "prawny-router-v3/SKILL.md",
-        "shared/PRAWO-HARDGATE.md",
+        "JUR:weryfikacja-przepisow-kanon",
         "prawny-router-v3/references/KROK0A-anonimizer.md",
         "prawny-router-v3/references/KROK1-detekcja.md",
         ...preloadForTurn(model, { profile: "PELNY", query: "art. 233 KK", legal: true, criminal: true, documents: false, documentsTruncated: false, documentGeneration: false, foreignJurisdiction: false })

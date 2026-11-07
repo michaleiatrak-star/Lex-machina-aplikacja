@@ -267,7 +267,7 @@
         "uodo_official"
       ],
       "legalFederation": {
-        "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+        "connectorPackage": "prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs",
         "sources": [
           "isap",
           "eurlex",
@@ -338,7 +338,7 @@
   },
   "legalSourceFederation": {
     "transport": "MCP_STDIO_VIA_BUNDLED_NODE",
-    "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+    "connectorPackage": "prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs",
     "role": "DISCOVERY_RESEARCH_ONLY",
     "sources": [
       "isap",

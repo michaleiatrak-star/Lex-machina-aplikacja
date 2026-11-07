@@ -54,7 +54,7 @@ jobs:
         include:
           - os: windows-latest
             accel: dml
-          - os: macos-14
+          - os: macos-15
             accel: coreml
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60

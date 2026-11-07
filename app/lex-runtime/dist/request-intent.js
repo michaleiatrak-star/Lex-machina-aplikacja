@@ -38,7 +38,20 @@ function sentences(text) {
  * end, with the sentence before it when that one asks too ("Mam wyrok. Przeanalizuj go.
  * Czy warto apelować?"). A message of up to two sentences is its own request.
  */
+// A pasted document after the request: "Treść umowy:", "Poniżej wyrok:" or the document's own
+// heading ("UMOWA NR 14/2026 …", "WYROK", "§ 1."). Its sentences ("O tym, czy wada jest istotna,
+// rozstrzyga Wykonawca") ask nothing of the application.
+const PASTED_DOCUMENT = /\n[ \t]*(?:(?:[Tt]re[śs][ćc]|[Tt]ekst|[Pp]oni[żz]ej|[Zz]a[łl][ąa]czam|[Ww]klejam|[Oo]to)(?![\p{L}])[^\n]{0,60}:[ \t]*\n|(?:UMOWA|ANEKS|POROZUMIENIE|REGULAMIN|WYROK|POSTANOWIENIE|DECYZJA|NAKAZ|POZEW|PEŁNOMOCNICTWO|STATUT|UCHWAŁA)(?![\p{L}])[^\n]*\n|§\s*1\.?[ \t])/u;
+/** The text before a document pasted after the request, when that text asks or instructs. */
+export function beforePastedDocument(text) {
+    const match = PASTED_DOCUMENT.exec(text);
+    if (!match || match.index < 10)
+        return text;
+    const head = text.slice(0, match.index);
+    return REQUEST_CUE.test(fold(head)) ? head : text;
+}
 export function requestOf(text) {
+    text = beforePastedDocument(text);
     const all = sentences(text);
     if (all.length <= 2)
         return text;

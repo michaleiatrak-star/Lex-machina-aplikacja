@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { activeJurisdictionPack, registerJurisdictionCorpus } from "./jurisdiction.js";
 
 export type SkillFrontmatter = {
   name?: string;
@@ -94,6 +95,7 @@ export class LexSkillRegistry {
   scan(): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     this.skills.clear();
+    registerJurisdictionCorpus(this.root);
 
     for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -160,6 +162,13 @@ export class LexSkillRegistry {
   resolveResource(skillName: string, semanticPath: string): string | null {
     const normalized = semanticPath.replaceAll("\\", "/").trim();
     if (!normalized) return null;
+    // "JUR:terminy-procesowe": national law named by key (shared/UNIVERSAL-RUNTIME-ADAPTER.md §1B),
+    // resolved through the active jurisdiction's manifest (Polish law: prawo-polskie-v2).
+    const key = /^JUR:([a-z0-9-]+)$/u.exec(normalized.replace(/^view\s+/u, ""));
+    if (key) {
+      const target = this.jurisdictionModules().get(`JUR:${key[1]}`);
+      return target ? this.resolveResource(skillName, target) : null;
+    }
 
     let candidate: string;
 
@@ -190,6 +199,23 @@ export class LexSkillRegistry {
 
     const safe = assertInside(this.root, candidate);
     return isFile(safe) || isDirectory(safe) ? safe : null;
+  }
+
+  private jurisdictionCache: { root: string; pack: string; modules: Map<string, string> } | null = null;
+
+  /** The active jurisdiction's keys → modules (jurisdiction.ts: Settings or LEX_JURISDICTION_PACK, default prawo-polskie-v2). */
+  jurisdictionModules(): Map<string, string> {
+    const pack = activeJurisdictionPack();
+    if (this.jurisdictionCache?.root === this.root && this.jurisdictionCache.pack === pack) return this.jurisdictionCache.modules;
+    const modules = new Map<string, string>();
+    try {
+      const manifest = fs.readFileSync(assertInside(this.root, path.join(this.root, pack, "JURYSDYKCJA.md")), "utf8");
+      for (const match of manifest.matchAll(/^\|\s*`(JUR:[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gmu)) modules.set(match[1]!, match[2]!);
+    } catch {
+      // No manifest: a key resolves to nothing (TRYB ZDEGRADOWANY in the skill), never to a guess.
+    }
+    this.jurisdictionCache = { root: this.root, pack, modules };
+    return modules;
   }
 
   validateDeclarations(): ValidationIssue[] {

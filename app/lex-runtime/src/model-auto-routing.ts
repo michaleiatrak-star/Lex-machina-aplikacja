@@ -17,10 +17,11 @@ import {
   latestUserTurn
 } from "./execution-engine.js";
 import {
-  MANDATORY_SESSION_SKILLS,
+  mandatorySessionSkills,
   SKILL_SELECTION_ENVELOPE_PREFIX,
   parseSkillSelectionEnvelope
 } from "./skill-selection.js";
+import { activeJurisdictionPack, isDomainSkill, jurisdictionDomainMap } from "./jurisdiction.js";
 
 export type ModelAutoRoutingDecision = {
   // false: the message has no legal matter (greeting, test, general
@@ -144,9 +145,7 @@ function allowedDomains(
     [...registry.skills.values()]
       .filter(
         (skill) =>
-          skill.name.startsWith(
-            "dr-"
-          )
+          isDomainSkill(skill.name)
       )
       .map(
         (skill) =>
@@ -191,11 +190,7 @@ function allowedExecutionSkills(
         isExecutionSkill(
           skill
         ) &&
-        !MANDATORY_SESSION_SKILLS
-          .includes(
-            skill.name as
-              typeof MANDATORY_SESSION_SKILLS[number]
-          ) &&
+        !mandatorySessionSkills().includes(skill.name) &&
         (
           !restrictionActive ||
           allowed.has(
@@ -498,8 +493,8 @@ export class ModelAutoRouter {
         ? null
         : this.registry
         .resolveResource(
-          "prawo-polskie-v2",
-          "prawo-polskie-v2/ROUTING-MAP.md"
+          activeJurisdictionPack(),
+          jurisdictionDomainMap(this.registry.root)
         );
     const mapText =
       routingMap

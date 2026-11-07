@@ -165,7 +165,7 @@ const QUALITY_GATE_LINE =
 // Usuwane razem z treścią: listy, wcięcia, blok kodu i kolejne wiersze z etykietą do pierwszego
 // zwykłego akapitu, nagłówka albo zastrzeżenia.
 const CONTROL_SECTION =
-  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:Ślad routingu\b|Kontrol[ae](?: wykonane)? przy tej odpowiedzi|Kontrol[ae] techniczn|Ścieżka:(?:\*\*)?\s*tryb\b|[^*\n]{0,80}\b(?:CN|OŚ|WYJ|REM)-GATE\b)/iu;
+  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:Ślad routingu\b|Bloki techniczne\b|Bramki (?:routera|kontrolne|jakości)\b|Kontrol[ae](?: wykonane)? przy tej odpowiedzi|Kontrol[ae] techniczn|Ścieżka:(?:\*\*)?\s*tryb\b|[^*\n]{0,80}\b(?:CN|OŚ|WYJ|REM)-GATE\b)/iu;
 const HEADING_ONLY = /^\s*(?:#{1,6}\s+.+|(?:[-*]\s*)?\*\*[^*\n]+\*\*\s*:?)\s*$/u;
 const SECTION_BODY = /^\s*(?:$|[-*•]\s|\d{1,2}[.)]\s)|^\s{2,}\S/u;
 
@@ -342,4 +342,16 @@ export function plainErrorMessage(code: string, technical: string, reason?: stri
   if (/DOCUMENT|EXPORT|LETTER_MARKUP/.test(code)) return plainSystemText(technical);
   if (/^Nie udało się uruchomić lokalnego modelu|^Lokalny model wymaga naprawy profilu/.test(code)) return technical;
   return PLAIN_ERROR;
+}
+
+/**
+ * The draft shown while the answer is written: a ✅ in it is the model's own claim, the
+ * verification has not run yet (live 2026-11-06: "art. 483 § 1 KC ✅" over the wording of
+ * art. 484 § 1). Shown as pending; the gate blocks go as in the answer.
+ */
+export function draftDisplayText(content: string, developer: boolean): string {
+  const pending = content
+    .replace(/✅\s*\[VER:[^\]\n]*\]/gu, "⏳ [weryfikacja w toku]")
+    .replace(/✅/gu, "⏳");
+  return developer ? pending : withoutQualityGateLines(pending).replace(/\n\n_Kontrola jakości odpowiedzi \(bramki modułów\) została wykonana\._$/u, "");
 }
