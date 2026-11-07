@@ -215,6 +215,17 @@ describe("FinalizationGate", () => {
     expect(report.findings[0]?.status).toBe("UNVERIFIED_NOT_MARKED");
   });
 
+  it("proposed contract wording in a quote is the parties' terms, not a claim about the law", () => {
+    const report = new FinalizationGate().evaluate(
+      "**Proponowane brzmienie:**\n> „1. Zamawiający w terminie 10 dni roboczych przeprowadza testy; kara wynosi 0,2% dziennie.”",
+      new VerificationLedger()
+    );
+    expect(report.findings.filter((finding) => finding.reference.kind === "amount")).toEqual([]);
+    // The same term stated as the law outside a quote is still checked.
+    const stated = new FinalizationGate().evaluate("Termin na wniesienie sprzeciwu wynosi 14 dni.", new VerificationLedger());
+    expect(stated.findings.some((finding) => finding.reference.kind === "amount")).toBe(true);
+  });
+
   it("passes a verified SN exact quote only when hash, quote and signature share the line", () => {
     const ledger = new VerificationLedger();
 
