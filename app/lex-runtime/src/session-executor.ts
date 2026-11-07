@@ -286,7 +286,7 @@ import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
-import { activeJurisdictionPack } from "./jurisdiction.js";
+import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
@@ -470,6 +470,10 @@ export type SessionExecutionRequest = {
 // A follow-up this short ("ok, robisz to.") carries no task of its own.
 const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
+// The qualifier is a module of Polish law (dr-03): read only while Polish law is the chosen jurisdiction.
+const criminalQualifierActive = (): boolean => isDomainSkill(CRIMINAL_QUALIFIER_RESOURCE.split("/")[0]);
+// A domain skill by its number in the chosen jurisdiction ("dr-03-" for Polish law, its analogue elsewhere).
+const domainNumber = (number: string): string => `${domainSkillPrefix()}-${number}-`;
   /(?<![\p{L}])(?:związ\p{L}*\s+przyczynow\p{L}*|przyczynowo[-\s]skutkow\p{L}*|co\s+z\s+czego\s+wynika|post\s+hoc|csqn|conditio\s+sine\s+qua\s+non|(?:czy|co)\s+(?:\p{L}+\s+){0,6}(?:spowodował\p{L}*|doprowadził\p{L}*|wywołał\p{L}*)|przerw\p{L}*\s+(?:\p{L}+\s+){0,2}związ\p{L}*|wyklucz\p{L}*\s+(?:\p{L}+\s+){0,3}(?:związ\p{L}*|przyczyn\p{L}*)|łańcuch\p{L}*\s+przyczyn\p{L}*)(?![\p{L}])/iu;
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
@@ -2510,7 +2514,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // AUTO: primarySkill is a placeholder until the model reads a domain skill,
       // so the criminal matter comes from the question itself.
       criminal:
-        (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
+        (!request.modelSelectsSkills && request.primarySkill.startsWith(domainNumber("03"))) ||
         criminalMatter(withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query))) ||
         // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
         // sends the latest message apart (auxiliaryText), so the thread is read as well.
@@ -2558,7 +2562,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
       `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
       // Route-based path: the engine puts the qualifier in the prompt itself.
-      ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
+      ...(pathFacts.criminal && !request.modelSelectsSkills && criminalQualifierActive() ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
     ]);
     corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
@@ -2643,7 +2647,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
     if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {
-      const qualifier = this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE);
+      const qualifier = criminalQualifierActive() ? this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE) : null;
       if (qualifier) {
         contextResources.add(CRIMINAL_QUALIFIER_RESOURCE);
         audit.record("resource_read", CRIMINAL_QUALIFIER_RESOURCE, "OK", { detail: "runtime-preload;mandatory-path;criminal-question" });
@@ -2706,7 +2710,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         const ranked = rankDomains(this.registry, this.flashRoutes(), text);
         return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
       };
-      const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+      const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith(domainNumber("16")));
       if (mechanical) {
         const allowed = (skill: string | undefined) =>
           skill && (!mechanicalEnvelope.domainRestrictionActive || mechanicalEnvelope.domainAllowList.includes(skill)) ? skill : undefined;
@@ -3835,7 +3839,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // The profile after the answer: a criminal domain the model read makes it PEŁNY.
     // Gate modules not yet in the context are loaded for the correcting round.
     const criminalAfter =
-      pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith("dr-03-"));
+      pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith(domainNumber("03")));
     const effectiveProfile: PathProfile = pathProfile({
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
