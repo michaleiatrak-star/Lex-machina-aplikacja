@@ -285,6 +285,8 @@ import { registryFactsText } from "./privacy/registry-enrichment.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus } from "./jurisdiction.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
@@ -1727,9 +1729,11 @@ export class SafeSessionExecutor implements SessionExecutor {
 
   // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
   private flashRoutes(): FlashRoute[] {
-    if (this.flashRoutesCache?.root === this.registry.root) return this.flashRoutesCache.rows;
-    const rows = parseFlashRouting(this.readCorpus("prawo-polskie-v2/SKILL.md") ?? "");
-    this.flashRoutesCache = { root: this.registry.root, rows };
+    const facade = activeJurisdictionPack();
+    if (this.flashRoutesCache?.root === `${this.registry.root}:${facade}`) return this.flashRoutesCache.rows;
+    // The chosen jurisdiction's facade (Polish law: prawo-polskie-v2) holds its flash routing.
+    const rows = parseFlashRouting(this.readCorpus(`${facade}/SKILL.md`) ?? "");
+    this.flashRoutesCache = { root: `${this.registry.root}:${facade}`, rows };
     return rows;
   }
 
@@ -2850,6 +2854,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
     // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
     const unreadableResources: string[] = [];
+    const jurisdiction = legalTurn ? activeJurisdiction(this.registry.root) : null;
+    const jurisdictionNotice = jurisdiction ? jurisdictionDegradedNotice(jurisdictionStatus(jurisdiction)) : null;
     if (mandatoryModel && legalTurn) {
       const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
       for (const resource of preloaded) {
@@ -2872,6 +2878,9 @@ export class SafeSessionExecutor implements SessionExecutor {
           ].join("\n")
         );
       }
+      // The chosen jurisdiction without an application provider for some component (jurisdiction.ts):
+      // named to the model and in the answer, never served by another country's component.
+      if (jurisdictionNotice) pathSections.push(`# ⛔ TRYB ZDEGRADOWANY — JURYSDYKCJA (ustalone przez aplikację)\n${jurisdictionNotice}`);
       step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length - unreadableResources.length} plików`);
       pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
     }
@@ -3850,7 +3859,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const corrections: AnswerCorrection[] = [];
     // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
     const domainSkillRead = audit.events.some(
-      (event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2"
+      (event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== activeJurisdictionPack()
     );
     const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
     const correctionEligible = Boolean(
@@ -5150,6 +5159,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ? [
           ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
           ...(unreadableResources.length ? [`nie wczytano: ${unreadableResources.join(", ")}`] : []),
+          ...(jurisdictionNotice && jurisdiction ? [`jurysdykcja ${jurisdiction.name}: ${jurisdictionStatus(jurisdiction).missing.map((item) => COMPONENT_LABELS[item.component]).join(", ")} bez dostawcy`] : []),
           ...(mandatoryPath.degraded
             ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
             : [])

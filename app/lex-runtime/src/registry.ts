@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 export type SkillFrontmatter = {
   name?: string;
@@ -199,20 +200,20 @@ export class LexSkillRegistry {
     return isFile(safe) || isDirectory(safe) ? safe : null;
   }
 
-  private jurisdictionCache: { root: string; modules: Map<string, string> } | null = null;
+  private jurisdictionCache: { root: string; pack: string; modules: Map<string, string> } | null = null;
 
-  /** The active jurisdiction's keys → modules (LEX_JURISDICTION_PACK, default prawo-polskie-v2). */
+  /** The active jurisdiction's keys → modules (jurisdiction.ts: Settings or LEX_JURISDICTION_PACK, default prawo-polskie-v2). */
   jurisdictionModules(): Map<string, string> {
-    if (this.jurisdictionCache?.root === this.root) return this.jurisdictionCache.modules;
+    const pack = activeJurisdictionPack();
+    if (this.jurisdictionCache?.root === this.root && this.jurisdictionCache.pack === pack) return this.jurisdictionCache.modules;
     const modules = new Map<string, string>();
-    const pack = process.env.LEX_JURISDICTION_PACK?.trim() || "prawo-polskie-v2";
     try {
       const manifest = fs.readFileSync(assertInside(this.root, path.join(this.root, pack, "JURYSDYKCJA.md")), "utf8");
       for (const match of manifest.matchAll(/^\|\s*`(JUR:[a-z0-9-]+)`\s*\|\s*`([^`]+)`\s*\|/gmu)) modules.set(match[1]!, match[2]!);
     } catch {
       // No manifest: a key resolves to nothing (TRYB ZDEGRADOWANY in the skill), never to a guess.
     }
-    this.jurisdictionCache = { root: this.root, modules };
+    this.jurisdictionCache = { root: this.root, pack, modules };
     return modules;
   }
 

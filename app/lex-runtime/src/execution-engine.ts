@@ -53,7 +53,7 @@ import type {
   StreamCallbacks
 } from "./providers/types.js";
 import {
-  MANDATORY_SESSION_SKILLS,
+  mandatorySessionSkills,
   latestUserTurn,
   parseSkillSelectionEnvelope,
   resolveAdditionalSkills,
@@ -101,6 +101,7 @@ import type {
   GateIRuntimePreludeResult
 } from "./gate-i-runtime-prelude.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { activeJurisdictionPack, jurisdictionDomainMap } from "./jurisdiction.js";
 
 export type RouteDecision = {
   jurisdiction: "PL";
@@ -655,36 +656,39 @@ export class LexExecutionEngine {
       );
     }
 
-    const polishLaw = this.registry.get("prawo-polskie-v2");
+    // The chosen jurisdiction's facade and domain map (Polish law: prawo-polskie-v2, ROUTING-MAP.md).
+    const facade = activeJurisdictionPack();
+    const domainMap = jurisdictionDomainMap(this.registry.root);
+    const polishLaw = this.registry.get(facade);
     if (!polishLaw) {
-      emit("skill_read", "prawo-polskie-v2", "BLOCKED");
+      emit("skill_read", facade, "BLOCKED");
       throw new LexExecutionError(
-        "prawo-polskie-v2 is required for Polish-law routing.",
-        "prawo-polskie-v2",
+        `${facade} is required for the jurisdiction's routing.`,
+        facade,
         [...events]
       );
     }
-    emit("skill_read", "prawo-polskie-v2", "OK");
+    emit("skill_read", facade, "OK");
 
     const routingMap = this.registry.resolveResource(
-      "prawo-polskie-v2",
-      "prawo-polskie-v2/ROUTING-MAP.md"
+      facade,
+      domainMap
     );
     if (!routingMap) {
       emit(
         "resource_read",
-        "prawo-polskie-v2/ROUTING-MAP.md",
+        domainMap,
         "BLOCKED"
       );
       throw new LexExecutionError(
-        "The central Polish-law routing map is unavailable.",
-        "prawo-polskie-v2/ROUTING-MAP.md",
+        "The jurisdiction's central routing map is unavailable.",
+        domainMap,
         [...events]
       );
     }
     emit(
       "resource_read",
-      "prawo-polskie-v2/ROUTING-MAP.md",
+      domainMap,
       "OK"
     );
 
@@ -2010,7 +2014,7 @@ export class LexExecutionEngine {
       ).text;
     const stableSkillPrompt = combineSkillPrompt(
       this.registry,
-      ["prawny-router-v3", "prawo-polskie-v2", ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))],
+      ["prawny-router-v3", activeJurisdictionPack(), ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))],
       localModel,
       skillCompaction
     );
@@ -2456,9 +2460,7 @@ export class LexExecutionEngine {
       }
       return !envelope.executionRestrictionActive ||
         envelope.executionAllowList.includes(name) ||
-        MANDATORY_SESSION_SKILLS.includes(
-          name as typeof MANDATORY_SESSION_SKILLS[number]
-        );
+        mandatorySessionSkills().includes(name);
     };
     const native = args.nativeCorpus;
     const catalog = [...this.registry.skills.values()]
@@ -2478,7 +2480,7 @@ export class LexExecutionEngine {
     // two tool rounds less on every legal question.
     const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
     const preloaded: Array<{ name: string; relative: string; text: string }> = onPreloaded
-      ? (["prawny-router-v3", "prawo-polskie-v2"] as const).flatMap((name) => {
+      ? ["prawny-router-v3", activeJurisdictionPack()].flatMap((name) => {
           const skill = this.registry.get(name);
           if (!skill || !allowed(name)) return [];
           const file = path.join(skill.directory, "SKILL.md");
@@ -2522,7 +2524,7 @@ export class LexExecutionEngine {
       preloaded.length
         ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`
         : `Sprawa lub pytanie prawne: NAJPIERW wczytaj ${native ? "Read prawny-router-v3/SKILL.md" : "read_legal_resource skill=prawny-router-v3 path=SKILL.md"} i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla).`,
-      `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === "prawo-polskie-v2") ? " i prawo-polskie-v2" : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
+      `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === activeJurisdictionPack()) ? ` i ${activeJurisdictionPack()}` : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
       `Nie wczytuj skilli i modułów, do których ani router, ani wczytane skille nie kierują dla tego pytania; nie zgaduj nazw plików (nazwy nie znasz: ${listTool}) i nie przeglądaj całych katalogów.${native ? "" : " Gdy ścieżka lub nazwa skilla jest błędna, runtime w tej samej rundzie poda jedyny pasujący plik (pole requestedPath) albo listę kandydatów (NOT_FOUND, candidates) - wybierz z niej, nie zgaduj dalej."} Nie udawaj, że przeczytałeś plik, którego nie wczytałeś.`
     ];
     const toolNames = new Set(

@@ -13,13 +13,14 @@ import {
   CRIMINAL_DOMAIN_PREFIX,
   CRIMINAL_QUALIFIER_INDEX
 } from "./execution-engine.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 const ROUTER_SKILL = "prawny-router-v3";
 // Loaded by the router itself; they are not a legal domain or workflow.
+// The jurisdiction's facade is the chosen country's package (jurisdiction.ts).
 const INFRASTRUCTURE_SKILLS = new Set([
   ROUTER_SKILL,
-  "shared",
-  "prawo-polskie-v2"
+  "shared"
 ]);
 
 export type ModelSkillSelection = {
@@ -466,7 +467,8 @@ export class LegalCorpusToolRuntime {
       this.readSkills.filter(
         (name) =>
           !name.startsWith("dr-") &&
-          !INFRASTRUCTURE_SKILLS.has(name)
+          !INFRASTRUCTURE_SKILLS.has(name) &&
+          name !== activeJurisdictionPack()
       );
     return {
       primarySkill:

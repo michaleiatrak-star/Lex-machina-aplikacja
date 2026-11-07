@@ -23,8 +23,8 @@ $nodeDir = Join-Path $runtime "node"
 $nodeExe = Join-Path $nodeDir "node.exe"
 $uodoServer = Join-Path $runtime "app\dist\uodo-official-mcp-server.js"
 $skillsRoot = Join-Path $runtime "corpus"
-# Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers) — jedyne źródłowe MCP prawne w konfiguracji llama.
-$lexMcp = Join-Path $skillsRoot "audyt-systemu-v4\mcp-servers\dist\lex-mcp.mjs"
+# Konektory MCP Lex Machina (prawo-polskie-v2/mcp-servers) — jedyne źródłowe MCP prawne w konfiguracji llama.
+$lexMcp = Join-Path $skillsRoot "prawo-polskie-v2\mcp-servers\dist\lex-mcp.mjs"
 $lexMcpServers = @("isap","eurlex","saos","cbosa","krs","wl","nbp","eureka","sudop","uodo")
 $privacyVaultRoot = Join-Path $localRoot "privacy-vaults"
 

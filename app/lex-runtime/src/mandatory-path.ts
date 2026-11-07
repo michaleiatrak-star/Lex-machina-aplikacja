@@ -2,6 +2,7 @@ import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import type { VerificationRecord } from "./verification-ledger.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 /**
  * Model of the mandatory path of a legal turn, read from the corpus
@@ -802,7 +803,7 @@ export function routingTrace(args: {
   sharedRoot: string;
   duplicates: string[];
 }): { text: string; primaryRead: boolean } {
-  const skipped = new Set([ROUTER_SKILL, "prawo-polskie-v2", "AUTO", ""]);
+  const skipped = new Set([ROUTER_SKILL, activeJurisdictionPack(), "AUTO", ""]);
   const read = (skill: string) =>
     args.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target === skill);
   const readSkills = args.events
@@ -810,7 +811,7 @@ export function routingTrace(args: {
     .map((event) => event.target);
   const primary = !skipped.has(args.primarySkill)
     ? args.primarySkill
-    : readSkills[0] ?? (read("prawo-polskie-v2") ? "prawo-polskie-v2" : "");
+    : readSkills[0] ?? (read(activeJurisdictionPack()) ? activeJurisdictionPack() : "");
   const primaryRead = Boolean(primary) && read(primary);
   const secondary = [...new Set([...args.loadedSkills, ...readSkills])].filter((skill) => !skipped.has(skill) && skill !== primary);
   const core = args.report.steps.filter((step) => step.layer === "ROUTER" && /^R-\d$/.test(step.id));

@@ -12,6 +12,7 @@ import { threadUserText } from "./skill-selection.js";
 import { parseFlashRouting, type FlashRoute } from "./domain-module-map.js";
 import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 /**
  * What one chat turn ends in, decided the way the application decides it for an
@@ -64,7 +65,7 @@ export class TurnOutcomeModel {
     this.router = new TurnRouter(corpusRoot);
     this.signals = parseModeSignals(read("prawny-router-v3/references/KROK1-detekcja.md"));
     this.routes = parseRoutingTable(read("prawny-router-v3/SKILL.md"));
-    this.flash = parseFlashRouting(read("prawo-polskie-v2/SKILL.md"));
+    this.flash = parseFlashRouting(read(`${activeJurisdictionPack()}/SKILL.md`));
     this.accents = buildAccentMap(executiveSkillTexts(this.router.registry));
   }
 

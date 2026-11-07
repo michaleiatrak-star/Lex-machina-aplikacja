@@ -27,6 +27,7 @@ import {
   htmlArticleAnchors,
   pdfArticleAnchors
 } from "./source-anchor.js";
+import { activeJurisdictionPack, jurisdictionDomainMap } from "./jurisdiction.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -294,9 +295,10 @@ function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
     const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
     if (fs.existsSync(file)) files.push({ domain: entry.name, file });
   }
-  const routing = path.join(corpusRoot, "prawo-polskie-v2", "ROUTING-MAP.md");
+  // The chosen jurisdiction's domain map (Polish law: prawo-polskie-v2/ROUTING-MAP.md).
+  const routing = path.join(corpusRoot, ...jurisdictionDomainMap(corpusRoot).split("/"));
   if (fs.existsSync(routing)) {
-    files.push({ domain: "prawo-polskie-v2", file: routing });
+    files.push({ domain: activeJurisdictionPack(), file: routing });
   }
   return files.sort((a, b) => a.domain.localeCompare(b.domain));
 }

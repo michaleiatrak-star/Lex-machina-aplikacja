@@ -312,6 +312,7 @@ import {
   type OrderedCaseWorkflowId,
   type OrderedCaseWorkflowState
 } from "../ordered-case-workflow-state.js";
+import { activeJurisdictionPack } from "../jurisdiction.js";
 
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
@@ -10222,7 +10223,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // The guide pinned in the chat's envelope (the route is a DR then) as the only
       // executive skill runs LEGAL_GUIDE_V1 too and needs its session state (E2E: 422).
       const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter(
-        (name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== "prawo-polskie-v2" && name !== "shared"
+        (name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== activeJurisdictionPack() && name !== "shared"
       );
       if (
         request.primarySkill ===

@@ -74,7 +74,7 @@ Copy-Item (Join-Path $repo "app\privacy") (Join-Path $payload "privacy") -Recurs
 Copy-Item (Join-Path $repo "app\storage") (Join-Path $payload "storage") -Recurse
 Copy-Item (Join-Path $repo "Wersja rozwojowa rozpakowana") (Join-Path $payload "corpus") -Recurse
 # Pakiet serwerów MCP musi mieć bajty z sumy w CHECKSUMS.sha256 skilla (bez CRLF z checkoutu).
-$mcpSkill = Join-Path $payload "corpus\audyt-systemu-v4"
+$mcpSkill = Join-Path $payload "corpus\prawo-polskie-v2"
 $mcpBundle = Join-Path $mcpSkill "mcp-servers\dist\lex-mcp.mjs"
 $mcpExpected = (Get-Content (Join-Path $mcpSkill "CHECKSUMS.sha256") |
   Where-Object { $_ -match "\s\./mcp-servers/dist/lex-mcp\.mjs$" } |

@@ -146,7 +146,7 @@ if ($bielikTemplateText -notmatch "LEX_WEB_GROUNDED_POLICY_V1" -or
 }
 
 $llamaConfiguratorText = Get-Content -Raw -LiteralPath $llamaWebConfigurator
-if ($llamaConfiguratorText -notmatch [Regex]::Escape("audyt-systemu-v4\mcp-servers\dist\lex-mcp.mjs")) {
+if ($llamaConfiguratorText -notmatch [Regex]::Escape("prawo-polskie-v2\mcp-servers\dist\lex-mcp.mjs")) {
   throw "SELFTEST_LLAMA_LEX_MCP_PACKAGE_MISSING"
 }
 if ($llamaConfiguratorText -match "matematicsolutions|prawo-pl-mcp") {

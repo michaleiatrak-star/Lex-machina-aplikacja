@@ -36,11 +36,11 @@ import {
   type WebSearchProvider
 } from "./web-search.js";
 
-// Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers, dist/lex-mcp.mjs) zastępują
+// Konektory MCP Lex Machina (pakiet jurysdykcji, pole `konektory`; PL: prawo-polskie-v2/mcp-servers, dist/lex-mcp.mjs) zastępują
 // agregator prawo-pl-mcp i flotę @matematicsolutions/*. Które serwery działają, decyduje
 // instalator w Ustawieniach → Konektory MCP (LexMcpConnectorStore).
 const CONNECTOR_PACKAGE =
-  "lex-mcp.mjs (audyt-systemu-v4/mcp-servers)";
+  "lex-mcp.mjs (prawo-polskie-v2/mcp-servers)";
 
 const SOURCE_IDS =
   LEX_MCP_SERVER_IDS;
@@ -1122,7 +1122,7 @@ export class LegalFederationToolRuntime {
     string {
     return [
       "# FEDERATED LEGAL RESEARCH",
-      "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), common courts (sp, link = decision), TK (tk), ECHR (etpcz), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
+      "Lex Machina has optional read-only MCP connectors (lex-mcp, prawo-polskie-v2/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), common courts (sp, link = decision), TK (tk), ECHR (etpcz), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
       "NSA/WSA results from cbosa are a snapshot 🟨 and are never promoted to VERIFIED; no exact match is OUT_OF_SCOPE, not absence of the ruling.",
       "Use list_federated_legal_sources when you need source capabilities or a native schema. Search first, then fetch the actual document before relying on its contents.",
       "This federation is DISCOVERY/RESEARCH ONLY. It never creates a Lex Machina VERIFIED ledger entry and never bypasses Gate I.",

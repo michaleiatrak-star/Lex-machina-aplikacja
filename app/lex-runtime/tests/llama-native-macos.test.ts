@@ -29,8 +29,8 @@ function runtimeRoot(skills = 32): string {
     fs.mkdirSync(path.join(root, "corpus", `skill-${index}`), { recursive: true });
     fs.writeFileSync(path.join(root, "corpus", `skill-${index}`, "SKILL.md"), "# skill\n");
   }
-  fs.mkdirSync(path.join(root, "corpus", "audyt-systemu-v4", "mcp-servers", "dist"), { recursive: true });
-  fs.writeFileSync(path.join(root, "corpus", "audyt-systemu-v4", "mcp-servers", "dist", "lex-mcp.mjs"), "");
+  fs.mkdirSync(path.join(root, "corpus", "prawo-polskie-v2", "mcp-servers", "dist"), { recursive: true });
+  fs.writeFileSync(path.join(root, "corpus", "prawo-polskie-v2", "mcp-servers", "dist", "lex-mcp.mjs"), "");
   fs.mkdirSync(path.join(root, "app", "dist"), { recursive: true });
   fs.writeFileSync(path.join(root, "app", "dist", "uodo-official-mcp-server.js"), "");
   return root;

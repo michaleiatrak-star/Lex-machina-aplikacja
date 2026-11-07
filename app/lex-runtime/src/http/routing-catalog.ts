@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
+import { activeJurisdictionPack, jurisdictionDomainMap } from "../jurisdiction.js";
 
 export type RouteValidation = {
   valid: boolean;
@@ -34,8 +35,8 @@ export class RoutingCatalog {
     }
 
     const routingMap = this.registry.resolveResource(
-      "prawo-polskie-v2",
-      "prawo-polskie-v2/ROUTING-MAP.md"
+      activeJurisdictionPack(),
+      jurisdictionDomainMap(this.registry.root)
     );
     if (!routingMap) {
       return {
