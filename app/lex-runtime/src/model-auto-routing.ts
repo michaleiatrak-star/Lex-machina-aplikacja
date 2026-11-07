@@ -21,7 +21,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX,
   parseSkillSelectionEnvelope
 } from "./skill-selection.js";
-import { activeJurisdictionPack, jurisdictionDomainMap } from "./jurisdiction.js";
+import { activeJurisdictionPack, isDomainSkill, jurisdictionDomainMap } from "./jurisdiction.js";
 
 export type ModelAutoRoutingDecision = {
   // false: the message has no legal matter (greeting, test, general
@@ -145,9 +145,7 @@ function allowedDomains(
     [...registry.skills.values()]
       .filter(
         (skill) =>
-          skill.name.startsWith(
-            "dr-"
-          )
+          isDomainSkill(skill.name)
       )
       .map(
         (skill) =>

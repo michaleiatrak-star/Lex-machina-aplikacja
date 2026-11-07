@@ -285,7 +285,7 @@ import { registryFactsText } from "./privacy/registry-enrichment.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
-import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus } from "./jurisdiction.js";
+import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack } from "./jurisdiction.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
@@ -2689,7 +2689,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // domain (word overlap with skill descriptions — "art. 415 KC" read as DR-01) gives way
       // to the act the question cites, then to a routing phrase. A domain the user picked
       // (a DR in the selection, or the domain allow-list) stays.
-      const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => name.startsWith("dr-"));
+      const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => isDomainSkill(name));
       if (!mechanical && (!request.modelSelectsSkills || !workflowContext)) return request.primarySkill;
       // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
       // the matter or of its thread; two shared words of an act-map row ("wyrok", "apelacja")
@@ -2701,7 +2701,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         .slice(0, 30_000);
       const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
         .modules.map((item) => item.skill)
-        .find((skill) => skill.startsWith("dr-"));
+        .find((skill) => isDomainSkill(skill));
       const phrased = (text: string) => {
         const ranked = rankDomains(this.registry, this.flashRoutes(), text);
         return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
@@ -2894,7 +2894,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // one a "next stage" choice under the answer. The pinned skill still answers this turn.
     let mechanicalTask: TaskDecision | null = null;
     if (mechanicalTurn(request) && legalTurn) {
-      const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !name.startsWith("dr-"));
+      const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !isDomainSkill(name));
       const letters = { skill: "pisma-proste-v2", entries: schemaCatalog(this.registry, "pisma-proste-v2") };
       const decided = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [...recognisedDocuments], this.redactionTest(), letters);
       // The request itself (without the delivered files' own rows) asks the pinned skill's work:
@@ -5318,7 +5318,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // silently but offered as the next stage (chronologia-sprawy-v1 next to a pleading).
     const pinnedLater: NextChoice[] = mechanicalTurn(request) && !switchOffered
       ? parseSkillSelectionEnvelope(request.query)
-          .manualSkills.filter((name) => !name.startsWith("dr-") && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
+          .manualSkills.filter((name) => !isDomainSkill(name) && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
           // Both letter skills pinned: the stricter pleading workflow controls (no offer of the simple one).
           .filter((name) => !(name === "pisma-proste-v2" && execution.workflowPlan.executionSkill === "pisma-procesowe-v3"))
           .filter((name) => name !== mechanicalChoice?.skill && !choicesShown.some((choice) => choice.skill === name))

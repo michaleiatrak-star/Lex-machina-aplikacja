@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ProviderGateway } from "./providers/gateway.js";
 import type { ProviderId } from "./providers/types.js";
 import type { LexSkillRegistry } from "./registry.js";
+import { domainSkillSource, isDomainSkill } from "./jurisdiction.js";
 
 /**
  * Domain fallback (Settings, off by default): when no flash-routing phrase and no act
@@ -51,7 +52,7 @@ export function domainFallbackTarget(choice: DomainFallbackChoice, turn: DomainF
 
 function catalog(registry: LexSkillRegistry): Array<{ skill: string; line: string }> {
   return [...registry.skills.values()]
-    .filter((skill) => /^dr-\d{2}-/.test(skill.name))
+    .filter((skill) => isDomainSkill(skill.name))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((skill) => {
       const description = typeof skill.frontmatter.description === "string" ? skill.frontmatter.description : skill.name;
@@ -72,7 +73,7 @@ export function domainFallbackPrompt(registry: LexSkillRegistry): string {
 /** "dr-NN" codes of the answer (JSON or not), at most two, as the registry's skill names. */
 export function parseFallbackDomains(registry: LexSkillRegistry, answer: string): string[] {
   const names = catalog(registry).map((item) => item.skill);
-  return [...new Set(answer.match(/dr-\d{2}/g) ?? [])]
+  return [...new Set(answer.match(new RegExp(domainSkillSource(), "gu")) ?? [])]
     .map((code) => names.find((name) => name.startsWith(`${code}-`)))
     .filter((name): name is string => Boolean(name))
     .slice(0, 2);

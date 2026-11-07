@@ -165,7 +165,7 @@ export async function executorOutcomes(corpus, cases) {
         });
         times.push(performance.now() - started);
         const hint = DR_HINT.exec(prompt)?.[0] ?? "";
-        const domains = [...new Set([...hint.matchAll(/^- (dr-\d{2}-[a-z0-9-]+):/gmu)].map((match) => match[1]))];
+        const domains = [...new Set([...hint.matchAll(/^- ([a-z]{2}-\d{2}-[a-z0-9-]+):/gmu)].map((match) => match[1]))];
         const loaded = result.loadedSkills ?? [];
         outcomes.push({
             legal: loaded.length > 0 || domains.length > 0 || Boolean(result.taskSkill),

@@ -2,12 +2,13 @@ import { suggestDomainModules } from "./domain-module-map.js";
 import fs from "node:fs";
 import path from "node:path";
 import { CRIMINAL_DOMAIN_PREFIX, CRIMINAL_QUALIFIER_INDEX } from "./execution-engine.js";
+import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
 const ROUTER_SKILL = "prawny-router-v3";
 // Loaded by the router itself; they are not a legal domain or workflow.
+// The jurisdiction's facade is the chosen country's package (jurisdiction.ts).
 const INFRASTRUCTURE_SKILLS = new Set([
     ROUTER_SKILL,
-    "shared",
-    "prawo-polskie-v2"
+    "shared"
 ]);
 const LIST_SKILLS = "list_legal_skills";
 const LIST_RESOURCES = "list_legal_resources";
@@ -321,9 +322,10 @@ export class LegalCorpusToolRuntime {
         this.caseText = text;
     }
     modelSkillSelection() {
-        const domainSkills = this.readSkills.filter((name) => name.startsWith("dr-"));
-        const executionSkills = this.readSkills.filter((name) => !name.startsWith("dr-") &&
-            !INFRASTRUCTURE_SKILLS.has(name));
+        const domainSkills = this.readSkills.filter((name) => isDomainSkill(name));
+        const executionSkills = this.readSkills.filter((name) => !isDomainSkill(name) &&
+            !INFRASTRUCTURE_SKILLS.has(name) &&
+            name !== activeJurisdictionPack());
         return {
             primarySkill: domainSkills[0] ??
                 (this.readSkills.length > 0 ? ROUTER_SKILL : null),
@@ -689,7 +691,7 @@ export class LegalCorpusToolRuntime {
                 this.cover(targetSkill, text.length, offset, offset + content.length, "tool");
             // prawo-polskie-v2: DR-skill -> act module. With the domain's SKILL.md, the
             // modules of its MAPA-AKTOW that the case text points to (a suggestion).
-            const domainModules = isSkillEntry && offset === 0 && /^dr-\d{2}-/.test(targetSkill) && this.caseText.trim()
+            const domainModules = isSkillEntry && offset === 0 && isDomainSkill(targetSkill) && this.caseText.trim()
                 ? suggestDomainModules(this.registry, targetSkill, this.caseText)
                 : [];
             // A criminal-law matter always goes through the qualifier: it is

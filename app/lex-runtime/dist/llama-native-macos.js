@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { lexMcpPackagePath } from "./lex-mcp-connectors.js";
 /**
  * The standalone llama.cpp server with tools on macOS: what configure-llama-native-web.ps1 and
  * start-llama-native-agent.ps1 set up on Windows. llama-server's own Web UI and agent then use the
@@ -26,7 +27,8 @@ export function writeNativeAgentMacos(options) {
         return file;
     };
     const skillsRoot = path.join(options.runtimeRoot, "corpus");
-    const lexMcp = path.join(skillsRoot, "audyt-systemu-v4", "mcp-servers", "dist", "lex-mcp.mjs");
+    // The chosen jurisdiction's connectors (field `konektory`), as the application's own MCP client.
+    const lexMcp = lexMcpPackagePath(skillsRoot);
     const uodoServer = path.join(options.runtimeRoot, "app", "dist", "uodo-official-mcp-server.js");
     for (const required of [lexMcp, uodoServer, options.python, options.node]) {
         if (!fs.existsSync(required))

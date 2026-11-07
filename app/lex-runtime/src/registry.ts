@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { activeJurisdictionPack } from "./jurisdiction.js";
+import { activeJurisdictionPack, registerJurisdictionCorpus } from "./jurisdiction.js";
 
 export type SkillFrontmatter = {
   name?: string;
@@ -95,6 +95,7 @@ export class LexSkillRegistry {
   scan(): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     this.skills.clear();
+    registerJurisdictionCorpus(this.root);
 
     for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;

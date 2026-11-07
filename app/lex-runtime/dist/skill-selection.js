@@ -1,10 +1,11 @@
 import { parseFlashRouting, rankDomains } from "./domain-module-map.js";
+import { activeJurisdictionPack, domainSkillSource, isDomainSkill as isDomainSkillName } from "./jurisdiction.js";
 export const SKILL_SELECTION_ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
-export const MANDATORY_SESSION_SKILLS = [
-    "prawny-router-v3",
-    "shared",
-    "prawo-polskie-v2"
-];
+// The router, shared and the chosen jurisdiction's facade (Polish law: prawo-polskie-v2) — never
+// another country's facade, whose law would reach the turn.
+export function mandatorySessionSkills() {
+    return ["prawny-router-v3", "shared", activeJurisdictionPack()];
+}
 const STOP_WORDS = new Set([
     "albo", "bez", "byc", "czy", "dla", "gdzie", "jest", "jako",
     "ktora", "ktore", "ktory", "mam", "oraz", "przez", "sie", "tego", "ten",
@@ -86,7 +87,7 @@ function safeDomainAllowList(value) {
         ...new Set(value
             .filter((item) => typeof item === "string")
             .map((item) => item.trim())
-            .filter((item) => /^dr-\d{2}-[a-z0-9-]{1,140}$/i.test(item)))
+            .filter((item) => new RegExp(`^${domainSkillSource()}-[a-z0-9-]{1,140}$`, "iu").test(item)))
     ].slice(0, 32);
 }
 export function parseSkillSelectionEnvelope(rawQuery) {
@@ -317,7 +318,7 @@ function explicitExecutionSkillHints(query, candidates) {
     return resolved;
 }
 function scoreSkill(queryTokens, name, description) {
-    const nameTokens = tokens(name.replace(/^dr-\d{2}-/, ""));
+    const nameTokens = tokens(name.replace(/^[a-z]{2}-\d{2}-/u, ""));
     const descriptionTokens = tokens(description);
     let score = 0;
     for (const token of queryTokens) {
@@ -337,7 +338,7 @@ function isExecutionSkill(skill) {
                 .startsWith("executive-")));
 }
 function isDomainSkill(skill) {
-    return skill.name.startsWith("dr-");
+    return isDomainSkillName(skill.name);
 }
 function descriptionOf(skill) {
     return typeof skill.frontmatter.description === "string"
@@ -389,7 +390,7 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
         allowedExecution.has(name);
     const core = new Set([
         "prawny-router-v3",
-        "prawo-polskie-v2",
+        activeJurisdictionPack(),
         primarySkill
     ]);
     const manual = [
@@ -509,7 +510,7 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
         // The domains of the chat's hint (prawo-polskie-v2: routing błyskawiczny, the
         // criminal qualifier, a foreign element); the skills' descriptions only when no
         // phrase names a domain, so a document and a chat answer of one case share them.
-        const flashRows = parseFlashRouting(registry.get("prawo-polskie-v2")?.body ?? "");
+        const flashRows = parseFlashRouting(registry.get(activeJurisdictionPack())?.body ?? "");
         const flashDomains = flashRows.length
             ? rankDomains(registry, flashRows, currentTurn).map((domain) => domain.skill)
             : [];
@@ -547,7 +548,7 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
         loadedSkills: [
             "prawny-router-v3",
             "shared",
-            "prawo-polskie-v2",
+            activeJurisdictionPack(),
             primarySkill,
             ...additionalSkills
         ],

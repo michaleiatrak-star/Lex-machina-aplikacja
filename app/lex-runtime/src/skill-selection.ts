@@ -1,6 +1,6 @@
 import { parseFlashRouting, rankDomains } from "./domain-module-map.js";
 import type { LexSkillRecord, LexSkillRegistry } from "./registry.js";
-import { activeJurisdictionPack } from "./jurisdiction.js";
+import { activeJurisdictionPack, domainSkillSource, isDomainSkill as isDomainSkillName } from "./jurisdiction.js";
 
 export const SKILL_SELECTION_ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
 // The router, shared and the chosen jurisdiction's facade (Polish law: prawo-polskie-v2) — never
@@ -159,7 +159,7 @@ function safeDomainAllowList(value: unknown): string[] {
       value
         .filter((item): item is string => typeof item === "string")
         .map((item) => item.trim())
-        .filter((item) => /^dr-\d{2}-[a-z0-9-]{1,140}$/i.test(item))
+        .filter((item) => new RegExp(`^${domainSkillSource()}-[a-z0-9-]{1,140}$`, "iu").test(item))
     )
   ].slice(0, 32);
 }
@@ -451,7 +451,7 @@ function scoreSkill(
   name: string,
   description: string
 ): number {
-  const nameTokens = tokens(name.replace(/^dr-\d{2}-/, ""));
+  const nameTokens = tokens(name.replace(/^[a-z]{2}-\d{2}-/u, ""));
   const descriptionTokens = tokens(description);
   let score = 0;
 
@@ -481,7 +481,7 @@ function isExecutionSkill(skill: LexSkillRecord): boolean {
 }
 
 function isDomainSkill(skill: LexSkillRecord): boolean {
-  return skill.name.startsWith("dr-");
+  return isDomainSkillName(skill.name);
 }
 
 function descriptionOf(skill: LexSkillRecord): string {

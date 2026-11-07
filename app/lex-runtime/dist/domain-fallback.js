@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { domainSkillSource, isDomainSkill } from "./jurisdiction.js";
 export const DOMAIN_FALLBACK_CHOICES = ["off", "session", "local/bielik-11b-v3-q4km", "local/mistral-nemo-12b-q4km"];
 let settingsFile = null;
 export function configureDomainFallback(dir) {
@@ -36,7 +37,7 @@ export function domainFallbackTarget(choice, turn) {
 }
 function catalog(registry) {
     return [...registry.skills.values()]
-        .filter((skill) => /^dr-\d{2}-/.test(skill.name))
+        .filter((skill) => isDomainSkill(skill.name))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((skill) => {
         const description = typeof skill.frontmatter.description === "string" ? skill.frontmatter.description : skill.name;
@@ -55,7 +56,7 @@ export function domainFallbackPrompt(registry) {
 /** "dr-NN" codes of the answer (JSON or not), at most two, as the registry's skill names. */
 export function parseFallbackDomains(registry, answer) {
     const names = catalog(registry).map((item) => item.skill);
-    return [...new Set(answer.match(/dr-\d{2}/g) ?? [])]
+    return [...new Set(answer.match(new RegExp(domainSkillSource(), "gu")) ?? [])]
         .map((code) => names.find((name) => name.startsWith(`${code}-`)))
         .filter((name) => Boolean(name))
         .slice(0, 2);

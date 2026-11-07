@@ -1,5 +1,6 @@
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
+import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
 export const ROUTER_SKILL = "prawny-router-v3";
 const PROFILE = "references/PROFIL-LEKKI.md";
 const ROUTER_FILE = `${ROUTER_SKILL}/SKILL.md`;
@@ -399,7 +400,7 @@ export function evaluateMandatoryPath(model, facts) {
         return { skill: skill, resource: resource, rule: rule ?? "" };
     });
     const domains = new Set([
-        ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => /^dr-\d{2}-/.test(name ?? "")),
+        ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => isDomainSkill(name ?? "")),
         ...mechanical.map((item) => item.skill)
     ]);
     for (const skill of domains) {
@@ -660,14 +661,14 @@ export function gateCorrectionPrompt(missing) {
  * not visible to the application, which says so instead of guessing.
  */
 export function routingTrace(args) {
-    const skipped = new Set([ROUTER_SKILL, "prawo-polskie-v2", "AUTO", ""]);
+    const skipped = new Set([ROUTER_SKILL, activeJurisdictionPack(), "AUTO", ""]);
     const read = (skill) => args.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target === skill);
     const readSkills = args.events
         .filter((event) => event.type === "skill_read" && event.status === "OK" && !skipped.has(event.target))
         .map((event) => event.target);
     const primary = !skipped.has(args.primarySkill)
         ? args.primarySkill
-        : readSkills[0] ?? (read("prawo-polskie-v2") ? "prawo-polskie-v2" : "");
+        : readSkills[0] ?? (read(activeJurisdictionPack()) ? activeJurisdictionPack() : "");
     const primaryRead = Boolean(primary) && read(primary);
     const secondary = [...new Set([...args.loadedSkills, ...readSkills])].filter((skill) => !skipped.has(skill) && skill !== primary);
     const core = args.report.steps.filter((step) => step.layer === "ROUTER" && /^R-\d$/.test(step.id));

@@ -3,6 +3,7 @@ import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { criminalMatter } from "./matter-signals.js";
 import type { LexSkillRegistry } from "./registry.js";
+import { isDomainSkill } from "./jurisdiction.js";
 
 /**
  * prawo-polskie-v2: "DR-skill właściwy -> moduł aktu prawnego". The domain comes
@@ -157,7 +158,7 @@ export function parseFlashRouting(markdown: string): FlashRoute[] {
   const rows: FlashRoute[] = [];
   for (const line of section.split("\n")) {
     const cells = line.split("|").map((cell) => cell.trim());
-    const skill = /`(dr-\d{2}-[^`]+)`/u.exec(cells[2] ?? "")?.[1];
+    const skill = /`([a-z]{2}-\d{2}-[^`]+)`/u.exec(cells[2] ?? "")?.[1];
     if (!skill) continue;
     rows.push({ skill: skill.toLowerCase(), phrases: cells[1]!.split(",").map((phrase) => phrase.trim()).filter(Boolean) });
   }
@@ -216,8 +217,8 @@ export function parseActMap(markdown: string, skill: string): ActEntry[] {
     if (moduleColumn < 0 || /^:?-+/.test(cells[0] ?? "")) continue;
     const cell = cells[moduleColumn] ?? "";
     const resources = [
-      ...cell.matchAll(/`((?:dr-\d{2}-[a-z0-9-]+\/modules\/)?mod-[A-Za-z0-9._-]+?)(?:\.md)?`/g)
-    ].map((match) => (match[1]!.startsWith("dr-") ? `${match[1]}.md` : `${skill}/modules/${match[1]}.md`));
+      ...cell.matchAll(/`((?:[a-z]{2}-\d{2}-[a-z0-9-]+\/modules\/)?mod-[A-Za-z0-9._-]+?)(?:\.md)?`/g)
+    ].map((match) => (isDomainSkill(match[1]!) ? `${match[1]}.md` : `${skill}/modules/${match[1]}.md`));
     if (resources.length) entries.push({ scope: cells[0]!.replace(/\*\*/g, ""), resources });
   }
   return entries;
@@ -228,7 +229,7 @@ export function locate(registry: LexSkillRegistry, skill: string, resource: stri
   if (registry.resolveResource(skill, resource)) return resource;
   const name = path.basename(resource);
   for (const other of registry.skills.values()) {
-    if (!other.name.startsWith("dr-") || other.name === skill) continue;
+    if (!isDomainSkill(other.name) || other.name === skill) continue;
     const candidate = `${other.name}/modules/${name}`;
     if (registry.resolveResource(other.name, candidate)) return candidate;
   }
@@ -300,7 +301,7 @@ function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]
 const GENERIC_DOMAINS = 4;
 const spread = new Map<string, Map<string, number>>();
 function domainSpread(registry: LexSkillRegistry): Map<string, number> {
-  const domains = [...registry.skills.keys()].filter((name) => /^dr-\d{2}-/.test(name)).sort();
+  const domains = [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort();
   const key = `${registry.root}:${domains.join(",")}`;
   const cached = spread.get(key);
   if (cached) return cached;
@@ -507,7 +508,7 @@ function rankByPhrases(
   if (flash.length) return flash;
   const have = tokens(text);
   return [...registry.skills.values()]
-    .filter((skill) => /^dr-\d{2}-/.test(skill.name))
+    .filter((skill) => isDomainSkill(skill.name))
     .map((skill) => ({ skill: skill.name, modules: suggestDomainModules(registry, skill.name, text) }))
     // Without a flash-routing phrase: two words of one act-map row, not one shared word
     // ("odpowiedzi" is not a data subject request).

@@ -5,6 +5,7 @@ import { criminalMatter } from "./matter-signals.js";
 import { laterTurn } from "./skill-sections.js";
 import { requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { latestUserTurn, threadUserText } from "./skill-selection.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 /**
  * Legal gate at the entry of a chat turn (every provider): a message with no legal
  * signal at all ("jak upiec sernik", "napisz funkcję w Pythonie") is answered in the
@@ -129,7 +130,7 @@ export function isNonLegalMessage(query, flash) {
 let flashCache = null;
 /** prawo-polskie-v2 "Routing błyskawiczny" of the registry, re-read after a skill update. */
 export function registryFlashRoutes(registry) {
-    const file = registry.get("prawo-polskie-v2")?.skillFile;
+    const file = registry.get(activeJurisdictionPack())?.skillFile;
     if (!file)
         return [];
     try {

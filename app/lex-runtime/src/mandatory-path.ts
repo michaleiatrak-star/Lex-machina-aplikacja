@@ -2,7 +2,7 @@ import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import type { VerificationRecord } from "./verification-ledger.js";
-import { activeJurisdictionPack } from "./jurisdiction.js";
+import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
 
 /**
  * Model of the mandatory path of a legal turn, read from the corpus
@@ -511,7 +511,7 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
       return { skill: skill!, resource: resource!, rule: rule ?? "" };
     });
   const domains = new Set([
-    ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => /^dr-\d{2}-/.test(name ?? "")),
+    ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => isDomainSkill(name ?? "")),
     ...mechanical.map((item) => item.skill)
   ]);
   for (const skill of domains) {

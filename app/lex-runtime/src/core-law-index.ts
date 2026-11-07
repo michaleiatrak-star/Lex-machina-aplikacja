@@ -27,7 +27,7 @@ import {
   htmlArticleAnchors,
   pdfArticleAnchors
 } from "./source-anchor.js";
-import { activeJurisdictionPack, jurisdictionDomainMap } from "./jurisdiction.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -291,7 +291,7 @@ function labelFor(line: string): string | null {
 function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
   const files: Array<{ domain: string; file: string }> = [];
   for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith("dr-")) continue;
+    if (!entry.isDirectory() || !isDomainSkill(entry.name)) continue;
     const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
     if (fs.existsSync(file)) files.push({ domain: entry.name, file });
   }
@@ -310,7 +310,7 @@ function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
 function sourceRegistries(corpusRoot: string): Array<{ domain: string; file: string }> {
   const files: Array<{ domain: string; file: string }> = [];
   for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith("dr-")) continue;
+    if (!entry.isDirectory() || !isDomainSkill(entry.name)) continue;
     const references = path.join(corpusRoot, entry.name, "references");
     let scopes: fs.Dirent[];
     try {

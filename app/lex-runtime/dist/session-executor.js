@@ -97,6 +97,8 @@ import { registryFactsText } from "./privacy/registry-enrichment.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
 const CONTRACT_WHOLE_DOCUMENT_HEADING = "## KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)";
@@ -889,10 +891,12 @@ export class SafeSessionExecutor {
     flashRoutesCache = null;
     // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
     flashRoutes() {
-        if (this.flashRoutesCache?.root === this.registry.root)
+        const facade = activeJurisdictionPack();
+        if (this.flashRoutesCache?.root === `${this.registry.root}:${facade}`)
             return this.flashRoutesCache.rows;
-        const rows = parseFlashRouting(this.readCorpus("prawo-polskie-v2/SKILL.md") ?? "");
-        this.flashRoutesCache = { root: this.registry.root, rows };
+        // The chosen jurisdiction's facade (Polish law: prawo-polskie-v2) holds its flash routing.
+        const rows = parseFlashRouting(this.readCorpus(`${facade}/SKILL.md`) ?? "");
+        this.flashRoutesCache = { root: `${this.registry.root}:${facade}`, rows };
         return rows;
     }
     combinationsCache = null;
@@ -1640,7 +1644,7 @@ export class SafeSessionExecutor {
             // domain (word overlap with skill descriptions — "art. 415 KC" read as DR-01) gives way
             // to the act the question cites, then to a routing phrase. A domain the user picked
             // (a DR in the selection, or the domain allow-list) stays.
-            const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => name.startsWith("dr-"));
+            const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => isDomainSkill(name));
             if (!mechanical && (!request.modelSelectsSkills || !workflowContext))
                 return request.primarySkill;
             // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
@@ -1653,7 +1657,7 @@ export class SafeSessionExecutor {
                 .slice(0, 30_000);
             const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
                 .modules.map((item) => item.skill)
-                .find((skill) => skill.startsWith("dr-"));
+                .find((skill) => isDomainSkill(skill));
             const phrased = (text) => {
                 const ranked = rankDomains(this.registry, this.flashRoutes(), text);
                 return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
@@ -1795,6 +1799,8 @@ export class SafeSessionExecutor {
         // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
         // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
         const unreadableResources = [];
+        const jurisdiction = legalTurn ? activeJurisdiction(this.registry.root) : null;
+        const jurisdictionNotice = jurisdiction ? jurisdictionDegradedNotice(jurisdictionStatus(jurisdiction)) : null;
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
@@ -1815,6 +1821,10 @@ export class SafeSessionExecutor {
                     "Nie odtwarzaj ich reguł z pamięci. Wskaż w odpowiedzi, której kontroli z tych zasobów nie wykonano."
                 ].join("\n"));
             }
+            // The chosen jurisdiction without an application provider for some component (jurisdiction.ts):
+            // named to the model and in the answer, never served by another country's component.
+            if (jurisdictionNotice)
+                pathSections.push(`# ⛔ TRYB ZDEGRADOWANY — JURYSDYKCJA (ustalone przez aplikację)\n${jurisdictionNotice}`);
             step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length - unreadableResources.length} plików`);
             pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
         }
@@ -1828,7 +1838,7 @@ export class SafeSessionExecutor {
         // one a "next stage" choice under the answer. The pinned skill still answers this turn.
         let mechanicalTask = null;
         if (mechanicalTurn(request) && legalTurn) {
-            const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !name.startsWith("dr-"));
+            const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !isDomainSkill(name));
             const letters = { skill: "pisma-proste-v2", entries: schemaCatalog(this.registry, "pisma-proste-v2") };
             const decided = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [...recognisedDocuments], this.redactionTest(), letters);
             // The request itself (without the delivered files' own rows) asks the pinned skill's work:
@@ -2638,7 +2648,7 @@ export class SafeSessionExecutor {
         let modelOutput = execution.output;
         const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
-        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
+        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== activeJurisdictionPack());
         const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
         const correctionEligible = Boolean(mandatoryModel &&
             legalTurn &&
@@ -3558,6 +3568,7 @@ export class SafeSessionExecutor {
             ? [
                 ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
                 ...(unreadableResources.length ? [`nie wczytano: ${unreadableResources.join(", ")}`] : []),
+                ...(jurisdictionNotice && jurisdiction ? [`jurysdykcja ${jurisdiction.name}: ${jurisdictionStatus(jurisdiction).missing.map((item) => COMPONENT_LABELS[item.component]).join(", ")} bez dostawcy`] : []),
                 ...(mandatoryPath.degraded
                     ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
                     : [])
@@ -3689,7 +3700,7 @@ export class SafeSessionExecutor {
         // silently but offered as the next stage (chronologia-sprawy-v1 next to a pleading).
         const pinnedLater = mechanicalTurn(request) && !switchOffered
             ? parseSkillSelectionEnvelope(request.query)
-                .manualSkills.filter((name) => !name.startsWith("dr-") && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
+                .manualSkills.filter((name) => !isDomainSkill(name) && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
                 // Both letter skills pinned: the stricter pleading workflow controls (no offer of the simple one).
                 .filter((name) => !(name === "pisma-proste-v2" && execution.workflowPlan.executionSkill === "pisma-procesowe-v3"))
                 .filter((name) => name !== mechanicalChoice?.skill && !choicesShown.some((choice) => choice.skill === name))

@@ -2,6 +2,7 @@ import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand } 
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { COURT_FORMAL, COURT_POSITION } from "./document-kind.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 const ROW = /^###\s+\[(\d{1,2})\]\s+(.+)$/u;
 export function parseRoutingTable(router) {
     const section = /## KROK 2 — ROUTING \[1\]–\[11\][\s\S]*?(?=\n## )/u.exec(router)?.[0] ?? "";
@@ -116,7 +117,7 @@ export function classifyTask(routes, rawQuestion, delivered = "") {
     const question = provisionsForDetection(rawQuestion).replace(EMPLOYMENT_BASIS, " ");
     let best = null;
     for (const route of routes) {
-        if (route.primary === "prawo-polskie-v2")
+        if (route.primary === activeJurisdictionPack())
             continue;
         const matched = route.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
         if (!matched.length)

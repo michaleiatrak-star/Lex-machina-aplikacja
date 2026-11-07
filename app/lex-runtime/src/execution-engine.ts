@@ -101,7 +101,7 @@ import type {
   GateIRuntimePreludeResult
 } from "./gate-i-runtime-prelude.js";
 import { withoutOutputContract } from "./document-output-contract.js";
-import { activeJurisdictionPack, jurisdictionDomainMap } from "./jurisdiction.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
 
 export type RouteDecision = {
   jurisdiction: "PL";
@@ -692,7 +692,7 @@ export class LexExecutionEngine {
       "OK"
     );
 
-    if (!args.route.primarySkill.startsWith("dr-")) {
+    if (!isDomainSkill(args.route.primarySkill)) {
       emit(
         "route",
         args.route.primarySkill,
@@ -1472,7 +1472,7 @@ export class LexExecutionEngine {
     // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
     if (!args.model.startsWith("local/")) {
       const domains = [...new Set([args.route.primarySkill, ...skillSelection.domainSkills])]
-        .filter((name) => /^dr-\d{2}-/.test(name))
+        .filter((name) => isDomainSkill(name))
         .map((skill) => ({
           skill,
           matched: ["dziedzina wybrana dla tej sprawy"],
@@ -2014,7 +2014,7 @@ export class LexExecutionEngine {
       ).text;
     const stableSkillPrompt = combineSkillPrompt(
       this.registry,
-      ["prawny-router-v3", activeJurisdictionPack(), ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))],
+      ["prawny-router-v3", activeJurisdictionPack(), ...skillSelection.additionalSkills.filter((name) => !isDomainSkill(name))],
       localModel,
       skillCompaction
     );
@@ -2022,7 +2022,7 @@ export class LexExecutionEngine {
       this.registry,
       [
         args.route.primarySkill,
-        ...skillSelection.additionalSkills.filter((name) => name.startsWith("dr-"))
+        ...skillSelection.additionalSkills.filter((name) => isDomainSkill(name))
       ],
       localModel,
       (body) =>
@@ -2454,7 +2454,7 @@ export class LexExecutionEngine {
       );
     }
     const allowed = (name: string): boolean => {
-      if (name.startsWith("dr-")) {
+      if (isDomainSkill(name)) {
         return !envelope.domainRestrictionActive ||
           envelope.domainAllowList.includes(name);
       }

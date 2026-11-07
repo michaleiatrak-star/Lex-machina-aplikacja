@@ -312,7 +312,7 @@ import {
   type OrderedCaseWorkflowId,
   type OrderedCaseWorkflowState
 } from "../ordered-case-workflow-state.js";
-import { activeJurisdictionPack } from "../jurisdiction.js";
+import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
 
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
@@ -1322,7 +1322,7 @@ function publicSkill(skill: {
     ...(typeof fm.description === "string"
       ? { description: fm.description }
       : {}),
-    category: /^dr-\d{2}-/.test(skill.name)
+    category: isDomainSkill(skill.name)
       ? "domain"
       : "execution"
   };
@@ -1594,11 +1594,11 @@ export function applyTrivialChatGate(
     return false;
   }
   const domain =
-    request.primarySkill.startsWith("dr-") &&
+    isDomainSkill(request.primarySkill) &&
     registry.get(request.primarySkill)
       ? request.primarySkill
       : [...registry.skills.keys()]
-          .filter((name) => name.startsWith("dr-"))
+          .filter((name) => isDomainSkill(name))
           .sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
@@ -1623,9 +1623,9 @@ export function applyFactCorrectionGate(registry: LexSkillRegistry, request: Ses
   const envelope = parseSkillSelectionEnvelope(request.query);
   if (envelope.manualSkills.length > 0 || !isFactCorrection(envelope.query)) return false;
   const domain =
-    request.primarySkill.startsWith("dr-") && registry.get(request.primarySkill)
+    isDomainSkill(request.primarySkill) && registry.get(request.primarySkill)
       ? request.primarySkill
-      : [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+      : [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
   request.query = SKILL_SELECTION_ENVELOPE_PREFIX + " " + JSON.stringify({ auto: false, manual: [], workflow: null }) + "\n" + envelope.query;
@@ -1661,7 +1661,7 @@ export function applyNonLegalChatGate(
   ) {
     return false;
   }
-  const domain = [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+  const domain = [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
   request.query =
@@ -2221,7 +2221,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         const placeholder =
           [...options.registry.skills.keys()]
             .filter((name) =>
-              name.startsWith("dr-") &&
+              isDomainSkill(name) &&
               (
                 !autoEnvelope.domainRestrictionActive ||
                 autoEnvelope.domainAllowList.includes(name)
@@ -10223,7 +10223,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // The guide pinned in the chat's envelope (the route is a DR then) as the only
       // executive skill runs LEGAL_GUIDE_V1 too and needs its session state (E2E: 422).
       const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter(
-        (name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== activeJurisdictionPack() && name !== "shared"
+        (name) => !isDomainSkill(name) && name !== "prawny-router-v3" && name !== activeJurisdictionPack() && name !== "shared"
       );
       if (
         request.primarySkill ===

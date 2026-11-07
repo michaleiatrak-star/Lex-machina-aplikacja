@@ -54,6 +54,8 @@ export type JurisdictionProvider = {
   currency: string;
   /** Map of the domain skills (dr-*) of this jurisdiction. */
   domains: string;
+  /** Prefix of its domain skills: "dr" (dr-02-…) for Polish law, the country code (de-02-…) for another. */
+  domainPrefix: string;
   /** Directory of the MCP connectors (dist/lex-mcp.mjs, installer), corpus-relative. */
   connectors: string;
   connectorServers: string[];
@@ -107,15 +109,26 @@ function manifestFields(text: string): Map<string, string> {
   return fields;
 }
 
+const providerCache = new Map<string, { mtimeMs: number; provider: JurisdictionProvider | null }>();
+
 /** The provider block of a package's JURYSDYKCJA.md, or null when the package declares none. */
 export function readJurisdictionProvider(root: string, pack: string): JurisdictionProvider | null {
   if (!/^[a-z0-9-]+$/u.test(pack)) return null;
-  let text: string;
+  const file = path.join(root, pack, "JURYSDYKCJA.md");
+  let mtimeMs: number;
   try {
-    text = fs.readFileSync(path.join(root, pack, "JURYSDYKCJA.md"), "utf8");
+    mtimeMs = fs.statSync(file).mtimeMs;
   } catch {
     return null;
   }
+  const cached = providerCache.get(file);
+  if (cached?.mtimeMs === mtimeMs) return cached.provider;
+  const provider = parseProvider(fs.readFileSync(file, "utf8"), pack);
+  providerCache.set(file, { mtimeMs, provider });
+  return provider;
+}
+
+function parseProvider(text: string, pack: string): JurisdictionProvider | null {
   const fields = manifestFields(text);
   const country = fields.get("kraj");
   if (!country) return null;
@@ -129,6 +142,7 @@ export function readJurisdictionProvider(root: string, pack: string): Jurisdicti
     language: fields.get("jezyk") ?? "",
     currency: fields.get("waluta") ?? "",
     domains: fields.get("dziedziny") ?? "",
+    domainPrefix: fields.get("prefiks-dziedzin") ?? "dr",
     connectors: fields.get("konektory") ?? "",
     connectorServers: (fields.get("konektory-serwery") ?? "")
       .split(",")
@@ -164,7 +178,9 @@ export function jurisdictionStatus(provider: JurisdictionProvider): Jurisdiction
   const missing: JurisdictionStatus["missing"] = [];
   for (const component of JURISDICTION_COMPONENTS) {
     const id = provider.components[component];
-    if (id && IMPLEMENTED_PROVIDERS[component].includes(id)) supported.push(component);
+    // A provider serves only its own country ("pl-…" for PL): another country's package never gets it.
+    const ownCountry = id.split("-")[0] === provider.country.toLowerCase();
+    if (id && ownCountry && IMPLEMENTED_PROVIDERS[component].includes(id)) supported.push(component);
     else missing.push({ component, provider: id || "brak" });
   }
   return { provider, supported, missing };
@@ -189,4 +205,26 @@ export function jurisdictionConnectorPackage(root: string): string | null {
 /** The routing map of the chosen jurisdiction's domain skills (field `dziedziny`), corpus-relative. */
 export function jurisdictionDomainMap(root: string): string {
   return activeJurisdiction(root)?.domains || `${activeJurisdictionPack()}/ROUTING-MAP.md`;
+}
+
+// The corpus the registry scanned last: the domain prefix of the chosen jurisdiction is read there.
+let corpusRoot: string | null = null;
+
+export function registerJurisdictionCorpus(root: string): void {
+  corpusRoot = root;
+}
+
+/** Prefix of the chosen jurisdiction's domain skills ("dr" for Polish law). */
+export function domainSkillPrefix(root: string | null = corpusRoot): string {
+  return (root ? activeJurisdiction(root)?.domainPrefix : null) || "dr";
+}
+
+/** A domain skill of the chosen jurisdiction ("dr-02-…" for Polish law); another country's is not. */
+export function isDomainSkill(name: string | null | undefined, root: string | null = corpusRoot): boolean {
+  return Boolean(name) && new RegExp(`^${domainSkillPrefix(root)}-\\d{2}-`, "u").test(name!);
+}
+
+/** The domain-skill name pattern of the chosen jurisdiction, for patterns that embed it. */
+export function domainSkillSource(root: string | null = corpusRoot): string {
+  return `${domainSkillPrefix(root)}-\\d{2}`;
 }

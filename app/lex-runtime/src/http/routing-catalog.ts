@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
-import { activeJurisdictionPack, jurisdictionDomainMap } from "../jurisdiction.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "../jurisdiction.js";
 
 export type RouteValidation = {
   valid: boolean;
@@ -13,12 +13,12 @@ export class RoutingCatalog {
 
   listDrSkills(): string[] {
     return [...this.registry.skills.keys()]
-      .filter((name) => /^dr-\d{2}-/.test(name))
+      .filter((name) => isDomainSkill(name))
       .sort();
   }
 
   validate(primarySkill: string): RouteValidation {
-    if (!/^dr-\d{2}-/.test(primarySkill)) {
+    if (!isDomainSkill(primarySkill)) {
       return {
         valid: false,
         primarySkill,
