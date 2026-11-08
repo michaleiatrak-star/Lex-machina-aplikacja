@@ -24,6 +24,7 @@ export const ELI_COUNTRIES = [
         consolidation: "osobny-akt",
         consolidatedVersion: "tj (tekst jednolity — osobna pozycja Dz.U.)",
         example: "https://eli.gov.pl/eli/DU/2026/795/tj/pol/pdf",
+        api: { url: "https://api.sejm.gov.pl/eli", kind: "REST", auth: "brak", probe: "https://api.sejm.gov.pl/eli/acts/DU/2026/795", checked: "200 application/json" },
         source: REGISTER("poland"),
         level: "PEŁNA",
         checked: "200",
@@ -38,6 +39,7 @@ export const ELI_COUNTRIES = [
         template: "https://www.ris.bka.gv.at/eli/bgbl/{I|II|III}/{year}/{number}/{date} (dziennik); …/eli/bgbl/{year}/{number}/{unit}/{NOR-id} (prawo skonsolidowane)",
         consolidation: "wersja-z-data",
         example: "https://www.ris.bka.gv.at/eli/bgbl/I/2018/30/20180516",
+        api: { url: "https://data.bka.gv.at/ris/api/v2.6", kind: "REST", auth: "brak", probe: "https://data.bka.gv.at/ris/api/v2.6/Bundesrecht?Applikation=BrKons&Titel=ABGB", checked: "200 application/json (OgdSearchResult)" },
         source: REGISTER("austria"),
         level: "ADRES-NIEPOTWIERDZONY",
         checked: "503",
@@ -68,6 +70,7 @@ export const ELI_COUNTRIES = [
         template: "https://www.retsinformation.dk/eli/{domain}/{year}/{natural identifier}/{pdf|html|xml}",
         consolidation: "nieustalone",
         example: "https://www.retsinformation.dk/eli/lta/2014/1308",
+        api: { url: "https://api.retsinformation.dk/v1/Documents", kind: "REST", auth: "brak", probe: "?date={dzień z ostatnich 10 dni}", checked: "200 (lista zmian dnia; starsza data = 400)" },
         source: REGISTER("denmark"),
         level: "ADRES",
         checked: "200",
@@ -82,6 +85,7 @@ export const ELI_COUNTRIES = [
         template: "https://data.finlex.fi/eli/sd/{year}/{number}/{alkup|ajantasa}… (opis: data.finlex.fi/fi/urit)",
         consolidation: "wersja-z-data",
         example: "https://data.finlex.fi/eli/sd/2008/521/alkup.html",
+        api: { url: "https://opendata.finlex.fi/finlex/avoindata/v1", kind: "AKN", auth: "brak", probe: "/akn/fi/act/statute-consolidated/list?page=1&limit=1", checked: "200 application/json (URI Akoma Ntoso)" },
         source: REGISTER("finland"),
         level: "BRAK-SZABLONU",
         // The register's example and its template page answer 404: the service moved.
@@ -96,6 +100,7 @@ export const ELI_COUNTRIES = [
         template: "https://www.legifrance.gouv.fr/eli/{type}/{year}/{month}/{day}/{natural identifier}/{version}/{level}",
         consolidation: "wersja-bez-mocy",
         example: "https://www.legifrance.gouv.fr/eli/loi/2023/4/14/2023-270/jo/texte",
+        api: { url: "https://api.piste.gouv.fr/dila/legifrance/lf-engine-app", kind: "REST", auth: "klucz", probe: "/consult/ping bez klucza", checked: "400 (wymaga OAuth PISTE: konto piste.gouv.fr, aplikacja z subskrypcją API Légifrance i zgodą na CGU, token client_credentials z https://oauth.piste.gouv.fr/api/oauth/token, sandbox: sandbox-oauth.piste.gouv.fr; serwer tokenów odpowiada invalid_client bez kluczy)" },
         source: REGISTER("france"),
         level: "ADRES-NIEPOTWIERDZONY",
         checked: "403 (blokada automatów)",
@@ -135,6 +140,7 @@ export const ELI_COUNTRIES = [
         template: "http://data.legilux.public.lu/eli/etat/{serie}/{type}/{year}/{month}/{day}/{ID}",
         consolidation: "nieustalone",
         example: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/13/a566/jo",
+        api: { url: "https://data.legilux.public.lu/sparqlendpoint", kind: "SPARQL", auth: "brak", probe: "ASK {?s ?p ?o}", checked: "200 boolean true" },
         source: REGISTER("luxembourg"),
         level: "ADRES-NIEPOTWIERDZONY",
         checked: "połączenie zerwane",
@@ -148,6 +154,7 @@ export const ELI_COUNTRIES = [
         pillars: "1, 2, 3 (beta)",
         template: "/eli/{jurisdiction}/{type}/{year}/{month}/{day}/{natural_identifier}/{level…}/{version}/{point in time}/{language}/{format} (wzorzec ogólny; adresy: lovdata.no/eli)",
         consolidation: "wersja-z-data",
+        api: { url: "https://api.lovdata.no", kind: "REST", auth: "brak", probe: "/v1/publicData/list", checked: "405 (ścieżka do potwierdzenia)" },
         source: REGISTER("norway"),
         level: "BRAK-SZABLONU",
         checked: "405 (strona startowa ELI)"
@@ -206,6 +213,7 @@ export const ELI_COUNTRIES = [
         consolidation: "wersja-z-data",
         consolidatedVersion: "con/{RRRRMMDD} (bez daty: najnowsza wersja skonsolidowana); dof = tekst ogłoszony",
         example: "https://www.boe.es/eli/es/l/2015/10/01/39/con/20220713/spa/html",
+        api: { url: "https://www.boe.es/datosabiertos/api/legislacion-consolidada", kind: "REST", auth: "brak", probe: "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565/metadatos", checked: "200 application/json" },
         source: REGISTER("spain"),
         level: "ADRES",
         checked: "200",
@@ -220,6 +228,7 @@ export const ELI_COUNTRIES = [
         template: "https://fedlex.data.admin.ch/eli/cc/{year}/{id}/{language} (konwencja: fedlex.data.admin.ch/home/convention)",
         consolidation: "wersja-z-data",
         example: "https://fedlex.data.admin.ch/eli/cc/1958/505_527_527/fr",
+        api: { url: "https://fedlex.data.admin.ch/sparqlendpoint", kind: "SPARQL", auth: "brak", probe: "ASK {?s ?p ?o}", checked: "200 boolean true" },
         source: REGISTER("switzerland"),
         level: "ADRES",
         checked: "200",
@@ -262,6 +271,16 @@ export const ELI_COUNTRIES = [
         build: (ref) => `https://legislation.mt/eli/${parts(ref.type, ref.type === "cap" || ref.type === "sl" ? undefined : ref.year, ref.number, ref.language ?? "eng", ref.format ?? "pdf")}`
     }
 ];
+/** The EU's own ELI (EUR-Lex, Cellar): acts of the Union for every package. */
+export const EU_ELI = {
+    url: "https://publications.europa.eu/webapi/rdf/sparql",
+    kind: "SPARQL",
+    auth: "brak",
+    probe: "ASK {?s ?p ?o} (Accept: application/sparql-results+json)",
+    checked: "200 boolean true",
+    template: "http://data.europa.eu/eli/{typedoc}/{year}/{naturalnumber}/oj",
+    example: "http://data.europa.eu/eli/reg/2013/216/oj"
+};
 /** Countries of common law in the ELI register: not civil law, no package from this list. */
 export const COMMON_LAW_IN_ELI_REGISTER = ["IE", "UK", "CY"];
 export function eliCountry(code) {
@@ -280,7 +299,12 @@ export function eliCapabilityNotice(code) {
     if (country.level === "PEŁNA")
         return null;
     if (country.build) {
-        return `ELI ${country.name}: aplikacja zbuduje urzędowy adres aktu (${country.template ?? country.portal}), ale nie odczyta ani nie sprawdzi brzmienia przepisu${country.level === "ADRES-NIEPOTWIERDZONY" ? `; adres nie odpowiedział z sieci aplikacji (${country.checked})` : ""}.`;
+        return `ELI ${country.name}: aplikacja zbuduje urzędowy adres aktu (${country.template ?? country.portal}), ale nie odczyta ani nie sprawdzi brzmienia przepisu${country.level === "ADRES-NIEPOTWIERDZONY" ? `; adres nie odpowiedział z sieci aplikacji (${country.checked})` : ""}.${apiLine(country)}`;
     }
-    return `ELI ${country.name}: rejestr nie podaje szablonu adresu (${country.checked}); przepisy sprawdzaj na portalu ${country.portal}.`;
+    return `ELI ${country.name}: rejestr nie podaje szablonu adresu (${country.checked}); przepisy sprawdzaj na portalu ${country.portal}.${apiLine(country)}`;
+}
+function apiLine(country) {
+    if (!country.api)
+        return "";
+    return ` API ${country.api.kind}: ${country.api.url}${country.api.auth === "klucz" ? " (wymaga klucza)" : ""}, kontrola: ${country.api.checked}.`;
 }

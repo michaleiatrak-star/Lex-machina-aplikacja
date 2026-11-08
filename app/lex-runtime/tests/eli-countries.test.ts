@@ -37,3 +37,16 @@ describe("ELI of the civil-law countries (EUR-Lex ELI register, 2026-11-08)", ()
     expect(eliCapabilityNotice("ES")).toContain("nie odczyta ani nie sprawdzi brzmienia");
   });
 });
+
+describe("ELI APIs of the countries (checked 2026-11-08)", () => {
+  it("every API has its kind, auth and the result of the live probe; Poland and the EU are free", async () => {
+    const { EU_ELI } = await import("../src/eli/eli-countries.js");
+    for (const country of ELI_COUNTRIES.filter((item) => item.api)) {
+      expect(country.api!.url).toMatch(/^https:\/\//u);
+      expect(country.api!.checked).not.toBe("");
+    }
+    expect(ELI_COUNTRIES.find((item) => item.code === "PL")!.api!.auth).toBe("brak");
+    expect(EU_ELI.kind).toBe("SPARQL");
+    expect(eliCapabilityNotice("FR")).toContain("wymaga klucza");
+  });
+});
