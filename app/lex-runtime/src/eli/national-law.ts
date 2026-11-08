@@ -4,7 +4,7 @@
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
 
@@ -16,14 +16,15 @@ const READERS: HostReader[] = [
   { country: "DE", hosts: /^(?:www\.)?gesetze-im-internet\.de$/u, read: readGermany },
   { country: "CH", hosts: /^fedlex\.data\.admin\.ch$/u, read: readSwitzerland, accept: "application/xml" },
   { country: "MC", hosts: /^legimonaco\.mc$/u, read: readMonaco },
-  { country: "LV", hosts: /^likumi\.lv$/u, read: readLatvia }
+  { country: "LV", hosts: /^likumi\.lv$/u, read: readLatvia },
+  // HTML of the act (MevzuatFihristDetayIframe); …/MevzuatMetin/*.pdf goes to the PDF branch by its type.
+  { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u, read: readTurkey }
 ];
 
-// Official PDFs with a text layer (Liechtenstein, Malta, Turkey): read as text, scans flagged.
+// Official PDFs with a text layer (Liechtenstein, Malta): read as text, scans flagged.
 const PDF_HOSTS: Array<{ country: string; hosts: RegExp }> = [
   { country: "LI", hosts: /^(?:www\.)?gesetze\.li$/u },
-  { country: "MT", hosts: /^(?:www\.)?legislation\.mt$/u },
-  { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u }
+  { country: "MT", hosts: /^(?:www\.)?legislation\.mt$/u }
 ];
 
 // `country`: the chosen legal system (jurisdiction.ts); another country's source is refused.
@@ -64,7 +65,7 @@ export type NationalFetch = (url: string, init: { headers: Record<string, string
 export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
-  const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
+  const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|madde|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   return own === wanted;
 }

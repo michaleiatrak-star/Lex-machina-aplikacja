@@ -31,12 +31,15 @@ describe(
           "assess_legal_source",
           "fetch_auxiliary_legal_source",
           "web_search",
-          "federated_legal_coverage",
-          "read_national_legislation"
+          "federated_legal_coverage"
         ]);
         expect(
           [...FEDERATED_LEGAL_TOOL_NAMES]
-        ).toEqual(names);
+        ).toEqual([
+            ...names,
+            // Czytnik prawa obcego: tylko gdy wybrany kraj nie jest Polską.
+            "read_national_legislation"
+          ]);
 
         const search =
           runtime.schemas().find(

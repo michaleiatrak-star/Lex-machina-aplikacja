@@ -112,6 +112,28 @@ describe("Monaco and Latvia", () => {
   });
 });
 
+describe("Turkey: Mevzuat Bilgi Sistemi HTML", () => {
+  it("TR: Madde N with its paragraphs, section headings end an article, amendment note with the amending law", async () => {
+    const { readTurkey } = await import("../src/eli/readers.js");
+    const reading = readTurkey(fixture("tr-medeni-kanunu.html"), "mevzuat.gov.tr 1/4721/5");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "27"]);
+    expect(reading.articles[0]!.text).toMatch(/^Madde 1 - Kanun, sözüyle ve özüyle/u);
+    expect(reading.articles[0]!.text).toContain("yargı kararlarından yararlanır.");
+    expect(reading.articles[0]!.text).not.toContain("Hukukî ilişkilerin kapsamı");
+    expect(reading.articles[2]!.amendments).toContainEqual({ act: "Değişik ikinci fıkra: 2024-11-14, Kanun 7532 md. 12" });
+  });
+
+  it("TR: the official host goes to the HTML reader, the article asked for as \"Madde 27\"", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("tr-medeni-kanunu.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html; charset=utf-8" }, arrayBuffer: async () => body.buffer });
+    const answer = await readNationalLaw({ url: "https://www.mevzuat.gov.tr/anasayfa/MevzuatFihristDetayIframe?MevzuatTur=1&MevzuatNo=4721&MevzuatTertip=5", unit: "Madde 27", country: "TR" }, fetchImpl as never);
+    expect(answer.country).toBe("TR");
+    expect(answer.articles).toHaveLength(1);
+    expect(answer.articles[0]!.text).toContain("Adın değiştirilmesi, ancak haklı sebeplere");
+  });
+});
+
 describe("Sweden: Riksdagen consolidated SFS text", () => {
   it("sections by number, the consolidation reference and an amending act at the section", async () => {
     const { readSweden } = await import("../src/eli/readers.js");

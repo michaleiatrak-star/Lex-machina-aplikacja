@@ -238,6 +238,46 @@ export function readLatvia(html: string, source: string): NationalReading {
 }
 
 /**
+ * Turkey, Mevzuat Bilgi Sistemi: the HTML of an act (…/anasayfa/MevzuatFihristDetayIframe?MevzuatTur=1&MevzuatNo=4721&MevzuatTertip=5)
+ * carries the text in force with the amendment notes, as the PDF does. An article opens with
+ * "Madde N -" in bold; a paragraph that is all bold and is not an article or a note is a
+ * heading of a section ("B. Hukukî ilişkilerin kapsamı") and ends the article before it.
+ * "(Değişik|Ek|Mülga …: DD/MM/YYYY-KANUN/MADDE md.)" names the amending law and the date it was adopted.
+ * The provisions of the amending laws printed after the last article are not read.
+ */
+export function readTurkey(html: string, source: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/giu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^(?:Geçici\s+)?Madde\s+(\d+(?:\/[A-Z])?)\s*[-–]\s*/u.exec(text);
+    const outsideBold = inner!.replace(/<b\b[^>]*>[\s\S]*?<\/b>/giu, "");
+    const allBold = /<b\b/iu.test(inner!) && !plainText(outsideBold).trim();
+    if (head && !/^Geçici/u.test(text)) {
+      // After the last article the page prints provisions of the amending laws with their own
+      // numbering ("Madde 36 - Bu Kanunla değiştirilen …"): a number lower than the last one ends the act.
+      if (articles.length && parseInt(head[1]!, 10) < parseInt(articles.at(-1)!.unit, 10)) break;
+      articles.push({ unit: head[1]!, heading: `Madde ${head[1]}`, text, amendments: [] });
+      open = true;
+    } else if (head) {
+      open = false;
+    } else if (allBold && !/^\((?:Değişik|Ek|Mülga)/u.test(text)) {
+      open = false;
+    } else if (open) {
+      articles.at(-1)!.text += `\n${text}`;
+    }
+  }
+  for (const article of articles) {
+    for (const match of article.text.matchAll(/\(((?:Değişik|Ek|Mülga)[^:()]*):\s*(\d{2})\/(\d{2})\/(\d{4})-(\d+)\/(\d+)\s*md\.\)/gu)) {
+      // The date is the adoption of the amending law, not its entry into force: kept in the act's name.
+      article.amendments.push({ act: `${match[1]}: ${match[4]}-${match[3]}-${match[2]}, Kanun ${match[5]} md. ${match[6]}` });
+    }
+  }
+  return { country: "TR", source, articles, version: "metin yürürlükteki (Mevzuat Bilgi Sistemi, z adnotacjami zmian)", status: "tekst Mevzuat Bilgi Sistemi (Cumhurbaşkanlığı); urzędowy jest tekst w Resmî Gazete" };
+}
+
+/**
  * Sweden, Riksdagen open data (no key): data.riksdagen.se/dokument/sfs-{year}-{number}.text is the
  * consolidated text from Regeringskansliet/Lagrummet ("Ändrad: t.o.m. SFS …"). A section opens
  * with "N §" (or "N a §"); chapters ("N kap.") restart the numbering in some acts, so the unit is
