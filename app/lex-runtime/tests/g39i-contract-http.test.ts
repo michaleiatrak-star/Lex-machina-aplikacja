@@ -680,7 +680,8 @@ describe(
         ).toEqual({
           mode: "DRAFT",
           stage: "INTAKE",
-          checkpoint: "AU-F0"
+          checkpoint: "AU-F0",
+          checkpoints: ["AU-F0", "AU-GAP", "AU-POV", "AU-ROUTE"]
         });
 
         expect(

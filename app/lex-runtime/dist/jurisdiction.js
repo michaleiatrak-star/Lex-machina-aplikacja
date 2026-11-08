@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { eliCapabilityNotice } from "./eli/eli-countries.js";
 /**
  * Jurisdiction provider: the country whose law the application works with. Each country is a
  * package of the corpus with JURYSDYKCJA.md — the content keys (JUR:<key>) and the block
@@ -158,9 +159,12 @@ export function jurisdictionStatus(provider) {
 export function jurisdictionDegradedNotice(status) {
     if (!status.missing.length)
         return null;
+    // No provider reads the country's acts: what its ELI still gives (the official address).
+    const eli = status.missing.some((item) => item.component === "weryfikacja-przepisow") ? eliCapabilityNotice(status.provider.country) : null;
     return (`Jurysdykcja ${status.provider.name}: aplikacja nie ma dostawcy dla: ` +
         status.missing.map((item) => COMPONENT_LABELS[item.component]).join(", ") +
-        ". Te elementy nie są wykonywane automatycznie (TRYB ZDEGRADOWANY); nie zastępuj ich prawem innego kraju.");
+        ". Te elementy nie są wykonywane automatycznie (TRYB ZDEGRADOWANY); nie zastępuj ich prawem innego kraju." +
+        (eli ? ` ${eli}` : ""));
 }
 /** The MCP connector package (dist/lex-mcp.mjs) of the chosen jurisdiction. */
 export function jurisdictionConnectorPackage(root) {

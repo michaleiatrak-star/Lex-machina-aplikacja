@@ -24,7 +24,7 @@ concurrency:
 env:
   # "false": the release carries the online installers only (Windows and macOS); the
   # offline Windows installer is neither built nor published. Set to "true" to ship it.
-  RELEASE_OFFLINE_INSTALLER: "false"
+  RELEASE_OFFLINE_INSTALLER: "true"
 
 jobs:
   version:

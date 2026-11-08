@@ -417,6 +417,26 @@ export function buildCoreLegalResourcePrompt(
 // analizator-umow-v1, one AU checkpoint per turn: the shared modules its SKILL.md
 // (Moduły SYSTEMOWE) requires for that checkpoint. HYBRID-VALIDATION before any
 // output document is generated and at AU-HYBRID; the rest at their own checkpoint.
+/** The AU checkpoints of the turn as the model reads them: one, or the batch in order with its trace. */
+export function contractCheckpointPromptLines(context: { checkpoint: ContractCheckpoint; checkpoints?: readonly ContractCheckpoint[] }): string[] {
+  const batch = context.checkpoints?.length ? context.checkpoints : [context.checkpoint];
+  if (batch.length === 1) {
+    return [
+      `Active AU checkpoint: ${batch[0]}.`,
+      `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[batch[0]!]}`,
+      "Execute only this AU checkpoint in this turn.",
+      "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint."
+    ];
+  }
+  return [
+    `Active AU checkpoints, in this order: ${batch.join(", ")}.`,
+    ...batch.map((checkpoint) => `- ${checkpoint}: ${CONTRACT_CHECKPOINT_SECTIONS[checkpoint]}`),
+    "Execute these AU checkpoints in order in this turn. When a checkpoint needs the user (missing document, a question that changes the analysis), stop there: ask, and do not write the later checkpoints.",
+    "End the answer with the trace table of the checkpoints: one row per checkpoint, its ID and its mark (✅ done, — N/A with the reason, ⚠️ POMINIĘTY or ⬛ with what is missing). The runtime closes the checkpoints up to the first one not marked ✅ or N/A.",
+    "Do not write output reserved for the generation or finalization checkpoints."
+  ];
+}
+
 export function contractCheckpointResources(mode: ContractWorkflowMode, checkpoint: ContractCheckpoint): string[] {
   switch (checkpoint) {
     case "AU-GAP":
@@ -542,6 +562,8 @@ export class LexExecutionEngine {
       >;
       checkpoint:
         ContractCheckpoint;
+      // The checkpoints of this turn (first = checkpoint); one when absent.
+      checkpoints?: ContractCheckpoint[];
     };
     orderedCaseWorkflowContext?: {
       workflowId:
@@ -1371,7 +1393,9 @@ export class LexExecutionEngine {
     let contractCheckpointText = "";
     if (args.contractWorkflowContext && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
-      const { checkpoint, mode } = args.contractWorkflowContext;
+      const { mode } = args.contractWorkflowContext;
+      const batch = args.contractWorkflowContext.checkpoints?.length ? args.contractWorkflowContext.checkpoints : [args.contractWorkflowContext.checkpoint];
+      for (const checkpoint of batch) {
       for (const resource of contractCheckpointResources(mode, checkpoint)) {
         if (already.has(resource)) continue;
         const file = this.registry.resolveResource(workflowPlan.executionSkill, resource);
@@ -1404,6 +1428,8 @@ export class LexExecutionEngine {
         }
         emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
         contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
+      }
+      for (const resource of contractCheckpointResources(mode, checkpoint)) already.add(resource);
       }
     }
     // pisma-proste-v2 pinned by the user: the same check the AUTO router makes (several
@@ -1710,7 +1736,7 @@ export class LexExecutionEngine {
         "gate",
         "G39I_CONTRACT_STATE_BINDING",
         "OK",
-        `mode=${args.contractWorkflowContext.mode};stage=${args.contractWorkflowContext.stage};checkpoint=${args.contractWorkflowContext.checkpoint}`
+        `mode=${args.contractWorkflowContext.mode};stage=${args.contractWorkflowContext.stage};checkpoint=${args.contractWorkflowContext.checkpoint}${(args.contractWorkflowContext.checkpoints?.length ?? 0) > 1 ? `;batch=${args.contractWorkflowContext.checkpoints!.join(",")}` : ""}`
       );
     }
 
@@ -1846,7 +1872,7 @@ export class LexExecutionEngine {
         ...(runtimePrelude.appendix
           ? [runtimePrelude.appendix]
           : []),
-        ...(/\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)
+        ...(/\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)
           ? [PERSON_CASE_PROTOCOL]
           : []),
         args.quickLocalLegal.toolPrompt
@@ -2115,10 +2141,7 @@ export class LexExecutionEngine {
               "# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED",
               `Mode: ${args.contractWorkflowContext.mode}.`,
               `Stage: ${args.contractWorkflowContext.stage}.`,
-              `Active AU checkpoint: ${args.contractWorkflowContext.checkpoint}.`,
-              `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[args.contractWorkflowContext.checkpoint]}`,
-              "Execute only this AU checkpoint in this turn.",
-              "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
+              ...contractCheckpointPromptLines(args.contractWorkflowContext),
               "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
               "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A.",
               MISSING_DOCUMENT_INSTRUCTION,
@@ -2218,7 +2241,7 @@ export class LexExecutionEngine {
     }
     if (
       !args.documentContext &&
-      /\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)
+      /\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)
     ) {
       promptParts.push(PERSON_CASE_PROTOCOL);
     }
@@ -2642,7 +2665,7 @@ export class LexExecutionEngine {
     }
     if (
       !args.documentContext &&
-      /\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)
+      /\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)
     ) {
       promptParts.push(PERSON_CASE_PROTOCOL);
     }

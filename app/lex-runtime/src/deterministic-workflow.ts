@@ -259,10 +259,13 @@ const CONTRACT_ANALYSIS_FULL_MARKERS = [
   "## 5. KLAUZULE RYZYKOWNE",
   "## 6. EKSPOZYCJA FINANSOWA",
   "## 7. ALERTY RODO",
-  "## 8. KLAUZULE KORZYSTNE DLA STRONY CHRONIONEJ",
+  // The heading's fixed start: the model names the protected party ("…DLA ZAMAWIAJĄCEGO") and
+  // adds to a heading ("PLAN DZIAŁANIA I PRIORYTETY NEGOCJACYJNE"); a whole-heading marker
+  // blocked every full report and the AU checkpoints never closed (contract test 2026-11-08).
+  "## 8. KLAUZULE KORZYSTNE",
   "## 9. BRAKUJĄCE KLAUZULE",
   "## 10. REKOMENDACJE ZMIAN",
-  "## 11. PLAN DZIAŁANIA PRZED PODPISANIEM",
+  "## 11. PLAN DZIAŁANIA",
   "## 12. OCENA OGÓLNA",
   "## 13. DISCLAIMER"
 ] as const;

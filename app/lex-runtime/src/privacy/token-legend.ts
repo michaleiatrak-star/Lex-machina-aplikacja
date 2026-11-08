@@ -19,7 +19,7 @@ export type PlaceholderGrammar = {
 };
 
 const PLACEHOLDER =
-  /\[(?:LMPII:D\d{2}|PII):(PERSON|ADDRESS):\d{4}(?:\|[A-Z]{2,4})?\]/g;
+  /\[(?:LMPII:D\d{2}|PII):(PERSON|FIRM|ADDRESS):\d{4}(?:\|[A-Z]{2,4})?\]/g;
 
 /** Base form of a placeholder: the case suffix removed. */
 export function placeholderBase(token: string): string {
@@ -45,7 +45,8 @@ export function placeholderGrammar(
   for (const match of text.matchAll(PLACEHOLDER)) {
     const token = placeholderBase(match[0]);
     if (seen.has(token)) continue;
-    const kind = match[1] as "PERSON" | "ADDRESS";
+    // A firm ([PII:FIRM:0001]) is a PERSON entry of the vault with the organization type.
+    const kind = match[1] === "ADDRESS" ? "ADDRESS" : "PERSON";
     if (kind === "ADDRESS") {
       seen.set(token, { token, kind });
       continue;
@@ -109,7 +110,7 @@ export type PartyGroup = {
   tokens: string[];
 };
 
-const PERSON_TOKEN = String.raw`\[(?:LMPII:D\d{2}|PII):PERSON:\d{4}(?:\|[A-Z]{2,4})?\]`;
+const PERSON_TOKEN = String.raw`\[(?:LMPII:D\d{2}|PII):(?:PERSON|FIRM):\d{4}(?:\|[A-Z]{2,4})?\]`;
 const PARTY_LIST = new RegExp(
   String.raw`(?<![\p{L}])(\p{L}{4,})\s+(${PERSON_TOKEN}(?:\s*(?:,|\bi\b|\boraz\b)\s*${PERSON_TOKEN})+)`,
   "gu"
@@ -170,7 +171,7 @@ export const PLACEHOLDER_ANSWER_LEGEND = [
   "   |VOC zwrot bezpośredni - „Szanowny Panie [PII:PERSON:0001|VOC]”",
   "2. Symbol przepisuj dokładnie: ten sam rodzaj, numer i przedrostek dokumentu ([LMPII:D01:PERSON:0001|GEN] to inna osoba niż [LMPII:D02:PERSON:0001|GEN]). Nie twórz nowych symboli.",
   "3. Czasowniki, przymiotniki i imiesłowy uzgadniaj z rodzajem i liczbą z klucza poniżej; rodzaj nieustalony - formy neutralne („strona wniosła”).",
-  "4. Nazwy firmy nie odmieniaj: symbol firmy zawsze |NOM, odmieniaj słowo przed nim („od spółki [PII:PERSON:0003|NOM]”).",
+  "4. Nazwy firmy nie odmieniaj: symbol firmy zawsze |NOM, odmieniaj słowo przed nim („od spółki [PII:FIRM:0003|NOM]”).",
   "5. Inne symbole (PESEL, NIP, IBAN, telefon, e-mail, KRS, księga wieczysta, numer rejestracyjny, data urodzenia) przepisuj bez zmian i bez przypadku.",
   "6. Nigdy nie wpisuj, nie odgaduj ani nie odmieniaj imion, nazwisk, nazw firm i adresów; nie zastępuj symbolu opisem („osoba oznaczona jako...”) ani inicjałami."
 ].join("\n");

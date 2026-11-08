@@ -93,7 +93,8 @@ import { earlierUserTurns, parseSkillSelectionEnvelope, SKILL_SELECTION_ENVELOPE
 import { withoutOutputContract } from "./document-output-contract.js";
 import { markdownSection } from "./checkpoint-skill-sections.js";
 import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
-import { registryFactsText } from "./privacy/registry-enrichment.js";
+import { registryConsistencyText, registryFactsText } from "./privacy/registry-enrichment.js";
+import { peselCheckText } from "./privacy/pesel-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
@@ -1577,31 +1578,54 @@ export class SafeSessionExecutor {
                     pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", `# GRAF RELACJI POSTANOWIEŃ: ${document.documentId}`));
                 }
             }
-            // A firm named by its NIP or KRS in the material: what KRS and the VAT white list say
-            // about it (exists, not struck off, legal form, VAT status, its accounts), as a checked
-            // fact under the documents' tokens. The registers are the ones that answer for these
-            // numbers (the federation's rule); nothing else of the case goes out.
-            const registry = this.registryForms();
-            if (registry) {
-                const numbers = chatPrivacyVault
-                    .knownIdentifierValues()
-                    .filter((item) => item.kind === "NIP" || item.kind === "KRS")
-                    .map((item) => item.value)
-                    .slice(0, 6);
-                if (numbers.length) {
-                    await Promise.all(numbers.map((value) => registry.forms(value).catch(() => [])));
-                    const factsText = registryFactsText(registry.facts(numbers));
-                    if (factsText) {
-                        const protectedFacts = await chatPseudonymizer.pseudonymize(factsText);
-                        audit.record("gate", "REGISTRY_FACTS", "OK", { firms: registry.facts(numbers).length });
-                        pathSections.push(protectedFacts.text);
-                    }
-                }
-            }
             const roles = replyRolesPrompt(request.query, recognisedDocuments);
             if (roles)
                 pathSections.push(roles);
             step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
+        }
+        // A contract pasted into the message, not attached: the same graph of its provisions as
+        // for an attached one (contract test 2026-11-07: the pasted contract got no CONTRACT_GRAPH).
+        if (legalTurn && !recognisedDocuments.some((document) => document.category === "UMOWA")) {
+            const pasted = classifyDocument({ text: protectedQuery, images: 0 });
+            const graph = pasted.category === "UMOWA" ? contractGraph(protectedQuery) : null;
+            if (graph && graph.nodes.length >= 3) {
+                audit.record("gate", "CONTRACT_GRAPH", "OK", { documentId: "message", nodes: graph.nodes.length, edges: graph.edges.length });
+                pathSections.push(contractGraphPrompt(graph).replace("# GRAF RELACJI POSTANOWIEŃ", "# GRAF RELACJI POSTANOWIEŃ: umowa w wiadomości"));
+            }
+        }
+        // A firm named by its NIP or KRS in the material (an attached document or a contract
+        // pasted into the message): what KRS and the VAT white list say about it, and whether the
+        // document's party data agree with the register (name, seat, NIP; the NIP's check digit),
+        // as checked facts under the documents' tokens (contract test 2026-11-07: the chat found
+        // the KRS and NIP of both parties belonged to other firms, the app did not). The registers
+        // are the ones that answer for these numbers; nothing else of the case goes out.
+        if (legalTurn) {
+            const registry = this.registryForms();
+            const material = [
+                chatPrivacyVault.deanonymize(request.query),
+                ...attachments
+                    .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                    .map((attachment) => chatPrivacyVault.deanonymize(attachment.chunks.map((chunk) => chunk.text).join("\n")))
+            ].join("\n\n");
+            const numbers = chatPrivacyVault
+                .knownIdentifierValues()
+                .filter((item) => item.kind === "NIP" || item.kind === "KRS")
+                .map((item) => item.value)
+                .slice(0, 6);
+            if (registry && numbers.length)
+                await Promise.all(numbers.map((value) => registry.forms(value).catch(() => [])));
+            const facts = registry && numbers.length ? registry.facts(numbers) : [];
+            const factsText = [registryFactsText(facts), registryConsistencyText(material, facts)].filter(Boolean).join("\n\n");
+            const peselText = peselCheckText([protectedQuery, ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))], chatPrivacyVault);
+            if (peselText) {
+                audit.record("gate", "PESEL_CHECK", "OK", { numbers: peselText.split("\n").length - 2 });
+                pathSections.push(peselText);
+            }
+            if (factsText) {
+                const protectedFacts = await chatPseudonymizer.pseudonymize(factsText);
+                audit.record("gate", "REGISTRY_FACTS", "OK", { firms: facts.length });
+                pathSections.push(protectedFacts.text);
+            }
         }
         // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
         if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {

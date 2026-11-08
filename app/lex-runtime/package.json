@@ -1,6 +1,6 @@
 {
   "name": "@lex-machina/runtime",
-  "version": "0.1.69",
+  "version": "0.1.70",
   "private": true,
   "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
@@ -87,7 +87,8 @@
     "benchmark:local-legal-quality": "tsx src/benchmark-local-legal-quality.ts",
     "validate:g40-live": "tsx src/validate-g40-live.ts",
     "validate:g40-courts": "tsx src/validate-g40-courts.ts",
-    "build:akt-pdf": "node scripts/build-akt-pdf.mjs"
+    "build:akt-pdf": "node scripts/build-akt-pdf.mjs",
+    "eli:check": "node dist/eli/eli-live-check.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.49",

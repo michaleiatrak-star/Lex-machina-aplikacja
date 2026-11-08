@@ -1,5 +1,6 @@
 import {
   completeContractCheckpoint,
+  contractCheckpointBatch,
   nextContractCheckpoint,
   validateContractAnalysisState,
   type ContractAnalysisState,
@@ -17,6 +18,8 @@ export type ContractExecutionPermit = {
   >;
   checkpoint:
     ContractCheckpoint;
+  // The checkpoints this turn runs, the first being `checkpoint` (contractCheckpointBatch).
+  checkpoints: ContractCheckpoint[];
 };
 
 export function requireContractExecutionPermit(
@@ -57,7 +60,8 @@ export function requireContractExecutionPermit(
       state.mode,
     stage:
       state.stage,
-    checkpoint
+    checkpoint,
+    checkpoints: contractCheckpointBatch(state)
   };
 }
 
@@ -67,7 +71,8 @@ export function completeContractExecution(
   permit:
     ContractExecutionPermit,
   auditRefs:
-    readonly string[]
+    readonly string[],
+  closed?: readonly ContractCheckpoint[]
 ): ContractAnalysisState {
   const state =
     validateContractAnalysisState(
@@ -96,9 +101,14 @@ export function completeContractExecution(
     );
   }
 
-  return completeContractCheckpoint(
-    state,
-    permit.checkpoint,
-    auditRefs
-  );
+  // The checkpoints the answer closed, in the order of the batch; the first one at least
+  // (the turn passed every gate).
+  const batch = permit.checkpoints?.length ? permit.checkpoints : [permit.checkpoint];
+  const wanted = new Set(closed ?? [permit.checkpoint]);
+  let next = state;
+  for (const [index, checkpoint] of batch.entries()) {
+    if (index > 0 && !wanted.has(checkpoint)) break;
+    next = completeContractCheckpoint(next, checkpoint, auditRefs);
+  }
+  return next;
 }
