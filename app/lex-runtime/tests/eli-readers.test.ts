@@ -94,3 +94,20 @@ describe("Austria: RIS OGD norm XML", () => {
     expect(reading.title).toBe("Allgemeines bürgerliches Gesetzbuch");
   });
 });
+
+describe("Monaco and Latvia", () => {
+  it("MC: articles with the amending law and its date", async () => {
+    const { readMonaco } = await import("../src/eli/readers.js");
+    const reading = readMonaco(fixture("mc-code-civil.html"), "legimonaco.mc/code/code-civil/");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[0]!.text).toMatch(/^Les lois acquièrent force obligatoire/u);
+    expect(reading.articles[0]!.amendments).toContainEqual({ act: "Loi n° 803 du 10 juin 1966", inForce: "1966-06-10" });
+  });
+
+  it("LV: Civil Law articles by their number, a following paragraph stays with its article", async () => {
+    const { readLatvia } = await import("../src/eli/readers.js");
+    const reading = readLatvia(fixture("lv-civillikums.html"), "likumi.lv/ta/id/225418");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["122", "123", "124"]);
+    expect(reading.articles[1]!.text).toContain("Trešo personu iegūtās tiesības paliek spēkā.");
+  });
+});

@@ -446,7 +446,7 @@ const NATIONAL_LAW_SCHEMA = {
     function: {
         name: NATIONAL_LAW_TOOL,
         description: "Read the text of an article of another country's legislation from its official source (not Poland: Polish provisions go through verify_legal_reference). " +
-            "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
+            "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), MC (legimonaco.mc), LV (likumi.lv), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
             "The answer gives the article, the source's legal status and the amending acts the source names; a scanned PDF is reported as such and is never quoted.",
         parameters: {
             type: "object",

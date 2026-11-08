@@ -3,14 +3,16 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readAustria, readBelgium, readCzech, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readMonaco, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
     { country: "NL", hosts: /^wetten\.overheid\.nl$/u, read: readNetherlands },
     { country: "BE", hosts: /^(?:www\.)?ejustice\.just\.fgov\.be$/u, read: readBelgium },
     { country: "IT", hosts: /^(?:www\.)?normattiva\.it$/u, read: readItaly },
     { country: "DE", hosts: /^(?:www\.)?gesetze-im-internet\.de$/u, read: readGermany },
-    { country: "CH", hosts: /^fedlex\.data\.admin\.ch$/u, read: readSwitzerland, accept: "application/xml" }
+    { country: "CH", hosts: /^fedlex\.data\.admin\.ch$/u, read: readSwitzerland, accept: "application/xml" },
+    { country: "MC", hosts: /^legimonaco\.mc$/u, read: readMonaco },
+    { country: "LV", hosts: /^likumi\.lv$/u, read: readLatvia }
 ];
 // Official PDFs with a text layer (Liechtenstein, Malta, Turkey): read as text, scans flagged.
 const PDF_HOSTS = [

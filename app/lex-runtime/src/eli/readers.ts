@@ -212,6 +212,31 @@ export function readAustria(xml: string, source: string): NationalReading {
   };
 }
 
+/** Monaco, Legimonaco: section.art (data-title "Article N"), aside.histo with the amending law and its date, div.text. */
+export function readMonaco(html: string, source: string): NationalReading {
+  const articles = [...html.matchAll(/<section class="section art"[^>]*data-title="([^"]+)"[^>]*>([\s\S]*?)<\/section>/gu)].map(([, title, body]): NationalArticle => {
+    const amendments = [...body!.matchAll(/data-date="(\d{4}-\d{2}-\d{2})"[^>]*>\s*<span>([^<]+)<\/span>/gu)].map((match) => ({ act: plainText(match[2]!), inForce: match[1]! }));
+    const text = plainText(/<div class="text\s*">([\s\S]*?)<\/div>/u.exec(body!)?.[1] ?? "");
+    return { unit: title!.replace(/^Article\s+/u, ""), heading: title!, text, amendments };
+  });
+  return { country: "MC", source, articles, version: "wersja obowiązująca (Legimonaco)", status: "tekst Legimonaco (Direction des affaires juridiques)" };
+}
+
+/** Latvia, likumi.lv: paragraphs p.TV213; an article opens with "N. pants." or, in the Civil Law, with its number "N.". */
+export function readLatvia(html: string, source: string): NationalReading {
+  // A centred paragraph is a heading of a chapter ("3. Laulāto mantas kopība"), not an article.
+  const paragraphs = [...html.matchAll(/<p class="TV213[^"]*">([\s\S]*?)<\/p>/gu)].filter((match) => !/<center>/iu.test(match[1]!)).map((match) => plainText(match[1]!)).filter(Boolean);
+  const articles: NationalArticle[] = [];
+  for (const paragraph of paragraphs) {
+    const head = /^(\d+(?:\.\d+)?)\.\s*(?:pants\.\s*)?/u.exec(paragraph);
+    // "1. Vispārīgi noteikumi": a short line without a sentence is a heading of a part, not an article.
+    if (head && paragraph.length < 70 && !/[.;:]\s*\S/u.test(paragraph.slice(head[0].length))) continue;
+    if (head) articles.push({ unit: head[1]!, heading: `${head[1]}.`, text: paragraph, amendments: [] });
+    else if (articles.length) articles.at(-1)!.text += `\n${paragraph}`;
+  }
+  return { country: "LV", source, articles, version: "wersja obowiązująca (likumi.lv)", status: "tekst urzędowy (Latvijas Vēstnesis, likumi.lv)" };
+}
+
 export type PdfReading =
   | { kind: "TEKST"; text: string; pages: number }
   | { kind: "SKAN"; pages: number; note: string }
