@@ -692,6 +692,11 @@ describe("deterministic legal workflow", () => {
             .toBe("PASS");
         expect(fullPass.mode)
             .toBe("CONTRACT_FINAL");
+        // Headings the model adapts to the case (contract test 2026-11-08).
+        expect(evaluateDeterministicWorkflowOutput(plan, full
+            .replace("DLA STRONY CHRONIONEJ", "DLA ZAMAWIAJĄCEGO")
+            .replace("PLAN DZIAŁANIA PRZED PODPISANIEM", "PLAN DZIAŁANIA I PRIORYTETY NEGOCJACYJNE")
+            .replace("## 10. REKOMENDACJE ZMIAN", "## 10. REKOMENDACJE ZMIAN WRAZ Z BRZMIENIEM")).result).toBe("PASS");
         const lite = [
             "RAPORT ANALIZY UMOWY — LITE",
             "## 1. IDENTYFIKACJA + FORMA",
