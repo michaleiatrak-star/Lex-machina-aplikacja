@@ -95,6 +95,7 @@ import { markdownSection } from "./checkpoint-skill-sections.js";
 import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
 import { registryConsistencyText, registryFactsText } from "./privacy/registry-enrichment.js";
 import { peselCheckText } from "./privacy/pesel-check.js";
+import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } from "./quote-source-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
@@ -2951,6 +2952,48 @@ export class SafeSessionExecutor {
                 modelOutput = parts.disclaimer
                     ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
                     : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
+            }
+        }
+        // Every quote against its source, in every kind of work and for every country: a quoted
+        // provision against the wording verified in this turn (ELI for Poland, the national readers
+        // for the others), a quote attributed to a case document against the documents. A mismatch
+        // goes to the correction round with the source's words; the correction stays only when it
+        // leaves fewer mismatches (user, 2026-11-08).
+        if (legalTurn && !waitsForUser(modelOutput) && /[„“]/u.test(modelOutput)) {
+            const statutes = [
+                ...ledger.all().filter((record) => (record.kind === "statute" || record.kind === "journal") && record.evidence).map((record) => ({ claim: record.claim, evidence: record.evidence })),
+                ...(this.legalFederationTools?.nationalReadings?.() ?? [])
+            ];
+            const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)];
+            const check = (answer) => [
+                ...statuteQuoteFindings(answer, statutes),
+                ...(citationSources.length ? documentQuoteFindings(processDocumentCitationMarkers(answer, citationSources, { otherTexts }).text) : [])
+            ];
+            const found = check(modelOutput);
+            if (found.length) {
+                step("MODEL", `kontrola cytatów ze źródłem: ${found.length} do korekty`);
+                let text = "";
+                try {
+                    const corrected = await this.providers.stream(request.provider, {
+                        model: request.model,
+                        ...correctingRound(modelOutput, quoteCorrectionPrompt(found), [identityPrompt, ...pathSections].join("\n\n")),
+                        accountContinuity: "none",
+                        reasoning: "none"
+                    });
+                    text = corrected.fullText.trim();
+                }
+                catch {
+                    text = "";
+                }
+                const remaining = text ? check(text) : found;
+                if (text && remaining.length < found.length) {
+                    corrections.push(answerCorrection("QUOTE_SOURCE", found.map((item) => `${item.kind === "STATUTE" ? item.claim : "dokument sprawy"}: „${item.quote.slice(0, 120)}”`), modelOutput, text));
+                    modelOutput = text;
+                }
+                audit.record("gate", "QUOTE_SOURCE_CHECK", remaining.length && !(text && remaining.length < found.length) ? "DEGRADED" : remaining.length ? "DEGRADED" : "OK", {
+                    findings: found.map((item) => `${item.kind}:${item.claim ?? ""}:${item.quote.slice(0, 80)}`),
+                    remaining: (text && remaining.length < found.length ? remaining : found).length
+                });
             }
         }
         // The model's own ⚠️ at a statute does not stop the application from

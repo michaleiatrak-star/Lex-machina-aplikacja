@@ -183,7 +183,12 @@ function lastMatchEnd(pattern, text) {
         last = match.index + match[0].length;
     return last;
 }
-function attributedToDocument(text, quoteStart) {
+// Right after a quote, its source: "„wyraźnie w niej wymienione”, art. 41 ust. 2 pr. aut." is the
+// statute's wording although "Umowa" stands before it (contract test 2026-11-08).
+const STATUTE_RIGHT_AFTER = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*(?:\(?\s*)?(?:art\.|§)\s*\d/u;
+function attributedToDocument(text, quoteStart, quoteEnd = quoteStart) {
+    if (STATUTE_RIGHT_AFTER.test(text.slice(quoteEnd, quoteEnd + 120)))
+        return false;
     const paragraphStart = Math.max(text.lastIndexOf("\n\n", quoteStart), quoteStart - 300, 0);
     const before = text.slice(paragraphStart, quoteStart);
     const attribution = lastMatchEnd(DOCUMENT_ATTRIBUTION, before);
@@ -431,7 +436,7 @@ function linkUnmarkedQuotes(text, entries, otherTexts) {
             autoLinked += 1;
             continue;
         }
-        if (!attributedToDocument(text, match.index))
+        if (!attributedToDocument(text, match.index, match.index + match[0].length))
             continue;
         // "Czy dostała Pani też decyzję, że „nie podlega Pani ubezpieczeniom”?": a question to the
         // user about a document's wording, not a quote from it (live C12-027). A quote given after

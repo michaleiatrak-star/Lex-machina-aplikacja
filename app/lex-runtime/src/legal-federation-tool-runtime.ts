@@ -1,4 +1,5 @@
 import { personalDataIn } from "./tool-broker-policy.js";
+import { readNationalLaw } from "./eli/national-law.js";
 import { LegalSourceFallbackStore, withSourceFallback } from "./legal-source-fallback.js";
 import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
 import {
@@ -310,6 +311,8 @@ export const SOURCES_BY_KIND = [
 
 const WEB_SEARCH_TOOL =
   "web_search";
+const NATIONAL_LAW_TOOL =
+  "read_national_legislation";
 
 const LIST_SCHEMA:
   NormalizedToolSchema = {
@@ -564,6 +567,28 @@ const WEB_SEARCH_SCHEMA:
             description:
               "Number of results, default 5."
           }
+        }
+      }
+    }
+  };
+
+const NATIONAL_LAW_SCHEMA:
+  NormalizedToolSchema = {
+    type: "function",
+    function: {
+      name: NATIONAL_LAW_TOOL,
+      description:
+        "Read the text of an article of another country's legislation from its official source (not Poland: Polish provisions go through verify_legal_reference). " +
+        "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
+        "The answer gives the article, the source's legal status and the amending acts the source names; a scanned PDF is reported as such and is never quoted.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["url"],
+        properties: {
+          url: { type: "string", description: "Address of the act at the official source." },
+          unit: { type: "string", description: "Article or paragraph: \"28\", \"§ 433\", \"1er\"." },
+          date: { type: "string", description: "YYYY-MM-DD: the wording in force that day (ES)." }
         }
       }
     }
@@ -1082,6 +1107,13 @@ export class LegalFederationToolRuntime {
    * classification and coverage helpers an 11B model trips over. Before, a local model had
    * no source but the core codes and the ELI check (comparison with the chat, 2026-11-06).
    */
+  // Articles read with read_national_legislation, for the quote check (newest last).
+  private readonly readings: Array<{ claim: string; evidence: string }> = [];
+
+  nationalReadings(): Array<{ claim: string; evidence: string }> {
+    return [...this.readings];
+  }
+
   localSchemas():
     NormalizedToolSchema[] {
     return [SEARCH_SCHEMA, GET_SCHEMA, CALL_SCHEMA, FETCH_AUXILIARY_SOURCE_SCHEMA, WEB_SEARCH_SCHEMA];
@@ -1097,7 +1129,8 @@ export class LegalFederationToolRuntime {
       ASSESS_SOURCE_SCHEMA,
       FETCH_AUXILIARY_SOURCE_SCHEMA,
       WEB_SEARCH_SCHEMA,
-      COVERAGE_SCHEMA
+      COVERAGE_SCHEMA,
+      NATIONAL_LAW_SCHEMA
     ];
   }
 
@@ -1112,7 +1145,8 @@ export class LegalFederationToolRuntime {
       ASSESS_SOURCE_TOOL,
       FETCH_AUXILIARY_SOURCE_TOOL,
       WEB_SEARCH_TOOL,
-      COVERAGE_TOOL
+      COVERAGE_TOOL,
+      NATIONAL_LAW_TOOL
     ].includes(
       name
     );
@@ -1442,6 +1476,19 @@ export class LegalFederationToolRuntime {
             })
           )
       });
+    }
+
+    if (call.name === NATIONAL_LAW_TOOL) {
+      const url = typeof call.input.url === "string" ? call.input.url.trim() : "";
+      const unit = typeof call.input.unit === "string" ? call.input.unit.trim().slice(0, 40) : undefined;
+      const date = typeof call.input.date === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(call.input.date) ? call.input.date : undefined;
+      const answer = await readNationalLaw({ url, ...(unit ? { unit } : {}), ...(date ? { date } : {}) });
+      // Kept for the quote check of this turn (quote-source-check.ts): "art. N" with its wording.
+      for (const article of answer.articles) {
+        this.readings.push({ claim: `art. ${article.unit.replace(/^(?:art\.?|§)\s*/iu, "")} (${answer.country})`, evidence: article.text });
+      }
+      if (this.readings.length > 200) this.readings.splice(0, this.readings.length - 200);
+      return JSON.stringify({ tool: NATIONAL_LAW_TOOL, ...answer, articles: answer.articles.map((article) => ({ ...article, text: article.text.slice(0, 12_000) })) });
     }
 
     if (
@@ -2032,5 +2079,6 @@ export const FEDERATED_LEGAL_TOOL_NAMES =
     ASSESS_SOURCE_TOOL,
     FETCH_AUXILIARY_SOURCE_TOOL,
     WEB_SEARCH_TOOL,
-    COVERAGE_TOOL
+    COVERAGE_TOOL,
+    NATIONAL_LAW_TOOL
   ]);

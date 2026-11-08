@@ -231,7 +231,12 @@ function lastMatchEnd(pattern: RegExp, text: string): number {
   return last;
 }
 
-function attributedToDocument(text: string, quoteStart: number): boolean {
+// Right after a quote, its source: "„wyraźnie w niej wymienione”, art. 41 ust. 2 pr. aut." is the
+// statute's wording although "Umowa" stands before it (contract test 2026-11-08).
+const STATUTE_RIGHT_AFTER = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*(?:\(?\s*)?(?:art\.|§)\s*\d/u;
+
+function attributedToDocument(text: string, quoteStart: number, quoteEnd = quoteStart): boolean {
+  if (STATUTE_RIGHT_AFTER.test(text.slice(quoteEnd, quoteEnd + 120))) return false;
   const paragraphStart = Math.max(text.lastIndexOf("\n\n", quoteStart), quoteStart - 300, 0);
   const before = text.slice(paragraphStart, quoteStart);
   const attribution = lastMatchEnd(DOCUMENT_ATTRIBUTION, before);
@@ -466,7 +471,7 @@ function linkUnmarkedQuotes(
       autoLinked += 1;
       continue;
     }
-    if (!attributedToDocument(text, match.index)) continue;
+    if (!attributedToDocument(text, match.index, match.index + match[0].length)) continue;
     // "Czy dostała Pani też decyzję, że „nie podlega Pani ubezpieczeniom”?": a question to the
     // user about a document's wording, not a quote from it (live C12-027). A quote given after
     // a colon ("pozwany napisał: „…”, prawda?") is still presented as the document's text.
