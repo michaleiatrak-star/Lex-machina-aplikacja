@@ -212,7 +212,8 @@ if ($actualHash -ne $receipt.sha256.ToLowerInvariant()) {
   throw "OFFLINE_BUNDLE_HASH_MISMATCH:expected=$($receipt.sha256) actual=$actualHash"
 }
 
-$stage = Join-Path $env:TEMP ("LexMachinaOfflineRuntime-" + [Guid]::NewGuid().ToString("N"))
+# Short stage name: every character counts against MAX_PATH for the deep Python packages inside.
+$stage = Join-Path $env:TEMP ("LMO-" + [Guid]::NewGuid().ToString("N").Substring(0, 12))
 New-Item -ItemType Directory -Path $stage | Out-Null
 $vcFirewallRule = $null
 
@@ -239,12 +240,19 @@ try {
 
   Set-BootstrapProgress "Sprawdzanie przygotowanych plików…"
   Write-Host "Verifying component-lock before installation"
+  $sha256 = [Security.Cryptography.SHA256]::Create()
   foreach ($entry in $lock.files) {
-    $path = Join-Path $stage ($entry.path -replace '/','\')
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    # \\?\ form: a path over 260 characters is still found and hashed.
+    $path = '\\?\' + (Join-Path $stage ($entry.path -replace '/','\'))
+    if (-not [IO.File]::Exists($path)) {
       throw "OFFLINE_BUNDLE_LOCK_FILE_MISSING:$($entry.path)"
     }
-    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+    $file = [IO.File]::OpenRead($path)
+    try {
+      $hash = ([BitConverter]::ToString($sha256.ComputeHash($file)) -replace '-','').ToLowerInvariant()
+    } finally {
+      $file.Dispose()
+    }
     if ($hash -ne $entry.sha256) {
       throw "OFFLINE_BUNDLE_LOCK_HASH_MISMATCH:$($entry.path)"
     }
@@ -410,4 +418,8 @@ try {
     Remove-NetFirewallRule -DisplayName $vcFirewallRule -ErrorAction SilentlyContinue
   }
   Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  # Remove-Item in Windows PowerShell 5.1 stops at paths over 260 characters; rd with \\?\ does not.
+  if (Test-Path -LiteralPath $stage) {
+    cmd.exe /d /c "rd /s /q `"\\?\$stage`"" | Out-Null
+  }
 }
