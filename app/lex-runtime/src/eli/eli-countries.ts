@@ -356,7 +356,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     source: REGISTER("lithuania"), level: "BRAK-SZABLONU", checked: "wdrożenie w toku" },
   { code: "NL", name: "Holandia", family: "kontynentalne", portal: "—", pillars: "1 (w trakcie)", consolidation: "nieustalone", text: { reading: "CZYTNIK", note: "readNetherlands: wetten.overheid.nl/{BWBR}/{data}/0" },
     source: REGISTER("netherlands"), level: "BRAK-SZABLONU", checked: "wdrożenie w toku" },
-  { code: "SE", name: "Szwecja", family: "nordyckie", portal: "—", pillars: "1 (w trakcie)", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "API Riksdagu (data.riksdagen.se) odpowiada listą SFS" },
+  { code: "SE", name: "Szwecja", family: "nordyckie", portal: "—", pillars: "1 (w trakcie)", consolidation: "nieustalone", text: { reading: "CZYTNIK", note: "readSweden: data.riksdagen.se/dokument/sfs-{rok}-{nr}.text (bez klucza), tekst ujednolicony Regeringskansliet z „Ändrad: t.o.m. SFS …”, rozdziały i paragrafy, akt zmieniający przy paragrafie" },
     source: REGISTER("sweden"), level: "BRAK-SZABLONU", checked: "wdrożenie w toku" },
   { code: "AL", name: "Albania", family: "kontynentalne", portal: "—", pillars: "nie podano", consolidation: "nieustalone", text: { reading: "JS", note: "qbz.gov.al: także adresy ELI (…/eli/ligj/{rok}/{mm}/{dd}/{nr}) zwracają tylko powłokę strony" },
     source: REGISTER("albania"), level: "BRAK-SZABLONU", checked: "rejestr podaje tylko koordynatorów" },

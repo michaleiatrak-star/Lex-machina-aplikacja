@@ -111,3 +111,15 @@ describe("Monaco and Latvia", () => {
     expect(reading.articles[1]!.text).toContain("Trešo personu iegūtās tiesības paliek spēkā.");
   });
 });
+
+describe("Sweden: Riksdagen consolidated SFS text", () => {
+  it("sections by number, the consolidation reference and an amending act at the section", async () => {
+    const { readSweden } = await import("../src/eli/readers.js");
+    const reading = readSweden(fixture("se-avtalslagen.txt"), "data.riksdagen.se/dokument/sfs-1915-218.text");
+    expect(reading.version).toBe("ujednolicony do SFS 1994:1513");
+    const s36 = reading.articles.find((article) => article.unit === "36")!;
+    expect(s36.text).toMatch(/^36 § Avtalsvillkor får jämkas eller lämnas utan avseende/u);
+    expect(s36.amendments.length).toBeGreaterThan(0);
+    expect(reading.articles[0]!.unit).toBe("1");
+  });
+});

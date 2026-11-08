@@ -58,6 +58,6 @@ describe("coverage: the EU of civil law, Turkey, Ukraine, Moldova and the Balkan
     const others = ["TR", "UA", "MD", "RS", "ME", "MK", "BA", "XK", "AL", "IS", "LI", "MC", "SM", "AD"];
     const codes = new Set(ELI_COUNTRIES.map((country) => country.code));
     expect([...eu, ...others].filter((code) => !codes.has(code))).toEqual([]);
-    expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["AT", "BE", "CH", "CZ", "DE", "DK", "ES", "IT", "LV", "MC", "NL"]);
+    expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["AT", "BE", "CH", "CZ", "DE", "DK", "ES", "IT", "LV", "MC", "NL", "SE"]);
   });
 });

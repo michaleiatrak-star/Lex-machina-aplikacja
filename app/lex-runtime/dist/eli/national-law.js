@@ -3,7 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readMonaco, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
     { country: "NL", hosts: /^wetten\.overheid\.nl$/u, read: readNetherlands },
@@ -84,6 +84,20 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
             throw new Error(`NATIONAL_LAW_SOURCE_${doc.status}`);
         const reading = readAustria(new TextDecoder().decode(await doc.arrayBuffer()), xmlUrl);
         return { country: "AT", url: xmlUrl, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles: reading.articles };
+    }
+    // Sweden: Riksdagen open data, the act by its SFS number (…/dokument/sfs-1915-218 or any URL naming "1915:218").
+    if (/^(?:data\.)?riksdagen\.se$/u.test(host) || /^(?:www\.)?riksdagen\.se$/u.test(host)) {
+        const sfs = /sfs-(\d{4})-(\d+)/iu.exec(url.href) ?? /(\d{4}):(\d+)/u.exec(decodeURIComponent(url.href));
+        if (!sfs)
+            throw new Error("NATIONAL_LAW_SE_SFS_REQUIRED");
+        const textUrl = `https://data.riksdagen.se/dokument/sfs-${sfs[1]}-${sfs[2]}.text`;
+        const reply = await fetchImpl(textUrl, { headers: { accept: "text/plain" }, signal: AbortSignal.timeout(60_000) });
+        if (!reply.ok)
+            throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+        const reading = readSweden(new TextDecoder().decode(await reply.arrayBuffer()), textUrl);
+        const wanted = request.unit?.replace(/§/gu, "").replace(/\s+/gu, " ").trim();
+        const articles = wanted ? reading.articles.filter((article) => article.unit === wanted || article.unit === wanted.replace(/\s+(?=[a-z]$)/u, "")) : reading.articles.slice(0, 20);
+        return { country: "SE", url: textUrl, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
     }
     // Czech Republic: e-Sbírka's public cache (no key): metadata of the version, then its fragments.
     if (/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u.test(host)) {

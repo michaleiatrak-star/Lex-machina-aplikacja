@@ -237,6 +237,38 @@ export function readLatvia(html: string, source: string): NationalReading {
   return { country: "LV", source, articles, version: "wersja obowiązująca (likumi.lv)", status: "tekst urzędowy (Latvijas Vēstnesis, likumi.lv)" };
 }
 
+/**
+ * Sweden, Riksdagen open data (no key): data.riksdagen.se/dokument/sfs-{year}-{number}.text is the
+ * consolidated text from Regeringskansliet/Lagrummet ("Ändrad: t.o.m. SFS …"). A section opens
+ * with "N §" (or "N a §"); chapters ("N kap.") restart the numbering in some acts, so the unit is
+ * "N kap. M §" there and "M" elsewhere. "Lag (YYYY:NNN)." closing a section names its amending act.
+ */
+export function readSweden(text: string, source: string): NationalReading {
+  const lines = text.replace(/\r/gu, "").split("\n");
+  const title = lines[0]?.trim() ?? "";
+  const changed = /Ändrad:\s*t\.o\.m\.\s*SFS\s*(\d{4}:\d+)/u.exec(text)?.[1];
+  type Raw = { chapter?: string; number: string; lines: string[] };
+  const sections: Raw[] = [];
+  let chapter: string | undefined;
+  for (const line of lines) {
+    const kap = /^(\d+\s?[a-z]?)\s+kap\.\s/u.exec(line);
+    if (kap) { chapter = kap[1]!.replace(/\s/gu, ""); continue; }
+    const head = /^(\d+\s?[a-z]?)\s+§\s/u.exec(line);
+    if (head) sections.push({ ...(chapter ? { chapter } : {}), number: head[1]!.replace(/\s/gu, ""), lines: [line] });
+    else if (sections.length) sections.at(-1)!.lines.push(line);
+  }
+  const numbers = sections.map((section) => section.number);
+  const restarts = new Set(numbers).size < numbers.length;
+  const articles = sections.map((section): NationalArticle => {
+    const body = section.lines.join("\n").replace(/\n{3,}/gu, "\n\n").trim();
+    // "… konsumentförhållanden. Lag (1994:1513)." closing a paragraph of the section.
+    const amendments = [...body.matchAll(/\b(?:Lag|Förordning)\s*\((\d{4}:\d+)\)\.(?=\s*(?:\n|$))/gu)].map((match) => ({ act: `SFS ${match[1]}` }));
+    const unit = restarts && section.chapter ? `${section.chapter} kap. ${section.number}` : section.number;
+    return { unit, heading: `${restarts && section.chapter ? `${section.chapter} kap. ` : ""}${section.number} §`, text: body, amendments };
+  });
+  return { country: "SE", source, title, version: changed ? `ujednolicony do SFS ${changed}` : "ujednolicony (Lagrummet)", articles, status: "tekst ujednolicony Regeringskansliet (Riksdagen öppna data); moc ma SFS" };
+}
+
 export type PdfReading =
   | { kind: "TEKST"; text: string; pages: number }
   | { kind: "SKAN"; pages: number; note: string }
