@@ -172,7 +172,11 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     family: "kontynentalne",
     portal: "https://www.recht.bund.de",
     pillars: "1",
-    consolidation: "nieustalone",
+    consolidation: "wersja-z-data",
+    // NeuRIS (rechtsinformationen.bund.de), test phase: ELI identifiers of the consolidated
+    // versions (eli/bund/bgbl-1/{year}/s{page}/{version date}/{n}/deu/{date}/regelungstext-1.html),
+    // text readable; on 2026-11-08 5 517 acts, BGB, StGB, ZPO and GG not among them.
+    api: { url: "https://testphase.rechtsinformationen.bund.de/v1/legislation", kind: "REST", auth: "brak", probe: "https://testphase.rechtsinformationen.bund.de/v1/legislation?size=1", checked: "200 application/json (faza testowa; 5517 aktów, bez BGB/StGB/ZPO/GG; produkcja api.rechtsinformationen.bund.de zablokowana przez proxy sieci aplikacji)" },
     source: REGISTER("germany"),
     level: "BRAK-SZABLONU",
     checked: "rejestr nie podaje szablonu"
@@ -273,7 +277,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     consolidation: "wersja-z-data",
     consolidatedVersion: "con/{RRRRMMDD} (bez daty: najnowsza wersja skonsolidowana); dof = tekst ogłoszony",
     example: "https://www.boe.es/eli/es/l/2015/10/01/39/con/20220713/spa/html",
-    api: { url: "https://www.boe.es/datosabiertos/api/legislacion-consolidada", kind: "REST", auth: "brak", probe: "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565/metadatos", checked: "200 application/json" },
+    api: { url: "https://www.boe.es/datosabiertos/api/legislacion-consolidada", kind: "REST", auth: "brak", probe: "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565/metadatos", checked: "200 application/json; tekst: …/id/{BOE-A-…}/texto i …/texto/bloque/{a1} (Accept: application/xml), wersje z fecha_vigencia" },
     source: REGISTER("spain"),
     level: "ADRES",
     checked: "200",
