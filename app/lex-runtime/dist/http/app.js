@@ -83,7 +83,7 @@ import { completeCourtAnalysisExecution, requireCourtAnalysisExecutionPermit } f
 import { createChronologyState, nextChronologyCheckpoint, requireChronologyTemporalGate } from "../chronology-state.js";
 import { completeChronologyExecution, requireChronologyExecutionPermit } from "../chronology-execution-gate.js";
 import { chronologyTemporalGateRequired } from "../chronology-date-trigger.js";
-import { nextContractCheckpoint } from "../contract-analysis-state.js";
+import { contractCheckpointsClosedByAnswer, nextContractCheckpoint } from "../contract-analysis-state.js";
 import { completeContractExecution, requireContractExecutionPermit } from "../contract-analysis-execution-gate.js";
 import { shareWithGroup, UserGroupError } from "../user-groups.js";
 import { registerMicrosoftPublicRoutes, registerMicrosoftRoutes } from "../microsoft/http-routes.js";
@@ -7266,7 +7266,8 @@ export function createLexHttpApp(options) {
                 request.contractWorkflowContext = {
                     mode: permit.mode,
                     stage: permit.stage,
-                    checkpoint: permit.checkpoint
+                    checkpoint: permit.checkpoint,
+                    checkpoints: permit.checkpoints
                 };
                 contractContext = {
                     caseId: contractCaseId,
@@ -7796,7 +7797,9 @@ export function createLexHttpApp(options) {
                                     .permit, [
                                     auditArtifact
                                         .auditRef
-                                ]);
+                                ], 
+                                // Every checkpoint of the turn the answer's trace closes.
+                                contractCheckpointsClosedByAnswer(typeof result.answer === "string" ? result.answer : "", contractContext.permit.checkpoints));
                                 return await options
                                     .contractWorkflowStore
                                     .saveContractAnalysisState({
