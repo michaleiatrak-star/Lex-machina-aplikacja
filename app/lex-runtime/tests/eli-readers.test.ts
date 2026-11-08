@@ -68,3 +68,17 @@ describe("Switzerland: Fedlex Akoma Ntoso", () => {
     expect(reading.articles[0]!.amendments).toContainEqual({ act: "https://fedlex.data.admin.ch/eli/oc/1999/149", inForce: "2000-01-01" });
   });
 });
+
+describe("Czech Republic: e-Sbírka fragments without a key", () => {
+  it("articles from the fragments under each Čl., with the version date and the amending acts", async () => {
+    const { readCzech } = await import("../src/eli/readers.js");
+    const fragments = JSON.parse(fixture("cz-ustava-fragmenty.json")).seznam;
+    const meta = JSON.parse(fixture("cz-ustava-metadata.json"));
+    const reading = readCzech(fragments, meta, "e-sbirka.gov.cz/sb/1993/1/2026-01-01");
+    const first = reading.articles.find((article) => article.unit === "1")!;
+    expect(first.text).toMatch(/^\(1\) Česká republika je svrchovaný, jednotný a demokratický právní stát/u);
+    expect(reading.articles.find((article) => article.unit === "2")!.text.split("\n")).toHaveLength(4);
+    expect(reading.version).toContain("2026-01-01");
+    expect(first.amendments).toContainEqual({ act: "87/2024 Sb." });
+  });
+});

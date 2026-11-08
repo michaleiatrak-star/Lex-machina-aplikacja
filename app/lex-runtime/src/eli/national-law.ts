@@ -3,7 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readBelgium, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readBelgium, readCzech, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
 
@@ -42,7 +42,7 @@ export type NationalFetch = (url: string, init: { headers: Record<string, string
 export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
-  const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
+  const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   return own === wanted;
 }
@@ -76,6 +76,30 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
       version: version ? `wersja od ${version.inForce} (${version.act})` : "brak wersji na tę datę",
       articles: version ? [{ unit: block.replace(/^a/u, ""), heading: article.title, text: version.text, amendments: article.versions.filter((item) => item.act !== id).map((item) => ({ act: item.act, inForce: item.inForce })) }] : []
     };
+  }
+
+  // Czech Republic: e-Sbírka's public cache (no key): metadata of the version, then its fragments.
+  if (/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u.test(host)) {
+    const act = /\/sb\/(\d{4})\/(\d+)(?:\/(\d{4}-\d{2}-\d{2}))?/u.exec(url.pathname);
+    if (!act) throw new Error("NATIONAL_LAW_CZ_ACT_REQUIRED");
+    const base = "https://e-sbirka.gov.cz/sbr-cache/dokumenty-sbirky/";
+    const json = async (path: string) => {
+      const reply = await fetchImpl(base + path, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return JSON.parse(new TextDecoder().decode(await reply.arrayBuffer())) as Record<string, unknown>;
+    };
+    const asked = `/sb/${act[1]}/${act[2]}${request.date ? `/${request.date}` : act[3] ? `/${act[3]}` : ""}`;
+    const meta = await json(encodeURIComponent(asked));
+    const version = typeof meta.staleUrl === "string" ? meta.staleUrl : asked;
+    const fragments: Array<{ eli: string; kodTypuFragmentu: string; xhtml?: string }> = [];
+    for (let page = 0; page < 40; page += 1) {
+      const chunk = await json(`${encodeURIComponent(version)}/fragmenty?cisloStranky=${page}`);
+      fragments.push(...((chunk.seznam as typeof fragments | undefined) ?? []));
+      if (page + 1 >= Number(chunk.pocetStranek ?? 1)) break;
+    }
+    const reading = readCzech(fragments, meta as never, `https://e-sbirka.gov.cz${version}`);
+    const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
+    return { country: "CZ", url: reading.source, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
   }
 
   const reader = READERS.find((item) => item.hosts.test(host));

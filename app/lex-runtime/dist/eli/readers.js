@@ -124,6 +124,30 @@ export function readSwitzerland(xml, source) {
     });
     return { country: "CH", source, ...(title ? { title } : {}), articles, version: "wersja skonsolidowana z datą (eli/cc/{id}/{RRRRMMDD})", status: "tekst urzędowy (Fedlex, SR)" };
 }
+/**
+ * Czech Republic, e-Sbírka public cache (the portal's own JSON, no key; the REST API needs one):
+ * …/sbr-cache/dokumenty-sbirky/{encoded staleUrl}/fragmenty?cisloStranky=N lists the fragments of
+ * a dated version (/sb/{year}/{number}/{YYYY-MM-DD}); a "Clanek" or "Paragraf" fragment opens an
+ * article (ELI …/cl_N or …/par_N), the fragments under its ELI carry the text (xhtml). The metadata
+ * (…/dokumenty-sbirky/{staleUrl}) gives the version's date and the amending acts (novely).
+ */
+export function readCzech(fragments, meta, source) {
+    const amendments = (meta.novely ?? []).map((item) => item.kodDokumentuSbirky).filter((item) => Boolean(item)).map((act) => ({ act }));
+    const heads = fragments.filter((fragment) => fragment.kodTypuFragmentu === "Clanek" || fragment.kodTypuFragmentu === "Paragraf");
+    const articles = heads.map((head) => {
+        const heading = plainText(head.xhtml ?? "");
+        const body = fragments.filter((fragment) => fragment.eli.startsWith(`${head.eli}/`)).map((fragment) => plainText(fragment.xhtml ?? "")).filter(Boolean);
+        return { unit: heading.replace(/^(?:Čl\.|§)\s*/u, ""), heading, text: body.join("\n"), amendments };
+    });
+    return {
+        country: "CZ",
+        source,
+        ...(meta.nazev ? { title: plainText(meta.nazev) } : {}),
+        version: `znění od ${meta.datumUcinnostiZneniOd ?? "?"} (${meta.typZneni ?? ""})`.trim(),
+        articles,
+        status: "tekst z e-Sbírki (publiczny cache portalu; oficjalne REST API wymaga klucza)"
+    };
+}
 const RAG_NOTE = "skan bez warstwy tekstowej: kandydat do OCR i indeksu RAG, nie brzmienie zweryfikowane";
 /** A legislation PDF: its text layer is read; pages without one are named for OCR/RAG. */
 export async function readLegislationPdf(data) {
