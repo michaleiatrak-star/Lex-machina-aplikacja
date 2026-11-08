@@ -123,3 +123,14 @@ describe("Sweden: Riksdagen consolidated SFS text", () => {
     expect(reading.articles[0]!.unit).toBe("1");
   });
 });
+
+describe("Luxembourg: Legilux Akoma Ntoso", () => {
+  it("top-level articles; the provision an amending act quotes stays in its text", async () => {
+    const { readLuxembourg } = await import("../src/eli/readers.js");
+    const reading = readLuxembourg(fixture("lu-loi-2016.xml"), "data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr/xml");
+    expect(reading.articles.map((article) => article.unit)).not.toContain("170-1");
+    const second = reading.articles.find((article) => article.unit === "2")!;
+    expect(second.text).toMatch(/^Le Code civil est complété comme suit/u);
+    expect(second.text).toContain("Art. 170-1.");
+  });
+});

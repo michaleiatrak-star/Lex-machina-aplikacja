@@ -3,7 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
     { country: "NL", hosts: /^wetten\.overheid\.nl$/u, read: readNetherlands },
@@ -98,6 +98,27 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
         const wanted = request.unit?.replace(/§/gu, "").replace(/\s+/gu, " ").trim();
         const articles = wanted ? reading.articles.filter((article) => article.unit === wanted || article.unit === wanted.replace(/\s+(?=[a-z]$)/u, "")) : reading.articles.slice(0, 20);
         return { country: "SE", url: textUrl, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+    }
+    // Luxembourg: Legilux ELI of an act of the Journal officiel (…/eli/etat/leg/loi/2016/05/23/n2/jo):
+    // SPARQL gives the Akoma Ntoso file of its French expression.
+    if (/^(?:data\.|www\.)?legilux\.public\.lu$/u.test(host)) {
+        const eli = /\/eli\/etat\/[^?#]+/u.exec(url.pathname)?.[0]?.replace(/\/(?:fr|de)(?:\/(?:html|pdf|xml|docx))?$/u, "");
+        if (!eli)
+            throw new Error("NATIONAL_LAW_LU_ELI_REQUIRED");
+        const manifestation = `http://data.legilux.public.lu${eli}/fr/xml`;
+        const query = `SELECT ?file WHERE { <${manifestation}> <http://data.legilux.public.lu/resource/ontology/jolux#isExemplifiedBy> ?file } LIMIT 1`;
+        const sparql = await fetchImpl(`https://data.legilux.public.lu/sparqlendpoint?query=${encodeURIComponent(query)}`, { headers: { accept: "application/sparql-results+json" }, signal: AbortSignal.timeout(60_000) });
+        if (!sparql.ok)
+            throw new Error(`NATIONAL_LAW_SOURCE_${sparql.status}`);
+        const file = JSON.parse(new TextDecoder().decode(await sparql.arrayBuffer())).results?.bindings?.[0]?.file?.value;
+        if (!file || !/^https?:\/\/data\.legilux\.public\.lu\/filestore\//u.test(file))
+            return { country: "LU", url: manifestation, status: "Legilux: brak pliku XML tego aktu", articles: [] };
+        const doc = await fetchImpl(file.replace(/^http:/u, "https:"), { headers: { accept: "application/xml" }, signal: AbortSignal.timeout(60_000) });
+        if (!doc.ok)
+            throw new Error(`NATIONAL_LAW_SOURCE_${doc.status}`);
+        const reading = readLuxembourg(new TextDecoder().decode(await doc.arrayBuffer()), file);
+        const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit)) : reading.articles.slice(0, 20);
+        return { country: "LU", url: file, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
     }
     // Czech Republic: e-Sbírka's public cache (no key): metadata of the version, then its fragments.
     if (/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u.test(host)) {

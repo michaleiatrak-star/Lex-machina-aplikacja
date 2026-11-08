@@ -269,6 +269,25 @@ export function readSweden(text: string, source: string): NationalReading {
   return { country: "SE", source, title, version: changed ? `ujednolicony do SFS ${changed}` : "ujednolicony (Lagrummet)", articles, status: "tekst ujednolicony Regeringskansliet (Riksdagen öppna data); moc ma SFS" };
 }
 
+/**
+ * Luxembourg, Legilux (Akoma Ntoso XML of the Journal officiel, legal value "officiel"; the file
+ * found by SPARQL: jolux:isEmbodiedBy → jolux:isExemplifiedBy). An amending act quotes the new
+ * provisions inside <quotedText>: those are text of the article that quotes them, not articles.
+ */
+export function readLuxembourg(xml: string, source: string): NationalReading {
+  const quoted: Array<[number, number]> = [...xml.matchAll(/<quotedText>[\s\S]*?<\/quotedText>/gu)].map((match) => [match.index!, match.index! + match[0].length]);
+  const inside = (at: number) => quoted.some(([from, to]) => at > from && at < to);
+  const starts = [...xml.matchAll(/<article id="([^"]+)">/gu)].filter((match) => !inside(match.index!));
+  const articles = starts.map((match, index): NationalArticle => {
+    const end = index + 1 < starts.length ? starts[index + 1]!.index! : xml.indexOf("</body>", match.index!) > 0 ? xml.indexOf("</body>", match.index!) : xml.length;
+    const block = xml.slice(match.index!, end);
+    const heading = plainText(/<num>([\s\S]*?)<\/num>/u.exec(block)?.[1] ?? "");
+    return { unit: heading.replace(/^Art\.\s*/u, "").replace(/\.$/u, "").replace(/^1er$/u, "1er"), heading, text: plainText(block.replace(/<num>[\s\S]*?<\/num>/u, "")), amendments: [] };
+  });
+  const title = plainText(/<docTitle>([\s\S]*?)<\/docTitle>/u.exec(xml)?.[1] ?? "");
+  return { country: "LU", source, ...(title ? { title } : {}), articles, version: "publikacja w Journal officiel (Mémorial A)", status: "tekst urzędowy Legilux (legalValue: officiel)" };
+}
+
 export type PdfReading =
   | { kind: "TEKST"; text: string; pages: number }
   | { kind: "SKAN"; pages: number; note: string }

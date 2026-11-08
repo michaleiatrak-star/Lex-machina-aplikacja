@@ -228,7 +228,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     consolidation: "nieustalone",
     example: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/13/a566/jo",
     api: { url: "https://data.legilux.public.lu/sparqlendpoint", kind: "SPARQL", auth: "brak", probe: "ASK {?s ?p ?o}", checked: "200 boolean true" },
-    text: { reading: "DO-ZBADANIA", note: "SPARQL odpowiada (Accept: application/sparql-results+json); legilux.public.lu wymaga JavaScriptu — tekst przez pliki z SPARQL (jak Fedlex)" },
+    text: { reading: "CZYTNIK", note: "readLuxembourg: ELI aktu → SPARQL (jolux:isExemplifiedBy) → Akoma Ntoso XML z filestore (legalValue: officiel); kodeksy skonsolidowane: ELI code/{kod}/art_N/{data} i PDF z datą" },
     source: REGISTER("luxembourg"),
     level: "ADRES-NIEPOTWIERDZONY",
     checked: "połączenie zerwane",
