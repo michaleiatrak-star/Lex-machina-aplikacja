@@ -1559,6 +1559,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
+        "/api/settings/legal-sources/legi" => method == "GET",
+        "/api/settings/legal-sources/legi/build" => method == "POST",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
         "/api/diagnostics/anomalies/export" => method == "GET",
@@ -2244,6 +2246,9 @@ mod tests {
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));
+        assert!(route_allowed("GET", "/api/settings/legal-sources/legi"));
+        assert!(route_allowed("POST", "/api/settings/legal-sources/legi/build"));
+        assert!(!route_allowed("GET", "/api/settings/legal-sources/legi/build"));
         assert!(route_allowed("POST", "/api/core-law/acts"));
         assert!(route_allowed("POST", "/api/core-law/acts/lookup"));
         assert!(route_allowed("POST", "/api/core-law/acts/remove"));
