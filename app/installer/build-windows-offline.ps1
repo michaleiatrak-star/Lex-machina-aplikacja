@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Configuration = "release"
 )
 
@@ -71,6 +71,8 @@ New-Item $bootstrap -ItemType Directory | Out-Null
 foreach ($file in @(
   "windows-online-bootstrap.ps1",
   "bootstrap-run.ps1",
+  "bootstrap-progress.ps1",
+  "bootstrap-progress-window.ps1",
   "windows-offline-bundle-install.ps1",
   "extract-offline-zip.ps1",
   "app-update-transaction.ps1",

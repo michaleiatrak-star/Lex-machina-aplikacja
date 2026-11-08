@@ -1,9 +1,11 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$RuntimeRoot,
   [Parameter(Mandatory=$true)][string]$BundlePath
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "bootstrap-progress.ps1")
+Set-BootstrapProgress "Sprawdzanie pełnego pakietu instalacyjnego…"
 
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 $bundle = (Resolve-Path -LiteralPath $BundlePath).Path
@@ -215,6 +217,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 $vcFirewallRule = $null
 
 try {
+  Set-BootstrapProgress "Rozpakowywanie narzędzi z pełnego instalatora…"
   Write-Host "Extracting verified offline runtime bundle"
   $extractor = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "extract-offline-zip.ps1"
   if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) {
@@ -234,6 +237,7 @@ try {
     throw "OFFLINE_BUNDLE_RUNTIME_NETWORK_POLICY_INVALID"
   }
 
+  Set-BootstrapProgress "Sprawdzanie przygotowanych plików…"
   Write-Host "Verifying component-lock before installation"
   foreach ($entry in $lock.files) {
     $path = Join-Path $stage ($entry.path -replace '/','\')
@@ -246,6 +250,7 @@ try {
     }
   }
 
+  Set-BootstrapProgress "Przygotowanie narzędzi aplikacji…"
   Write-Host "Installing verified private runtime into $runtime"
   $null = robocopy.exe $stage $runtime /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
   $robocopyCode = $LASTEXITCODE
@@ -293,7 +298,8 @@ try {
       Write-Host "Acceptance firewall: outbound blocked for bundled VC++ installer"
     }
 
-    Write-Host "Installing verified bundled Visual C++ runtime"
+    Set-BootstrapProgress "Przygotowanie składników systemu Windows…"
+  Write-Host "Installing verified bundled Visual C++ runtime"
     $vcExit = Install-VcRuntime $vcInstaller ([Version]$vc.version) (Join-Path $env:LOCALAPPDATA "LexMachina\logs") "OFFLINE_BUNDLE_VC_RUNTIME"
     Write-Host "Bundled Visual C++ runtime fallback exercised; exit=$vcExit"
   }
@@ -306,6 +312,7 @@ try {
     Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
   }
 
+  Set-BootstrapProgress "Sprawdzanie gotowości aplikacji…"
   $selfTest = Join-Path $runtime "bootstrap\windows-payload-selftest.ps1"
   if (-not (Test-Path -LiteralPath $selfTest -PathType Leaf)) {
     throw "OFFLINE_BUNDLE_SELFTEST_SCRIPT_MISSING"

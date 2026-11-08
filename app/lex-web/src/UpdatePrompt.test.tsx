@@ -14,7 +14,8 @@ describe("UpdatePrompt", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain("Dostępna jest nowa wersja Lex Machina");
     expect(html).toContain("0.1.47");
-    expect(html).toContain("Zaktualizuj teraz");
+    expect(html).toContain("Pobierz aktualizację");
+    expect(html).not.toContain("Zainstaluj i uruchom ponownie");
     expect(html).toContain("Później");
     expect(html).toContain("Pomiń tę wersję");
   });

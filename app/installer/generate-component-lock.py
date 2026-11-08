@@ -88,6 +88,7 @@ def main() -> int:
     manifest = json.loads((code_root / "release-source.json").read_text(encoding="utf-8"))
     lock = {
         "schemaVersion": 4,
+        "installerInputs": {name: manifest["runtime"][name] for name in ("node", "python")},
         "status": "INSTALLED_COMPONENT_LOCK",
         "applicationVersion": manifest.get("applicationVersion", "UNKNOWN"),
         "target": "macos-arm64",

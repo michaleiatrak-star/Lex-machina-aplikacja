@@ -1,3 +1,4 @@
+import { ApplicationDownloadProgress } from "./ApplicationDownloadProgress.js";
 import {
   useEffect,
   useMemo,
@@ -67,6 +68,12 @@ export function friendlyError(error: unknown): string {
         ? error.message
         : String(error);
 
+  if (/UPDATE_ASSET_HASH|UPDATE_ASSET_SIZE|UPDATE_ASSET_RANGE/.test(code)) {
+    return "Pobrane pliki są niekompletne lub uszkodzone. Spróbuj pobrać aktualizację ponownie.";
+  }
+  if (/UPDATE_ASSET_DOWNLOAD|fetch failed|Failed to fetch|TimeoutError|AbortError/.test(code)) {
+    return "Pobieranie zostało przerwane. Sprawdź połączenie z internetem i spróbuj ponownie.";
+  }
   // The update runner (PowerShell) ended at once: it never ran the update script.
   if (code.startsWith("APPLICATION_UPDATE_RUNNER_EXITED")) {
     const detail = code.split(":").slice(2).join(":").trim();
@@ -284,16 +291,14 @@ export function MaintenancePanel({
     setBusy("app-download");
     setError("");
     setMessage(
-      "Pobieram instalator do stagingu i weryfikuję SHA-256, ProductVersion oraz wymaganą politykę Authenticode."
+      "Pobieram aktualizację i sprawdzam, czy pliki są kompletne."
     );
     try {
       const result =
         await downloadApplicationUpdate();
       setStaged(result);
       setMessage(
-        result.publisher.verification === "AUTHENTICODE"
-          ? `Zweryfikowano ${result.filename} (${formatBytes(result.bytes)}). Authenticode + ProductVersion ${result.publisher.productVersion}: PASS. Aktualizacja jest gotowa do instalacji.`
-          : `Zweryfikowano ${result.filename} (${formatBytes(result.bytes)}). SHA-256 + ProductVersion ${result.publisher.productVersion}: PASS. UWAGA: aktualizacja bez podpisu jest tymczasowo dozwolona.`
+        `Aktualizacja ${result.version} jest gotowa do instalacji (${formatBytes(result.bytes)}).`
       );
     } catch (problem) {
       setMessage("");
@@ -328,7 +333,9 @@ export function MaintenancePanel({
     setBusy("app-install");
     setError("");
     setMessage(
-      "Przekazuję aktualizację do zewnętrznej transakcji. Program zostanie zamknięty, zaktualizowany, sprawdzony i uruchomiony ponownie."
+      /Mac OS X|Macintosh/i.test(navigator.userAgent)
+        ? "Otwieram instalator. Przejdź jego kroki; potem Lex Machina pokaże dalsze przygotowanie."
+        : "Instaluję aktualizację. Aplikacja zamknie się i uruchomi ponownie po zakończeniu."
     );
     try {
       await installStagedApplicationUpdate(
@@ -622,6 +629,7 @@ export function MaintenancePanel({
           Sprawdź ponownie
         </button>
 
+        {busy === "app-download" ? <ApplicationDownloadProgress /> : null}
         {message ? (
           <p className="maintenance-message">
             {message}

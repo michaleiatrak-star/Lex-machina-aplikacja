@@ -1,8 +1,8 @@
 #!/bin/bash
 # Builds the macOS (Apple silicon) online installer:
 #   Lex Machina.app (Tauri) with the thin runtime payload in Contents/Resources/runtime,
-#   ad-hoc signed (no Apple Developer ID), wrapped in a .pkg whose postinstall
-#   runs macos-online-bootstrap.sh as the logged-in user.
+#   ad-hoc signed (no Apple Developer ID), wrapped in a .pkg that opens the app.
+#   The native preparation window runs macos-online-bootstrap.sh as the user.
 # Usage: build-macos-online.sh <output.pkg>
 # LEX_MACOS_OFFLINE=1: the offline package - Node, Python, the Python packages and the OCR/NER
 # models are inside the app (prepare-macos-offline.sh) and the install needs no network.
@@ -68,7 +68,7 @@ cp "$INSTALLER/macos-release-requirements.txt" "$PAYLOAD/release-requirements.tx
 mkdir -p "$PAYLOAD/bootstrap"
 # llama-*: the standalone llama.cpp server with tools (start-llama-native-agent.sh, written when
 # a local model is installed).
-for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-release-models.py verify-python-package-set.py \
+for file in macos-online-bootstrap.sh macos-component-state.py macos-model-state.py generate-component-lock.py prefetch-release-models.py verify-python-package-set.py \
   llama-web-mcp.py llama-legal-skills-mcp.py llama-local-documents-mcp.py llama-native-system-message.txt \
   mistral-nemo-web-grounded.jinja bielik-web-grounded.jinja; do
   cp "$INSTALLER/$file" "$PAYLOAD/bootstrap/$file"
@@ -111,12 +111,17 @@ ditto "$APP" "$WORK/root/Applications/Lex Machina.app"
 pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist"
 # Always install into /Applications, never relocate onto another copy of the app.
 plutil -replace 0.BundleIsRelocatable -bool NO "$WORK/components.plist"
+mkdir -p "$WORK/scripts"
+cp "$INSTALLER/macos/scripts/postinstall" "$WORK/scripts/postinstall"
+chmod 755 "$WORK/scripts/postinstall"
+bash -n "$WORK/scripts/postinstall"
 pkgbuild --root "$WORK/root" --component-plist "$WORK/components.plist" \
-  --scripts "$INSTALLER/macos/scripts" --identifier pl.lexmachina.desktop --version "$VERSION" \
+  --scripts "$WORK/scripts" --identifier pl.lexmachina.desktop --version "$VERSION" \
   --install-location / "$WORK/LexMachina-component.pkg"
 mkdir -p "$WORK/resources"
 cp "$INSTALLER/macos/welcome.html" "$WORK/resources/welcome.html"
 productbuild --distribution "$INSTALLER/macos/distribution.xml" --package-path "$WORK" \
   --resources "$WORK/resources" "$OUTPUT"
+bash "$INSTALLER/verify-macos-package.sh" "$OUTPUT"
 rm -rf "$WORK"
 echo "Installer: $OUTPUT"

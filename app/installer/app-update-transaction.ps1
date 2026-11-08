@@ -53,7 +53,7 @@ $UpdateProgressSteps = @{
 function Start-UpdateProgress([string]$TargetVersion) {
   if ($script:UpdateProgress -or $env:LEX_UPDATE_NO_PROGRESS_WINDOW -eq "1" -or -not [Environment]::UserInteractive) { return }
   try {
-    $sync = [hashtable]::Synchronized(@{ CloseAt = $null; Text = "Przygotowanie aktualizacji…"; Value = 5; Title = "Aktualizacja Lex Machina do wersji $TargetVersion" })
+    $sync = [hashtable]::Synchronized(@{ CloseAt = $null; Text = "Przygotowanie aktualizacji…"; Value = 5; Installing = $false; Title = "Aktualizacja Lex Machina do wersji $TargetVersion" })
     $runspace = [runspacefactory]::CreateRunspace()
     $runspace.ApartmentState = "STA"
     $runspace.ThreadOptions = "ReuseThread"
@@ -83,6 +83,7 @@ function Start-UpdateProgress([string]$TargetVersion) {
       $timer = New-Object System.Windows.Forms.Timer
       $timer.Interval = 300
       $timer.Add_Tick({
+        $form.TopMost = -not $sync.Installing
         $label.Text = $sync.Text
         $bar.Value = [Math]::Max(0, [Math]::Min(100, [int]$sync.Value))
         if ($sync.CloseAt -and [DateTime]::UtcNow -ge $sync.CloseAt) { $timer.Stop(); $form.Close() }
@@ -100,6 +101,7 @@ function Start-UpdateProgress([string]$TargetVersion) {
 function Set-UpdateProgress([string]$State) {
   if (-not $script:UpdateProgress -or -not $UpdateProgressSteps.ContainsKey($State)) { return }
   try {
+    $script:UpdateProgress.Installing = $State -eq "INSTALLING"
     $step = $UpdateProgressSteps[$State]
     $script:UpdateProgress.Value = $step[0]
     $script:UpdateProgress.Text = $step[1]
