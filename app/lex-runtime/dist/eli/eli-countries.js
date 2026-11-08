@@ -154,7 +154,7 @@ export const ELI_COUNTRIES = [
         consolidation: "nieustalone",
         example: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/06/13/a566/jo",
         api: { url: "https://data.legilux.public.lu/sparqlendpoint", kind: "SPARQL", auth: "brak", probe: "ASK {?s ?p ?o}", checked: "200 boolean true" },
-        text: { reading: "DO-ZBADANIA", note: "SPARQL odpowiada; adres ELI z sieci aplikacji zrywa połączenie" },
+        text: { reading: "DO-ZBADANIA", note: "SPARQL odpowiada (Accept: application/sparql-results+json); legilux.public.lu wymaga JavaScriptu — tekst przez pliki z SPARQL (jak Fedlex)" },
         source: REGISTER("luxembourg"),
         level: "ADRES-NIEPOTWIERDZONY",
         checked: "połączenie zerwane",
@@ -284,7 +284,7 @@ export const ELI_COUNTRIES = [
         source: REGISTER("netherlands"), level: "BRAK-SZABLONU", checked: "wdrożenie w toku" },
     { code: "SE", name: "Szwecja", family: "nordyckie", portal: "—", pillars: "1 (w trakcie)", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "API Riksdagu (data.riksdagen.se) odpowiada listą SFS" },
         source: REGISTER("sweden"), level: "BRAK-SZABLONU", checked: "wdrożenie w toku" },
-    { code: "AL", name: "Albania", family: "kontynentalne", portal: "—", pillars: "nie podano", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "qbz.gov.al: strona startowa; ELI qbz.gov.al/eli/ odpowiada" },
+    { code: "AL", name: "Albania", family: "kontynentalne", portal: "—", pillars: "nie podano", consolidation: "nieustalone", text: { reading: "JS", note: "qbz.gov.al: także adresy ELI (…/eli/ligj/{rok}/{mm}/{dd}/{nr}) zwracają tylko powłokę strony" },
         source: REGISTER("albania"), level: "BRAK-SZABLONU", checked: "rejestr podaje tylko koordynatorów" },
     // Outside the EUR-Lex ELI register (EU members without an entry, Turkey, Ukraine, Moldova and
     // the Balkan states outside the EU): no ELI template, the official portal and what it gives.
@@ -298,6 +298,11 @@ export const ELI_COUNTRIES = [
     { code: "MK", name: "Macedonia Północna", family: "kontynentalne", portal: "http://www.slvesnik.com.mk", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "BRAK-POŁĄCZENIA", note: "Службен весник: odrzucony przez proxy sieci aplikacji" }, source: "http://www.slvesnik.com.mk/", level: "BRAK-SZABLONU", checked: "proxy" },
     { code: "BA", name: "Bośnia i Hercegowina", family: "kontynentalne", portal: "http://www.sluzbenilist.ba", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "Službeni list BiH: strona startowa odpowiada; prawo podzielone (BiH, FBiH, RS, Brčko)" }, source: "http://www.sluzbenilist.ba/", level: "BRAK-SZABLONU", checked: "200 (portal)" },
     { code: "XK", name: "Kosowo", family: "kontynentalne", portal: "https://gzk.rks-gov.net", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "Gazeta Zyrtare: portal odpowiada (sq, sr, en); akty na stronach ActDetail" }, source: "https://gzk.rks-gov.net/", level: "BRAK-SZABLONU", checked: "200 (portal)" },
+    { code: "IS", name: "Islandia", family: "nordyckie", portal: "https://www.althingi.is/lagasafn/", pillars: "brak w rejestrze", consolidation: "wersja-z-data", text: { reading: "BLOKADA", note: "Lagasafn (Althingi): Cloudflare (403, JavaScript i ciasteczka)" }, source: "https://www.althingi.is/lagasafn/", level: "BRAK-SZABLONU", checked: "403 (Cloudflare)" },
+    { code: "LI", name: "Liechtenstein", family: "kontynentalne", portal: "https://www.gesetze.li", pillars: "brak w rejestrze", consolidation: "wersja-z-data", text: { reading: "PDF", note: "Lilex: tekst skonsolidowany w PDF z warstwą tekstową (…/konso/pdf/{LGBl-id}?version={n}; PGR 1926.004: 1035 stron), strona HTML aktu to powłoka" }, source: "https://www.gesetze.li/konso/1926.004", level: "BRAK-SZABLONU", checked: "200 application/pdf" },
+    { code: "MC", name: "Monako", family: "kontynentalne", portal: "https://legimonaco.mc", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "Legimonaco: pełny tekst kodeksów w HTML (…/code/code-civil/, artykuły w blokach „Article N”); czytnik do napisania" }, source: "https://legimonaco.mc/code/code-civil/", level: "BRAK-SZABLONU", checked: "200 text/html (835 tys. znaków tekstu)" },
+    { code: "SM", name: "San Marino", family: "kontynentalne", portal: "https://www.consigliograndeegenerale.sm", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "Consiglio Grande e Generale: archiwum ustaw i dekretów (…/archivio-leggi-decreti-e-regolamenti.html), teksty jako dokumenty do pobrania" }, source: "https://www.consigliograndeegenerale.sm/on-line/home/archivio-leggi-decreti-e-regolamenti.html", level: "BRAK-SZABLONU", checked: "200 (portal)" },
+    { code: "AD", name: "Andora", family: "kontynentalne", portal: "https://www.bopa.ad", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "JS", note: "BOPA: aplikacja JavaScript" }, source: "https://www.bopa.ad/", level: "BRAK-SZABLONU", checked: "200 (strona JavaScript)" },
     {
         code: "MT",
         name: "Malta",
@@ -307,7 +312,7 @@ export const ELI_COUNTRIES = [
         template: "https://legislation.mt/eli/{type}/{year}*/{natural identifier}/{lang}/{format}",
         consolidation: "osobny-akt",
         consolidatedVersion: "cap / sl = prawo skonsolidowane (bez roku); act / ln = publikacje",
-        text: { reading: "PDF", note: "legislation.mt: PDF przez ELI (cap/sl skonsolidowane)" },
+        text: { reading: "PDF", note: "legislation.mt: PDF z warstwą tekstową przez ELI (cap/sl skonsolidowane; Civil Code cap/16: 615 stron)" },
         source: REGISTER("malta"),
         level: "ADRES-NIEPOTWIERDZONY",
         checked: "nie sprawdzano",

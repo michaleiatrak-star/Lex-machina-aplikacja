@@ -55,7 +55,7 @@ describe("ELI APIs of the countries (checked 2026-11-08)", () => {
 describe("coverage: the EU of civil law, Turkey, Ukraine, Moldova and the Balkans outside the EU", () => {
   it("every one of them is in the register, with its text reading status", () => {
     const eu = ["AT", "BE", "BG", "HR", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"];
-    const others = ["TR", "UA", "MD", "RS", "ME", "MK", "BA", "XK", "AL"];
+    const others = ["TR", "UA", "MD", "RS", "ME", "MK", "BA", "XK", "AL", "IS", "LI", "MC", "SM", "AD"];
     const codes = new Set(ELI_COUNTRIES.map((country) => country.code));
     expect([...eu, ...others].filter((code) => !codes.has(code))).toEqual([]);
     expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["BE", "CH", "DE", "DK", "ES", "IT", "NL"]);
