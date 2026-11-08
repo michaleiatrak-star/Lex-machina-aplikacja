@@ -157,7 +157,7 @@ export function familyMethod(entry: ReturnType<typeof eliCountry>): string {
   const caseLaw = entry.caseLaw ? ` Orzeczenia czytaj tym samym narzędziem (${entry.caseLaw.source}; ${entry.caseLaw.note.slice(0, 200)}).` : "";
   if (entry.family === "common-law") {
     return (
-      " RODZINA PRAWA: COMMON LAW. Źródłami są ustawa i precedens. Dla każdej osi sporu ustal: (1) ustawę, jeśli jest, i jej brzmienie; " +
+      " RODZINA PRAWA: COMMON LAW — metoda: shared/RODZINA-PRAWA-COMMON-LAW.md (CL-1…CL-7, wczytaj przed pierwszym powołaniem). Źródłami są ustawa i precedens. Dla każdej osi sporu ustal: (1) ustawę, jeśli jest, i jej brzmienie; " +
       "(2) orzeczenia wiążące według hierarchii sądów tej jurysdykcji (stare decisis) i ich ratio decidendi — odróżnij je od obiter dicta; " +
       "(3) czy stan faktyczny da się odróżnić (distinguishing); (4) orzeczenia innych jurysdykcji common law tylko jako perswazyjne. " +
       "Bramki metody (zakres normy, oś czasu, wykładnia) stosuj do ustawy i do ratio orzeczenia. Odpowiedź bez sprawdzonego orzecznictwa oznacz jako niepełną." +
@@ -166,7 +166,7 @@ export function familyMethod(entry: ReturnType<typeof eliCountry>): string {
     );
   }
   if (entry.family === "mieszane") {
-    return ` RODZINA PRAWA: SYSTEM MIESZANY. ${entry.familyNote ?? "Ustal dla danej dziedziny, czy źródłem jest kodeks, czy precedens."} Dla dziedzin opartych na common law ustal też orzeczenia wiążące i ich ratio.${caseLaw}`;
+    return ` RODZINA PRAWA: SYSTEM MIESZANY — dla dziedzin opartych na common law metoda shared/RODZINA-PRAWA-COMMON-LAW.md (CL-1…CL-7). ${entry.familyNote ?? "Ustal dla danej dziedziny, czy źródłem jest kodeks, czy precedens."} Dla dziedzin opartych na common law ustal też orzeczenia wiążące i ich ratio.${caseLaw}`;
   }
   return "";
 }
