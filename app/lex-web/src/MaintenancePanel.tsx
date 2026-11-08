@@ -24,6 +24,7 @@ import {
 import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
 import { JurisdictionSection } from "./JurisdictionSection.js";
+import { LegiIndexSection } from "./LegiIndexSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
 import { useDeveloperMode } from "./developer-mode.js";
@@ -611,6 +612,7 @@ export function MaintenancePanel({
 
         <CaseLawLibrarySection />
         <JurisdictionSection />
+        <LegiIndexSection />
         <DomainFallbackSection />
 
         {developer ? <AnomalyJournalSection user={user} /> : null}

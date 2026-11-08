@@ -4128,6 +4128,19 @@ export function setJurisdiction(pack: string): Promise<JurisdictionSettings> {
   return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ pack }) });
 }
 
+export type LegiIndexStatus = {
+  built: { built: string; codes: number; versions: number; archive: string } | null;
+  build: { state: "BUILDING" | "FAILED"; files: number; error?: string; started: string } | null;
+};
+
+export function getLegiIndex(): Promise<LegiIndexStatus> {
+  return json("/api/settings/legal-sources/legi");
+}
+
+export function buildLegiIndex(): Promise<LegiIndexStatus> {
+  return json("/api/settings/legal-sources/legi/build", { method: "POST", body: "{}" });
+}
+
 export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {
   return json("/api/case-law/library/remove", { method: "POST", body: JSON.stringify({ cardUrl }) });
 }

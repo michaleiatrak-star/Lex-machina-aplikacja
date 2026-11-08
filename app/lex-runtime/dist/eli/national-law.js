@@ -3,6 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
+import { legiLookup } from "./fr-legi.js";
 import { readAustria, readBelgium, readCzech, readLatvia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
@@ -21,7 +22,7 @@ const PDF_HOSTS = [
     { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u }
 ];
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR"];
 function unitMatches(article, unit) {
     const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
     const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
@@ -119,6 +120,29 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
         const reading = readLuxembourg(new TextDecoder().decode(await doc.arrayBuffer()), file);
         const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit)) : reading.articles.slice(0, 20);
         return { country: "LU", url: file, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+    }
+    // France: Légifrance blocks automated reads and its API needs a PISTE key; the codes are read
+    // from the local index of DILA's LEGI dump (built once, see fr-legi.ts) by LEGITEXT/LEGIARTI id.
+    if (/^(?:www\.)?legifrance\.gouv\.fr$/u.test(host)) {
+        const cid = /LEGITEXT\d{12}/u.exec(url.href)?.[0];
+        const articleId = /LEGIARTI\d{12}/u.exec(url.href)?.[0];
+        if (!cid && !articleId)
+            throw new Error("NATIONAL_LAW_FR_LEGI_ID_REQUIRED");
+        const answer = await legiLookup({ ...(cid ? { cid } : {}), ...(articleId ? { articleId } : {}), ...(request.unit ? { num: request.unit } : {}), ...(request.date ? { date: request.date } : {}) });
+        if (!answer)
+            return { country: "FR", url: url.href, status: "indeks LEGI nie jest zbudowany", articles: [], note: "Francja czytana z lokalnego indeksu zrzutu LEGI (DILA, 1,2 GB, bez klucza): administrator buduje go w Ustawienia > Aplikacja > Prawo francuskie (LEGI); do tego czasu artykuł nie jest zweryfikowany" };
+        if (!answer.code)
+            return { country: "FR", url: url.href, status: "LEGI: kodeksu nie ma w indeksie (indeks obejmuje kodeksy obowiązujące)", articles: [] };
+        const version = answer.version;
+        return {
+            country: "FR",
+            url: `https://www.legifrance.gouv.fr/codes/article_lc/${version?.id ?? articleId ?? ""}`,
+            status: `tekst skonsolidowany Légifrance (zrzut LEGI DILA z ${answer.built?.slice(0, 10) ?? "?"}), bez mocy urzędowej; moc ma Journal officiel`,
+            title: answer.code.title,
+            ...(version ? { version: `wersja ${version.state} od ${version.from}${version.to < "2999" ? ` do ${version.to}` : ""}` } : { version: "brak wersji tego artykułu na tę datę" }),
+            articles: version ? [{ unit: version.num, heading: `Article ${version.num}`, text: version.text, amendments: version.links.map((act) => ({ act })) }] : [],
+            ...(answer.others.length ? { note: `inne wersje: ${answer.others.map((item) => `${item.from}–${item.to < "2999" ? item.to : "…"} (${item.state})`).join("; ")}` } : {})
+        };
     }
     // Finland: Finlex open data (no key), the act by year and number from any Finlex address
     // (…/eli/sd/1929/228/ajantasa, …/statute-consolidated/1889/39-001, finlex.fi/fi/laki/ajantasa/1929/19290228).

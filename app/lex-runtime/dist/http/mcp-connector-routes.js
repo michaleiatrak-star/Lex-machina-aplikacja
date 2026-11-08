@@ -7,6 +7,9 @@ import { AuthError } from "../auth/service.js";
 import { isLexMcpServerId } from "../lex-mcp-connectors.js";
 import { fetchSourcePreview } from "../source-preview.js";
 import { CaseAccessError } from "../case-access.js";
+import { buildLegiIndex, defaultLegiIndexDir, latestLegiDump } from "../eli/fr-legi.js";
+import { promises as legiFs } from "node:fs";
+import legiPath from "node:path";
 import { activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveJurisdictionPack } from "../jurisdiction.js";
 function requireAdmin(req, res, authService) {
     return authorize(req, res, authService, true);
@@ -408,6 +411,38 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         setActiveJurisdictionPack(connectors.corpusRoot, pack);
         connectors.jurisdictionChanged();
         res.json(jurisdictionView());
+    });
+    // French codes without a key: the local index of DILA's LEGI dump (about 1.2 GB download,
+    // built in the background once; read by read_national_legislation for legifrance.gouv.fr).
+    let legiBuild = null;
+    const legiView = async () => {
+        const built = await legiFs.readFile(legiPath.join(defaultLegiIndexDir(), "built.json"), "utf8").then((text) => JSON.parse(text)).catch(() => null);
+        return { built, build: legiBuild };
+    };
+    app.get("/api/settings/legal-sources/legi", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json(await legiView());
+    });
+    app.post("/api/settings/legal-sources/legi/build", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        if (legiBuild?.state === "BUILDING") {
+            res.status(409).json({ error: "LEGI_BUILD_RUNNING" });
+            return;
+        }
+        const build = { state: "BUILDING", files: 0, started: new Date().toISOString() };
+        legiBuild = build;
+        void latestLegiDump()
+            .then((archive) => buildLegiIndex(archive, defaultLegiIndexDir(), { onProgress: (files) => (build.files = files) }))
+            .then(() => {
+            legiBuild = null;
+        })
+            .catch((failure) => {
+            build.state = "FAILED";
+            build.error = failure instanceof Error ? failure.message : String(failure);
+        });
+        res.status(202).json(await legiView());
     });
     // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony): gdy reguły nie
     // wskazały dziedziny, krótkie zapytanie do modelu sesji albo lokalnego Bielika/Mistrala.

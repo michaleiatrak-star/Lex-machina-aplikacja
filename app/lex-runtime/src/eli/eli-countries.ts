@@ -181,7 +181,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     consolidation: "wersja-bez-mocy",
     example: "https://www.legifrance.gouv.fr/eli/loi/2023/4/14/2023-270/jo/texte",
     api: { url: "https://api.piste.gouv.fr/dila/legifrance/lf-engine-app", kind: "REST", auth: "klucz", probe: "/consult/ping bez klucza", checked: "400 (wymaga OAuth PISTE: konto piste.gouv.fr, aplikacja z subskrypcją API Légifrance i zgodą na CGU, token client_credentials z https://oauth.piste.gouv.fr/api/oauth/token, sandbox: sandbox-oauth.piste.gouv.fr; serwer tokenów odpowiada invalid_client bez kluczy)" },
-    text: { reading: "KLUCZ", note: "portal: Cloudflare; API Légifrance przez PISTE (OAuth); bez klucza: zrzut LEGI w otwartych danych DILA (echanges.dila.gouv.fr/OPENDATA/LEGI, 1,26 GB, codziennie, XML artykułów z datami wersji) — do pobrania raz i lokalnego indeksu" },
+    text: { reading: "CZYTNIK", note: "src/eli/fr-legi.ts: lokalny indeks zrzutu LEGI (otwarte dane DILA, echanges.dila.gouv.fr/OPENDATA/LEGI, około 1,2 GB, bez klucza; budowa: Ustawienia > Aplikacja > Prawo francuskie (LEGI)); kodeksy obowiązujące, wszystkie wersje artykułów z datami; portal: Cloudflare; alternatywa: API Légifrance przez PISTE (OAuth)" },
     source: REGISTER("france"),
     level: "ADRES-NIEPOTWIERDZONY",
     checked: "403 (blokada automatów)",
