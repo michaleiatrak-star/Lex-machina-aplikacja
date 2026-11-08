@@ -69,11 +69,16 @@ jobs:
           LEX_GOOGLE_OAUTH_CLIENT_JSON: ${{ secrets.LEX_GOOGLE_OAUTH_CLIENT_JSON }}
         run: bash app/installer/build-macos-online.sh "$RUNNER_TEMP/$ASSET_NAME"
 
-      - name: Install the .pkg (online bootstrap as the logged-in user)
+      - name: Install the .pkg and prepare components as the user
         run: |
           set -euo pipefail
           status=0
           sudo installer -pkg "$RUNNER_TEMP/$ASSET_NAME" -target / -verboseR || status=$?
+          [ "$status" -eq 0 ]
+          runtime="/Applications/Lex Machina.app/Contents/Resources/runtime"
+          mkdir -p "$HOME/Library/Logs/LexMachina"
+          # Headless acceptance invokes the same engine used by the preparation window.
+          bash "$runtime/bootstrap/macos-online-bootstrap.sh" "$runtime" > "$HOME/Library/Logs/LexMachina/install.log" 2>&1 || status=$?
           tail -60 "$HOME/Library/Logs/LexMachina/install.log" || true
           [ "$status" -eq 0 ]
           grep -q BOOTSTRAP_PASS "$HOME/Library/Logs/LexMachina/install.log"

@@ -2685,3 +2685,19 @@ textarea:focus {
 .privacy-preview-group:not([open]) > summary {
   color: var(--muted, var(--lm-t90));
 }
+
+.component-setup { min-height: 100vh; display: grid; place-items: center; padding: 32px; background: #f4f3ef; color: #253b38; }
+.component-setup section { width: min(620px, 100%); padding: 44px; background: white; border: 1px solid #dce3de; border-radius: 20px; box-shadow: 0 16px 70px #15352b0d; }
+.component-setup-brand { font-size: 12px; letter-spacing: .2em; font-weight: 700; }
+.component-setup h1 { font-size: 30px; margin: 28px 0 16px; }
+.component-setup p { line-height: 1.65; }
+.component-setup progress { width: 100%; accent-color: #267363; }
+.component-setup button { margin: 12px 0; padding: 12px 22px; border: 0; border-radius: 8px; background: #215e50; color: white; font: inherit; cursor: pointer; }
+.component-setup-note { color: #64706a; font-size: 14px; }
+.component-setup [role="alert"] { color: #9a342b; }
+
+.component-setup { grid-template-columns: minmax(0, 1fr); }
+.component-setup section { min-width: 0; width: 100%; max-width: 620px; padding: clamp(20px, 4vw, 44px); }
+.update-download-toast { position: fixed; right: 24px; bottom: 24px; z-index: 1000; width: min(360px, calc(100vw - 48px)); padding: 20px; background: #fff; color: #253b38; border: 1px solid #dce3de; border-radius: 14px; box-shadow: 0 8px 32px #15352b24; }
+.update-download-toast progress { width: 100%; }
+.update-download-toast button { padding: 8px 12px; cursor: pointer; }

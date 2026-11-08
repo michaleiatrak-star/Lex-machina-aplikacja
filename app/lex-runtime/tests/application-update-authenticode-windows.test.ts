@@ -1,7 +1,13 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   createHash
 } from "node:crypto";
 import {
+  beforeEach,
+  afterEach,
+  vi,
   describe,
   expect,
   it
@@ -16,6 +22,20 @@ import type {
   UpdateDiscovery,
   UpdateDiscoveryResult
 } from "../src/update-discovery.js";
+
+let platform: PropertyDescriptor;
+let testRoot: string;
+beforeEach(() => {
+  platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+  testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lex-signer-policy-"));
+  vi.stubEnv("LOCALAPPDATA", testRoot);
+  Object.defineProperty(process, "platform", { value: "win32" });
+});
+afterEach(() => {
+  Object.defineProperty(process, "platform", platform);
+  vi.unstubAllEnvs();
+  fs.rmSync(testRoot, { recursive: true, force: true });
+});
 
 describe(
   "Windows application update signer pinning",

@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "app/installer/*.ps1"
+      - "app/installer/windows-bootstrap-test.py"
       - "app/installer/get-install-state.ps1"
       - "app/installer/installer-state-machine-selftest.ps1"
       - "app/installer/windows-release-source.json"
@@ -38,6 +39,7 @@ jobs:
     # No progress window in the unattended self-test.
     env:
       LEX_UPDATE_NO_PROGRESS_WINDOW: "1"
+      LEX_BOOTSTRAP_NO_UI: "1"
 
     steps:
       - name: Checkout
@@ -60,6 +62,15 @@ jobs:
       - name: Online bootstrap quoting and model-source contract
         shell: pwsh
         run: ./app/installer/windows-online-bootstrap-contract-selftest.ps1
+
+      # Przerwane pobieranie (Range, 416), weryfikacja i ponowne użycie modeli: lokalny serwer, bez sieci.
+      - name: Bootstrap downloads, resume and component reuse (PowerShell 5.1)
+        shell: powershell
+        run: python app/installer/windows-bootstrap-test.py powershell.exe
+
+      - name: Progress window and worker lifecycle (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./app/installer/windows-bootstrap-wrapper-selftest.ps1
 
       - name: Visual C++ runtime install outcomes (1603, declined UAC, app-local)
         shell: pwsh

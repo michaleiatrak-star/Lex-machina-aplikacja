@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MaintenanceService, applicationUpdateStagingRoot } from "./maintenance-service.js";
 afterEach(() => {
     fs.rmSync(applicationUpdateStagingRoot(), {
@@ -9,6 +9,12 @@ afterEach(() => {
     });
 });
 describe("application update release-to-installer version binding", () => {
+    let original;
+    beforeEach(() => {
+        original = Object.getOwnPropertyDescriptor(process, "platform");
+        Object.defineProperty(process, "platform", { value: "win32" });
+    });
+    afterEach(() => Object.defineProperty(process, "platform", original));
     it("persists an explicit unsigned receipt when the temporary policy accepts SHA-256 + ProductVersion", async () => {
         const bytes = Buffer.from("unsigned-installer-fixture", "utf8");
         const digest = createHash("sha256")

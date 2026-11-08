@@ -637,6 +637,11 @@ export function registerMaintenanceRoutes(app, dependencies) {
             sendMaintenanceError(res, error);
         }
     });
+    app.get("/api/update/progress", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        res.json(maintenance.applicationDownloadProgress());
+    });
     app.post("/api/update/download", async (req, res) => {
         if (!requireAdmin(req, res, authService))
             return;

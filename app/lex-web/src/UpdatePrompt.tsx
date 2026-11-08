@@ -1,3 +1,4 @@
+import { ApplicationDownloadProgress } from "./ApplicationDownloadProgress.js";
 import { useEffect, useRef, useState } from "react";
 import {
   downloadApplicationUpdate,
@@ -28,12 +29,14 @@ import {
  */
 const UPDATE_STEPS = (macos: boolean): string[] =>
   macos
-    ? ["Pobieranie i sprawdzenie instalatora", "Instalator macOS: przejdź jego kroki", "Uruchom Lex Machina po instalacji"]
+    ? ["Pobieranie i sprawdzenie instalatora", "Instalator macOS: przejdź jego kroki", "Lex Machina otworzy się i pokaże dalsze przygotowanie"]
     : ["Pobieranie i sprawdzenie instalatora", "Instalacja — okno z paskiem postępu pokaże kolejne etapy", "Lex Machina uruchomi się sama po instalacji"];
 
 export function UpdatePrompt() {
   const [store] = useState(updateStore);
   const [offer, setOffer] = useState(() => startupUpdate(store));
+  const [staged, setStaged] = useState<Awaited<ReturnType<typeof downloadApplicationUpdate>> | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const [busy, setBusy] = useState(false);
   // The update's steps on screen until the app hands over to the installer (user report
   // 2026-11-06: the update went on in the background and the user did not know what happened).
@@ -74,6 +77,13 @@ export function UpdatePrompt() {
     };
   }, [store]);
 
+  if (minimized && offer) return (
+    <aside className="update-download-toast" aria-label="Aktualizacja Lex Machina">
+      {busy ? <ApplicationDownloadProgress /> : <p role="status">{error || message || "Dostępna jest aktualizacja."}</p>}
+      <button type="button" onClick={() => setMinimized(false)}>Pokaż aktualizację</button>
+    </aside>
+  );
+
   if (!offer) {
     if (!outcome) return null;
     return (
@@ -99,10 +109,18 @@ export function UpdatePrompt() {
     if (busy || !offer) return;
     setBusy(true);
     setError("");
-    setMessage("Pobieram instalator i sprawdzam jego sumę kontrolną SHA-256…");
+    setMessage("Przygotowuję aktualizację. Po pobraniu zdecydujesz, kiedy ją zainstalować.");
     setStage(1);
     try {
-      const staged = await downloadApplicationUpdate();
+      if (!staged || staged.version !== offer.version) {
+        const downloaded = await downloadApplicationUpdate();
+        setStaged(downloaded);
+        if (downloaded.version !== offer.version) setOffer({ ...offer, version: downloaded.version });
+        setMessage("Aktualizacja jest gotowa. Zapisz pracę przed rozpoczęciem instalacji.");
+        setBusy(false);
+        setStage(0);
+        return;
+      }
       setStage(2);
       setMessage(
         macos
@@ -146,7 +164,8 @@ export function UpdatePrompt() {
           </p>
         ) : null}
         {message ? <p className="update-prompt-status" role="status">{message}</p> : null}
-        {stage > 0 ? (
+        {busy && stage === 1 ? <ApplicationDownloadProgress /> : null}
+        {stage === 2 ? (
           <div className="update-prompt-progress">
             <progress aria-label="Postęp aktualizacji" />
             <ol>
@@ -160,8 +179,9 @@ export function UpdatePrompt() {
         ) : null}
         {error ? <p className="update-prompt-error" role="alert">{error}</p> : null}
         <div className="update-prompt-actions">
+          {busy && stage === 1 ? <button type="button" onClick={() => setMinimized(true)}>Pracuj dalej</button> : null}
           <button type="button" className="update-prompt-primary" disabled={busy} onClick={() => void update()}>
-            {busy ? "Aktualizuję…" : "Zaktualizuj teraz"}
+            {busy ? "Przygotowuję…" : staged?.version === offer.version ? "Zainstaluj i uruchom ponownie" : "Pobierz aktualizację"}
           </button>
           <button
             type="button"

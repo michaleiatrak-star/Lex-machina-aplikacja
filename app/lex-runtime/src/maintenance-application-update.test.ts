@@ -4,6 +4,7 @@ import {
 } from "node:crypto";
 import {
   afterEach,
+  beforeEach,
   describe,
   expect,
   it,
@@ -33,6 +34,12 @@ afterEach(() => {
 describe(
   "application update release-to-installer version binding",
   () => {
+    let original: PropertyDescriptor;
+    beforeEach(() => {
+      original = Object.getOwnPropertyDescriptor(process, "platform")!;
+      Object.defineProperty(process, "platform", { value: "win32" });
+    });
+    afterEach(() => Object.defineProperty(process, "platform", original));
     it(
       "persists an explicit unsigned receipt when the temporary policy accepts SHA-256 + ProductVersion",
       async () => {

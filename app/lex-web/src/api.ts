@@ -2905,6 +2905,11 @@ export function applySkillUpdate():
   );
 }
 
+export type ApplicationDownloadProgress = { phase: "idle" | "downloading" | "checking" | "ready" | "failed"; received: number; total?: number };
+export function getApplicationDownloadProgress(): Promise<ApplicationDownloadProgress> {
+  return json<ApplicationDownloadProgress>("/api/update/progress");
+}
+
 export function downloadApplicationUpdate():
   Promise<ApplicationUpdateDownloadResponse> {
   return json<ApplicationUpdateDownloadResponse>(
@@ -2939,6 +2944,7 @@ export async function repairDesktopRuntime(): Promise<void> {
   const invoke = tauriInvoke();
   if (!invoke) throw new ApiError("TAURI_INVOKE_UNAVAILABLE", 503);
   await invoke("runtime_repair");
+  window.location.reload();
 }
 
 export async function installStagedApplicationUpdate(

@@ -120,18 +120,20 @@ try:
             )
             del ocr
 
-            stanza.download(
-                "pl",
-                model_dir=str(stanza_root),
-                processors="tokenize,ner",
-                verbose=False,
-            )
+            if os.environ.get("LEX_PREFETCH_SKIP_STANZA") != "1":
+                stanza.download(
+                    "pl",
+                    model_dir=str(stanza_root),
+                    processors="tokenize,ner",
+                    verbose=False,
+                )
             # Optional: the second recognizer for the Polish marks (paddle_worker LATIN_REC).
             # Without it OCR reads as before, so a failed download never fails the install.
             try:
                 from paddleocr import TextRecognition
 
-                TextRecognition(model_name="latin_PP-OCRv5_mobile_rec", enable_mkldnn=False, device="cpu")
+                if os.environ.get("LEX_PREFETCH_SKIP_OPTIONAL") != "1":
+                    TextRecognition(model_name="latin_PP-OCRv5_mobile_rec", enable_mkldnn=False, device="cpu")
             except Exception as exc:  # noqa: BLE001
                 print(f"MODEL_PREFETCH_OPTIONAL_FAILED:latin_PP-OCRv5_mobile_rec:{type(exc).__name__}:{exc}")
         except BaseException as exc:

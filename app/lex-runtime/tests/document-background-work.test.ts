@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { CompleteDocumentIngestor, type OcrEngine } from "../src/document-ingestion.js";
 import { LocalPrivateDocumentService } from "../src/document-service.js";
 import { DocumentWorkScheduler } from "../src/document-work.js";
@@ -55,6 +55,9 @@ describe("background OCR and the user's own document work", () => {
 });
 
 describe("correction chosen after a background read", () => {
+  // The reader is a fixture: keep this behavior test independent of host memory pressure.
+  beforeEach(() => vi.spyOn(os, "freemem").mockReturnValue(8 * 1024 ** 3));
+  afterEach(() => vi.restoreAllMocks());
   const morphology: PersonMorphology = {
     analyze: async (surfaces) => surfaces.map(() => null),
     knownWords: async (words) => words.map((word) => ["radcy", "prawnego", "Pawła", "Raka"].includes(word))

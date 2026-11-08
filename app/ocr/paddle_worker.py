@@ -749,7 +749,12 @@ class OcrEngine:
         self.kwargs = kwargs
         self.latin_dir = latin_dir
         self.det_map: DetectionMap | None = None
-        self.mkldnn = os.environ.get("LEX_OCR_MKLDNN", "on") != "off"
+        from paddle.base import core
+
+        requested = os.environ.get("LEX_OCR_MKLDNN", "on") != "off"
+        available = bool(core.is_compiled_with_mkldnn())
+        self.mkldnn = requested and available
+        self.mkldnn_error = "MKLDNN_NOT_COMPILED" if requested and not available else None
         self.verified = not self.mkldnn
         try:
             self.ocr = PaddleOCR(**kwargs, enable_mkldnn=self.mkldnn)
