@@ -99,7 +99,9 @@ export function AccountSecurityPanel({
       }
       setMessage(
         user.passwordSetupPending
-          ? "Hasło zostało zmienione. Początkowe hasło admin przestało działać, a nowy kod recovery został wygenerowany."
+          ? user.passwordChangeRequired === true
+            ? "Hasło zostało ustawione. Hasło jednorazowe przestało działać, a nowy kod recovery został wygenerowany: zapisz go."
+            : "Hasło zostało zmienione. Początkowe hasło admin przestało działać, a nowy kod recovery został wygenerowany."
           : "Hasło zostało zmienione. Pozostałe sesje zostały unieważnione; sprawy zachowały te same klucze danych."
       );
     } catch (failure) {
@@ -142,7 +144,12 @@ export function AccountSecurityPanel({
             ? "Zmień początkowe hasło"
             : "Hasło i odzyskiwanie"}
         </h3>
-        {user.passwordSetupPending && (
+        {user.passwordChangeRequired === true && (
+          <div className="alert">
+            Administrator ustawił hasło jednorazowe. Przed dalszą pracą ustaw własne hasło (co najmniej 10 znaków); w polu poniżej wpisz hasło jednorazowe.
+          </div>
+        )}
+        {user.passwordSetupPending && user.passwordChangeRequired !== true && (
           <div className="alert">
             Początkowe dane logowania to admin / admin. Hasło admin jest tymczasowe i znane publicznie: możesz już pracować, ale do czasu jego zmiany u góry okna pozostaje ostrzeżenie. Nowe hasło musi mieć co najmniej 10 znaków.
           </div>
@@ -218,9 +225,11 @@ export function AccountSecurityPanel({
               : "Zmiana hasła"}
           </h4>
           <label>
-            {user.passwordSetupPending
-              ? "Początkowe hasło"
-              : "Bieżące hasło"}
+            {user.passwordChangeRequired === true
+              ? "Hasło jednorazowe"
+              : user.passwordSetupPending
+                ? "Początkowe hasło"
+                : "Bieżące hasło"}
             <input
               type="password"
               autoComplete="current-password"

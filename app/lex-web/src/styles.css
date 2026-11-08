@@ -2701,3 +2701,63 @@ textarea:focus {
 .update-download-toast { position: fixed; right: 24px; bottom: 24px; z-index: 1000; width: min(360px, calc(100vw - 48px)); padding: 20px; background: #fff; color: #253b38; border: 1px solid #dce3de; border-radius: 14px; box-shadow: 0 8px 32px #15352b24; }
 .update-download-toast progress { width: 100%; }
 .update-download-toast button { padding: 8px 12px; cursor: pointer; }
+
+/* Account settings dialog (click on the user's name). */
+.admin-user-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lm-t1);
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--lm-l1-rgb) / 0.9);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.admin-user-name:hover,
+.admin-user-name:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.user-account-dialog {
+  max-width: 640px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.user-account-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.user-account-dialog fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgb(var(--lm-l1-rgb) / 0.78);
+  border-radius: 12px;
+}
+
+.user-account-dialog legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.user-account-dialog label {
+  display: grid;
+  gap: 4px;
+}
+
+.password-change-required {
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 16px;
+  display: grid;
+  gap: 12px;
+}

@@ -17,8 +17,12 @@ export type AuthenticatedUser = {
   appRole: "ADMIN" | "USER";
   // INDIVIDUAL: a private person's chat only (automatic mode, conversations instead of cases).
   accountKind?: AccountKind;
+  // Contact e-mail set in the account dialog (server mode: the login is the e-mail).
+  email?: string;
   status: "ACTIVE" | "DISABLED";
   passwordSetupPending?: boolean;
+  // One-time password from the administrator: the user must set their own before anything else.
+  passwordChangeRequired?: boolean;
   createdAt: string;
   lastLoginAt?: string;
 };
@@ -1706,6 +1710,38 @@ export function setAccountKind(
   return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/account-kind`, {
     method: "PATCH",
     body: JSON.stringify({ accountKind })
+  });
+}
+
+// Account dialog: display name and contact e-mail (administrator).
+export function setAdminUserProfile(
+  userId: string,
+  profile: { displayName?: string; email?: string }
+): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/profile`, {
+    method: "PATCH",
+    body: JSON.stringify(profile)
+  });
+}
+
+// Server mode: a one-time password for the account (shown once); the user must replace it at login.
+export function setAdminOneTimePassword(userId: string): Promise<{ oneTimePassword: string }> {
+  return json<{ oneTimePassword: string }>(`/api/server-mode/accounts/${encodeURIComponent(userId)}/one-time-password`, { method: "POST" });
+}
+
+// Server mode: a password reset link sent by the administrator to the account's e-mail.
+export function sendAdminPasswordReset(userId: string): Promise<{ sentTo: string }> {
+  return json<{ sentTo: string }>(`/api/server-mode/accounts/${encodeURIComponent(userId)}/password-reset`, { method: "POST" });
+}
+
+// Role of another account (administrator only); the account's sessions end.
+export function setAdminUserRole(
+  userId: string,
+  appRole: AuthenticatedUser["appRole"]
+): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ appRole })
   });
 }
 

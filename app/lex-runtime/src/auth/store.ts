@@ -363,6 +363,15 @@ export class LocalAuthStore {
       );
     }
 
+    // Contact e-mail set by the administrator (account dialog); in server mode the login is the e-mail.
+    if (!userColumns.some((column) => column.name === "contact_email")) {
+      this.db.exec("ALTER TABLE users ADD COLUMN contact_email TEXT");
+    }
+    // One-time password set by the administrator: nothing but the password change until the user sets one.
+    if (!userColumns.some((column) => column.name === "must_change_password")) {
+      this.db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0,1))");
+    }
+
     const caseColumns =
       this.db.prepare(
         "PRAGMA table_info(cases)"
@@ -731,6 +740,8 @@ export class LocalAuthStore {
       ),
       appRole: role,
       accountKind: row.account_kind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL",
+      ...(typeof row.contact_email === "string" && row.contact_email ? { email: row.contact_email } : {}),
+      ...(row.must_change_password === 1 ? { passwordChangeRequired: true } : {}),
       status,
       passwordSetupPending:
         numberValue(
@@ -1055,6 +1066,7 @@ export class LocalAuthStore {
         UPDATE users
         SET auth_epoch =
               auth_epoch + 1,
+            must_change_password = 0,
             updated_at = ?
         WHERE user_id = ?
       `).run(
@@ -1190,6 +1202,7 @@ export class LocalAuthStore {
         SET auth_epoch =
               auth_epoch + 1,
             password_setup_pending = 0,
+            must_change_password = 0,
             updated_at = ?
         WHERE user_id = ?
       `).run(
@@ -1225,6 +1238,45 @@ export class LocalAuthStore {
       }
       throw error;
     }
+  }
+
+  setProfile(
+    userId: string,
+    profile: { displayName: string; email: string | null },
+    at: string
+  ): void {
+    this.db.prepare(`
+      UPDATE users
+      SET display_name = ?,
+          contact_email = ?,
+          updated_at = ?
+      WHERE user_id = ?
+    `).run(profile.displayName, profile.email, at, userId);
+  }
+
+  /** After an administrator's one-time password: the user must set their own before anything else. */
+  requirePasswordChange(userId: string, at: string): void {
+    this.db.prepare(`
+      UPDATE users
+      SET must_change_password = 1,
+          password_setup_pending = 1,
+          updated_at = ?
+      WHERE user_id = ?
+    `).run(at, userId);
+  }
+
+  setAppRoleAndIncrementEpoch(
+    userId: string,
+    appRole: "ADMIN" | "USER",
+    updatedAt: string
+  ): void {
+    this.db.prepare(`
+      UPDATE users
+      SET app_role = ?,
+          auth_epoch = auth_epoch + 1,
+          updated_at = ?
+      WHERE user_id = ?
+    `).run(appRole, updatedAt, userId);
   }
 
   setUserStatusAndIncrementEpoch(
