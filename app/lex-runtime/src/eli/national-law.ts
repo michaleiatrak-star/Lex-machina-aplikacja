@@ -30,6 +30,8 @@ const READERS: HostReader[] = [
 const PDF_HOSTS: Array<{ country: string; hosts: RegExp }> = [
   { country: "LI", hosts: /^(?:www\.)?gesetze\.li$/u },
   { country: "MT", hosts: /^(?:www\.)?legislation\.mt$/u },
+  // Portugal: the Diário da República's own PDFs (files.diariodarepublica.pt; the portal needs JavaScript).
+  { country: "PT", hosts: /^files\.diariodarepublica\.pt$/u },
   // Laws of the Vatican City State (Governatorato): PDF downloads of vaticanstate.va.
   { country: "VA", hosts: /^(?:www\.)?vaticanstate\.va$/u }
 ];
@@ -405,7 +407,15 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     return { country, url: url.href, status: "tekst z urzędowego PDF", articles, ...(reading.kind === "MIESZANY" ? { note: reading.note } : {}), ...(request.unit && !articles.length ? { note: "artykułu nie znaleziono w tekście PDF" } : {}) };
   }
 
-  const reading = reader!.read(new TextDecoder(/iso-8859-1/iu.test(type) ? "latin1" : "utf-8").decode(bytes), url.href);
+  // The page's charset: the header, else its <meta> (pages served as a bare "text/html").
+  const declared = /charset=([\w-]+)/iu.exec(type)?.[1] ?? /charset=["']?([\w-]+)/iu.exec(new TextDecoder("latin1").decode(bytes.subarray(0, 2048)))?.[1] ?? "utf-8";
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(/iso-8859-1/iu.test(declared) ? "latin1" : declared);
+  } catch {
+    decoder = new TextDecoder("utf-8");
+  }
+  const reading = reader!.read(decoder.decode(bytes), url.href);
   const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
   return {
     country: reading.country,

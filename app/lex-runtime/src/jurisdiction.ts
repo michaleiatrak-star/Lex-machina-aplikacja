@@ -156,7 +156,11 @@ export function foreignLegalSystemNotice(country: string): string | null {
     "Prawo polskie, polskie skille dziedzinowe (dr-*), polskie konektory, korpus polskich ustaw i weryfikacja w ELI/ISAP są wyłączone: nie powołuj polskich przepisów. " +
     "Skille metod (router, shared, analiza umów, pisma) stosuj jako metodę, a ich polskie przykłady i parametry JUR zastąp prawem wybranego kraju. " +
     `Brzmienie przepisów ustalaj narzędziem read_national_legislation ze źródła urzędowego (${entry?.portal ?? "portal urzędowy kraju"}; ${entry?.text?.note ? entry.text.note.slice(0, 220) : "odczyt do ustalenia"}). ` +
-    "Przepis, którego nie odczytano, oznacz jako niezweryfikowany; nie podawaj brzmienia z pamięci."
+    "Przepis, którego nie odczytano, oznacz jako niezweryfikowany; nie podawaj brzmienia z pamięci." +
+    (entry?.family === "mieszane"
+      ? " To system mieszany (z elementami common law): ustawa nie wyczerpuje źródeł, wiążą też precedensy sądów wyższych — wskaż, czego nie sprawdzono w orzecznictwie."
+      : "") +
+    " Prawo kanoniczne (Kodeks Prawa Kanonicznego, vatican.va) czytasz tym samym narzędziem niezależnie od kraju; wiąże tekst łaciński."
   );
 }
 

@@ -1240,7 +1240,8 @@ def opencv_threads() -> None:
 def serve() -> None:
     """Jobs as JSON lines on stdin, the models loaded once per configuration: a document no
     longer waits 3-12 s for the models. On stdout "LEX_OCR_JOB_DONE <id>" or
-    "LEX_OCR_JOB_FAILED <id> <reason>" ends each job; stderr carries pages and stats as before."""
+    "LEX_OCR_JOB_FAILED <id> <reason>" ends each job; stderr carries pages and stats as before
+    and ends each job with "LEX_OCR_JOB_END <id>" (written before the stdout line)."""
     opencv_threads()
     engines: dict = {}
     print("LEX_OCR_SERVE_READY", flush=True)
@@ -1274,11 +1275,16 @@ def serve() -> None:
                 bool(job.get("lineCrops")),
                 load_seconds,
             )
+            # stderr (pages, stats) and stdout are separate pipes: the end marker on stderr lets the
+            # runtime wait for the job's last stderr lines before it reads the stats.
+            print(f"LEX_OCR_JOB_END {job_id}", file=sys.stderr, flush=True)
             print(f"LEX_OCR_JOB_DONE {job_id}", flush=True)
         except SystemExit as stop:
+            print(f"LEX_OCR_JOB_END {job_id}", file=sys.stderr, flush=True)
             print(f"LEX_OCR_JOB_FAILED {job_id} EXIT:{stop.code}", flush=True)
         except Exception as error:  # noqa: BLE001
             print(f"{type(error).__name__}: {str(error)[:400]}", file=sys.stderr, flush=True)
+            print(f"LEX_OCR_JOB_END {job_id}", file=sys.stderr, flush=True)
             print(f"LEX_OCR_JOB_FAILED {job_id} {type(error).__name__}", flush=True)
 
 

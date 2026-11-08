@@ -264,3 +264,4 @@ describe("readers added 2026-11-08: SK, HR, XK, SI, IS, FO, canon law", () => {
     await expect(readNationalLaw({ url: "https://narodne-novine.nn.hr/clanci/sluzbeni/2005_03_35_707.html", unit: "2", country: "AT" }, fetchImpl as never)).rejects.toThrow("NATIONAL_LAW_COUNTRY_DISABLED:HR");
   });
 });
+

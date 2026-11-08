@@ -32,8 +32,9 @@ describe("ELI of the civil-law countries (EUR-Lex ELI register, 2026-11-08)", ()
     for (const country of ELI_COUNTRIES) {
       expect(country.source).toMatch(/^https?:\/\//u);
       expect(country.text?.reading).toBeTruthy();
-      expect(["IE", "UK", "CY"]).not.toContain(country.code);
     }
+    // Common law is out (user, 2026-11-08): another relation of statute and precedent than the method assumes.
+    for (const country of ELI_COUNTRIES) expect(["GB", "UK"]).not.toContain(country.code);
     expect(ELI_COUNTRIES.filter((country) => country.level === "PEŁNA").map((country) => country.code)).toEqual(["PL"]);
     expect(eliCapabilityNotice("ES")).toContain("nie odczyta ani nie sprawdzi brzmienia");
   });
