@@ -4,7 +4,7 @@
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
 
@@ -18,13 +18,20 @@ const READERS: HostReader[] = [
   { country: "MC", hosts: /^legimonaco\.mc$/u, read: readMonaco },
   { country: "LV", hosts: /^likumi\.lv$/u, read: readLatvia },
   // HTML of the act (MevzuatFihristDetayIframe); …/MevzuatMetin/*.pdf goes to the PDF branch by its type.
-  { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u, read: readTurkey }
+  { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u, read: readTurkey },
+  { country: "HR", hosts: /^narodne-novine\.nn\.hr$/u, read: readCroatia },
+  { country: "SI", hosts: /^(?:www\.)?uradni-list\.si$/u, read: readSlovenia },
+  { country: "FO", hosts: /^(?:www\.)?logir\.fo$/u, read: readFaroe },
+  // Canon law (Codex Iuris Canonici): the Holy See's site, for every chosen country (see CANON_HOSTS).
+  { country: "VA", hosts: /^(?:www\.)?vatican\.va$/u, read: readCanonLaw }
 ];
 
 // Official PDFs with a text layer (Liechtenstein, Malta): read as text, scans flagged.
 const PDF_HOSTS: Array<{ country: string; hosts: RegExp }> = [
   { country: "LI", hosts: /^(?:www\.)?gesetze\.li$/u },
-  { country: "MT", hosts: /^(?:www\.)?legislation\.mt$/u }
+  { country: "MT", hosts: /^(?:www\.)?legislation\.mt$/u },
+  // Laws of the Vatican City State (Governatorato): PDF downloads of vaticanstate.va.
+  { country: "VA", hosts: /^(?:www\.)?vaticanstate\.va$/u }
 ];
 
 // `country`: the chosen legal system (jurisdiction.ts); another country's source is refused.
@@ -39,8 +46,16 @@ const HOST_COUNTRIES: Array<[RegExp, string]> = [
   [/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u, "CZ"],
   [/^(?:www\.|data\.|opendata\.)?finlex\.fi$/u, "FI"],
   [/^(?:www\.)?legifrance\.gouv\.fr$/u, "FR"],
-  [/^(?:www\.)?riigiteataja\.ee$/u, "EE"]
+  [/^(?:www\.)?riigiteataja\.ee$/u, "EE"],
+  [/^static\.slov-lex\.sk$/u, "SK"],
+  [/^gzk\.rks-gov\.net$/u, "XK"],
+  [/^(?:www\.)?pisrs\.si$/u, "SI"],
+  [/^(?:www\.)?althingi\.is$/u, "IS"],
+  [/^raw\.githubusercontent\.com$/u, "IS"]
 ];
+
+// Canon law binds Catholics in every country: its source is read whatever legal system is chosen.
+const CANON_HOSTS = /^(?:www\.)?vatican\.va$/u;
 
 /** The country whose official source the address is, or null for a host this module does not read. */
 export function nationalLawCountry(host: string): string | null {
@@ -62,10 +77,15 @@ export type NationalLawAnswer = {
 export type NationalFetch = (url: string, init: { headers: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; headers: { get(name: string): string | null }; arrayBuffer(): Promise<ArrayBuffer> }>;
 
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE", "SK", "XK", "IS"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
-  const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|madde|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
+  const wanted = unit
+    .replace(/^(?:art\.?|artikel|article|artículo|madde|članak|člen|neni|can\.?|canon|kanon|čl\.?|§)\s*/iu, "")
+    .replace(/\.?\s*(?:člen|gr)\.?$|\.$/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
   const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   return own === wanted;
 }
@@ -82,7 +102,82 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   const sourceCountry = nationalLawCountry(host);
   if (!sourceCountry) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
   // Only the chosen legal system's sources: the other countries are off (user, 2026-11-08).
-  if (request.country && request.country !== sourceCountry) throw new Error(`NATIONAL_LAW_COUNTRY_DISABLED:${sourceCountry}`);
+  if (request.country && !CANON_HOSTS.test(host) && request.country !== sourceCountry) throw new Error(`NATIONAL_LAW_COUNTRY_DISABLED:${sourceCountry}`);
+
+  // Slovakia: Slov-Lex static portal. …/static/SK/ZZ/{year}/{number}/ is the history of versions: the one in
+  // force on `date` (today when not given) is read; …/{YYYYMMDD}.html names a version directly.
+  if (/^static\.slov-lex\.sk$/u.test(host)) {
+    const act = /^\/static\/SK\/ZZ\/(\d{4})\/(\d+)\/(?:(\d{8})\.html)?$/u.exec(url.pathname);
+    if (!act) throw new Error("NATIONAL_LAW_SK_ACT_REQUIRED");
+    const base = `https://static.slov-lex.sk/static/SK/ZZ/${act[1]}/${act[2]}/`;
+    const text = async (address: string): Promise<string> => {
+      const reply = await fetchImpl(address, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return new TextDecoder().decode(await reply.arrayBuffer());
+    };
+    const versions = slovakVersions(await text(base));
+    const day = request.date ?? (act[3] ? `${act[3].slice(0, 4)}-${act[3].slice(4, 6)}-${act[3].slice(6)}` : new Date().toISOString().slice(0, 10));
+    const version = slovakVersionOn(versions, day);
+    if (!version) return { country: "SK", url: base, status: "Slov-Lex: brak wersji obowiązującej w tym dniu", articles: [] };
+    const reading = readSlovakia(await text(base + version.file), base + version.file, version);
+    const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
+    return { country: "SK", url: reading.source, status: reading.status, ...(reading.version ? { version: reading.version } : {}), articles };
+  }
+
+  // Slovenia: PISRS API. The act by its register id (…/pregledPredpisa?id=ZAKO1263 or …/api/rezultat/zbirka/id/ZAKO1263):
+  // the newest consolidated version (NPB n), or the version named in the address (&npb=NPB 3, "Osnovni" = as published).
+  if (/^(?:www\.)?pisrs\.si$/u.test(host)) {
+    const id = url.searchParams.get("id") ?? /\/zbirka\/id\/([A-Z]+\d+)/u.exec(url.pathname)?.[1];
+    if (!id || !/^[A-Z]{3,8}\d{1,8}$/u.test(id)) throw new Error("NATIONAL_LAW_SI_ID_REQUIRED");
+    const get = async (address: string, accept: string): Promise<string> => {
+      const reply = await fetchImpl(address, { headers: { accept }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return new TextDecoder().decode(await reply.arrayBuffer());
+    };
+    const card = pisrsCard(await get(`https://pisrs.si/api/rezultat/zbirka/id/${id}`, "application/json"));
+    const wanted = url.searchParams.get("npb");
+    const version = (wanted ? card.versions.find((item) => item.name === wanted) : card.versions.filter((item) => item.html).at(-1)) ?? null;
+    if (!version?.html) return { country: "SI", url: url.href, status: "PISRS: brak tekstu HTML tej wersji", title: card.title, articles: [] };
+    const address = `https://pisrs.si/api/datoteke/integracije/${version.html}`;
+    const reading = readPisrs(await get(address, "text/html"), address, card, version.name);
+    const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
+    return { country: "SI", url: address, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+  }
+
+  // Kosovo: Gazeta Zyrtare, the act by ActID: its text (ActDocumentDetail) and its status and amendments (ActDetail).
+  if (/^gzk\.rks-gov\.net$/u.test(host)) {
+    const id = /ActID=(\d+)/iu.exec(url.search)?.[1];
+    if (!id) throw new Error("NATIONAL_LAW_XK_ACTID_REQUIRED");
+    const get = async (page: string): Promise<string> => {
+      const reply = await fetchImpl(`https://gzk.rks-gov.net/${page}.aspx?ActID=${id}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return new TextDecoder().decode(await reply.arrayBuffer());
+    };
+    const reading = readKosovo(await get("ActDocumentDetail"), `https://gzk.rks-gov.net/ActDocumentDetail.aspx?ActID=${id}`, await get("ActDetail"));
+    const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
+    return { country: "XK", url: reading.source, status: reading.status, ...(reading.version ? { version: reading.version } : {}), articles };
+  }
+
+  // Iceland: the Law Collection refuses automated clients; the act ({year}.{nr}, or althingi.is/lagas/nuna/{YYYY}{NNN}.html)
+  // is read from lagasafn-xml (unofficial, built from the Althingi's HTML), newest edition first.
+  if (/^(?:www\.)?althingi\.is$/u.test(host) || /^raw\.githubusercontent\.com$/u.test(host)) {
+    if (/^raw\./u.test(host) && !/^\/althingi-net\/lagasafn-xml\//u.test(url.pathname)) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
+    const named = /(\d{4})\.(\d+)\.xml$/u.exec(url.pathname) ?? /\/(\d{4})(\d{3})\.html$/u.exec(url.pathname);
+    if (!named) throw new Error("NATIONAL_LAW_IS_ACT_REQUIRED");
+    const law = `${named[1]}.${Number(named[2])}`;
+    const first = new Date().getUTCFullYear() - 1866;
+    for (let session = first; session >= first - 4; session -= 1) {
+      for (const letter of ["d", "c", "b", "a"]) {
+        const address = `https://raw.githubusercontent.com/althingi-net/lagasafn-xml/master/data/xml/${session}${letter}/${law}.xml`;
+        const reply = await fetchImpl(address, { headers: { accept: "application/xml" }, signal: AbortSignal.timeout(30_000) });
+        if (!reply.ok) continue;
+        const reading = readIceland(new TextDecoder().decode(await reply.arrayBuffer()), address, `${session}${letter}`);
+        const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!.replace(/\.?\s*gr\.?$/u, ""))) : reading.articles.slice(0, 20);
+        return { country: "IS", url: address, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+      }
+    }
+    return { country: "IS", url: url.href, status: "lagasafn-xml: ustawy nie znaleziono w ostatnich wydaniach", articles: [] };
+  }
 
   // Spain: the BOE API by identifier and block ("BOE-A-2015-10565" + "a28").
   if (/^(?:www\.)?boe\.es$/u.test(host)) {
@@ -280,8 +375,9 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   if (!reader && !pdf) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
   const ask = () => fetchImpl(url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
   let response = await ask();
-  // A busy portal (gesetze-im-internet.de answered 503 once and 200 right after): one retry.
-  if (response.status === 503 || response.status === 429) {
+  // A busy portal (gesetze-im-internet.de and narodne-novine.nn.hr answered 503 once and 200 right after,
+  // vaticanstate.va 522 through Cloudflare): one retry.
+  if ([429, 502, 503, 504, 522].includes(response.status)) {
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     response = await ask();
   }
@@ -297,11 +393,12 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     // The article asked for, by its heading in the text ("Art. 12", "Madde 12", "12."): the passage up to the next one.
     const articles: NationalArticle[] = [];
     if (request.unit) {
-      const number = request.unit.replace(/^(?:art\.?|madde|article)\s*/iu, "").trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const start = new RegExp(`(?:^|\\n)\\s*(?:Art\\.|Artikel|Article|MADDE|Madde)\\s*${number}\\b`, "u").exec(text);
+      const number = request.unit.replace(/^(?:art\.?|articolo|artikel|article|artículo|artigo|madde|članak|neni)\s*/iu, "").trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const heads = "Art\\.|Articolo|Artikel|Article|Artículo|Artigo|MADDE|Madde|Članak|Neni";
+      const start = new RegExp(`(?:^|\\n)\\s*(?:${heads})\\s*${number}\\b`, "u").exec(text);
       if (start) {
         const rest = text.slice(start.index + start[0].length);
-        const next = /\n\s*(?:Art\.|Artikel|Article|MADDE|Madde)\s*\d/u.exec(rest);
+        const next = new RegExp(`\\n\\s*(?:${heads})\\s*\\d`, "u").exec(rest);
         articles.push({ unit: request.unit, heading: start[0].trim(), text: (start[0] + rest.slice(0, next ? next.index : 6000)).trim(), amendments: [] });
       }
     }

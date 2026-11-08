@@ -191,3 +191,76 @@ describe("Estonia: Riigi Teataja XML", () => {
     expect(reading.articles.find((article) => article.unit === "1")!.amendments[0]).toEqual({ act: "RT I, 131122013001", inForce: "2014-06-13" });
   });
 });
+
+describe("readers added 2026-11-08: SK, HR, XK, SI, IS, FO, canon law", () => {
+  it("SK: version in force on a day from the Slov-Lex history, § with its odseky", async () => {
+    const { slovakVersions, slovakVersionOn, readSlovakia } = await import("../src/eli/readers.js");
+    const versions = slovakVersions(fixture("sk-40-1964-index.html"));
+    expect(slovakVersionOn(versions, "1970-01-01")).toMatchObject({ file: "19690701.html", amendments: ["58/1969 Zb."] });
+    const latest = slovakVersionOn(versions, "2026-11-08")!;
+    const reading = readSlovakia(fixture("sk-40-1964-20260731.html"), "x", latest);
+    expect(reading.articles.map((article) => article.unit)).toEqual(["415", "417"]);
+    expect(reading.articles[1]!.text).toContain("ohrozený má právo");
+    expect(reading.articles[1]!.text).not.toContain("DRUHÁ HLAVA");
+  });
+
+  it("HR: Članak N. with its paragraph, the bold title of the next article is not part of it", async () => {
+    const { readCroatia } = await import("../src/eli/readers.js");
+    const reading = readCroatia(fixture("hr-zoo-35-2005.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[0]!.text).not.toContain("Sloboda uređivanja");
+  });
+
+  it("XK: Neni N from the act's text; status and amending acts from ActDetail", async () => {
+    const { readKosovo } = await import("../src/eli/readers.js");
+    const reading = readKosovo(fixture("xk-act-document.html"), "x", fixture("xk-act-detail.html"));
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.status).toMatch(/UCHYLONY/u);
+    expect(reading.articles[0]!.amendments[0]).toMatchObject({ inForce: "2012-11-09" });
+  });
+
+  it("SI: PISRS card picks the newest NPB with HTML; N. člen without the next article's title", async () => {
+    const { pisrsCard, readPisrs, readSlovenia } = await import("../src/eli/readers.js");
+    const card = pisrsCard(fixture("si-pisrs-zako1263.json"));
+    expect(card.versions.map((version) => version.name)).toEqual(["Osnovni", "NPB 1", "NPB 2", "NPB 3", "NPB 4"]);
+    const reading = readPisrs(fixture("si-pisrs-oz-npb4.html"), "x", card, "NPB 4");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[0]!.text).not.toContain("Dispozitivna narava");
+    expect(reading.status).toMatch(/nieurzędowy/u);
+    expect(readSlovenia(fixture("si-ul-2001-4186.html"), "x").articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+  });
+
+  it("IS: articles and amending laws with dates in force; marked unofficial", async () => {
+    const { readIceland } = await import("../src/eli/readers.js");
+    const reading = readIceland(fixture("is-1944-33.xml"), "x", "158a");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[0]!.amendments).toContainEqual({ act: "L. 51/1959", inForce: "1959-08-20" });
+    expect(reading.status).toMatch(/nieurzędowa/u);
+  });
+
+  it("FO: § N from Lógasavnið", async () => {
+    const { readFaroe } = await import("../src/eli/readers.js");
+    const reading = readFaroe(fixture("fo-logtingslog-94-2026.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[1]!.text).toBe("§ 2\nHenda løgtingslóg kemur í gildi 1. januar 2027.");
+  });
+
+  it("canon law: Can. N, § entities decoded, headings end a canon", async () => {
+    const { readCanonLaw } = await import("../src/eli/readers.js");
+    const first = readCanonLaw(fixture("va-cic-liberI.html"), "x");
+    expect(first.articles.map((article) => article.unit)).toEqual(["1", "2", "3", "7"]);
+    expect(first.articles[2]!.text).not.toContain("TITULUS");
+    const sixth = readCanonLaw(fixture("va-cic-liberVI.html"), "x");
+    expect(sixth.articles[0]!.text).toMatch(/^Can\. 1311 — § 1\. Nativum/u);
+    expect(sixth.articles[0]!.text).toContain("§ 2. Qui Ecclesiae");
+  });
+
+  it("canon law is read whatever country is chosen; another country's source is not", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("va-cic-liberVI.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer });
+    const canon = await readNationalLaw({ url: "https://www.vatican.va/archive/cod-iuris-canonici/latin/documents/cic_liberVI_la.html", unit: "can. 1311", country: "PL" }, fetchImpl as never);
+    expect(canon.articles).toHaveLength(1);
+    await expect(readNationalLaw({ url: "https://narodne-novine.nn.hr/clanci/sluzbeni/2005_03_35_707.html", unit: "2", country: "AT" }, fetchImpl as never)).rejects.toThrow("NATIONAL_LAW_COUNTRY_DISABLED:HR");
+  });
+});

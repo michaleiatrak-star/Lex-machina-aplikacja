@@ -24,7 +24,7 @@ export type NationalReading = {
   status: string;
 };
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", sect: "§", deg: "°", ordm: "º", ordf: "ª", ndash: "–", mdash: "—", hellip: "…", laquo: "«", raquo: "»", bdquo: "„", ldquo: "“", rdquo: "”", lsquo: "‘", rsquo: "’", middot: "·", para: "¶" };
 
 export function plainText(html: string): string {
   return html
@@ -275,6 +275,207 @@ export function readTurkey(html: string, source: string): NationalReading {
     }
   }
   return { country: "TR", source, articles, version: "metin yürürlükteki (Mevzuat Bilgi Sistemi, z adnotacjami zmian)", status: "tekst Mevzuat Bilgi Sistemi (Cumhurbaşkanlığı); urzędowy jest tekst w Resmî Gazete" };
+}
+
+/**
+ * Slovakia, Slov-Lex static portal (no JavaScript): static.slov-lex.sk/static/SK/ZZ/{year}/{number}/ lists
+ * every version with its dates in force (data-ucinnostod / data-ucinnostdo) and the amending act;
+ * {YYYYMMDD}.html is the consolidated text in force from that day. A § is div#paragraf-{n}.
+ */
+export type SlovakVersion = { file: string; from: string; to?: string; amendments: string[] };
+
+export function slovakVersions(html: string): SlovakVersion[] {
+  return [...html.matchAll(/<tr class="effectivenessHistoryItem"[^>]*data-vyhlasene="0"[^>]*data-ucinnostod="([\d-]*)"[^>]*data-ucinnostdo="([\d-]*)"[^>]*>([\s\S]*?)<\/tr>/gu)]
+    .filter((match) => match[1])
+    .map(([, from, to, row]) => ({
+      file: /href="(\d{8}\.html)"/u.exec(row!)?.[1] ?? `${from!.replace(/-/gu, "")}.html`,
+      from: from!,
+      ...(to ? { to } : {}),
+      amendments: [...row!.matchAll(/<a href="\.\.\/[^"]+">([^<]+)<\/a>/gu)].map((match) => plainText(match[1]!))
+    }));
+}
+
+/** The version in force on the day (YYYY-MM-DD); the newest that has started when no day is given. */
+export function slovakVersionOn(versions: SlovakVersion[], day: string): SlovakVersion | null {
+  return versions.filter((version) => version.from <= day && (!version.to || version.to >= day)).at(-1) ?? null;
+}
+
+export function readSlovakia(html: string, source: string, version?: SlovakVersion): NationalReading {
+  const starts = [...html.matchAll(/<div class="paragraf Skupina\s*" id="paragraf-([0-9a-z]+)">/gu)];
+  const articles = starts.map((match, index): NationalArticle => {
+    let body = html.slice(match.index!, starts[index + 1]?.index ?? html.length);
+    // A heading of the next part, chapter or section belongs to what follows.
+    const heading = /<div class="(?:cast|hlava|diel|oddiel)(?:Oznacenie|Nadpis)?[\s"]/u.exec(body.slice(1));
+    if (heading) body = body.slice(0, heading.index + 1);
+    return { unit: match[1]!, heading: `§ ${match[1]}`, text: plainText(body), amendments: version ? version.amendments.map((act) => ({ act, inForce: version.from })) : [] };
+  });
+  return { country: "SK", source, articles, version: version ? `znenie účinné od ${version.from}${version.to ? ` do ${version.to}` : ""}` : "znenie z adresu", status: "tekst Slov-Lex (Ministerstvo spravodlivosti SR, wersja statyczna portalu)" };
+}
+
+/**
+ * Croatia, Narodne novine (official gazette): narodne-novine.nn.hr/clanci/sluzbeni/{YYYY}_{MM}_{issue}_{id}.html is the
+ * text as published; amendments are separate acts of the gazette (no consolidated text there).
+ * "Članak N." is a p.Clanak; a bold title paragraph (class …fett) begins the next article.
+ */
+export function readCroatia(html: string, source: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*class=["']?([\w-]+)[^>]*>([\s\S]*?)<\/p>/giu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^Članak\s+(\d+[a-z]?)\.?$/u.exec(text);
+    if (head) {
+      articles.push({ unit: head[1]!, heading: `Članak ${head[1]}.`, text, amendments: [] });
+      open = true;
+    } else if (/fett|naslov|glava|dio/iu.test(cls!)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  return { country: "HR", source, articles, version: "tekst ogłoszony (Narodne novine); zmiany w osobnych aktach NN", status: "tekst urzędowy (Narodne novine, wydanie urzędowe)" };
+}
+
+/**
+ * Kosovo, Gazeta Zyrtare: ActDocumentDetail.aspx?ActID={id} is the act's text (lines with <br>), "Neni N" alone on a
+ * line opens an article; ActDetail.aspx?ActID={id} carries the status (repealed: "I shfuqizuar") and
+ * the amending acts ("Ndryshohet/Plotësohet nga …", "Shfuqizuar nga …").
+ */
+export function readKosovo(html: string, source: string, detail?: string): NationalReading {
+  const lines = plainText(html.replace(/\s+/gu, " ").replace(/<br\s*\/?>/giu, "\n")).split("\n").map((line) => line.trim()).filter(Boolean);
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const line of lines) {
+    const head = /^(?:Neni|Član|Article)\s+(\d+[a-z]?)$/u.exec(line);
+    if (head) {
+      articles.push({ unit: head[1]!, heading: line, text: line, amendments: [] });
+      open = true;
+    } else if (/^(?:KAPITULLI|PJESA|POGLAVLJE|DEO|CHAPTER|PART)\b/u.test(line)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${line}`;
+  }
+  let status = "tekst aktu z Gazeta Zyrtare (bez zmian późniejszych)";
+  if (detail) {
+    const info = plainText(detail.replace(/\s+/gu, " ")).replace(/\s+/gu, " ");
+    const changes = [...info.matchAll(/(Ndryshohet\/Plotësohet nga|Shfuqizuar nga)\s+(.+?)\s+Data e publikimit:\s*(\d{2})\.(\d{2})\.(\d{4})/gu)]
+      .map((match) => ({ act: `${match[1]} ${match[2]}`, inForce: `${match[5]}-${match[4]}-${match[3]}` }));
+    for (const article of articles) article.amendments = changes;
+    if (/\bI shfuqizuar\b/u.test(info)) status = "AKT UCHYLONY (I shfuqizuar) — tekst historyczny z Gazeta Zyrtare";
+    else if (changes.length) status = "tekst pierwotny z Gazeta Zyrtare; akt zmieniany (lista zmian przy artykułach)";
+  }
+  return { country: "XK", source, articles, version: "tekst ogłoszony", status };
+}
+
+/**
+ * Slovenia, Uradni list RS archive (issues until 28.2.2026; later ones only in PISRS):
+ * uradni-list.si/glasilo-uradni-list-rs/vsebina/{YYYY}-01-{nr} is the text as published, "N. člen" in div.esegment_h4.
+ */
+export function readSlovenia(html: string, source: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<div class="(esegment_[\w]+)">([\s\S]*?)<\/div>/gu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^(\d+[a-z]?)\. člen$/u.exec(text);
+    if (head) {
+      articles.push({ unit: head[1]!, heading: text, text, amendments: [] });
+      open = true;
+    } else if (/esegment_(?:h[1-3]|c\d)/u.test(cls!)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  return { country: "SI", source, articles, version: "tekst ogłoszony (Uradni list RS, archiwum); tekst jednolity tylko w PISRS", status: "tekst urzędowy (Uradni list RS)" };
+}
+
+/**
+ * Slovenia, PISRS (pisrs.si, all acts including those after 28.2.2026): the act's card
+ * …/api/rezultat/zbirka/id/{ZAKOnnnn} lists its versions (Osnovni, NPB 1…n) with an HTML file each;
+ * …/api/datoteke/integracije/{file id} is that text: p.clen "N. člen" (its title is a p.clen before it),
+ * p.odstavek the paragraphs. NPB = neuradno prečiščeno besedilo (consolidated, without legal force).
+ */
+export type PisrsCard = { title: string; state?: string; versions: Array<{ name: string; html?: number }> };
+
+export function pisrsCard(json: string): PisrsCard {
+  const data = (JSON.parse(json) as { data?: { evidencniPodatki?: { naslov?: string; semafor?: { naziv?: string } }; datoteke?: Array<{ npbVerzija?: { naziv?: string }; datoteke?: Array<{ tip?: string; id?: number }> }> } }).data ?? {};
+  const order = (name: string): number => (name === "Osnovni" ? 0 : Number(/NPB\s*(\d+)/u.exec(name)?.[1] ?? -1));
+  const versions = (data.datoteke ?? [])
+    .map((entry) => ({ name: entry.npbVerzija?.naziv ?? "", ...(entry.datoteke?.find((file) => file.tip === "HTML_DOCUMENT")?.id ? { html: entry.datoteke.find((file) => file.tip === "HTML_DOCUMENT")!.id! } : {}) }))
+    .sort((a, b) => order(a.name) - order(b.name));
+  return { title: data.evidencniPodatki?.naslov ?? "", ...(data.evidencniPodatki?.semafor?.naziv ? { state: data.evidencniPodatki.semafor.naziv } : {}), versions };
+}
+
+export function readPisrs(html: string, source: string, card?: PisrsCard, version?: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p class="([^"]*)">([\s\S]*?)<\/p>/gu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^(\d+[a-z]?)\. člen$/u.exec(text);
+    if (head && /\bclen\b/u.test(cls!)) {
+      articles.push({ unit: head[1]!, heading: text, text, amendments: [] });
+      open = true;
+    } else if (/\b(?:clen|del|poglavje|oddelek|pododdelek|naslov)\b/u.test(cls!)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  const legal = version === "Osnovni" ? "tekst ogłoszony (Uradni list RS)" : "tekst jednolity nieurzędowy (NPB, PISRS) — moc prawną ma Uradni list RS";
+  return { country: "SI", source, ...(card?.title ? { title: card.title } : {}), articles, version: `${version ?? "?"}${card?.state ? `; ${card.state}` : ""}`, status: legal };
+}
+
+/**
+ * Iceland: the Law Collection (althingi.is/lagas) refuses automated clients; lagasafn-xml (althingi-net,
+ * built from the Althingi's own HTML, one folder per edition, e.g. 158a) carries <art nr> with <sen>,
+ * and the amending laws with their date in force in <minister-clause>. Unofficial: the wording is to be
+ * confirmed at althingi.is.
+ */
+export function readIceland(xml: string, source: string, edition?: string): NationalReading {
+  const clause = plainText(/<minister-clause>([\s\S]*?)<\/minister-clause>/u.exec(xml)?.[1]?.replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&amp;/gu, "&") ?? "");
+  const months: Record<string, string> = { janúar: "01", febrúar: "02", mars: "03", apríl: "04", maí: "05", júní: "06", júlí: "07", ágúst: "08", september: "09", október: "10", nóvember: "11", desember: "12" };
+  const amendments = [...clause.matchAll(/L\.\s*(\d+\/\d{4})\s*\(tók[iu]? gildi (\d{1,2})\.\s*([a-záéíóúýþæö]+)\s+(\d{4})\)/gu)]
+    .map((match) => ({ act: `L. ${match[1]}`, ...(months[match[3]!] ? { inForce: `${match[4]}-${months[match[3]!]}-${match[2]!.padStart(2, "0")}` } : {}) }));
+  const articles = [...xml.matchAll(/<art nr="([^"]+)"[^>]*>([\s\S]*?)<\/art>/gu)].map(([, nr, body]): NationalArticle => {
+    const title = plainText(/<nr-title>([\s\S]*?)<\/nr-title>/u.exec(body!)?.[1] ?? `${nr}. gr.`);
+    const paragraphs = [...body!.matchAll(/<paragraph\b[^>]*>([\s\S]*?)<\/paragraph>/gu)].map((match) => [...match[1]!.matchAll(/<sen\b[^>]*>([\s\S]*?)<\/sen>/gu)].map((sen) => plainText(sen[1]!)).join(" "));
+    return { unit: nr!, heading: title, text: [title, ...paragraphs].join("\n"), amendments };
+  });
+  const name = plainText(/<name>([\s\S]*?)<\/name>/u.exec(xml)?.[1] ?? "");
+  return { country: "IS", source, ...(name ? { title: name } : {}), articles, version: `lagasafn ${edition ?? "?"} (wydanie zbioru ustaw Althingi)`, status: "kopia nieurzędowa (lagasafn-xml z HTML Althingi) — brzmienie potwierdź w althingi.is/lagas" };
+}
+
+/**
+ * Faroe Islands, Lógasavnið (logir.fo, Løgmansskrivstovan): the act's page carries the text in
+ * P.Afsnitsnummer ("§ N") and the paragraphs after it; the act's status (Gildisstøða) is printed under it.
+ */
+export function readFaroe(html: string, source: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*class=["']?([\w-]+)[^>]*>([\s\S]*?)<\/p>/giu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    if (/^Afsnitsnummer$/iu.test(cls!) && /^§\s*\d+[a-z]?\.?$/u.test(text)) {
+      const unit = text.replace(/[§.\s]/gu, "");
+      articles.push({ unit, heading: text, text, amendments: [] });
+      open = true;
+    } else if (/kapitel|overskrift|MsoNormal|MsoTitle/iu.test(cls!)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  const title = plainText(/<h1[^>]*>([\s\S]*?)<\/h1>/u.exec(html)?.[1] ?? "");
+  // The act's own status is printed after its text ("Um rættarregluna … Gildisstøða: Í komi"); the search form above has the same word.
+  const about = plainText(html).split("Um rættarregluna").slice(1).join(" ");
+  const state = /Gildisstøða:\s*([^\n]+?)(?:\s{2,}|\n|$)/u.exec(about)?.[1]?.trim();
+  return { country: "FO", source, ...(title ? { title } : {}), articles, version: state ? `Gildisstøða: ${state}` : "tekst z Lógasavnið", status: "tekst urzędowy zbioru Lógasavnið (Løgmansskrivstovan)" };
+}
+
+/**
+ * Canon law, Codex Iuris Canonici 1983 (authentic Latin text on vatican.va, one page per book:
+ * …/cod-iuris-canonici/latin/documents/cic_liber{I…VII}_la.html; Liber VI in the 2021 wording of Pascite gregem Dei).
+ * "Can. N" opens a canon; a centred paragraph (PARS, TITULUS, CAPUT) is a heading and ends it.
+ */
+export function readCanonLaw(html: string, source: string): NationalReading {
+  const body = html.replace(/\s+/gu, " ").replace(/<p align="center">[\s\S]*?<\/p>/giu, "\n§HEADING§\n");
+  const text = plainText(body);
+  const articles: NationalArticle[] = [];
+  const marks = [...text.matchAll(/(?:^|\n|\s)Can\.\s+(\d+)\s*[—–-]\s*/gu)];
+  marks.forEach((match, index) => {
+    let piece = text.slice(match.index! + match[0].length, marks[index + 1]?.index ?? text.length);
+    piece = piece.split("§HEADING§")[0]!.replace(/\s*\n\s*/gu, "\n").trim();
+    articles.push({ unit: match[1]!, heading: `Can. ${match[1]}`, text: `Can. ${match[1]} — ${piece}`, amendments: [] });
+  });
+  return { country: "VA", source, articles, version: "Codex Iuris Canonici 1983, tekst łaciński (autentyczny) z vatican.va; zmiany motu proprio: vatican.va/archive/cdc/index.htm", status: "tekst autentyczny (Stolica Apostolska, vatican.va)" };
 }
 
 /**
