@@ -58,6 +58,11 @@ function nameBefore(text, end) {
         if (picked.length && /\n[^\S\n]*\n/u.test(line.slice(words[index].index, picked[0].index)))
             break;
         picked.unshift(words[index]);
+        // An opening bracket starts the name: "Zamawiającego (ALFA LOGISTYKA sp. z o.o.)" names
+        // ALFA LOGISTYKA, not "Zamawiającego (ALFA LOGISTYKA" (contract test 2026-11-08: two tokens
+        // for one firm and the role word gone from the request).
+        if (/^[(\[]/u.test(word))
+            break;
     }
     // "w Katowicach i Human Park sp. z o.o.": a place after "w" is not the first firm's name.
     const before = words[words.length - picked.length - 1]?.[0];

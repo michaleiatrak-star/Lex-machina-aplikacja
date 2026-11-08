@@ -253,3 +253,15 @@ describe("firm token label (contract test 2026-11-07: a company shown as [PII:PE
     expect(restored.deanonymize("[PII:FIRM:0001|NOM]")).toBe("Beta Software");
   });
 });
+
+describe("a firm in brackets after a role word (contract test 2026-11-08)", () => {
+  it("one token for the firm of the request and of the contract; the role word stays", async () => {
+    const vault = new PseudonymizationVault();
+    const result = await new LocalPolishPseudonymizer(vault).pseudonymize(
+      "Jestem prawnikiem Zamawiającego (ALFA LOGISTYKA sp. z o.o.). Umowa:\n\nALFA LOGISTYKA spółka z ograniczoną odpowiedzialnością z siedzibą w Gdyni"
+    );
+    expect(result.text).toContain("Jestem prawnikiem Zamawiającego ([PII:FIRM:0001] sp. z o.o.)");
+    expect(result.text).toContain("[PII:FIRM:0001] spółka z ograniczoną");
+    expect(vault.snapshot().tokens.filter((item) => item.token.startsWith("[PII:FIRM:"))).toHaveLength(1);
+  });
+});
