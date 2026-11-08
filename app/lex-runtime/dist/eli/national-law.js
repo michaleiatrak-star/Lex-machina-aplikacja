@@ -3,7 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
     { country: "NL", hosts: /^wetten\.overheid\.nl$/u, read: readNetherlands },
@@ -21,7 +21,7 @@ const PDF_HOSTS = [
     { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u }
 ];
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI"];
 function unitMatches(article, unit) {
     const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
     const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
@@ -119,6 +119,43 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
         const reading = readLuxembourg(new TextDecoder().decode(await doc.arrayBuffer()), file);
         const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit)) : reading.articles.slice(0, 20);
         return { country: "LU", url: file, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+    }
+    // Finland: Finlex open data (no key), the act by year and number from any Finlex address
+    // (…/eli/sd/1929/228/ajantasa, …/statute-consolidated/1889/39-001, finlex.fi/fi/laki/ajantasa/1929/19290228).
+    if (/^(?:www\.|data\.|opendata\.)?finlex\.fi$/u.test(host)) {
+        const path = decodeURIComponent(url.pathname);
+        const act = /\/(?:sd|statute(?:-consolidated)?|ajantasa|alkup|lainsaadanto(?:\/[a-z]+)?|laki\/[a-z]+)\/(\d{4})\/(\d{1,8}(?:-\d{3})?)(?:\/(fin|swe)@(\d{8})?)?/u.exec(path);
+        if (!act)
+            throw new Error("NATIONAL_LAW_FI_ACT_REQUIRED");
+        const year = act[1];
+        // The old Finlex page address writes the number as year + zero-padded number (19290228).
+        const number = act[2].length === 8 && act[2].startsWith(year) ? String(Number(act[2].slice(4))) : act[2];
+        const original = /\/alkup\b|\/statute\//u.test(path);
+        const base = `https://opendata.finlex.fi/finlex/avoindata/v1/akn/fi/act/${original ? "statute" : "statute-consolidated"}/${year}/`;
+        const explicit = act[4] ? `/fin@${act[4]}` : original ? "/fin@" : "";
+        // Old acts in parts answer only under "-001"/"-000" (Rikoslaki 1889/39-001).
+        const candidates = number.includes("-") ? [number] : [number, `${number}-001`, `${number}-000`];
+        let xml = "";
+        let used = "";
+        for (const candidate of candidates) {
+            used = `${base}${candidate}${explicit}`;
+            const reply = await fetchImpl(used, { headers: { accept: "application/xml" }, signal: AbortSignal.timeout(120_000) });
+            if (!reply.ok && reply.status !== 404)
+                throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+            if (!reply.ok)
+                continue;
+            xml = new TextDecoder().decode(await reply.arrayBuffer());
+            if (/<akomaNtoso\b/u.test(xml))
+                break;
+            xml = "";
+        }
+        if (!xml)
+            return { country: "FI", url: used, status: "Finlex: aktu nie znaleziono", articles: [] };
+        const reading = readFinland(xml, used);
+        const wanted = request.unit?.toLowerCase().replace(/§|pykälä|pykälän/gu, "").replace(/^(\d+\s?[a-z]?)\s*:\s*/u, "$1 luku ").replace(/\s+/gu, " ").trim();
+        const articles = wanted ? reading.articles.filter((article) => article.unit === wanted || article.unit.replace(/^\S+ luku /u, "") === wanted) : reading.articles.slice(0, 20);
+        const note = request.date && !act[4] ? "Finlex podaje najnowszą wersję ujednoliconą; wersję na dzień zdarzenia wskaż numerem wersji w adresie (…/fin@RRRRNNNN)" : undefined;
+        return { country: "FI", url: used, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles, ...(note ? { note } : {}) };
     }
     // Czech Republic: e-Sbírka's public cache (no key): metadata of the version, then its fragments.
     if (/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u.test(host)) {

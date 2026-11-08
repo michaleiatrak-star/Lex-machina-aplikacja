@@ -1,0 +1,1316 @@
+<AknXmlList><Results><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:finlex="http://data.finlex.fi/schema/finlex" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <act contains="multipleVersions" name="main">
+        <meta>
+            <identification source="#organization_fi.finlex">
+                <FRBRWork>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/!main"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa"/>
+                    <FRBRdate date="1929-06-13" name="dateIssued"/>
+                    <FRBRauthor as="#role_author" href="#organization_fi.finlex"/>
+                    <FRBRcountry value="fi"/>
+                    <FRBRsubtype value="statute-consolidated"/>
+                    <FRBRnumber value="228"/>
+                    <FRBRprescriptive value="false"/>
+                    <FRBRauthoritative value="false"/>
+                </FRBRWork>
+                <FRBRExpression>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/swe@20040128/!main"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228/swe@20040128"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa/2004-02-20/swe"/>
+                    <FRBRdate date="1929-06-13" name="dateIssued"/>
+                    <FRBRdate date="2004-02-20" name="dateConsolidated"/>
+                    <FRBRauthor as="#role_author" href="#organization_fi.finlex"/>
+                    <FRBRversionNumber value="20040128"/>
+                    <FRBRlanguage language="swe"/>
+                </FRBRExpression>
+                <FRBRManifestation>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/swe@20040128/!main.xml"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228/swe@20040128.akn"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa/2004-02-20/swe/xml"/>
+                    <FRBRdate date="2026-10-15" name="dateProduced"/>
+                    <FRBRauthor as="#role_editor" href="#organization_fi.finlex"/>
+                    <FRBRformat value="xml"/>
+                </FRBRManifestation>
+            </identification>
+            <classification source="#organization_fi.finlex">
+                <keyword dictionary="/akn/ontology/concept/statute-keyword" showAs="Rättshandling" value="/akn/ontology/concept/statute-keyword.2880"/>
+                <keyword dictionary="/akn/ontology/concept/statute-keyword" showAs="Förmögenhetsrättens område" value="/akn/ontology/concept/statute-keyword.4342"/>
+            </classification>
+            <references source="#organization_fi.finlex">
+                <TLCOrganization eId="organization_fi.finlex" href="/akn/ontology/organization/fi.finlex" showAs="Finlex"/>
+                <TLCRole eId="role_author" href="/akn/ontology/role/author" showAs="Tekijä"/>
+                <TLCRole eId="role_editor" href="/akn/ontology/role/editor" showAs="Toimittaja"/>
+                <TLCOrganization eId="fi.ministry-of-justice" href="/akn/ontology/organization/fi.ministry-of-justice" showAs="Justitieministeriet"/>
+                <TLCConcept eId="act" href="/akn/ontology/concept/statute/type-statute.act" showAs="Lag"/>
+            </references>
+            <proprietary source="#organization_fi.finlex">
+                <finlex:documentYear>1929</finlex:documentYear>
+                <finlex:administrativeBranch refersTo="#fi.ministry-of-justice"/>
+                <finlex:typeStatute refersTo="#act"/>
+                <finlex:isInForce value="true"/>
+                <finlex:inForce>
+                    <finlex:dateEntryIntoForce date="1929-07-01"/>
+                </finlex:inForce>
+                <finlex:amendedBy>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/2004/128">128/2004</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="2004-09-01">1.9.2004</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>ändrar 23 §</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1999/449">449/1999</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1999-12-01">1.12.1999</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>ändrar 22 och 24 §</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1996/810">810/1996</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1996-12-01">1.12.1996</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>övergångsstadgande i L 818/1996</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1982/956">956/1982</finlex:ref>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1994/1260">1260/1994</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1995-01-01">1.1.1995</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>ändrar 36 §</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                </finlex:amendedBy>
+            </proprietary>
+        </meta>
+        <preface>
+            <p>
+                <docNumber>228/1929</docNumber>
+                <docTitle>Lag om rättshandlingar på förmögenhetsrättens område</docTitle>
+            </p>
+        </preface>
+        <preamble>
+            <formula eId="enactingClause" name="enactingClause">
+                <p>I enlighet med Riksdagens beslut stadgas härmed om slutande av förmögenhetsrättsliga avtal, om fullmakt att företaga förmögenhetsrättsliga rättshandlingar och om sådana rättshandlingars ogiltighet, som följer:</p>
+            </formula>
+        </preamble>
+        <body>
+            <hcontainer finlex:outline="Förordningens text" name="statuteProvisionsWrapper">
+                <chapter eId="chp_1">
+                    <num>1 Kap</num>
+                    <heading eId="chp_1__heading">Slutande av avtal</heading>
+                    <section eId="chp_1__sec_1">
+                        <num>1 §</num>
+                        <subsection eId="chp_1__sec_1__subsec_1">
+                            <content>
+                                <p>Anbud om slutande av avtal och svar å sådant anbud vare bindande för den, som avgivit anbudet eller svaret, efter ty nedan i detta kapitel stadgas.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_1__subsec_2">
+                            <content>
+                                <p>Stadgandena i detta kapitel gälla ej i fråga om formbundna avtal, ej heller beträffande avtal, för vilkas slutande erfordras utgörande av en prestation åt andra kontrahenten, och lända i övrigt till efterrättelse blott såvitt ej annat följer av anbudet eller svaret eller av handelsbruk eller annan sedvänja.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_2">
+                        <num>2 §</num>
+                        <subsection eId="chp_1__sec_2__subsec_1">
+                            <content>
+                                <p>Har anbudsgivaren bestämt viss tid för avgivande av svar, skall han anses hava föreskrivit, att svaret skall inom den tid komma honom till handa.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_2__subsec_2">
+                            <content>
+                                <p>Är i brev eller telegram, vari anbud göres, viss tidrymd utsatt för svaret, skall denna räknas från den dag brevet är dagtecknat, sagda dag oräknad, eller den tid på dagen telegrammet är inlämnat å avgångsortens telegrafanstalt för befordran till anbudstagaren. Är i brevet ej datum utsatt, skall brevet anses vara dagtecknat den dag poststämpeln utvisar.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_3">
+                        <num>3 §</num>
+                        <subsection eId="chp_1__sec_3__subsec_1">
+                            <content>
+                                <p>Å anbud, som göres muntligen, skall, om anbudet antages, svar omedelbart avgivas, där icke anstånd för dess avgivande medgivits; sker det ej, anses anbudet vara avslaget.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_3__subsec_2">
+                            <content>
+                                <p>Göres anbud i brev, telegram eller eljest på sådant sätt, att svar icke kan omedelbart erhållas, måste, där tid för svar icke utsatts, antagande svar komma anbudsgivaren till handa inom den tid, som vid anbudets avgivande skäligen kunde av honom beräknas åtgå. Vid beräkningen av nämnda tid äge anbudsgivaren, där ej annat föranledes av omständigheterna, förutsätta, att anbudet framkommer i rätt tid samt att svaret avsändes utan uppskov efter det anbudstagaren åtnjutit skälig betänketid och icke varder under vägen försenat; är anbudet gjort i telegram eller på annat sätt, som hänvisar på anbudsgivarens önskan om skyndsamt svar, äge anbudsgivaren tillika förutsätta, att svaret befordras på enahanda sätt eller annorledes kommer honom lika tidigt till handa.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_4">
+                        <num>4 §</num>
+                        <subsection eId="chp_1__sec_4__subsec_1">
+                            <content>
+                                <p>Antagande svar, sam för sent kommer anbudsgivaren till handa, skall gälla såsom nytt, av den, som avgav svaret, gjort anbud.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_4__subsec_2">
+                            <content>
+                                <p>Vad i 1 momentet är sagt, äge dock icke tillämpning, om den, som avsänt svaret, utgår från att det framkommit i rätt tid och mottagaren måste inse detta. I ty fall åligger det denne, om han icke vill godtaga svaret, att utan oskäligt uppehåll giva avsändaren meddelande därom; underlåter han det, anses avtal hava genom svaret kommit till stånd.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_5">
+                        <num>5 §</num>
+                        <subsection eId="chp_1__sec_5__subsec_1">
+                            <content>
+                                <p>Avslås anbud, vare det förfallet, ändå att den tid, varunder det eljest gällt, ej gått till ända.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_6">
+                        <num>6 §</num>
+                        <subsection eId="chp_1__sec_6__subsec_1">
+                            <content>
+                                <p>Svar, som innehåller, att anbud antages, men som på grund av tillagg, inskränkning eller förbehåll icke överensstämmer med anbudet, skall gälla såsom avslag i förening med nytt anbud.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_6__subsec_2">
+                            <content>
+                                <p>Vad i 1 momentet är sagt, äge dock icke tillämpning, där den, som avgav svaret, anser det överensstämma med anbudet och anbudsgivaren måste inse detta. I ty fall åligger det denne, om han icke vill godtaga svaret, att utan oskäligt uppehåll giva meddelande därom; underlåter han det, skall avtal i enlighet med svarets innehåll anses hava kommit till stånd.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_7">
+                        <num>7 §</num>
+                        <subsection eId="chp_1__sec_7__subsec_1">
+                            <content>
+                                <p>Anbud eller svar, som återkallas, vare ej gällande, där återkallelsen kommer den, till vilken anbudet eller svaret är riktat, till handa innan han tager del av detta eller samtidigt därmed.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_8">
+                        <num>8 §</num>
+                        <subsection eId="chp_1__sec_8__subsec_1">
+                            <content>
+                                <p>Har den, som avgivit anbud, förklarat sig icke påfordra uttryckligt svar därå, eller utvisa omständigheterna, att han ej förväntar sådant, vare anbudstagaren ändock pliktig att på förfrågan giva besked, om han vill antaga anbudet; underlåter han det anses anbudet förfallet.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_9">
+                        <num>9 §</num>
+                        <subsection eId="chp_1__sec_9__subsec_1">
+                            <content>
+                                <p>Auktionsbud binder den bjudande intill dess auktionen i fråga om det föremål budet avser är avslutad eller överhud, som icke strax avvisats, blivit gjort. Den, som stannat för högsta budet, äger, om säljaren icke förbehållit sig anstånd för avgivande av svar, omedelbart erhålla besked, huruvida hans bud antages eller icke. Sker utrop till ovillkorlig försäljning och stannar någon annan än säljaren själv för högsta budet, vare köp med honom slutet; äro två eller flere om budet, äger säljaren välja dem emellan.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_9__subsec_2">
+                            <content>
+                                <p>Sker auktion med avslag, skall vad i 1 momentet om högre eller högsta bud är stadgat äga motsvarande tillämpning å lägre eller lägsta bud.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_2">
+                    <num>2 Kap</num>
+                    <heading eId="chp_2__heading">Fullmakt</heading>
+                    <section eId="chp_2__sec_10">
+                        <num>10 §</num>
+                        <subsection eId="chp_2__sec_10__subsec_1">
+                            <content>
+                                <p>Den, som åt annan givit fullmakt att sluta avtal eller eljest företaga rättshandlingar, varder omedelbart berättigad och förpliktad i förhållande till tredje man genom rättshandling, som fullmäktigen inom fullmaktens gränser företager i fullmaktsgivarens namn.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_10__subsec_2">
+                            <content>
+                                <p>Där någon såsom anställd i annans tjänst eller eljest i följd av avtal med annan intager en ställning, varmed enligt lag eller sedvänja följer viss behörighet att handla å dennes vägnar, anses han hava fullmakt att företaga rättshandlingar, som falla inom gränserna för denna behörighet.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_11">
+                        <num>11 §</num>
+                        <subsection eId="chp_2__sec_11__subsec_1">
+                            <content>
+                                <p>Har fullmäktigen vid företagande av rättshandling handlat i strid mot föreskrifter, som fullmaktsgivaren givit honom, vare rättshandlingen ej gällande mot denne, såframt tredje man insåg eller bort inse, att fullmäktigen överskred sin befogenhet.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_11__subsec_2">
+                            <content>
+                                <p>Grundar sig fullmakten allenast å fullmaktsgivarens meddelande till fullmäktigen, vare rättshandling, som fullmäktigen med överskridande av sin befogenhet företagit, icke gällande mot fullmaktsgivaren, ändå att tredje man var i god tro.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_12">
+                        <num>12 §</num>
+                        <subsection eId="chp_2__sec_12__subsec_1">
+                            <content>
+                                <p>Fullmakt, som bragts till tredje mans kännedom genom ett till honom särskilt riktat meddelande från fullmaktsgivaren, är återkallad, när särskilt meddelande från fullmaktsgivaren, att fullmakten icke vidare skall gälla, kommit tredje man till handa.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_13">
+                        <num>13 §</num>
+                        <subsection eId="chp_2__sec_13__subsec_1">
+                            <content>
+                                <p>Fullmakt, som blivit av fullmaktegivaren i tidning kungjord, återkallas genom tillkännagivande i samma tidning. Annorledes allmänneligen kungjord fullmakt återkallas genom att återkallandet offentliggöres i samma ordning som kungörandet av fullmakten ägt rum.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_13__subsec_2">
+                            <content>
+                                <p>Kan fullmakten ej återkallas på sätt i 1 momentet är sagt, skall återkallelsen på annat lika verksamt sätt tillkännagivas. Fullmaktsgivaren äge, där han det äskar, hos myndighet, som i 17 § sägs, erhålla anvisning, huru han i sådant avseende har att förfara.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_14">
+                        <num>14 §</num>
+                        <subsection eId="chp_2__sec_14__subsec_1">
+                            <content>
+                                <p>Fullmakt, som avses i 10 § 2 mom., återkallas därigenom att fullmäktigen avlägsnad från tjänst eller annan ställning, i kraft varav han varit befullmäktigad.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_15">
+                        <num>15 §</num>
+                        <subsection eId="chp_2__sec_15__subsec_1">
+                            <content>
+                                <p>Fullmakt, vilken grundar sig å skriftlig handling, som utgivits till fullmäktigen för att av honom innehavas och företes för tredje man, återkallas därigenom att fullmaktsgivaren återtager eller låter förstöra fullmaktshandlingen.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_15__subsec_2">
+                            <content>
+                                <p>Fullmäktigen är pliktig att på begäran av fullmaktsgivaren återställa fullmaktshandlingen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_16">
+                        <num>16 §</num>
+                        <subsection eId="chp_2__sec_16__subsec_1">
+                            <content>
+                                <p>Äro flere av stadgandena i 12–15 §§, vart för sig, tillämpliga å samma fullmakt, skola de alla iakttagas. Tredje man, hos vilken en fullmakt återkallats på det i 12 § angivna sätt, äge dock icke åberopa, att återkallelse ej skett på annat sätt.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_17">
+                        <num>17 §</num>
+                        <subsection eId="chp_2__sec_17__subsec_1">
+                            <content>
+                                <p>Gör fullmaktsgivaren sannolikt, att fullmaktshandling förkommit eller att han av annan orsak icke utan dröjsmål kan få den åter, må handlingen förklaras kraftlös.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_17__subsec_2v19960810" finlex:originalVersion="@19960810" finlex:originalVersionLabel="1.11.1996/810">
+                            <content>
+                                <p>Ansökan om att en fullmaktshandling skall förklaras utan verkan skall göras till tingsrätten på den ort där sökanden är bosatt. Saknar sökanden boningsort i Finland, kan ansökan göras till tingsrätten på sökandens vistelseort eller till Helsingfors tingsrätt. Om ansökan bifalls, skall tingsrätten i den officiella tidningen införa en kungörelse enligt vilken handlingen blir utan verkan efter en viss tid. Denna tid kan bestämmas till högst 14 dagar efter kungörelsen i officiella tidningen. Genast efter att den utsatta tiden har löpt ut skall tingsrätten förklara fullmakten vara utan verkan, om hinder inte föreligger. Tingsrätten kan också vid behov på sökandens bekostnad en eller flera gånger införa kungörelsen i någon dagstidning innan den införs i den officiella tidningen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_18">
+                        <num>18 §</num>
+                        <subsection eId="chp_2__sec_18__subsec_1">
+                            <content>
+                                <p>Fullmakt, som grundar sig allenast å fullmaktsgivarens meddelande till fullmäktigen, är återkallad, när meddelande från fullmaktsgivaren, att fullmakten icke vidare skall gälla, kommit fullmäktigen till handa.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_19">
+                        <num>19 §</num>
+                        <subsection eId="chp_2__sec_19__subsec_1">
+                            <content>
+                                <p>Har fullmaktsgivaren särskild anledning att befara, att fullmäktigen, oaktat fullmakten återkallats eller fullmaktshandlingen förklarats kraftlös, kommer att på grund av fullmakten företaga rättshandling gent emot viss man, vilken kan antagas sakna vetskap om dess upphörande, åligger det honom att, där så ske kan, giva denne meddelande, att fullmakten icke vidare skall gälla. Underlåter fullmaktsgivaren det, må han, såframt den, gent emot vilken rättshandlingen företogs, var i god tro, icke mot denne åberopa fullmaktens upphörande.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_20">
+                        <num>20 §</num>
+                        <subsection eId="chp_2__sec_20__subsec_1">
+                            <content>
+                                <p>Har fullmaktsgivaren, utan att i den uti 12–18 §§ stadgade ordning bringa fullmakten till upphörande, tillsagt fullmäktigen att icke göra bruk av fullmakten eller annorledes givit till känna sin vilja, att fullmakten icke vidare skall gälla, vare rättshandling, som fullmäktigen företager, icke gällande mot fullmaktsgivaren, såframt tredje man ägde eller bort äga kännedom om förhållandet.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_21">
+                        <num>21 §</num>
+                        <subsection eId="chp_2__sec_21__subsec_1">
+                            <content>
+                                <p>Dör fullmaktsgivaren, vare fullmakten ändock gällande, för såvitt ej särskilda omständigheter föranleda, att den skall vara förfallen. Ändå att sådana omständigheter äro för handen, vare dock rättshandling, som fullmäktigen företager, gällande mot dödsboet, där tredje man varken ägde eller kan anses hava bort äga vetskap om dödsfallet och dess betydelse för fullmäktigens behörighet att företaga rättshandlingen; är fullmakten sådan, som i 18 § avses, erfordras för rättshandlingens giltighet, att ej heller fullmäktigen, då han företog rättshandlingen, ägde eller kan anses hava bort äga vetskap om dödsfallet och dess förenämnda betydelse.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_21__subsec_2">
+                            <content>
+                                <p>Där den dödes egendom varder avträdd till konkurs, äge rättshandling, som, efter vad i 1 momentet sagts, är gällande mot dödsboet, icke mot borgenärerna annan verkan än den skulle haft, om den företagits av stärbhusdelägarne.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_22v19990449" finlex:originalVersion="@19990449" finlex:originalVersionLabel="1.4.1999/449">
+                        <num>22 §</num>
+                        <subsection eId="chp_2__sec_22v19990449__subsec_1v19990449">
+                            <content>
+                                <p>Om fullmaktsgivarens handlingsbehörighet begränsas, har en rättshandling som den befullmäktigade företar ingen annan verkan än den skulle ha haft om fullmaktsgivaren själv hade företagit den.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_23v20040128" finlex:originalVersion="@20040128" finlex:originalVersionLabel="20.2.2004/128">
+                        <num>23 §</num>
+                        <subsection eId="chp_2__sec_23v20040128__subsec_1v20040128">
+                            <content>
+                                <p>Om fullmaktsgivarens egendom överlämnas till konkurs, har en rättshandling som fullmäktigen därefter företar samma verkan som om fullmaktsgivaren hade företagit den.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_24v19990449" finlex:originalVersion="@19990449" finlex:originalVersionLabel="1.4.1999/449">
+                        <num>24 §</num>
+                        <subsection eId="chp_2__sec_24v19990449__subsec_1v19990449">
+                            <content>
+                                <p>Om fullmaktsgivarens handlingsbehörighet begränsas eller om fullmaktsgivarens egendom avträds till konkurs, har den befullmäktigade innan intressebevakaren eller konkursförvaltningen kan vidta behövliga åtgärder, rätt att med stöd av sin fullmakt företa sådana rättshandlingar, som är nödvändiga för att skydda fullmaktsgivaren eller konkursboet mot förlust.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_25">
+                        <num>25 §</num>
+                        <subsection eId="chp_2__sec_25__subsec_1">
+                            <content>
+                                <p>Den, som uppträder såsom fullmäktig för annan, är, där han ej förmår styrka, att han handlat efter fullmakt eller att den rättshandling, varom fråga är, blivit godkänd av den uppgivne fullmaktsgivaren eller ändock är gällande mot honom, pliktig att ersätta tredje man skada, som denne lider därigenom, att rättshandlingen icke är bindande gent emot den uppgivna fullmaktsgivaren.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_25__subsec_2">
+                            <content>
+                                <p>Vad i 1 momentet är stadgat skall dock icke äga tillämpning, där tredje man insåg eller bort inse, att fullmakt ej förefanns eller att förefintlig fullmakt överskreds; ej heller där den, som uppträdde såsom fullmäktig, handlade på grund av fullmakt, vilken var ogiltig i följd av någon särskild omständighet, varom han icke ägde kunskap och varom tredje man ej heller kunde med fog förutsätta, att han skulle hava kännedom.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_26">
+                        <num>26 §</num>
+                        <subsection eId="chp_2__sec_26__subsec_1">
+                            <content>
+                                <p>Vad här ovan i detta kapitel är stadgat om fullmakt att företaga rättshandlingar, skall äga motsvarande tillämpning i fråga om fullmakt att företräda fullmaktsgivaren vid rättshandlingar, som företagas gentemot honom.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_27">
+                        <num>27 §</num>
+                        <subsection eId="chp_2__sec_27__subsec_1">
+                            <content>
+                                <p>I fråga om återkallelse av prokura, som blivit till handelsregistret anmäld, skall vad i 8 och 31 §§ uti förordningen angående handelsregister samt om firma och prokura den 2 maj 1895 är stadgat lända till efterrättelse. Har återkallelsen blivit införd i handelsregistret och behörigen kungjord, är firmans innehavare icke pliktig att på annat sätt återkalla fullmakten.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_27__subsec_2">
+                            <content>
+                                <p>Angående formen för fullmakt att sälja, förbyta eller förpanta fast egendom gälle vad i 1 § 10 kap. jordabalken stadgas. Har sådan fullmakt blivit, efter ty i 15 och 17 §§ sägs, återkallad eller för kraftlös förklarad, vare fullmakten utan verkan.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_27__subsec_3">
+                            <content>
+                                <p>Genom vad här ovan i detta kapitel stadgas därom, att rättshandling av fullmäktigen i vissa fall icke är gällande mot fullmaktsgivaren, sker ej ändring i vad 3 § 18 kap. handelsbalken innehåller angående verkan därav, att vad som genom sådan rättshandling åtkommits blivit använt till fullmaktsgivarens nytta.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_3">
+                    <num>3 kap.</num>
+                    <heading eId="chp_3__headingv19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        Rättshandlingars ogiltighet och jämkning av dem 
+                        <ref href="#entryIntoForce_19820956">(17.12.1982/956)</ref>
+                    </heading>
+                    <section eId="chp_3__sec_28">
+                        <num>28 §</num>
+                        <subsection eId="chp_3__sec_28__subsec_1">
+                            <content>
+                                <p>Rättshandling, den någon blivit rättsstridigt tvungen att företaga, vare, där tvånget utövats genom våld å person eller genom hot, som innebär trängande fara för liv eller hälsa, icke gällande mot den tvungne.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_28__subsec_2">
+                            <content>
+                                <p>Har tvånget utövats av annan än den, gent emot vilken rättshandlingen företagits, och var denne i god tro, åligger det dock den tvungne, där han vill mot honom åberopa tvånget, att utan oskäligt uppehåll efter det tvånget upphörde giva honom meddelande därom vid äventyr, att rättshandlingen annars varder gällande.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_29">
+                        <num>29 §</num>
+                        <subsection eId="chp_3__sec_29__subsec_1">
+                            <content>
+                                <p>Rättshandling, den någon utan användande av sådant tvång, som i 28 § sägs, rättsstridigt tvungit en annan att företaga, vare ej gällande mot den tvungne, där den, gent emot vilken rättshandlingen företogs, själv utövat tvånget eller ock insett eller bort inse, att rättshandlingen framkallats genom rättsstridigt tvång från annans sida.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_30">
+                        <num>30 §</num>
+                        <subsection eId="chp_3__sec_30__subsec_1">
+                            <content>
+                                <p>Där den, gent emot vilken rättshandling företagits, framkallat densamma genom svikligt förledande eller ock insett eller bort inse, att den, som företog rättshandlingen, blivit svikligen förledd därtill av annan, vare rättshandlingen icke gällande mot den förledde.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_31">
+                        <num>31 §</num>
+                        <subsection eId="chp_3__sec_31__subsec_1">
+                            <content>
+                                <p>Har någon, med begagnande av annans trångmål, oförstånd, lättsinne eller beroende ställning i förhållande till honom, tagit eller betingat sig fördel i egendom, som står i uppenbart missförhållande till vad av honom givits eller beviljats eller för vilken något vederlag icke skall utgå, vare rättshandling, som sålunda tillkommit, icke gällande mot den förfördelade.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_31__subsec_2">
+                            <content>
+                                <p>Lag samma vare, där sådant förfarande, som i 1 momentet avses, ligger annan till last än den, gent emot vilken rättshandlingen företogs, och denne ägde eller bort äga kunskap därom.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_31__subsec_3">
+                            <content>
+                                <p>Om avtal rörande bärgarlön gälle vad i lagen den 17 februari 1923 om skada genom fartygs sammanstötning och om bärgarlön är stadgat.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <hcontainer eId="note_1" finlex:outline="huomautus" name="noteAuthorial">
+                        <content>
+                            <p>
+                                L om skada genom fartygs sammanstötning och om bärgarlön 
+                                <ref href="/akn/fi/act/statute/1923/64">64/1923</ref>
+                                 har upphävts genom L 
+                                <ref href="/akn/fi/act/statute/1939/167">167/1939</ref>, om bärgarlön se SjöL 
+                                <ref href="/akn/fi/act/statute-consolidated/1994/674#chp_16">674/1994 16 kap.</ref>
+                                 Se även L om skuldebrev 
+                                <ref href="/akn/fi/act/statute-consolidated/1947/622#sec_15">622/1947 15 §</ref>. Jfr StraffL 
+                                <ref href="/akn/fi/act/statute-consolidated/1889/39-001#chp_36">39/1889 36 kap.</ref>
+                                 6 och 7 §.
+                            </p>
+                        </content>
+                    </hcontainer>
+                    <section eId="chp_3__sec_32">
+                        <num>32 §</num>
+                        <subsection eId="chp_3__sec_32__subsec_1">
+                            <content>
+                                <p>Den, som avgivit en viljeförklaring, vilken i följd av felskrivning eller annat misstag å hans sida fått annat innehåll än åsyftat varit, vare icke bunden av viljeförklaringens innehåll, där den, till vilken förklaringen är riktad, insåg eller bort inse misstaget.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_32__subsec_2">
+                            <content>
+                                <p>Varder en avgiven viljeförklaring, som befordras genom telegram eller framföres muntligen genom bud, till följd av fel vid telegraferingen eller oriktigt återgivande genom budet till innehållet förvanskad, vare avsändaren, ändå att mottagaren var i god tro, icke bunden av förklaringen i det skick den framkommit. Avsändaren åligger dock, om han efter det förvanskningen kommit till hans kunskap vill, att förklaringen ej vidare skall vara gällande, att utan oskäligt uppehåll giva mottagaren meddelande därom; underlåter han det, och var mottagaren i god tro, vare förklaringen gällande sådan den framkommit.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_33">
+                        <num>33 §</num>
+                        <subsection eId="chp_3__sec_33__subsec_1">
+                            <content>
+                                <p>Rättshandling, som eljest vore att såsom giltig anse, må ej göras gällande, där omständigheterna vid dess tillkomst voro sådana, att det skulle strida mot tro och heder att med vetskap om dem åberopa rättshandlingen, och den, gent emot vilken rättshandlingen företogs, måste antagas hava ägt sådan vetskap.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_34">
+                        <num>34 §</num>
+                        <subsection eId="chp_3__sec_34__subsec_1">
+                            <content>
+                                <p>Har skriftlig handling upprättas för skens skull, må utan hinder därav fordran eller annan rättighet, som den enligt handlingens innehåll berättigade överlåtit å annan, göras gällande av förvärvaren, såframt denne var i god tro vid sitt förvärv.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_35">
+                        <num>35 §</num>
+                        <subsection eId="chp_3__sec_35__subsec_1">
+                            <content>
+                                <p>Har någon underskrivit skuldebrev eller annan handling, som är gällande i innehavarens hand eller eljest av löpande beskaffenhet, vare handlingen, ändå att den utan hans vilja kommit ur hans besittning, gällande mot honom, där den efter överlåtelse förvärvats av någon, som därvid var i god tro.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_35__subsec_2">
+                            <content>
+                                <p>Är kvitto å ett penningbelopp utan borgenärens vilja kommet ur hans besittning, vare utan hinder därav betalning, som gäldenären, när fordringen är förfallen, i god tro erlägger mot bekommande av kvittot, gällande mot borgenären.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_36v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>36 §</num>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Är villkor i rättshandling oskäligt eller skulle dess tillämpning leda till oskälighet, kan villkoret antingen jämkas eller lämnas utan avseende. Vid prövning av oskäligheten skall beaktas rättshandlingens hela innehåll, parternas ställning, förhållandena då rättshandlingen företogs och därefter samt övriga omständigheter.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_2v19820956">
+                            <content>
+                                <p>Är i 1 mom. avsett villkor sådant att det till följd av jämkningen av villkoret inte är skäligt att avtalet i övrigt oförändrat förblir i kraft, kan avtalet jämkas även till övriga delar eller förordnas att förfalla.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_3v19820956">
+                            <content>
+                                <p>Såsom villkor i rättshandling betraktas även utfästelse om beloppet av vederlag.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_4v19941260" finlex:originalVersion="@19941260" finlex:originalVersionLabel="16.12.1994/1260">
+                            <content>
+                                <p>
+                                    På jämkning av ett avtal om en konsumtionsnyttighet mellan en konsument och en näringsidkare tillämpas konsumentskyddslagen 
+                                    <ref href="/akn/fi/act/statute-consolidated/1978/38">(38/78)</ref>. 
+                                </p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_37v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>37 §</num>
+                        <subsection eId="chp_3__sec_37v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Villkor enligt vilket till säkerhet för förbindelse ställd pant eller annan säkerhet är förverkad, om förbindelsen inte fullgörs, är utan verkan.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_38v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>38 §</num>
+                        <subsection eId="chp_3__sec_38v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Avtal, genom vilket någon till förebyggande eller begränsande av konkurrens förbundit sig att inte bedriva viss verksamhet eller verksamhet av visst slag eller att inte ingå arbetsavtal med någon som bedriver sådan verksamhet, binder inte den som gjort utfästelsen till den del den oskäligt begränsar hans handlingsfrihet.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_4">
+                    <num>4 Kap</num>
+                    <heading eId="chp_4__heading">Särskilda bestämmelser</heading>
+                    <section eId="chp_4__sec_39">
+                        <num>39 §</num>
+                        <subsection eId="chp_4__sec_39__subsec_1">
+                            <content>
+                                <p>Är enligt denna lag giltigheten av avtal eller annan rättshandling beroende därav, att den, gentemot vilken rättshandlingen företogs, icke ägde eller kan anses hava bort äga vetskap om visst förhållande eller eljest var i god tro, skall hänsyn tagas till vad han insåg eller bort inse vid den tidpunkt, då rättshandlingen blev honom kunnig. Dock må, där särskilda omständigheter sådant föranleda, hänsyn jämväl tagas till den insikt han vunnit eller bort vinna efter nämnda tidpunkt, men innan rättshandlingen inverkat bestämmande på hans handlingssätt.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_40">
+                        <num>40 §</num>
+                        <subsection eId="chp_4__sec_40__subsec_1">
+                            <content>
+                                <p>Skall någon enligt denna lag giva annan ett meddelande, vid äventyr att eljest avtal anses slutet eller anbud antaget eller rättshandling, som av honom eller å hans vägnar företagits, bliver mot honom gällande, och varder sådant meddelande inlämnat för befordran med post eller telegraf eller eljest på ändamålsenligt sätt avsänt, må ej den omständigheten, att meddelandet försenas eller icke kommer fram, föranleda därtill, att avsändaren icke anses hava fullgjort vad honom åligger.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_4__sec_40__subsec_2">
+                            <content>
+                                <p>I fråga om återkallelse av anbud eller svar eller av fullmakt gäller vad i 7, 12 och 18 §§ är stadgat.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_41">
+                        <num>41 §</num>
+                        <subsection eId="chp_4__sec_41__subsec_1">
+                            <content>
+                                <p>Härmed upphäves 1 § 1 kap. handelsbalken, varjämte övriga mot denna lag stridande stadganden undergå ändring.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_42" finlex:entryIntoForce="true" finlex:vsId="228/1929">
+                        <num>42 §</num>
+                        <subsection eId="chp_4__sec_42__subsec_1">
+                            <content>
+                                <p>Denna lag träder i kraft den 1 juli 1929.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+            </hcontainer>
+            <hcontainer name="amendmentEntryIntoForceAndApplianceProvisions">
+                <heading>Ikraftträdelsestadganden</heading>
+                <hcontainer eId="entryIntoForce_19820956" name="entryIntoForce">
+                    <heading>17.12.1982/956:</heading>
+                    <content>
+                        <p>Denna lag träder i kraft den 1 Januari 1983. Den tillämpas även på rättshandlingar som företagits före lagens ikraftträdande.</p>
+                        <p>Regeringens proposition 247/81, Lagutsk. bet. 6/82, Stora utsk. bet. 136/82</p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19941260" name="entryIntoForce">
+                    <heading>16.12.1994/1260:</heading>
+                    <content>
+                        <p>Denna lag träder i kraft den 1 januari 1995.</p>
+                        <p>På avtal som ingåtts innan lagen har trätt i kraft tillämpas de stadganden som gällde vid ikraftträdandet.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1994/218">RP 218/94</ref>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/EkUB+31/1994">EkUB 31/94</a>
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19960810" name="entryIntoForce">
+                    <heading>1.11.1996/810:</heading>
+                    <content>
+                        <p>Denna lag träder i kraft den 1 december 1996. Övergångsstadganden utfärdas särskilt genom lag. </p>
+                        <block eId="note_2" finlex:outline="huomautus" name="noteAuthorial">
+                            Om övergångsstadganden se L 
+                            <ref href="/akn/fi/act/statute-consolidated/1996/818">818/1996</ref>.
+                        </block>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1996/92">RP 92/1996</ref>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/LaUB+10/1996">LaUB 10/1996</a>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/RSv+123/1996">RSv 123/1996</a>
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19990449" name="entryIntoForce">
+                    <heading>1.4.1999/449:</heading>
+                    <content>
+                        <p>Denna lag träder i kraft den 1 december 1999.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1998/146">RP 146/1998</ref>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/LaUB+20/1998">LaUB 20/1998</a>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/RSv+234/1998">RSv 234/1998</a>
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_20040128" name="entryIntoForce">
+                    <heading>20.2.2004/128:</heading>
+                    <content>
+                        <p>Denna lag träder i kraft den 1 september 2004.</p>
+                        <p>Om konkursen har börjat före denna lags ikraftträdande, tillämpas i stället för denna lag den bestämmelse som gäller när denna lag träder i kraft.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/2003/26">RP 26/2003</ref>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/LaUB+6/2003">LaUB 6/2003</a>, 
+                            <a href="https://www.eduskunta.fi/riksdagshandlingar/RSv+113/2003">RSv 113/2003</a>
+                        </p>
+                    </content>
+                </hcontainer>
+            </hcontainer>
+        </body>
+    </act>
+</akomaNtoso>
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:finlex="http://data.finlex.fi/schema/finlex" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <act contains="multipleVersions" name="main">
+        <meta>
+            <identification source="#organization_fi.finlex">
+                <FRBRWork>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/!main"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa"/>
+                    <FRBRdate date="1929-06-13" name="dateIssued"/>
+                    <FRBRauthor as="#role_author" href="#organization_fi.finlex"/>
+                    <FRBRcountry value="fi"/>
+                    <FRBRsubtype value="statute-consolidated"/>
+                    <FRBRnumber value="228"/>
+                    <FRBRprescriptive value="false"/>
+                    <FRBRauthoritative value="false"/>
+                </FRBRWork>
+                <FRBRExpression>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/fin@20040128/!main"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228/fin@20040128"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa/2004-02-20/fin"/>
+                    <FRBRdate date="1929-06-13" name="dateIssued"/>
+                    <FRBRdate date="2004-02-20" name="dateConsolidated"/>
+                    <FRBRauthor as="#role_author" href="#organization_fi.finlex"/>
+                    <FRBRversionNumber value="20040128"/>
+                    <FRBRlanguage language="fin"/>
+                </FRBRExpression>
+                <FRBRManifestation>
+                    <FRBRthis value="/akn/fi/act/statute-consolidated/1929/228/fin@20040128/!main.xml"/>
+                    <FRBRuri value="/akn/fi/act/statute-consolidated/1929/228/fin@20040128.akn"/>
+                    <FRBRalias name="eli" value="http://data.finlex.fi/eli/sd/1929/228/ajantasa/2004-02-20/fin/xml"/>
+                    <FRBRdate date="2026-10-15" name="dateProduced"/>
+                    <FRBRauthor as="#role_editor" href="#organization_fi.finlex"/>
+                    <FRBRformat value="xml"/>
+                </FRBRManifestation>
+            </identification>
+            <classification source="#organization_fi.finlex">
+                <keyword dictionary="/akn/ontology/concept/statute-keyword" showAs="Oikeustoimi" value="/akn/ontology/concept/statute-keyword.2880"/>
+                <keyword dictionary="/akn/ontology/concept/statute-keyword" showAs="Varallisuusoikeudellinen oikeustoimi" value="/akn/ontology/concept/statute-keyword.4342"/>
+            </classification>
+            <references source="#organization_fi.finlex">
+                <TLCOrganization eId="organization_fi.finlex" href="/akn/ontology/organization/fi.finlex" showAs="Finlex"/>
+                <TLCRole eId="role_author" href="/akn/ontology/role/author" showAs="Tekijä"/>
+                <TLCRole eId="role_editor" href="/akn/ontology/role/editor" showAs="Toimittaja"/>
+                <TLCOrganization eId="fi.ministry-of-justice" href="/akn/ontology/organization/fi.ministry-of-justice" showAs="Oikeusministeriö"/>
+                <TLCConcept eId="act" href="/akn/ontology/concept/statute/type-statute.act" showAs="Laki"/>
+            </references>
+            <proprietary source="#organization_fi.finlex">
+                <finlex:documentYear>1929</finlex:documentYear>
+                <finlex:administrativeBranch refersTo="#fi.ministry-of-justice"/>
+                <finlex:typeStatute refersTo="#act"/>
+                <finlex:isInForce value="true"/>
+                <finlex:inForce>
+                    <finlex:dateEntryIntoForce date="1929-07-01"/>
+                </finlex:inForce>
+                <finlex:commonName>Oikeustoimilaki</finlex:commonName>
+                <finlex:amendedBy>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/2004/128">128/2004</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="2004-09-01">1.9.2004</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>muutt. 23 §</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1999/449">449/1999</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1999-12-01">1.12.1999</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>muutt. 22 ja 24 §</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1996/810">810/1996</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1996-12-01">1.12.1996</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>siirtymäsäännökset L:ssa 818/1996</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1982/956">956/1982</finlex:ref>
+                    </finlex:statuteReference>
+                    <finlex:statuteReference>
+                        <finlex:ref href="/akn/fi/act/statute/1994/1260">1260/1994</finlex:ref>
+                        <finlex:inForce>
+                            <finlex:dateEntryIntoForce date="1995-01-01">1.1.1995</finlex:dateEntryIntoForce>
+                        </finlex:inForce>
+                        <finlex:noteEditorial>muutt. 36 §:ää</finlex:noteEditorial>
+                    </finlex:statuteReference>
+                </finlex:amendedBy>
+            </proprietary>
+        </meta>
+        <preface>
+            <p>
+                <docNumber>228/1929</docNumber>
+                <docTitle>Laki varallisuusoikeudellisista oikeustoimista</docTitle>
+            </p>
+        </preface>
+        <preamble>
+            <formula eId="enactingClause" name="enactingClause">
+                <p>Eduskunnan päätöksen mukaisesti säädetään täten varallisuusoikeudellisten sopimusten tekemisestä, valtuutuksesta varallisuusoikeudellisiin oikeustoimiin ja sellaisten oikeustointen pätemättömyydestä seuraavaa:</p>
+            </formula>
+        </preamble>
+        <body>
+            <hcontainer finlex:outline="Säädöksen teksti" name="statuteProvisionsWrapper">
+                <chapter eId="chp_1">
+                    <num>1 luku</num>
+                    <heading eId="chp_1__heading">Sopimuksen tekeminen</heading>
+                    <section eId="chp_1__sec_1">
+                        <num>1 §</num>
+                        <subsection eId="chp_1__sec_1__subsec_1">
+                            <content>
+                                <p>Tarjous sopimuksen tekemisestä ja sellaiseen tarjoukseen annettu vastaus sitovat tarjouksen tekijää ja vastauksen antajaa sen mukaan, kuin jäljempänä tässä luvussa säädetään.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_1__subsec_2">
+                            <content>
+                                <p>Tämän luvun säännökset eivät koske määrämuotoisia sopimuksia eivätkä myöskään sopimuksia, joiden päättämiseen vaaditaan suorituksen toimittamista toiselle sopimuspuolelle, ja ovat muuten voimassa vain, mikäli tarjouksesta tai vastauksesta tahi kauppa- tai muusta tavasta ei muuta johdu.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_2">
+                        <num>2 §</num>
+                        <subsection eId="chp_1__sec_2__subsec_1">
+                            <content>
+                                <p>Jos tarjouksen tekijä on pannut vastauksen antamista varten määräajan, on hänen katsottava määränneen, että vastauksen tulee siinä ajassa saapua hänelle.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_2__subsec_2">
+                            <content>
+                                <p>Jos kirjeessä tai sähkösanomassa, jossa tarjous on tehty, on pantu vastauksen antamista varten määräaika, luettakoon se siitä päivästä, jona kirje on päivätty, sitä päivää lukuunottamatta, taikka siitä päivän ajasta, jolloin sähkösanoma on annettu lähettämispaikkakunnan lennätintoimistoon tarjouksen saajalle toimitettavaksi. Milloin kirjeestä puuttuu päiväys, on se katsottava päivätyksi postileiman osoittamana päivänä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_3">
+                        <num>3 §</num>
+                        <subsection eId="chp_1__sec_3__subsec_1">
+                            <content>
+                                <p>Suullisesti tehtyyn tarjoukseen on, jos se hyväksytään, heti annettava vastaus, ellei ole varattu aikaa sen antamiseen; jos vastausta ei heti anneta, katsotaan tarjous hylätyksi.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_3__subsec_2">
+                            <content>
+                                <p>Jos tarjous on tehty kirjeessä, sähkösanomassa tai muuten siten, ettei vastausta ole voitu heti saada, eikä määräaikaa ole pantu vastauksen antamista varten, tulee hyväksyvän vastauksen saapua tarjouksen tekijälle siinä ajassa, jonka hän tarjouksen tehdessään kohtuudella on voinut laskea vastauksen antamiseen menevän. Tätä aikaa laskiessaan olkoon tarjouksen tekijä, ellei asianhaaroista muuta johdu, oikeutettu edellyttämään, että tarjous tulee perille oikeassa ajassa sekä että vastaus lähetetään viipymättä sen jälkeen, kun tarjouksen saajalla on ollut kohtuullinen miettimisaika, ja ettei vastaus matkalla viivästy; jos tarjous on tehty sähköteitse tai muulla tavalla, josta on käynyt ilmi, että tarjouksen tekijä on tahtonut saada pikaisen vastauksen, olkoon tarjouksen tekijä myös oikeutettu edellyttämään, että vastaus lähetetään samalla tavalla tai muuten saapuu hänelle yhtä aikaisin.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_4">
+                        <num>4 §</num>
+                        <subsection eId="chp_1__sec_4__subsec_1">
+                            <content>
+                                <p>Hyväksyvä vastaus, joka on liian myöhään saapunut tarjouksen tekijälle, katsottakoon uudeksi, vastauksen antajan tekemäksi tarjoukseksi.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_4__subsec_2">
+                            <content>
+                                <p>Mitä 1 momentissa on sanottu, ei kuitenkaan ole sovellettava, jos vastauksen lähettäjä on olettanut vastauksen tulleen oikeassa ajassa perille, ja vastauksen saajan on täytynyt tämä käsittää. Sellaisessa tapauksessa on vastauksen saajan, ellei hän tahdo hyväksyä vastausta, ilman aiheetonta viivytystä siitä ilmoitettava vastauksen lähettäjälle; jos hän ei sitä tee, katsotaan sopimus syntyneeksi vastauksen antamisen kautta.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_5">
+                        <num>5 §</num>
+                        <subsection eId="chp_1__sec_5__subsec_1">
+                            <content>
+                                <p>Jos tarjous hylätään, olkoon se rauennut vaikka aika, jonka se muuten olisi ollut voimassa, ei ole mennyt umpeen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_6">
+                        <num>6 §</num>
+                        <subsection eId="chp_1__sec_6__subsec_1">
+                            <content>
+                                <p>Vastaus, jossa tarjous sanotaan hyväksytyksi, mutta joka siihen tehdyn lisäyksen, rajoituksen tai ehdon johdosta ei vastaa tarjousta, katsottakoon kieltäväksi vastaukseksi, johon liittyy uusi tarjous.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_6__subsec_2">
+                            <content>
+                                <p>Mitä 1 momentissa on sanottu, ei kuitenkaan ole sovellettava, jos vastauksen antaja on pitänyt vastausta tarjousta vastaavana, ja tarjouksen tekijän on täytynyt tämä käsittää. Sellaisessa tapauksessa on tarjouksen tekijän, ellei hän tahdo hyväksyä vastausta, ilman aiheetonta viivytystä ilmoitettava siitä; jos hän ei sitä tee, katsottakoon vastauksen sisällyksen mukainen sopimus syntyneeksi.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_7">
+                        <num>7 §</num>
+                        <subsection eId="chp_1__sec_7__subsec_1">
+                            <content>
+                                <p>Tarjous tai vastaus, joka peruutetaan, ei ole sitova, jos peruutus saapuu sille, jolle tarjous on tehty tai vastaus annettu, ennenkuin hän on ottanut selon tarjouksesta tai vastauksesta tahi samaan aikaan, kuin tämä tapahtuu.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_8">
+                        <num>8 §</num>
+                        <subsection eId="chp_1__sec_8__subsec_1">
+                            <content>
+                                <p>Jos se, joka on tehnyt tarjouksen, on ilmoittanut, ettei hän vaadi siihen nimenomaista vastausta, tai jos asianhaarat osoittavat, ettei hän sitä odota, olkoon tarjouksen saaja kuitenkin velvollinen kysyttäessä ilmoittamaan, hyväksyykö hän tarjouksen; jos hän ei sitä ilmoita, katsotaan tarjous rauenneeksi.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_1__sec_9">
+                        <num>9 §</num>
+                        <subsection eId="chp_1__sec_9__subsec_1">
+                            <content>
+                                <p>Huutokaupassa tehty tarjous sitoo tarjouksen tekijää siihen saakka, kun huutokauppa on päättynyt sen esineen kohdalta, jota huuto koskee, tai on tehty korkeampi tarjous, jota ei heti ole hylätty. Korkeimman tarjouksen tekijällä on, ellei myyjä ole pidättänyt itselleen miettimisaikaa vastauksen antamista varten, oikeus heti saada tietää, hyväksytäänkö hänen tarjouksensa vai ei. Jos on ilmoitettu, että esine joka tapauksessa myydään, ja joku muu kuin myyjä itse on tehnyt korkeimman tarjouksen, on kauppa tehtävä hänen kanssaan; jos kaksi tai useammat ovat tehneet saman korkeimman tarjouksen, on myyjällä oikeus valita, minkä näistä tarjouksista hän hyväksy.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_1__sec_9__subsec_2">
+                            <content>
+                                <p>Jos huutokauppa tapahtuu laskuhuudoin, sovellettakoon alempaan tai alimpaan tarjoukseen vastaavasti, mitä 1 momentissa on korkeammasta tai korkeimmasta tarjouksesta säädetty.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_2">
+                    <num>2 luku</num>
+                    <heading eId="chp_2__heading">Valtuutus</heading>
+                    <section eId="chp_2__sec_10">
+                        <num>10 §</num>
+                        <subsection eId="chp_2__sec_10__subsec_1">
+                            <content>
+                                <p>Joka on valtuuttanut toisen tekemään sopimuksia tai muita oikeustoimia, tulee suhteessaan kolmanteen henkilöön välittömästi oikeutetuksi ja velvoitetuksi oikeustoimen perusteella, jonka valtuutettu valtuutuksen rajoissa tekee valtuuttajan nimessä.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_10__subsec_2">
+                            <content>
+                                <p>Milloin jollakin toisen toimessa ollen tai muuten toisen kanssa tekemänsä sopimuksen johdosta on sellainen asema, että siihen lain tai yleisen tavan mukaan liittyy määrätynlainen kelpoisuus toimia tämän puolesta, katsotaan hänet valtuutetuksi tämän kelpoisuuden rajoissa tekemään oikeustoimia.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_11">
+                        <num>11 §</num>
+                        <subsection eId="chp_2__sec_11__subsec_1">
+                            <content>
+                                <p>Jos valtuutettu tehdessään oikeustoimen on toiminut vastoin valtuuttajan hänelle antamia ohjeita, ei oikeustoimi sido valtuuttajaa, jos kolmas henkilö tiesi tai hänen olisi pitänyt tietää, että valtuutettu ylitti toimivaltansa.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_11__subsec_2">
+                            <content>
+                                <p>Milloin valtuutus perustuu vain valtuuttajan valtuutetulle tekemään tiedonantoon, ei oikeustoimi, jonka valtuutettu on tehnyt toimivaltansa ylittäen, sido valtuuttajaa, vaikkakin kolmas henkilö oli vilpittömässä mielessä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_12">
+                        <num>12 §</num>
+                        <subsection eId="chp_2__sec_12__subsec_1">
+                            <content>
+                                <p>Valtuuttajan erityisellä tiedonannolla kolmannelle henkilölle ilmoittama valtuutus on peruutettu, kun valtuuttajan erityinen tiedonanto, ettei valtuutus enää ole voimassa, on saapunut hänelle.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_13">
+                        <num>13 §</num>
+                        <subsection eId="chp_2__sec_13__subsec_1">
+                            <content>
+                                <p>Valtuuttajan sanomalehdessä julkaisema valtuutus peruutetaan ilmoittamalla siitä samassa lehdessä. Muuten julkisesti tiedotettu valtuutus peruutetaan saattamalla peruutus julkisuuteen samalla tavoin kuin valtuutuksesta on ilmoitettu.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_13__subsec_2">
+                            <content>
+                                <p>Jos valtuutusta ei voida peruuttaa sillä tavoin, kuin 1 momentissa on sanottu, on peruutus annettava tiedoksi muulla yhtä tehokkaalla tavalla. Valtuuttaja on oikeutettu pyynnöstään 17 §:ssä mainitulta viranomaiselta saamaan osoituksen, miten hänen on sellaisessa tapauksessa meneteltävä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_14">
+                        <num>14 §</num>
+                        <subsection eId="chp_2__sec_14__subsec_1">
+                            <content>
+                                <p>Valtuutus, josta puhutaan 10 §:n 2 momentissa, peruutetaan poistamalla valtuutettu siitä toimesta tai muusta asemasta, johon hänen valtuutuksensa on perustunut.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_15">
+                        <num>15 §</num>
+                        <subsection eId="chp_2__sec_15__subsec_1">
+                            <content>
+                                <p>Valtuutus, joka perustuu asiakirjaan, joka on annettu valtuutetulle hänen hallussaan pidettäväksi ja kolmannelle henkilölle esitettäväksi, peruutetaan siten, että valtuuttaja ottaa takaisin tai hävityttää valtuuttamisasiakirjan.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_15__subsec_2">
+                            <content>
+                                <p>Valtuutettu on velvollinen valtuuttajan pyynnöstä palauttamaan valtuuttamisasiakirjan.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_16">
+                        <num>16 §</num>
+                        <subsection eId="chp_2__sec_16__subsec_1">
+                            <content>
+                                <p>Jos useammat 12–15 §:ssä olevista säännöksistä, kukin erikseen, soveltuvat samaan valtuutukseen, on niitä kaikkia noudatettava. Kolmas henkilö, jolle valtuutuksen peruutus on ilmoitettu 12 §:ssä mainitulla tavalla, ei kuitenkaan ole oikeutettu vetoamaan siihen, ettei valtuutusta ole muulla tavalla peruutettu.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_17">
+                        <num>17 §</num>
+                        <subsection eId="chp_2__sec_17__subsec_1">
+                            <content>
+                                <p>Jos valtuuttaja saattaa todennäköiseksi, että valtuuttamisasiakirja on kadonnut tai ettei hän muusta syystä viipymättä voi saada sitä takaisin, voidaan asiakirja julistaa tehottomaksi.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_17__subsec_2v19960810" finlex:originalVersion="@19960810" finlex:originalVersionLabel="1.11.1996/810">
+                            <content>
+                                <p>Hakemus valtuuttamisasiakirjan tehottomaksi julistamisesta tehdään hakijan asuinpaikan käräjäoikeudelle. Jos hakijalla ei ole asuinpaikkaa Suomessa, hakemus voidaan tehdä hakijan oleskelupaikan tai Helsingin käräjäoikeudelle. Jos hakemukseen suostutaan, käräjäoikeuden on julkaistava virallisessa lehdessä kuulutus, jonka mukaan asiakirja tulee tehottomaksi määräajan kuluttua. Määräaika voidaan panna enintään 14 päiväksi siitä, kun kuulutus on julkaistu virallisessa lehdessä. Heti määräajan päätyttyä käräjäoikeuden on julistettava valtakirja tehottomaksi, jollei estettä ole. Käräjäoikeus voi myös tarvittaessa hakijan kustannuksella julkaista kuulutuksen kerran tai useammin jossain sanomalehdessä ennen kuin se julkaistaan virallisessa lehdessä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_18">
+                        <num>18 §</num>
+                        <subsection eId="chp_2__sec_18__subsec_1">
+                            <content>
+                                <p>Valtuutus, joka perustuu vain valtuuttajan valtuutetulle tekemään tiedonantoon, on peruutettu, kun valtuuttajan tiedonanto, ettei valtuutus enää ole voimassa, on saapunut valtuutetulle.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_19">
+                        <num>19 §</num>
+                        <subsection eId="chp_2__sec_19__subsec_1">
+                            <content>
+                                <p>Jos valtuuttajalla on erityinen aihe epäillä, että valtuutettu, valtuutuksen peruutuksesta tai valtuuttamisasiakirjan tehottomaksi julistamisesta huolimatta, tulee valtuutuksen perusteella tekemään oikeustoimen henkilön kanssa, jonka ei voida olettaa tietäneen valtuutuksen lakkaamisesta, on valtuuttaja velvollinen, mikäli on mahdollista, ilmoittamaan tälle, ettei valtuutus enää ole voimassa. Jos valtuuttaja ei sitä tee ja jos se, jonka kanssa oikeustoimi tehtiin, on vilpittömässä mielessä, älköön valtuuttaja suhteessaan tähän vedotko valtuutuksen lakkaamiseen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_20">
+                        <num>20 §</num>
+                        <subsection eId="chp_2__sec_20__subsec_1">
+                            <content>
+                                <p>Milloin valtuuttaja, saattamatta 12–18 §:ssä säädetyllä tavalla valtuutusta päättymään, on kieltänyt valtuutettua käyttämästä valtuutusta tai muuten ilmaissut tahtovansa, ettei valtuutus enää ole voimassa, ei valtuutetun tekemä oikeustoimi sido valtuuttajaa, jos kolmas henkilö tiesi tai hänen olisi pitänyt tietää mainitusta seikasta.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_21">
+                        <num>21 §</num>
+                        <subsection eId="chp_2__sec_21__subsec_1">
+                            <content>
+                                <p>Jos valtuuttaja kuolee, olkoon valtuutus kuitenkin voimassa, ellei erityisistä asianhaaroista johdu, että sen tulee olla rauennut. Vaikkakin sellaisia asianhaaroja on olemassa, sitoo oikeustoimi, jonka valtuutettu tekee, kuitenkin kuolinpesää, jos kolmas henkilö ei tietänyt eikä voida katsoa hänen pitäneen tietää kuolintapauksesta ja sen merkityksestä valtuutetun kelpoisuuteen nähden tehdä oikeustoimi; jos valtuutus on sellainen, josta 18 §:ssä puhutaan, on oikeustoimen pätevyyden edellytyksenä, ettei valtuutettukaan oikeustointa tehdessään kuolintapauksesta ja sen edellämainitusta merkityksestä tietänyt, eikä voida katsoa hänen pitäneen sitä tietää.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_21__subsec_2">
+                            <content>
+                                <p>Milloin kuolleen omaisuus luovutetaan konkurssiin, älköön oikeustoimella, joka sen mukaan, kuin 1 momentissa on sanottu, sitoo kuolinpesää, olko velkojia vastaan muuta vaikutusta, kuin sillä olisi ollut, jos kuolinpesän osakkaat olivat sen tehneet.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_22v19990449" finlex:originalVersion="@19990449" finlex:originalVersionLabel="1.4.1999/449">
+                        <num>22 §</num>
+                        <subsection eId="chp_2__sec_22v19990449__subsec_1v19990449">
+                            <content>
+                                <p>Jos valtuuttajan toimintakelpoisuutta rajoitetaan, valtuutetun tekemällä oikeustoimella ei ole muuta vaikutusta kuin sillä olisi ollut, jos valtuuttaja olisi tehnyt sen itse.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_23v20040128" finlex:originalVersion="@20040128" finlex:originalVersionLabel="20.2.2004/128">
+                        <num>23 §</num>
+                        <subsection eId="chp_2__sec_23v20040128__subsec_1v20040128">
+                            <content>
+                                <p>Jos valtuuttajan omaisuus luovutetaan konkurssiin, valtuutetun sen jälkeen tekemällä oikeustoimella on sama vaikutus kuin jos oikeustoimen olisi tehnyt valtuuttaja.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_24v19990449" finlex:originalVersion="@19990449" finlex:originalVersionLabel="1.4.1999/449">
+                        <num>24 §</num>
+                        <subsection eId="chp_2__sec_24v19990449__subsec_1v19990449">
+                            <content>
+                                <p>Jos valtuuttajan toimintakelpoisuutta rajoitetaan tai jos hänen omaisuutensa luovutetaan konkurssiin, valtuutetulla on oikeus, ennen kuin edunvalvoja tai konkurssipesän hoitaja voi ryhtyä tarpeellisiin toimiin, valtuutuksensa perusteella tehdä sellaisia oikeustoimia, jotka ovat tarpeen valtuuttajan tai konkurssipesän turvaamiseksi vahingolta.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_25">
+                        <num>25 §</num>
+                        <subsection eId="chp_2__sec_25__subsec_1">
+                            <content>
+                                <p>Joka esiintyy toisen valtuutettuna voimatta näyttää, että hän on toiminut valtuutuksen mukaan tai että valtuuttajaksi ilmoitettu henkilö on oikeustoimen hyväksynyt tahi että se muuten sitoo tätä, on velvollinen korvaamaan kolmannelle henkilölle vahingon, jonka tämä kärsii sen johdosta, ettei oikeustoimi sido valtuuttajaksi ilmoitettua henkilöä.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_25__subsec_2">
+                            <content>
+                                <p>Mitä 1 momentissa on säädetty, ei kuitenkaan ole sovellettava, jos kolmas henkilö tiesi tai hänen olisi pitänyt tietää, ettei valtuutusta ollut tahi että se ylitettiin, eikä myöskään, jos valtuutettuna esiintynyt toimi valtuutuksen perusteella, joka oli pätemätön jostakin erityisestä, hänelle tuntemattomasta syystä, mistä kolmas henkilö ei myöskään voinut kohtuudella olettaa hänen tietäneen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_26">
+                        <num>26 §</num>
+                        <subsection eId="chp_2__sec_26__subsec_1">
+                            <content>
+                                <p>Mitä edellä tässä luvussa on säädetty valtuutuksesta oikeustoimien tekemiseen, on vastaavasti sovellettava valtuutukseen edustaa valtuuttajaa hänen kohdistuvissa oikeustoimissa.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_2__sec_27">
+                        <num>27 §</num>
+                        <subsection eId="chp_2__sec_27__subsec_1">
+                            <content>
+                                <p>Sellaisen prokuran peruuttamisesta, joka on ilmoitettu kaupparekisteriin, on noudatettava kaupparekisteristä sekä toiminimestä ja prokurasta 2 päivänä toukokuuta 1895 annetun asetuksen 8 ja 31 §:n säännöksiä. Jos peruuttaminen on merkitty kaupparekisteriin ja asianmukaisesti kuulutettu, ei toiminimen haltijan tarvitse muulla tavalla peruuttaa valtuutusta.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_27__subsec_2">
+                            <content>
+                                <p>Kiinteän omaisuuden myymistä, vaihtamista tai panttaamista varten annetun valtuutuksen muodosta olkoon voimassa, mitä maakaaren 10 luvun 1 §:ssä säädetään. Jos sellainen valtuutus on peruutettu tai julistettu tehottomaksi sillä tavalla, kuin 15 ja 17 §:ssä sanotaan, olkoon se ilman vaikutusta.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_2__sec_27__subsec_3">
+                            <content>
+                                <p>Tämän luvun säännöksillä, ettei valtuutetun tekemä oikeustoimi eräissä tapauksissa sido valtuuttajaa, ei muuteta kauppakaaren 18 luvun 3 §:n säännöstä sen seikan vaikutuksesta, että valtuuttajan hyödyksi on tullut, mitä sellaisen oikeustoimen perusteella on saatu.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_3">
+                    <num>3 luku</num>
+                    <heading eId="chp_3__headingv19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        Oikeustointen pätemättömyys ja sovittelu  
+                        <ref href="#entryIntoForce_19820956">(17.12.1982/956)</ref>
+                    </heading>
+                    <section eId="chp_3__sec_28">
+                        <num>28 §</num>
+                        <subsection eId="chp_3__sec_28__subsec_1">
+                            <content>
+                                <p>Oikeustoimi, jonka tekemiseen joku on oikeudenvastaisesti pakotettu, ei sido pakotettua, jos pakottamiseen on käytetty väkivaltaista pitelemistä taikka pakottavaa hengen tai terveyden vaaraa käsittävää uhkausta.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_28__subsec_2">
+                            <content>
+                                <p>Jos pakkoa on käyttänyt toinen kuin se, johon oikeustoimi on kohdistettu, ja jos tämä oli vilpittömässä mielessä, tulee pakon alaiseksi joutuneen kuitenkin, jos hän tahtoo suhteessaan tähän vedota pakkoon, sitten kuin pakko on lakannut, ilman aiheetonta viivytystä tästä ilmoittaa hänelle, uhalla että oikeustoimi muuten tulee päteväksi.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_29">
+                        <num>29 §</num>
+                        <subsection eId="chp_3__sec_29__subsec_1">
+                            <content>
+                                <p>Oikeustoimi, jonka tekemiseen joku on toisen oikeudenvastaisesti pakottanut käyttämättä sellaista pakkoa, josta 28 §:ssä puhutaan, ei sido pakotettua, jos se, johon oikeustoimi on kohdistettu, on itse tätä pakkoa käyttänyt, taikka jos hän on tietänyt tai hänen olisi pitänyt tietää, että toinen on oikeustoimen tekijän sen tekemiseen pakottanut.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_30">
+                        <num>30 §</num>
+                        <subsection eId="chp_3__sec_30__subsec_1">
+                            <content>
+                                <p>Jos se, johon oikeustoimi on kohdistettu, on saanut sen aikaan petollisella viettelyllä taikka jos hän on tietänyt tai hänen olisi pitänyt tietää, että toinen on oikeustoimen tekijän sen tekemiseen petollisesti vietellyt, ei oikeustoimi sido vieteltyä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_31">
+                        <num>31 §</num>
+                        <subsection eId="chp_3__sec_31__subsec_1">
+                            <content>
+                                <p>Jos joku, käyttäen hyväkseen toisen pulaa, ymmärtämättömyyttä, kevytmielisyyttä tai hänestä riippuvaista asemaa, on ottanut tai edustanut itselleen aineellista etua, joka on ilmeisessä epäsuhteessa siihen, mitä hän on antanut tai myöntänyt, tahi josta mitään vastiketta ei ole suoritettava, ei täten syntynyt oikeustoimi sido sitä, jonka etua on loukattu.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_31__subsec_2">
+                            <content>
+                                <p>Sama olkoon laki, jos 1 momentissa mainittuun menettelyyn on syypää toinen kuin se, johon oikeustoimi on kohdistettu, ja tämä siitä tiesi tai hänen olisi pitänyt siitä tietää.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_31__subsec_3">
+                            <content>
+                                <p>Pelastuspalkkiota koskevista sopimuksista on voimassa, mitä 17 päivänä helmikuuta 1923 alusten yhteentörmäyksestä johtuvasta vahingosta sekä pelastuspalkkiosta annetussa laissa on säädetty.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <hcontainer eId="note_1" finlex:outline="huomautus" name="noteAuthorial">
+                        <content>
+                            <p>
+                                L alusten yhteentörmäyksestä johtuvasta vahingosta sekä pelastuspalkkiosta 
+                                <ref href="/akn/fi/act/statute/1923/64">64/1923</ref>
+                                 on kumottu L:lla 
+                                <ref href="/akn/fi/act/statute/1939/167">167/1939</ref>, ks. pelastuspalkkiosta MeriL 
+                                <ref href="/akn/fi/act/statute-consolidated/1994/674#chp_16">674/1994 16 luku</ref>. Ks. myös VelkakirjaL 
+                                <ref href="/akn/fi/act/statute-consolidated/1947/622#sec_15">622/1947 15 §</ref>. Vrt. RikosL 
+                                <ref href="/akn/fi/act/statute-consolidated/1889/39-001#chp_36">39/1889 36 luku</ref>
+                                 6 ja 7 §.
+                            </p>
+                        </content>
+                    </hcontainer>
+                    <section eId="chp_3__sec_32">
+                        <num>32 §</num>
+                        <subsection eId="chp_3__sec_32__subsec_1">
+                            <content>
+                                <p>Jos jonkun tahdonilmaisu on erhekirjoituksen tai muun hänen erehdyksensä johdosta saanut toisen sisällyksen, kuin on tarkoitettu, ei tahdonilmaisu sellaisena sido sen antajaa, jos se, johon tahdonilmaisu on kohdistettu, tiesi tai hänen oli pitänyt tietää erehdyksestä.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_32__subsec_2">
+                            <content>
+                                <p>Jos tahdonilmaisu, joka toimitetaan perille sähköteitse tai suullisesti lähettiä käyttäen, on sähköttämisessä tapahtuneen virheen tai lähetin virheellisesti toimittaman esittämisen johdosta sisällykseltään muuttunut, ei tahdonilmaisu sellaisena, kuin se on tullut perille, sido lähettäjää, vaikkakin vastaanottaja on vilpittömässä mielessä. Lähettäjä olkoon kuitenkin, jos hän, saatuaan tiedon sisällyksen muuttumisesta, haluaa, että tahdonilmaisu ei enää olisi voimassa, velvollinen ilman aiheetonta viivytystä ilmoittamaan siitä vastaanottajalle; jos hän ei sitä tee, ja vastaanottaja oli vilpittömässä mielessä, on tahdonilmaisu sitova sellaisena, kuin se on tullut perille.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_33">
+                        <num>33 §</num>
+                        <subsection eId="chp_3__sec_33__subsec_1">
+                            <content>
+                                <p>Oikeustointa, jota muuten olisi pidettävä pätevänä, älköön saatettako voimaan, jos se on tehty sellaisissa olosuhteissa, että niistä tietoisen olisi kunnian vastaista ja arvotonta vedota oikeustoimeen, ja sen, johon oikeustoimi on kohdistettu, täytyy olettaa niistä tietäneen.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_34">
+                        <num>34 §</num>
+                        <subsection eId="chp_3__sec_34__subsec_1">
+                            <content>
+                                <p>Jos on tehty valeasiakirja, ja se, jolla asiakirjan sisällyksen mukaan on saamis- tai muu oikeus, on tämän oikeuden siirtänyt toiselle, olkoon se, jolle oikeus on siirretty, oikeutettu saattamaan oikeuden voimaan, jos hän sen saadessaan oli vilpittömässä mielessä.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_35">
+                        <num>35 §</num>
+                        <subsection eId="chp_3__sec_35__subsec_1">
+                            <content>
+                                <p>Sitä, joka on allekirjoittanut haltijalle asetetun tai muunlaisen juoksevan velkakirjan tahi muun sellaisen asiakirjan, sitoo asiakirja, vaikkakin se on hänen tahtomattaan joutunut pois hänen hallustaan, milloin asiakirjan on siirron perusteella saanut joku, joka sen saadessaan oli vilpittömässä mielessä.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_35__subsec_2">
+                            <content>
+                                <p>Jos rahan vastaanottamisesta kirjoitettu kuitti on ilman velkojan tahtoa joutunut pois hänen hallustaan, on siitä huolimatta maksu, jonka velallinen velan eräännyttyä vilpittömässä mielessä kuitin saadessaan suorittaa, pätevä velkojaa kohtaan.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_36v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>36 §</num>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Jos oikeustoimen ehto on kohtuuton tai sen soveltaminen johtaisi kohtuuttomuuteen, ehtoa voidaan joko sovitella tai jättää se huomioon ottamatta. Kohtuuttomuutta arvosteltaessa on otettava huomioon oikeustoimen koko sisältö, osapuolten asema, oikeustointa tehtäessä ja sen jälkeen vallinneet olosuhteet sekä muut seikat.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_2v19820956">
+                            <content>
+                                <p>Jos 1 momentissa tarkoitettu ehto on sellainen, että sopimuksen jääminen voimaan muilta osin muuttumattomana ei ole ehdon sovittelun vuoksi kohtuullista, sopimusta voidaan sovitella muiltakin osin tai se voidaan määrätä raukeamaan.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_3v19820956">
+                            <content>
+                                <p>Oikeustoimen ehtona pidetään myös vastikkeen määrää koskevaa sitoumusta.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_3__sec_36v19820956__subsec_4v19941260" finlex:originalVersion="@19941260" finlex:originalVersionLabel="16.12.1994/1260">
+                            <content>
+                                <p>
+                                    Kuluttajan ja elinkeinonharjoittajan välisen kulutushyödykettä koskevan sopimuksen sovitteluun sovelletaan, mitä kuluttajansuojalaissa 
+                                    <ref href="/akn/fi/act/statute-consolidated/1978/38">(38/78)</ref>
+                                     säädetään.
+                                </p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_37v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>37 §</num>
+                        <subsection eId="chp_3__sec_37v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Ehto, jonka mukaan sitoumuksen vakuudeksi annettu pantti tai muu vakuus on menetetty, jos sitoumusta ei täytetä, on tehoton.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_3__sec_38v19820956" finlex:originalVersion="@19820956" finlex:originalVersionLabel="17.12.1982/956">
+                        <num>38 §</num>
+                        <subsection eId="chp_3__sec_38v19820956__subsec_1v19820956">
+                            <content>
+                                <p>Sopimus, jolla joku kilpailun estämiseksi tai rajoittamiseksi on sitoutunut olemaan harjoittamatta tiettyä tai tietynlaista toimintaa tai olemaan tekemättä työsopimusta jonkun kanssa, joka harjoittaa sellaista toimintaa, ei sido sitoumuksen antajaa siltä osin kuin se kohtuuttomasti rajoittaa hänen toimintavapauttaan.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+                <chapter eId="chp_4">
+                    <num>4 luku</num>
+                    <heading eId="chp_4__heading">Erinäisiä määräyksiä</heading>
+                    <section eId="chp_4__sec_39">
+                        <num>39 §</num>
+                        <subsection eId="chp_4__sec_39__subsec_1">
+                            <content>
+                                <p>Jos tämän lain mukaan sopimuksen tai muun oikeustoimen pätevyys riippuu siitä, ettei se, johon oikeustoimi on kohdistettu, ole tietänyt eikä hänen voida katsoa pitäneen tietää jostakin olosuhteesta, tahi että hän muuten on ollut vilpittömässä mielessä, on huomioon otettava se, mitä hän on tietänyt tai hänen olisi pitänyt tietää silloin, kun hän sai tiedon oikeustoimesta. Kuitenkin voidaan, milloin erityiset asianhaarat antavat siihen aihetta, ottaa huomioon myös mitä hän on tietänyt tai hänen olisi pitänyt tietää sanotun ajan jälkeen, mutta ennenkuin oikeustoimi oli vaikuttanut määräävästi hänen toimintaansa.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_40">
+                        <num>40 §</num>
+                        <subsection eId="chp_4__sec_40__subsec_1">
+                            <content>
+                                <p>Jos jonkun on tämän lain mukaan tehtävä toiselle ilmoitus, uhalla että muuten sopimus katsotaan tehdyksi tai tarjous hyväksytyksi tahi oikeustoimi, jonka hän on tehnyt tai joka on tehty hänen puolestaan, tulee häntä sitovaksi, ja jos sellainen ilmoitus on jätetty postitse tai sähköteitse toimitettavaksi perille tahi on muuten tarkoituksenmukaisesti lähetetty, ei se seikka, että ilmoitus myöhästyy tai ei tule perille, aiheuta sitä, ettei lähettäjän katsota täyttäneen ilmoitusvelvollisuuttaan.</p>
+                            </content>
+                        </subsection>
+                        <subsection eId="chp_4__sec_40__subsec_2">
+                            <content>
+                                <p>Tarjouksen, vastauksen ja valtuutuksen peruuttamisesta olkoon voimassa, mitä 7, 12 ja 18 §:ssä on säädetty.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_41">
+                        <num>41 §</num>
+                        <subsection eId="chp_4__sec_41__subsec_1">
+                            <content>
+                                <p>Täten kumotaan kauppakaaren 1 luvun 1 § ja muutetaan muut tämän lain vastaiset säännökset.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                    <section eId="chp_4__sec_42" finlex:entryIntoForce="true" finlex:vsId="228/1929">
+                        <num>42 §</num>
+                        <subsection eId="chp_4__sec_42__subsec_1">
+                            <content>
+                                <p>Tämä laki tulee voimaan 1 päivänä heinäkuuta 1929.</p>
+                            </content>
+                        </subsection>
+                    </section>
+                </chapter>
+            </hcontainer>
+            <hcontainer name="amendmentEntryIntoForceAndApplianceProvisions">
+                <heading>Muutossäädösten voimaantulo ja soveltaminen</heading>
+                <hcontainer eId="entryIntoForce_19820956" name="entryIntoForce">
+                    <heading>17.12.1982/956:</heading>
+                    <content>
+                        <p>Tämä laki tulee voimaan 1 päivänä tammikuuta 1983. Sitä sovelletaan myös ennen lain voimaantuloa tehtyihin oikeustoimiin.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1981/247">HE 247/81</ref>, lvk.miet. 6/82, svk.miet. 136/82
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19941260" name="entryIntoForce">
+                    <heading>16.12.1994/1260:</heading>
+                    <content>
+                        <p>Tämä laki tulee voimaan 1 päivänä tammikuuta 1995.</p>
+                        <p>Ennen lain voimaantuloa tehtyihin sopimuksiin sovelletaan lain voimaan tullessa voimassa olleita säännöksiä.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1994/218">HE 218/94</ref>, TaVM 31/94
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19960810" name="entryIntoForce">
+                    <heading>1.11.1996/810:</heading>
+                    <content>
+                        <p>Tämä laki tulee voimaan 1 päivänä joulukuuta 1996. Siirtymäsäännökset annetaan erikseen lailla. </p>
+                        <block eId="note_2" finlex:outline="huomautus" name="noteAuthorial">
+                            Ks. siirtymäsäännöksistä L 
+                            <ref href="/akn/fi/act/statute-consolidated/1996/818">818/1996</ref>.
+                        </block>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1996/92">HE 92/1996</ref>, LaVM 10/1996, 
+                            <a href="https://www.eduskunta.fi/valtiopaivaasiakirjat/EV+123/1996">EV 123/1996</a>
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_19990449" name="entryIntoForce">
+                    <heading>1.4.1999/449:</heading>
+                    <content>
+                        <p>Tämä laki tulee voimaan 1 päivänä joulukuuta 1999.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/1998/146">HE 146/1998</ref>, LaVM 20/1998, 
+                            <a href="https://www.eduskunta.fi/valtiopaivaasiakirjat/EV+234/1998">EV 234/1998</a>
+                        </p>
+                    </content>
+                </hcontainer>
+                <hcontainer eId="entryIntoForce_20040128" name="entryIntoForce">
+                    <heading>20.2.2004/128:</heading>
+                    <content>
+                        <p>Tämä laki tulee voimaan 1 päivänä syyskuuta 2004.</p>
+                        <p>Jos konkurssi on alkanut ennen tämän lain voimaantuloa, tämän lain asemesta sovelletaan lain voimaan tullessa voimassa ollutta säännöstä.</p>
+                        <p>
+                            <ref href="/akn/fi/doc/government-proposal/2003/26">HE 26/2003</ref>, LaVM 6/2003, 
+                            <a href="https://www.eduskunta.fi/valtiopaivaasiakirjat/EV+113/2003">EV 113/2003</a>
+                        </p>
+                    </content>
+                </hcontainer>
+            </hcontainer>
+        </body>
+    </act>
+</akomaNtoso>
+</Results></AknXmlList>

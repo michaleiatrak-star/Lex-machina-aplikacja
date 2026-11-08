@@ -134,3 +134,25 @@ describe("Luxembourg: Legilux Akoma Ntoso", () => {
     expect(second.text).toContain("Art. 170-1.");
   });
 });
+
+describe("Finland: Finlex Akoma Ntoso", () => {
+  it("Finnish consolidated text, amending act at the section, no legal force", async () => {
+    const { readFinland } = await import("../src/eli/readers.js");
+    const reading = readFinland(fixture("fi-oikeustoimilaki.xml"), "opendata.finlex.fi/…/statute-consolidated/1929/228");
+    expect(reading.title).toBe("Laki varallisuusoikeudellisista oikeustoimista");
+    expect(reading.version).toBe("ujednolicony do 2004/128");
+    expect(reading.status).toMatch(/bez mocy urzędowej/u);
+    const s36 = reading.articles.find((article) => article.unit === "36")!;
+    expect(s36.text).toMatch(/^Jos oikeustoimen ehto on kohtuuton/u);
+    expect(s36.amendments).toEqual([{ act: "17.12.1982/956" }]);
+    expect(reading.articles).toHaveLength(42);
+  });
+
+  it("chapters restarting the numbering: unit names the chapter", async () => {
+    const { readFinland } = await import("../src/eli/readers.js");
+    const reading = readFinland(fixture("fi-rikoslaki-luvut.xml"), "opendata.finlex.fi/…/statute-consolidated/1889/39-001/fin@20150564");
+    const legality = reading.articles.find((article) => article.unit === "3 luku 1")!;
+    expect(legality.heading).toBe("3 luku 1 § Laillisuusperiaate");
+    expect(legality.text).toMatch(/^Rikokseen syylliseksi saa katsoa vain/u);
+  });
+});

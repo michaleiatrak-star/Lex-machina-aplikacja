@@ -288,6 +288,49 @@ export function readLuxembourg(xml: string, source: string): NationalReading {
   return { country: "LU", source, ...(title ? { title } : {}), articles, version: "publikacja w Journal officiel (Mémorial A)", status: "tekst urzędowy Legilux (legalValue: officiel)" };
 }
 
+/**
+ * Finland, Finlex open data (Akoma Ntoso, no key): /akn/fi/act/statute-consolidated/{year}/{number}
+ * answers every expression of the act (Finnish and Swedish, the newest versions); the reader keeps
+ * the Finnish one with the highest version number (the amending act it is consolidated to). The
+ * consolidated text has no legal force (FRBRauthoritative false): the Statute Book (statute/…) has.
+ * A section changed by an amendment carries finlex:originalVersionLabel ("17.12.1982/956").
+ */
+export function readFinland(xml: string, source: string, language = "fin"): NationalReading {
+  const docs = xml.split(/<akomaNtoso\b/u).slice(1);
+  const own = docs.filter((doc) => new RegExp(`<FRBRlanguage language="${language}"`, "u").test(doc));
+  const versionOf = (doc: string) => /<FRBRversionNumber value="(\d+)"/u.exec(doc)?.[1] ?? "";
+  const doc = (own.length ? own : docs).sort((a, b) => versionOf(b).localeCompare(versionOf(a)))[0] ?? xml;
+  const authoritative = /<FRBRauthoritative value="true"/u.test(doc);
+  const consolidated = /statute-consolidated/u.test(/<FRBRuri value="([^"]+)"/u.exec(doc)?.[1] ?? "");
+  const chapters = [...doc.matchAll(/<chapter eId="[^"]+"[^>]*>\s*<num>([^<]*)<\/num>/gu)].map((match) => ({ at: match.index!, number: match[1]!.replace(/\s*luku\s*$/iu, "").replace(/\s+/gu, "").toLowerCase() }));
+  type Raw = { chapter?: string; number: string; heading: string; body: string; label?: string };
+  const sections: Raw[] = [];
+  for (const match of doc.matchAll(/<section eId="[^"]+"([^>]*)>\s*<num>([^<]*)<\/num>/gu)) {
+    const end = doc.indexOf("</section>", match.index!);
+    const block = doc.slice(match.index!, end > 0 ? end : undefined);
+    const chapter = chapters.filter((item) => item.at < match.index!).at(-1)?.number;
+    const label = /finlex:originalVersionLabel="([^"]+)"/u.exec(match[1]!)?.[1];
+    const heading = plainText(/<heading[^>]*>([\s\S]*?)<\/heading>/u.exec(block)?.[1] ?? "");
+    sections.push({ ...(chapter ? { chapter } : {}), number: match[2]!.replace(/\s*§\s*$/u, "").replace(/\s+/gu, " ").trim(), heading, body: plainText(block.replace(/<num>[\s\S]*?<\/num>/u, "").replace(/<heading[^>]*>[\s\S]*?<\/heading>/u, "")), ...(label ? { label } : {}) });
+  }
+  const numbers = sections.map((section) => section.number);
+  const restarts = new Set(numbers).size < numbers.length;
+  const articles = sections.map((section): NationalArticle => {
+    const prefix = restarts && section.chapter ? `${section.chapter} luku ` : "";
+    return { unit: `${prefix}${section.number}`, heading: `${prefix}${section.number} §${section.heading ? ` ${section.heading}` : ""}`, text: section.body, amendments: section.label ? [{ act: section.label }] : [] };
+  });
+  const title = plainText(/<docTitle>([\s\S]*?)<\/docTitle>/u.exec(doc)?.[1] ?? "");
+  const version = versionOf(doc);
+  return {
+    country: "FI",
+    source,
+    ...(title ? { title } : {}),
+    version: consolidated ? (version ? `ujednolicony do ${version.slice(0, 4)}/${Number(version.slice(4))}` : "ujednolicony (Finlex)") : "tekst pierwotny (Suomen säädöskokoelma)",
+    articles,
+    status: authoritative ? "tekst urzędowy Suomen säädöskokoelma (Finlex)" : "tekst ujednolicony Finlex (ajantasainen lainsäädäntö), bez mocy urzędowej; moc ma Suomen säädöskokoelma"
+  };
+}
+
 export type PdfReading =
   | { kind: "TEKST"; text: string; pages: number }
   | { kind: "SKAN"; pages: number; note: string }
