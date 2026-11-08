@@ -3,7 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
-import { readBelgium, readCzech, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland } from "./readers.js";
 const READERS = [
     { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
     { country: "NL", hosts: /^wetten\.overheid\.nl$/u, read: readNetherlands },
@@ -57,6 +57,31 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
             version: version ? `wersja od ${version.inForce} (${version.act})` : "brak wersji na tę datę",
             articles: version ? [{ unit: block.replace(/^a/u, ""), heading: article.title, text: version.text, amendments: article.versions.filter((item) => item.act !== id).map((item) => ({ act: item.act, inForce: item.inForce })) }] : []
         };
+    }
+    // Austria: RIS OGD API (no key): the norm by short title or abbreviation ("ABGB") and § / Art.
+    // The address names the act: …/ris/api/v2.6/Bundesrecht?Titel=ABGB, or any ris.bka.gv.at URL with Titel=.
+    if (/^(?:www\.|ogd\.|data\.)?(?:ris\.)?bka\.gv\.at$/u.test(host)) {
+        const title = url.searchParams.get("Titel") ?? url.searchParams.get("Kurztitel");
+        if (!title || !request.unit)
+            throw new Error("NATIONAL_LAW_AT_TITLE_AND_UNIT_REQUIRED");
+        const number = request.unit.replace(/^(?:§|art\.?|artikel)\s*/iu, "").trim();
+        const kind = /^art/iu.test(request.unit) ? "Artikel" : "Paragraph";
+        const search = new URL("https://data.bka.gv.at/ris/api/v2.6/Bundesrecht");
+        search.search = new URLSearchParams({ Applikation: "BrKons", Titel: title, "Abschnitt.Von": number, "Abschnitt.Bis": number, "Abschnitt.Typ": kind, ...(request.date ? { FassungVom: request.date } : {}) }).toString();
+        const found = await fetchImpl(search.href, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(60_000) });
+        if (!found.ok)
+            throw new Error(`NATIONAL_LAW_SOURCE_${found.status}`);
+        const data = JSON.parse(new TextDecoder().decode(await found.arrayBuffer()));
+        const raw = data.OgdSearchResult?.OgdDocumentResults?.OgdDocumentReference;
+        const refs = (Array.isArray(raw) ? raw : raw ? [raw] : []);
+        const xmlUrl = refs[0]?.Data?.Dokumentliste?.ContentReference?.Urls?.ContentUrl?.find((item) => item.DataType === "Xml")?.Url;
+        if (!xmlUrl || !/^https:\/\/ogd\.ris\.bka\.gv\.at\//u.test(xmlUrl))
+            return { country: "AT", url: search.href, status: "RIS: normy nie znaleziono", articles: [] };
+        const doc = await fetchImpl(xmlUrl, { headers: { accept: "application/xml" }, signal: AbortSignal.timeout(60_000) });
+        if (!doc.ok)
+            throw new Error(`NATIONAL_LAW_SOURCE_${doc.status}`);
+        const reading = readAustria(new TextDecoder().decode(await doc.arrayBuffer()), xmlUrl);
+        return { country: "AT", url: xmlUrl, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles: reading.articles };
     }
     // Czech Republic: e-Sbírka's public cache (no key): metadata of the version, then its fragments.
     if (/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u.test(host)) {

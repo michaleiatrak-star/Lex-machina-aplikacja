@@ -82,3 +82,15 @@ describe("Czech Republic: e-Sbírka fragments without a key", () => {
     expect(first.amendments).toContainEqual({ act: "87/2024 Sb." });
   });
 });
+
+describe("Austria: RIS OGD norm XML", () => {
+  it("the § with its text, the last amending act and the date in force", async () => {
+    const { readAustria } = await import("../src/eli/readers.js");
+    const reading = readAustria(fixture("at-abgb-879.xml"), "ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR12018602/NOR12018602.xml");
+    const article = reading.articles[0]!;
+    expect(article.unit).toBe("879");
+    expect(article.text).toMatch(/^§ 879\. \(1\) Ein Vertrag, der gegen ein gesetzliches Verbot oder gegen die guten Sitten verstößt, ist nichtig\./u);
+    expect(article.amendments).toEqual([{ act: "BGBl. Nr. 275/1992", inForce: "1992-07-01" }]);
+    expect(reading.title).toBe("Allgemeines bürgerliches Gesetzbuch");
+  });
+});

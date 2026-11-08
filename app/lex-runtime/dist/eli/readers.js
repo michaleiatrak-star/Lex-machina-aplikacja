@@ -148,6 +148,32 @@ export function readCzech(fragments, meta, source) {
         status: "tekst z e-Sbírki (publiczny cache portalu; oficjalne REST API wymaga klucza)"
     };
 }
+/**
+ * Austria, RIS OGD (data.bka.gv.at/ris/api/v2.6, no key): the norm found by Titel and
+ * Abschnitt (§ or Art.) has an XML at ogd.ris.bka.gv.at; its metadata name the last amending act
+ * ("zuletzt geändert durch") and the date in force, the text follows the "Text" heading. RIS
+ * consolidated federal law is official for the RIS documents marked authentic; otherwise informative.
+ */
+export function readAustria(xml, source) {
+    const field = (ct) => plainText(new RegExp(`<absatz[^>]*ct="${ct}"[^>]*>([\\s\\S]*?)<\\/absatz>`, "u").exec(xml)?.[1] ?? "");
+    const unit = plainText(/<gldsym>([\s\S]*?)<\/gldsym>/u.exec(xml)?.[1] ?? "").replace(/\.$/u, "");
+    const textStart = xml.search(/<ueberschrift[^>]*>Text<\/ueberschrift>/u);
+    const body = textStart >= 0 ? xml.slice(textStart).replace(/<ueberschrift[^>]*>Text<\/ueberschrift>/u, "") : "";
+    const text = plainText(body.replace(/<\/(?:absatz|listelem)>/gu, "\n"));
+    // "JGS Nr. 946/1811 zuletzt geändert durch BGBl. Nr. 275/1992" (field Kundmachungsorgan).
+    const changed = /zuletzt geändert durch\s+(.+)$/u.exec(field("kundmachungsorgan"))?.[1]?.trim() ?? "";
+    const inForce = field("ikra");
+    const date = /^(\d{2})\.(\d{2})\.(\d{4})$/u.exec(inForce);
+    const heading = (text.split("\n")[0] ?? "").split(/\s/u).slice(0, 2).join(" ");
+    return {
+        country: "AT",
+        source,
+        ...(field("kurztitel") ? { title: field("kurztitel") } : {}),
+        version: `wersja od ${date ? `${date[3]}-${date[2]}-${date[1]}` : inForce || "?"}`,
+        articles: text ? [{ unit: (unit || heading).replace(/^(?:§|Art\.)\s*/u, "").replace(/\.$/u, ""), heading: unit || heading, text, amendments: changed ? [{ act: changed, ...(date ? { inForce: `${date[3]}-${date[2]}-${date[1]}` } : {}) }] : [] }] : [],
+        status: "RIS Bundesrecht konsolidiert (OGD)"
+    };
+}
 const RAG_NOTE = "skan bez warstwy tekstowej: kandydat do OCR i indeksu RAG, nie brzmienie zweryfikowane";
 /** A legislation PDF: its text layer is read; pages without one are named for OCR/RAG. */
 export async function readLegislationPdf(data) {

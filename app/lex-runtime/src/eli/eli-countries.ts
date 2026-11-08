@@ -115,7 +115,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     consolidation: "wersja-z-data",
     example: "https://www.ris.bka.gv.at/eli/bgbl/I/2018/30/20180516",
     api: { url: "https://data.bka.gv.at/ris/api/v2.6", kind: "REST", auth: "brak", probe: "https://data.bka.gv.at/ris/api/v2.6/Bundesrecht?Applikation=BrKons&Titel=ABGB", checked: "200 application/json (OgdSearchResult)" },
-    text: { reading: "BLOKADA", note: "portal RIS: kontrola bezpieczeństwa; API RIS OGD odpowiada (wyniki wyszukiwania)" },
+    text: { reading: "CZYTNIK", note: "readAustria: API RIS OGD (bez klucza) Titel + Abschnitt → XML normy z ogd.ris.bka.gv.at; ostatnia zmiana i data wejścia w życie; portal www.ris.bka.gv.at blokuje automaty" },
     source: REGISTER("austria"),
     level: "ADRES-NIEPOTWIERDZONY",
     checked: "503",
@@ -342,7 +342,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     level: "BRAK-SZABLONU",
     checked: "200 (portal); szablonu aktu rejestr nie podaje"
   },
-  { code: "CZ", name: "Czechy", family: "kontynentalne", portal: "https://e-sbirka.gov.cz", pillars: "1", consolidation: "wersja-z-data", api: { url: "https://api.e-sbirka.gov.cz", kind: "REST", auth: "klucz", probe: "bez nagłówka esel-api-access-key", checked: "401 NEPLATNY_API_KLIC (klucz: wniosek do datové schránky MV 6bnaawp, temat „e-Sbírka a e-Legislativa – registrace REST API”, ocena do 10 dni roboczych; nagłówek esel-api-access-key)" }, text: { reading: "KLUCZ", note: "e-Sbírka: strona JavaScript, API api.e-sbirka.gov.cz odpowiada 401 (klucz)" },
+  { code: "CZ", name: "Czechy", family: "kontynentalne", portal: "https://e-sbirka.gov.cz", pillars: "1", consolidation: "wersja-z-data", api: { url: "https://api.e-sbirka.gov.cz", kind: "REST", auth: "klucz", probe: "bez nagłówka esel-api-access-key", checked: "401 NEPLATNY_API_KLIC (klucz: wniosek do datové schránky MV 6bnaawp, temat „e-Sbírka a e-Legislativa – registrace REST API”, ocena do 10 dni roboczych; nagłówek esel-api-access-key)" }, text: { reading: "CZYTNIK", note: "readCzech: publiczny cache portalu e-Sbírka (bez klucza): …/sbr-cache/dokumenty-sbirky/{staleUrl} i …/fragmenty; dane otwarte opendata.eselpoint.gov.cz (SPARQL, zbiory JSON-LD); REST API z kluczem MV" },
     source: "https://e-sbirka.gov.cz/pristup-pres-stale-url-a-eli", level: "BRAK-SZABLONU", checked: "200 (strona schematu ładowana skryptem; schemat do odczytania ręcznie)" },
   { code: "SK", name: "Słowacja", family: "kontynentalne", portal: "https://www.slov-lex.sk", pillars: "1", consolidation: "nieustalone", text: { reading: "JS", note: "Slov-Lex wymaga JavaScriptu; publicznego API nie znaleziono (kod strony i wyszukiwanie, 2026-11-08)" },
     source: REGISTER("slovakia"), level: "BRAK-SZABLONU", checked: "rejestr nie podaje szablonu" },
