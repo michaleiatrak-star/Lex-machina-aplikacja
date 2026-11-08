@@ -4,7 +4,7 @@
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
 
@@ -26,7 +26,26 @@ const PDF_HOSTS: Array<{ country: string; hosts: RegExp }> = [
   { country: "TR", hosts: /^(?:www\.)?mevzuat\.gov\.tr$/u }
 ];
 
-export type NationalLawRequest = { url: string; unit?: string; date?: string };
+// `country`: the chosen legal system (jurisdiction.ts); another country's source is refused.
+export type NationalLawRequest = { url: string; unit?: string; date?: string; country?: string };
+
+// The country of each official host this module reads (the readers below and the API branches).
+const HOST_COUNTRIES: Array<[RegExp, string]> = [
+  [/^(?:www\.)?boe\.es$/u, "ES"],
+  [/^(?:www\.|ogd\.|data\.)?(?:ris\.)?bka\.gv\.at$/u, "AT"],
+  [/^(?:data\.|www\.)?riksdagen\.se$/u, "SE"],
+  [/^(?:data\.|www\.)?legilux\.public\.lu$/u, "LU"],
+  [/^(?:www\.)?e-sbirka\.(?:gov\.)?cz$/u, "CZ"],
+  [/^(?:www\.|data\.|opendata\.)?finlex\.fi$/u, "FI"],
+  [/^(?:www\.)?legifrance\.gouv\.fr$/u, "FR"],
+  [/^(?:www\.)?riigiteataja\.ee$/u, "EE"]
+];
+
+/** The country whose official source the address is, or null for a host this module does not read. */
+export function nationalLawCountry(host: string): string | null {
+  const name = host.toLowerCase();
+  return HOST_COUNTRIES.find(([pattern]) => pattern.test(name))?.[1] ?? READERS.find((item) => item.hosts.test(name))?.country ?? PDF_HOSTS.find((item) => item.hosts.test(name))?.country ?? null;
+}
 
 export type NationalLawAnswer = {
   country: string;
@@ -42,7 +61,7 @@ export type NationalLawAnswer = {
 export type NationalFetch = (url: string, init: { headers: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; headers: { get(name: string): string | null }; arrayBuffer(): Promise<ArrayBuffer> }>;
 
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
   const wanted = unit.replace(/^(?:art\.?|artikel|article|artículo|čl\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
@@ -59,6 +78,10 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && /legilux|dre\.pt/u.test(url.hostname))) throw new Error("NATIONAL_LAW_URL_INVALID");
   const host = url.hostname.toLowerCase();
+  const sourceCountry = nationalLawCountry(host);
+  if (!sourceCountry) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
+  // Only the chosen legal system's sources: the other countries are off (user, 2026-11-08).
+  if (request.country && request.country !== sourceCountry) throw new Error(`NATIONAL_LAW_COUNTRY_DISABLED:${sourceCountry}`);
 
   // Spain: the BOE API by identifier and block ("BOE-A-2015-10565" + "a28").
   if (/^(?:www\.)?boe\.es$/u.test(host)) {
@@ -153,6 +176,45 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
       articles: version ? [{ unit: version.num, heading: `Article ${version.num}`, text: version.text, amendments: version.links.map((act) => ({ act })) }] : [],
       ...(answer.others.length ? { note: `inne wersje: ${answer.others.map((item) => `${item.from}–${item.to < "2999" ? item.to : "…"} (${item.state})`).join("; ")}` } : {})
     };
+  }
+
+  // Estonia: Riigi Teataja public API (no key). The act by its id (…/akt/{globaalID}) or by its title
+  // (…/akt?pealkiri=Võlaõigusseadus): the search lists every version with its validity; the one in
+  // force on the date (today by default) is read as XML.
+  if (/^(?:www\.)?riigiteataja\.ee$/u.test(host)) {
+    const json = async (address: string) => {
+      const reply = await fetchImpl(address, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return JSON.parse(new TextDecoder().decode(await reply.arrayBuffer())) as Record<string, unknown>;
+    };
+    let id = /\/akt\/(\d{6,})/u.exec(url.pathname)?.[1];
+    const title = url.searchParams.get("pealkiri")?.trim();
+    const date = request.date ?? new Date().toISOString().slice(0, 10);
+    if (title) {
+      type Hit = { globaalID: number; pealkiri: string; tekst: string; mitteJoustunud: boolean; kehtivus: { algus: string; lopp: string | null } };
+      const hits: Hit[] = [];
+      for (let page = 1; page <= 10; page += 1) {
+        const search = new URL("https://www.riigiteataja.ee/api/oigusakt_otsing/1/otsi");
+        search.search = new URLSearchParams({ pealkiri: title, leht: String(page), limiit: "100" }).toString();
+        const data = await json(search.href);
+        const list = (data.aktid as Hit[] | undefined) ?? [];
+        hits.push(...list);
+        const meta = data.metaandmed as { kokku?: number } | undefined;
+        if (!list.length || hits.length >= Number(meta?.kokku ?? 0)) break;
+      }
+      const exact = hits.filter((hit) => hit.pealkiri.toLocaleLowerCase("et") === title.toLocaleLowerCase("et") && hit.tekst === "terviktekst");
+      const inForce = exact.filter((hit) => hit.kehtivus.algus <= date && (!hit.kehtivus.lopp || date <= hit.kehtivus.lopp));
+      id = String((inForce.find((hit) => !hit.mitteJoustunud) ?? inForce[0])?.globaalID ?? "") || undefined;
+      if (!id) return { country: "EE", url: url.href, status: "Riigi Teataja: brak wersji aktu obowiązującej w tym dniu", articles: [] };
+    }
+    if (!id) throw new Error("NATIONAL_LAW_EE_ACT_REQUIRED");
+    const xmlUrl = `https://www.riigiteataja.ee/public-api/api/v1/akt/${id}/blob-xml`;
+    const reply = await fetchImpl(xmlUrl, { headers: { accept: "application/xml" }, signal: AbortSignal.timeout(120_000) });
+    if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+    const reading = readEstonia(new TextDecoder().decode(await reply.arrayBuffer()), xmlUrl);
+    const wanted = request.unit?.replace(/§/gu, "").replace(/\.$/u, "").trim();
+    const articles = wanted ? reading.articles.filter((article) => article.unit === wanted) : reading.articles.slice(0, 20);
+    return { country: "EE", url: `https://www.riigiteataja.ee/akt/${id}`, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
   }
 
   // Finland: Finlex open data (no key), the act by year and number from any Finlex address

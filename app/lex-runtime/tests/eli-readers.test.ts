@@ -156,3 +156,16 @@ describe("Finland: Finlex Akoma Ntoso", () => {
     expect(legality.text).toMatch(/^Rikokseen syylliseksi saa katsoa vain/u);
   });
 });
+
+describe("Estonia: Riigi Teataja XML", () => {
+  it("paragraphs with their sections and the amending act of a section", async () => {
+    const { readEstonia } = await import("../src/eli/readers.js");
+    const reading = readEstonia(fixture("ee-volaoigusseadus.xml"), "riigiteataja.ee/public-api/api/v1/akt/120062026018/blob-xml");
+    expect(reading.title).toBe("Võlaõigusseadus");
+    expect(reading.version).toBe("wersja od 2026-09-01 do 2026-12-31");
+    const s106 = reading.articles.find((article) => article.unit === "106")!;
+    expect(s106.heading).toBe("§ 106. Vastutusest vabastamise või vastutuse piiramise kokkulepe");
+    expect(s106.text).toMatch(/^\(1\) Võlgnik ja võlausaldaja võivad eelnevalt kokku leppida/u);
+    expect(reading.articles.find((article) => article.unit === "1")!.amendments[0]).toEqual({ act: "RT I, 131122013001", inForce: "2014-06-13" });
+  });
+});

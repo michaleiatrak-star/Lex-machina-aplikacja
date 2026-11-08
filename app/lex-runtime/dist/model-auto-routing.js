@@ -233,7 +233,7 @@ export class ModelAutoRouter {
         // 11-12B model spends minutes just reading it before the first token.
         // Local models route from the compact catalog below instead.
         const localModel = args.model.startsWith("local/");
-        const routingMap = localModel
+        const routingMap = localModel || !activeJurisdictionPack()
             ? null
             : this.registry
                 .resolveResource(activeJurisdictionPack(), jurisdictionDomainMap(this.registry.root));

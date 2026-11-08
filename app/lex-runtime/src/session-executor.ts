@@ -287,7 +287,7 @@ import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } fr
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
-import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
+import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
@@ -1737,6 +1737,7 @@ export class SafeSessionExecutor implements SessionExecutor {
   // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
   private flashRoutes(): FlashRoute[] {
     const facade = activeJurisdictionPack();
+    if (!facade) return [];
     if (this.flashRoutesCache?.root === `${this.registry.root}:${facade}`) return this.flashRoutesCache.rows;
     // The chosen jurisdiction's facade (Polish law: prawo-polskie-v2) holds its flash routing.
     const rows = parseFlashRouting(this.readCorpus(`${facade}/SKILL.md`) ?? "");
@@ -2493,10 +2494,13 @@ export class SafeSessionExecutor implements SessionExecutor {
             return null;
           }
         });
+    // Polish courts, the Polish core-law corpus and ELI/ISAP verification serve Polish law only:
+    // another chosen country has them off (user, 2026-11-08: "inne wtedy wyłączasz").
+    const polishSystem = activeCountry() === "PL";
     const toolSchemas = [
       ...(nativeCorpus ? [] : corpusTools.schemas()),
-      ...(courtTools ? courtTools.schemas() : []),
-      ...(coreLawTools
+      ...(courtTools && polishSystem ? courtTools.schemas() : []),
+      ...(coreLawTools && polishSystem
         ? coreLawTools.schemas()
         : []),
       ...(caseFileTools ? caseFileTools.schemas() : []),
@@ -2505,7 +2509,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(federationTools
         ? localFederation ? federationTools.localSchemas() : federationTools.schemas()
         : []),
-      ...(verificationTools ? verificationTools.schemas() : [])
+      ...(verificationTools && polishSystem ? verificationTools.schemas() : [])
     ];
     // Mandatory path (hosted models): the profile, the corpus files the router's
     // mandatory gates require, loaded up front, and the mode decided at the entry.
@@ -2569,6 +2573,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     ]);
     corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
+    // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
+    const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
+    if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
     // the skill also by what the user delivers (ACTIVATION-MATRIX).

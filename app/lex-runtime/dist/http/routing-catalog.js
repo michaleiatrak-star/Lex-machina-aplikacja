@@ -25,7 +25,7 @@ export class RoutingCatalog {
                 reason: "SKILL_NOT_FOUND"
             };
         }
-        const routingMap = this.registry.resolveResource(activeJurisdictionPack(), jurisdictionDomainMap(this.registry.root));
+        const routingMap = activeJurisdictionPack() && this.registry.resolveResource(activeJurisdictionPack(), jurisdictionDomainMap(this.registry.root));
         if (!routingMap) {
             return {
                 valid: false,

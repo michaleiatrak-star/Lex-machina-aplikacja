@@ -10,7 +10,8 @@ import { CaseAccessError } from "../case-access.js";
 import { buildLegiIndex, defaultLegiIndexDir, latestLegiDump } from "../eli/fr-legi.js";
 import { promises as legiFs } from "node:fs";
 import legiPath from "node:path";
-import { activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveJurisdictionPack } from "../jurisdiction.js";
+import { activeCountry, activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveCountry, setActiveJurisdictionPack } from "../jurisdiction.js";
+import { ELI_COUNTRIES } from "../eli/eli-countries.js";
 function requireAdmin(req, res, authService) {
     return authorize(req, res, authService, true);
 }
@@ -375,9 +376,22 @@ export function registerMcpConnectorRoutes(app, dependencies) {
     const jurisdictionView = () => {
         const root = connectors.corpusRoot;
         const active = activeJurisdictionPack();
+        const providers = listJurisdictions(root);
         return {
             active,
-            jurisdictions: listJurisdictions(root).map((provider) => {
+            // The legal system the application applies: one country, the others off (jurisdiction.ts).
+            country: activeCountry(),
+            countries: [...ELI_COUNTRIES]
+                .map((entry) => ({
+                code: entry.code,
+                name: entry.name,
+                reading: entry.text?.reading ?? "DO-ZBADANIA",
+                note: entry.text?.note ?? "",
+                portal: entry.portal,
+                pack: providers.find((provider) => provider.country === entry.code)?.pack ?? null
+            }))
+                .sort((a, b) => a.name.localeCompare(b.name, "pl")),
+            jurisdictions: providers.map((provider) => {
                 const status = jurisdictionStatus(provider);
                 return {
                     pack: provider.pack,
@@ -400,15 +414,20 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         if (!requireAdmin(req, res, authService))
             return;
         const pack = req.body?.pack;
-        if (typeof pack !== "string" || !listJurisdictions(connectors.corpusRoot).some((provider) => provider.pack === pack)) {
+        const country = typeof req.body?.country === "string" ? req.body.country.trim().toUpperCase() : null;
+        const knownPack = typeof pack === "string" && listJurisdictions(connectors.corpusRoot).some((provider) => provider.pack === pack);
+        if (!knownPack && !(country && ELI_COUNTRIES.some((entry) => entry.code === country))) {
             res.status(400).json({ error: "JURISDICTION_UNKNOWN" });
             return;
         }
-        if (process.env.LEX_JURISDICTION_PACK?.trim()) {
+        if (process.env.LEX_JURISDICTION_PACK?.trim() || process.env.LEX_JURISDICTION_COUNTRY?.trim()) {
             res.status(409).json({ error: "JURISDICTION_FIXED_BY_DEPLOYMENT" });
             return;
         }
-        setActiveJurisdictionPack(connectors.corpusRoot, pack);
+        if (country)
+            setActiveCountry(connectors.corpusRoot, country);
+        else
+            setActiveJurisdictionPack(connectors.corpusRoot, pack);
         connectors.jurisdictionChanged();
         res.json(jurisdictionView());
     });

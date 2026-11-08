@@ -331,6 +331,37 @@ export function readFinland(xml: string, source: string, language = "fin"): Nati
   };
 }
 
+/**
+ * Estonia, Riigi Teataja (public API, no key): the XML of a consolidated text version
+ * (…/public-api/api/v1/akt/{globaalID}/blob-xml, schema tyviseadus): paragrahv with its
+ * lõiked, the amending act of each lõige (muutmismarge: RT reference and date in force).
+ */
+export function readEstonia(xml: string, source: string): NationalReading {
+  const title = plainText(/<aktinimi>\s*<nimi>\s*<pealkiri>([\s\S]*?)<\/pealkiri>/u.exec(xml)?.[1] ?? /<pealkiri>([\s\S]*?)<\/pealkiri>/u.exec(xml)?.[1] ?? "");
+  const from = /<kehtivuseAlgus>(\d{4}-\d{2}-\d{2})/u.exec(xml)?.[1];
+  const to = /<kehtivuseLopp>(\d{4}-\d{2}-\d{2})/u.exec(xml)?.[1];
+  const articles = [...xml.matchAll(/<paragrahv\b[^>]*>([\s\S]*?)<\/paragrahv>/gu)].map((match): NationalArticle => {
+    const block = match[1]!;
+    const number = /<paragrahvNr>([^<]+)<\/paragrahvNr>/u.exec(block)?.[1]?.trim() ?? "";
+    const heading = plainText(/<paragrahvPealkiri>([\s\S]*?)<\/paragrahvPealkiri>/u.exec(block)?.[1] ?? "");
+    const amendments = [...block.matchAll(/<muutmismarge>([\s\S]*?)<\/muutmismarge>/gu)].map((change) => {
+      const rt = /<RTosa>([^<]+)<\/RTosa>[\s\S]*?<aktViide>([^<]+)<\/aktViide>/u.exec(change[1]!);
+      const inForce = /<joustumine>(\d{4}-\d{2}-\d{2})/u.exec(change[1]!)?.[1];
+      return { act: rt ? `${rt[1]}, ${rt[2]}` : plainText(change[1]!), ...(inForce ? { inForce } : {}) };
+    });
+    const text = plainText(block.replace(/>\s+</gu, "><").replace(/<\/(loige|alampunkt)>/gu, "\n</$1>").replace(/<muutmismarge>[\s\S]*?<\/muutmismarge>/gu, "").replace(/<paragrahvNr>[\s\S]*?<\/paragrahvNr>/u, "").replace(/<paragrahvPealkiri>[\s\S]*?<\/paragrahvPealkiri>/u, "").replace(/<(?:loigeNr|alampunktNr)>[^<]*<\/(?:loigeNr|alampunktNr)>/gu, "").replace(/<kuvatavNr><!\[CDATA\[§[^\]]*\]\]><\/kuvatavNr>/u, "").replace(/<kuvatavNr><!\[CDATA\[([^\]]*)\]\]><\/kuvatavNr>\s*/gu, "$1 "));
+    return { unit: number, heading: `§ ${number}.${heading ? ` ${heading}` : ""}`, text, amendments };
+  });
+  return {
+    country: "EE",
+    source,
+    ...(title ? { title } : {}),
+    version: from ? `wersja od ${from}${to ? ` do ${to}` : ""}` : "tekst ujednolicony (Riigi Teataja)",
+    articles,
+    status: "tekst ujednolicony Riigi Teataja (terviktekst, urzędowy)"
+  };
+}
+
 export type PdfReading =
   | { kind: "TEKST"; text: string; pages: number }
   | { kind: "SKAN"; pages: number; note: string }

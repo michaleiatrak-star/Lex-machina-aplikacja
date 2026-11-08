@@ -1,0 +1,880 @@
+<?xml version="1.0" encoding="UTF-8"?><oigusakt xmlns="Juurakt" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="0eac7b2a-09f0-437d-87e9-c53910bc2206" xsi:schemaLocation="tyviseadus_1_10.02.2010 https://varamu.riha.ee/resources/Oigusakt/tyviseadus_1_10.02.2010.xsd">
+	<metaandmed>
+		<valjaandja>Riigikogu</valjaandja>
+		<dokumentLiik>seadus</dokumentLiik>
+		<tekstiliik>terviktekst</tekstiliik>
+		
+		<lyhend>VÕS</lyhend><dokumentEtapp>avaldamine</dokumentEtapp>
+		<dokumentStaatus>avaldatud</dokumentStaatus>
+		<vastuvoetud>
+			<aktikuupaev>2001-09-26</aktikuupaev>
+			<avaldamismarge>
+				<RTosa>RT I</RTosa>
+				<RTaasta>2001</RTaasta>
+				<RTnr>81</RTnr>
+				<RTartikkel>487</RTartikkel>
+				<aktViide>73181</aktViide>
+			</avaldamismarge>
+			<joustumine>2002-07-01</joustumine>
+		</vastuvoetud>
+		
+		<avaldamismarge><RTosa>RT I</RTosa><avaldamineKuupaev>2026-06-20+03:00</avaldamineKuupaev><RTaasta>2026</RTaasta><RTartikkel>18</RTartikkel><aktViide>120062026018</aktViide></avaldamismarge><kehtivus>
+			<kehtivuseAlgus>2026-09-01</kehtivuseAlgus>
+			<kehtivuseLopp>2026-12-31+02:00</kehtivuseLopp>
+		</kehtivus>
+		<versioon>
+			<dokumentVersioonKuupaev>2011-06-06</dokumentVersioonKuupaev>
+		</versioon>
+		<skeemiNimi>tyviseadus_1_10.02.2010.xsd</skeemiNimi>
+		<globaalID>120062026018</globaalID>
+		<metaandmedVersioon>172</metaandmedVersioon>
+		<metaandmedVersioonKuupaev>2026-07-11</metaandmedVersioonKuupaev>
+		<metaandmedVersioonPohjustaja>Maret Mauer</metaandmedVersioonPohjustaja>
+		<terviktekstiGrupiID>153569</terviktekstiGrupiID>
+		<eesmark>Tüviseaduse raamskeem XML struktuuri koostamiseks</eesmark>
+	</metaandmed>
+	<aktinimi>
+		<nimi>
+			<pealkiri>Võlaõigusseadus</pealkiri>
+			<normtehnmarkus>
+				<normtehnmarkusNr>1</normtehnmarkusNr>
+			</normtehnmarkus>
+		</nimi>
+	</aktinimi>
+	<muutmismarge>
+		<aktikuupaev>2002-06-05</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2002</RTaasta>
+			<RTnr>53</RTnr>
+			<RTartikkel>336</RTartikkel>
+			<aktViide>174795</aktViide>
+		</avaldamismarge>
+		<joustumine>2002-07-01</joustumine>
+		<tavatekst>, osaliselt 01.09.2002, 01.01.2003 ja 01.07.2003</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<tavatekst>terviktekst RT paberkandjal</tavatekst>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2002</RTaasta>
+			<RTnr>60</RTnr>
+			<RTartikkel>374</RTartikkel>
+			<aktViide>175519</aktViide>
+		</avaldamismarge>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2003-11-19</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2003</RTaasta>
+			<RTnr>78</RTnr>
+			<RTartikkel>523</RTartikkel>
+			<aktViide>685541</aktViide>
+		</avaldamismarge>
+		<joustumine>2003-12-27</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2004-02-11</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2004</RTaasta>
+			<RTnr>13</RTnr>
+			<RTartikkel>86</RTartikkel>
+			<aktViide>715202</aktViide>
+		</avaldamismarge>
+		<joustumine>2004-04-15</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2004-04-22</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2004</RTaasta>
+			<RTnr>37</RTnr>
+			<RTartikkel>255</RTartikkel>
+			<aktViide>745265</aktViide>
+		</avaldamismarge>
+		<joustumine>2004-05-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2004-10-20</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2004</RTaasta>
+			<RTnr>75</RTnr>
+			<RTartikkel>522</RTartikkel>
+			<aktViide>813499</aktViide>
+		</avaldamismarge>
+		<joustumine>2004-11-10</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2004-12-08</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2004</RTaasta>
+			<RTnr>87</RTnr>
+			<RTartikkel>593</RTartikkel>
+			<aktViide>827848</aktViide>
+		</avaldamismarge>
+		<joustumine>2005-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2004-12-08</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2004</RTaasta>
+			<RTnr>90</RTnr>
+			<RTartikkel>616</RTartikkel>
+			<aktViide>831362</aktViide>
+		</avaldamismarge>
+		<joustumine>2005-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2005-06-15</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2005</RTaasta>
+			<RTnr>39</RTnr>
+			<RTartikkel>308</RTartikkel>
+			<aktViide>919178</aktViide>
+		</avaldamismarge>
+		<joustumine>2006-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2005-10-19</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2005</RTaasta>
+			<RTnr>61</RTnr>
+			<RTartikkel>473</RTartikkel>
+			<aktViide>958493</aktViide>
+		</avaldamismarge>
+		<joustumine>2006-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2007-10-11</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2007</RTaasta>
+			<RTnr>56</RTnr>
+			<RTartikkel>375</RTartikkel>
+			<aktViide>12874304</aktViide>
+		</avaldamismarge>
+		<joustumine>2007-12-12</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2008-11-19</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2008</RTaasta>
+			<RTnr>54</RTnr>
+			<RTartikkel>304</RTartikkel>
+			<aktViide>13087219</aktViide>
+		</avaldamismarge>
+		<joustumine>2008-12-27</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2008-12-10</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2008</RTaasta>
+			<RTnr>59</RTnr>
+			<RTartikkel>330</RTartikkel>
+			<aktViide>13099767</aktViide>
+		</avaldamismarge>
+		<joustumine>2009-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2009-02-25</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2009</RTaasta>
+			<RTnr>18</RTnr>
+			<RTartikkel>108</RTartikkel>
+			<aktViide>13157608</aktViide>
+		</avaldamismarge>
+		<joustumine>2009-05-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2009-11-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2009</RTaasta>
+			<RTnr>60</RTnr>
+			<RTartikkel>395</RTartikkel>
+			<aktViide>13240237</aktViide>
+		</avaldamismarge>
+		<joustumine>2010-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2009-12-17</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2010</RTaasta>
+			<RTnr>2</RTnr>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>13256098</aktViide>
+		</avaldamismarge>
+		<joustumine>2010-01-22</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2010-01-28</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2010</RTaasta>
+			<RTnr>7</RTnr>
+			<RTartikkel>30</RTartikkel>
+			<aktViide>13275330</aktViide>
+		</avaldamismarge>
+		<joustumine>2010-02-26</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2010-04-22</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2010</RTaasta>
+			<RTnr>22</RTnr>
+			<RTartikkel>108</RTartikkel>
+			<aktViide>13310847</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-01-01</joustumine>
+		<tavatekst> jõustub päeval, mis on kindlaks määratud Euroopa Liidu Nõukogu otsuses Eesti Vabariigi suhtes kehtestatud erandi kehtetuks tunnistamise kohta Euroopa Liidu toimimise lepingu artikli 140 lõikes 2 sätestatud alusel, Euroopa Liidu Nõukogu 13.07.2010. a otsus Nr 2010/416/EL (ELT L 196, 28.07.2010, lk 24–26).</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2010-09-30</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<RTaasta>2010</RTaasta>
+			<RTnr>77</RTnr>
+			<RTartikkel>590</RTartikkel>
+			<aktViide>13364145</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-02-23</joustumine>
+		<tavatekst>, osaliselt 01.07.2011</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2010-11-17</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2010-12-06</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>106122010001</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-04-05</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2010-11-25</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2010-12-21</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>121122010001</aktViide>
+		</avaldamismarge>
+		<joustumine>2010-12-31</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2011-01-12</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2011-02-04</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>104022011001</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-04-05</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2011-01-20</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2011-02-04</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>104022011002</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-02-23</joustumine>
+		<tavatekst>, osaliselt 05.04.2011 ja 01.07.2011</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2011-06-09</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2011-06-29</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>129062011001</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-06-30</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2011-06-16</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2011-07-08</avaldamineKuupaev>
+			<RTartikkel>6</RTartikkel>
+			<aktViide>108072011006</aktViide>
+		</avaldamismarge>
+		<joustumine>2011-07-18</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2012-11-14</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2012-12-03</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>103122012001</aktViide>
+		</avaldamismarge>
+		<joustumine>2013-05-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2013-03-20</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2013-04-05</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>105042013001</aktViide>
+		</avaldamismarge>
+		<joustumine>2013-04-15</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2013-05-23</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2013-06-11</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>111062013003</aktViide>
+		</avaldamismarge>
+		<joustumine>2013-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2013-11-15</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2013-11-29</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>129112013001</aktViide>
+		</avaldamismarge>
+		<joustumine>2013-12-09</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2013-12-12</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2013-12-31</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>131122013001</aktViide>
+		</avaldamismarge>
+		<joustumine>2014-06-13</joustumine>
+		<tavatekst>, osaliselt 10.01.2014; seaduse 20. peatükis asendatud läbivalt sõna „pakkuja” sõnaga „ettevõtja” vastavas käändes</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2014-03-26</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2014-04-11</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>111042014001</aktViide>
+		</avaldamismarge>
+		<joustumine>2014-10-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2014-06-19</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2014-06-29</avaldamineKuupaev>
+			<RTartikkel>109</RTartikkel>
+			<aktViide>129062014109</aktViide>
+		</avaldamismarge>
+		<joustumine>2014-07-01</joustumine>
+		<tavatekst>, Vabariigi Valitsuse seaduse § 107³ lõike 4 alusel asendatud ministrite ametinimetused.</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2015-02-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2015-03-11</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>111032015001</aktViide>
+		</avaldamismarge>
+		<joustumine>2015-10-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2015-02-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2015-03-12</avaldamineKuupaev>
+			<RTartikkel>5</RTartikkel>
+			<aktViide>112032015005</aktViide>
+		</avaldamismarge>
+		<joustumine>2015-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2015-02-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2015-03-23</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>123032015002</aktViide>
+		</avaldamismarge>
+		<joustumine>2015-10-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2015-02-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2015-03-23</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>123032015003</aktViide>
+		</avaldamismarge>
+		<joustumine>2015-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2015-06-10</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2015-07-07</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>107072015001</aktViide>
+		</avaldamismarge>
+		<joustumine>2016-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2016-02-23</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2016-03-11</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>111032016001</aktViide>
+		</avaldamismarge>
+		<joustumine>2016-03-21</joustumine>
+		<tavatekst>, osaliselt 01.07.2016</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2016-12-14</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2016-12-31</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>131122016001</aktViide>
+		</avaldamismarge>
+		<joustumine>2017-01-10</joustumine>
+		<tavatekst>, osaliselt 31.10.2018, üheksa kuud pärast Euroopa Parlamendi ja nõukogu direktiivi 2014/92/EL maksekontoga seotud tasude võrreldavuse, maksekonto vahetamise ja põhimaksekontole juurdepääsu kohta (ELT L 257, 28.08.2014, lk 214–246) artikli 3 lõikes 4 nimetatud Euroopa Komisjoni rakendusmääruse (ELT L 6, 11.01.2018, lk 3–25) jõustumist.</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-02-08</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-02-22</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>122022017001</aktViide>
+		</avaldamismarge>
+		<joustumine>2018-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-06-14</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-07-01</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>101072017001</aktViide>
+		</avaldamismarge>
+		<joustumine>2017-09-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-10-26</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-11-17</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>117112017002</aktViide>
+		</avaldamismarge>
+		<joustumine>2017-11-27</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-10-26</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-11-17</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>117112017003</aktViide>
+		</avaldamismarge>
+		<joustumine>2018-02-23</joustumine>
+		<tavatekst>, osaliselt 03.01.2018. Jõustumine 23.02.2018 muudetud - jõustub Euroopa Parlamendi ja nõukogu direktiivi (EL) 2016/97, mis käsitleb kindlustustoodete turustamist (uuesti sõnastatud) (ELT L 26, 02.02.2016, lk 19–59), rakendamiskuupäeval [RT I, 30.12.2017, 3] – Euroopa Parlamendi ja Nõukogu direktiiv (EL) 2018/411, 14. märts 2018, millega muudetakse direktiivi (EL) 2016/97 seoses liikmesriikide ülevõtmismeetmete kohaldamise kuupäevaga (ELT L 76, 19.03.2018, lk 28-29) – 01.10.2018</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-11-15</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-12-07</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>107122017001</aktViide>
+		</avaldamismarge>
+		<joustumine>2018-01-13</joustumine>
+		<tavatekst>, osaliselt 14.09.2019 s.o 18 kuud pärast Euroopa Parlamendi ja nõukogu direktiivi 2015/2366/EL makseteenuste kohta siseturul, direktiivide 2002/65/EÜ, 2009/110/EÜ ning 2013/36/EL ja määruse (EL) nr 1093/2010 muutmise ning direktiivi 2007/64/EÜ kehtetuks tunnistamise kohta (ELT L 337, 23.12.2015, lk 35–127) artiklis 98 nimetatud Euroopa Komisjoni rakendusmääruse jõustumist. Komisjoni delegeeritud määrus (EL) 2018/389, 27. november 2017, millega täiendatakse Euroopa Parlamendi ja nõukogu direktiivi (EL) 2015/2366 regulatiivsete tehniliste standarditega, mis käsitlevad kliendi tugevat autentimist ning ühiseid ja turvalisi teabevahetuse avatud standardeid, avaldati Euroopa Liidu Teatajas 13. märtsil 2018 ja jõustus 14. märtsil 2018.</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-12-06</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-12-28</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>128122017003</aktViide>
+		</avaldamismarge>
+		<joustumine>2018-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2017-12-13</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2017-12-30</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>130122017003</aktViide>
+		</avaldamismarge>
+		<joustumine>2018-01-03</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2019-01-30</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2019-02-20</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>120022019002</aktViide>
+		</avaldamismarge>
+		<joustumine>2019-03-02</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2019-11-13</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2019-12-04</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>104122019001</aktViide>
+		</avaldamismarge>
+		<joustumine>2019-12-14</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2019-12-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2020-01-08</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>108012020001</aktViide>
+		</avaldamismarge>
+		<joustumine>2020-01-17</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2020-12-16</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2021-01-04</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>104012021002</aktViide>
+		</avaldamismarge>
+		<joustumine>2021-01-14</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2021-09-14</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2021-09-21</avaldamineKuupaev>
+			<RTartikkel>4</RTartikkel>
+			<aktViide>121092021004</aktViide>
+		</avaldamismarge>
+		<joustumine>2021-11-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2021-11-10</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2021-11-24</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>124112021001</aktViide>
+		</avaldamismarge>
+		<joustumine>2022-01-01</joustumine>
+		<tavatekst>, osaliselt 28.05.2022</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2021-11-24</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2021-12-08</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>108122021002</aktViide>
+		</avaldamismarge>
+		<joustumine>2022-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2022-02-23</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2022-03-15</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>115032022002</aktViide>
+		</avaldamismarge>
+		<joustumine>2022-03-25</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2022-04-13</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2022-04-29</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>129042022001</aktViide>
+		</avaldamismarge>
+		<joustumine>2024-11-01</joustumine>
+		<tavatekst>, jõustumine muudetud [RT I, 21.06.2024, 2]</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2022-11-16</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2022-12-02</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>102122022002</aktViide>
+		</avaldamismarge>
+		<joustumine>2022-12-12</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2023-02-08</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2023-03-01</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>101032023003</aktViide>
+		</avaldamismarge>
+		<joustumine>2023-03-11</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2023-02-22</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2023-03-17</avaldamineKuupaev>
+			<RTartikkel>5</RTartikkel>
+			<aktViide>117032023005</aktViide>
+		</avaldamismarge>
+		<joustumine>2023-03-27</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2023-06-20</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2023-07-06</avaldamineKuupaev>
+			<RTartikkel>6</RTartikkel>
+			<aktViide>106072023006</aktViide>
+		</avaldamismarge>
+		<joustumine>2024-01-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2024-06-04</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2024-06-21</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>121062024002</aktViide>
+		</avaldamismarge>
+		<joustumine>2024-07-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2024-06-12</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2024-07-04</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>104072024002</aktViide>
+		</avaldamismarge>
+		<joustumine>2024-07-14</joustumine>
+		<tavatekst>, osaliselt 01.01.2025</tavatekst>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2025-06-18</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2025-07-08</avaldamineKuupaev>
+			<RTartikkel>4</RTartikkel>
+			<aktViide>108072025004</aktViide>
+		</avaldamismarge>
+		<joustumine>2025-07-15</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2025-10-15</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2025-11-11</avaldamineKuupaev>
+			<RTartikkel>1</RTartikkel>
+			<aktViide>111112025001</aktViide>
+		</avaldamismarge>
+		<joustumine>2025-11-21</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2026-05-13</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2026-05-27</avaldamineKuupaev>
+			<RTartikkel>2</RTartikkel>
+			<aktViide>127052026002</aktViide>
+		</avaldamismarge>
+		<joustumine>2026-09-01</joustumine>
+	</muutmismarge>
+	<muutmismarge>
+		<aktikuupaev>2026-06-10</aktikuupaev>
+		<avaldamismarge>
+			<RTosa>RT I</RTosa>
+			<avaldamineKuupaev>2026-06-20</avaldamineKuupaev>
+			<RTartikkel>3</RTartikkel>
+			<aktViide>120062026003</aktViide>
+		</avaldamismarge>
+		<joustumine>2026-06-30</joustumine>
+	</muutmismarge>
+	<sisu>
+		<osa id="osa1">
+			<osaNr>1</osaNr>
+			<kuvatavNr><![CDATA[1. osa]]></kuvatavNr>
+			<osaPealkiri>ÜLDOSA</osaPealkiri>
+			<peatykk id="ptk1">
+				<peatykkNr>1</peatykkNr>
+				<kuvatavNr><![CDATA[1. peatükk]]></kuvatavNr>
+				<peatykkPealkiri>ÜLDSÄTTED</peatykkPealkiri>
+				<paragrahv id="para106">
+						<paragrahvNr>106</paragrahvNr>
+						<kuvatavNr><![CDATA[§ 106.]]></kuvatavNr>
+						<paragrahvPealkiri>Vastutusest vabastamise või vastutuse piiramise kokkulepe</paragrahvPealkiri>
+						<loige id="para106lg1">
+							<loigeNr>1</loigeNr>
+							<kuvatavNr><![CDATA[(1)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Võlgnik ja võlausaldaja võivad eelnevalt kokku leppida kohustuse rikkumise eest vastutuse välistamises või piiramises.</tavatekst>
+							</sisuTekst>
+						</loige>
+						<loige id="para106lg2">
+							<loigeNr>2</loigeNr>
+							<kuvatavNr><![CDATA[(2)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Tühine on kokkulepe, millega välistatakse vastutus või piiratakse seda kohustuse tahtliku rikkumise puhuks, samuti kokkulepe, mis võimaldab võlgnikul täita kohustuse oluliselt erinevana võlausaldaja poolt mõistlikult eeldatust või mis muul viisil ebamõistlikult välistab vastutuse või piirab seda.</tavatekst>
+							</sisuTekst>
+						</loige>
+					</paragrahv>
+<paragrahv id="para107">
+						<paragrahvNr>107</paragrahvNr>
+						<kuvatavNr><![CDATA[§ 107.]]></kuvatavNr>
+						<paragrahvPealkiri>Heastamine</paragrahvPealkiri>
+						<loige id="para107lg1">
+							<loigeNr>1</loigeNr>
+							<kuvatavNr><![CDATA[(1)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Lepingulist kohustust rikkunud lepingupool võib rikkumise oma kulul heastada, muu hulgas mittekohase täitmise parandada või asendada, kuni teine lepingupool ei ole lepingust taganenud, seda üles öelnud või nõudnud kohustuse täitmise asemel kahju hüvitamist, kui:</tavatekst>
+							</sisuTekst>
+							<alampunkt id="para107lg1p1">
+								<alampunktNr>1</alampunktNr>
+								<kuvatavNr><![CDATA[1)]]></kuvatavNr>
+								<sisuTekst>
+									<tavatekst>heastamine on vastavalt asjaoludele mõistlik ja</tavatekst>
+								</sisuTekst>
+							</alampunkt>
+							<alampunkt id="para107lg1p2">
+								<alampunktNr>2</alampunktNr>
+								<kuvatavNr><![CDATA[2)]]></kuvatavNr>
+								<sisuTekst>
+									<tavatekst>heastamisega ei põhjustata kahjustatud lepingupoolele põhjendamatuid ebamugavusi ega kulutusi ja</tavatekst>
+								</sisuTekst>
+							</alampunkt>
+							<alampunkt id="para107lg1p3">
+								<alampunktNr>3</alampunktNr>
+								<kuvatavNr><![CDATA[3)]]></kuvatavNr>
+								<sisuTekst>
+									<tavatekst>kahjustatud lepingupoolel ei ole õigustatud huvi heastamisest keelduda.</tavatekst>
+								</sisuTekst>
+							</alampunkt>
+						</loige>
+						<loige id="para107lg2">
+							<loigeNr>2</loigeNr>
+							<kuvatavNr><![CDATA[(2)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Kohustust rikkunud lepingupool võib kohustuse rikkumise heastada mõistliku aja jooksul pärast seda, kui ta on kahjustatud lepingupoolele teatanud heastamise kavatsusest, pakutavast heastamise viisist ja ajast ning kahjustatud lepingupool, kellel on heastamisest keeldumiseks õigustatud huvi, ei ole mõistliku aja jooksul teatanud, et ta ei ole heastamisega nõus.</tavatekst>
+							</sisuTekst>
+						</loige>
+						<loige id="para107lg3">
+							<loigeNr>3</loigeNr>
+							<kuvatavNr><![CDATA[(3)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Kahjustatud lepingupool võib heastamise teate saamisest kuni heastamise lõppemiseni või selle ebaõnnestumiseni oma kohustuse täitmisest keelduda. Muid õiguskaitsevahendeid võib ta heastamise ajal kasutada üksnes juhul, kui need ei ole heastamisega vastuolus.</tavatekst>
+							</sisuTekst>
+						</loige>
+						<loige id="para107lg4">
+							<loigeNr>4</loigeNr>
+							<kuvatavNr><![CDATA[(4)]]></kuvatavNr>
+							<sisuTekst>
+								<tavatekst>Heastamine ei võta kahjustatud lepingupoolelt õigust nõuda kohustuse täitmisega viivitamise ja rikkumise heastamisega tekitatud kahju hüvitamist, muu hulgas viivise või leppetrahvi maksmist.</tavatekst>
+							</sisuTekst>
+						</loige>
+					</paragrahv>
+<paragrahv id="para1">
+					<paragrahvNr>1</paragrahvNr>
+					<kuvatavNr><![CDATA[§ 1.]]></kuvatavNr>
+					<paragrahvPealkiri>Seaduse kohaldamine</paragrahvPealkiri>
+					<loige id="para1lg1">
+						<loigeNr>1</loigeNr>
+						<kuvatavNr><![CDATA[(1)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Käesoleva seaduse üldosas sätestatut kohaldatakse kõikidele käesolevas seaduses või muudes seadustes nimetatud lepingutele, muu hulgas töölepingule, ja muudele mitmepoolsetele tehingutele, samuti lepingutele, mida ei ole küll seaduses nimetatud, kuid mis ei ole seaduse sisu ja mõttega vastuolus, samuti võlasuhetele, mis ei ole tekkinud lepingust.</tavatekst>
+						</sisuTekst>
+					</loige>
+					<loige id="para1lg2">
+						<loigeNr>2</loigeNr>
+						<kuvatavNr><![CDATA[(2)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Kui leping vastab kahe või enama seaduses sätestatud lepinguliigi tunnustele, kohaldatakse nende lepinguliikide kohta seaduses sätestatut üheaegselt, välja arvatud sätted, mille üheaegne kohaldamine ei ole võimalik või mille kohaldamine oleks vastuolus lepingu olemuse või eesmärgiga.</tavatekst>
+						</sisuTekst>
+					</loige>
+					<loige id="para1lg3">
+						<loigeNr>3</loigeNr>
+						<kuvatavNr><![CDATA[(3)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Rohkem kui kahe poole vahel sõlmitud lepingutele (mitmepoolne leping) kohaldatakse käesolevas seaduses lepingute kohta sätestatut, kui see ei ole vastuolus lepingu olemuse ega eesmärgiga.</tavatekst>
+						</sisuTekst>
+					</loige>
+					<loige id="para1lg4">
+						<loigeNr>4</loigeNr>
+						<kuvatavNr><![CDATA[(4)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Seadusest võib tuleneda, et lepingule või muule võlasuhtele kohaldatakse erireegleid juhul, kui lepingu või võlasuhte pooleks on tarbija või ettevõtja.</tavatekst>
+						</sisuTekst>
+						<muutmismarge>
+							<avaldamismarge>
+								<RTosa>RT I</RTosa>
+								<avaldamineKuupaev>2013-12-31</avaldamineKuupaev>
+								<RTartikkel>1</RTartikkel>
+								<aktViide>131122013001</aktViide>
+							</avaldamismarge>
+							<joustumine>2014-06-13</joustumine>
+						</muutmismarge>
+					</loige>
+					<loige id="para1lg5">
+						<loigeNr>5</loigeNr>
+						<kuvatavNr><![CDATA[(5)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Tarbija käesoleva seaduse tähenduses on füüsiline isik, kes teeb tehingu, mis ei seondu iseseisva majandus- või kutsetegevuse läbiviimisega.</tavatekst>
+						</sisuTekst>
+						<muutmismarge>
+							<avaldamismarge>
+								<RTosa>RT I</RTosa>
+								<avaldamineKuupaev>2013-12-31</avaldamineKuupaev>
+								<RTartikkel>1</RTartikkel>
+								<aktViide>131122013001</aktViide>
+							</avaldamismarge>
+							<joustumine>2014-06-13</joustumine>
+						</muutmismarge>
+					</loige>
+					<loige id="para1lg6">
+						<loigeNr>6</loigeNr>
+						<kuvatavNr><![CDATA[(6)]]></kuvatavNr>
+						<sisuTekst>
+							<tavatekst>Ettevõtja käesoleva seaduse tähenduses on isik, sealhulgas avalik-õiguslik juriidiline isik, kes teeb tehingu, mis seondub iseseisva majandus- või kutsetegevuse läbiviimisega.</tavatekst>
+						</sisuTekst>
+						<muutmismarge>
+							<avaldamismarge>
+								<RTosa>RT I</RTosa>
+								<avaldamineKuupaev>2013-12-31</avaldamineKuupaev>
+								<RTartikkel>1</RTartikkel>
+								<aktViide>131122013001</aktViide>
+							</avaldamismarge>
+							<joustumine>2014-06-13</joustumine>
+						</muutmismarge>
+					</loige>
+				</paragrahv></oigusakt>

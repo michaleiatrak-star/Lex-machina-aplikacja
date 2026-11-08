@@ -4124,7 +4124,9 @@ export type JurisdictionOption = {
   missing: string[];
 };
 
-export type JurisdictionSettings = { active: string; jurisdictions: JurisdictionOption[] };
+export type LegalSystemOption = { code: string; name: string; reading: string; note: string; portal: string; pack: string | null };
+
+export type JurisdictionSettings = { active: string; country: string; countries: LegalSystemOption[]; jurisdictions: JurisdictionOption[] };
 
 export function getJurisdiction(): Promise<JurisdictionSettings> {
   return json("/api/settings/jurisdiction");
@@ -4132,6 +4134,11 @@ export function getJurisdiction(): Promise<JurisdictionSettings> {
 
 export function setJurisdiction(pack: string): Promise<JurisdictionSettings> {
   return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ pack }) });
+}
+
+/** The legal system the application applies: one country, the others off. */
+export function setLegalSystem(country: string): Promise<JurisdictionSettings> {
+  return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ country }) });
 }
 
 export type LegiIndexStatus = {

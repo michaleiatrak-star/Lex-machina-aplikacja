@@ -65,7 +65,8 @@ export class TurnOutcomeModel {
     this.router = new TurnRouter(corpusRoot);
     this.signals = parseModeSignals(read("prawny-router-v3/references/KROK1-detekcja.md"));
     this.routes = parseRoutingTable(read("prawny-router-v3/SKILL.md"));
-    this.flash = parseFlashRouting(read(`${activeJurisdictionPack()}/SKILL.md`));
+    const pack = activeJurisdictionPack();
+    this.flash = pack ? parseFlashRouting(read(`${pack}/SKILL.md`)) : [];
     this.accents = buildAccentMap(executiveSkillTexts(this.router.registry));
   }
 

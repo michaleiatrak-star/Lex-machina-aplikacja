@@ -34,7 +34,7 @@ export class RoutingCatalog {
       };
     }
 
-    const routingMap = this.registry.resolveResource(
+    const routingMap = activeJurisdictionPack() && this.registry.resolveResource(
       activeJurisdictionPack(),
       jurisdictionDomainMap(this.registry.root)
     );

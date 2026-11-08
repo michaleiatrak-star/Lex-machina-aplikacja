@@ -1,4 +1,5 @@
 import { personalDataIn } from "./tool-broker-policy.js";
+import { activeCountry } from "./jurisdiction.js";
 import { readNationalLaw } from "./eli/national-law.js";
 import { LegalSourceFallbackStore, withSourceFallback } from "./legal-source-fallback.js";
 import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
@@ -445,8 +446,8 @@ const NATIONAL_LAW_SCHEMA = {
     type: "function",
     function: {
         name: NATIONAL_LAW_TOOL,
-        description: "Read the text of an article of another country's legislation from its official source (not Poland: Polish provisions go through verify_legal_reference). " +
-            "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), MC (legimonaco.mc), LV (likumi.lv), LU (legilux.public.lu ELI of an act), SE (data.riksdagen.se/dokument/sfs-{year}-{number}, unit \"36 §\" or \"3 kap. 5 §\"), FR (legifrance.gouv.fr address with LEGITEXT/LEGIARTI id + unit, read from the local LEGI index, without legal force; date gives the version in force), FI (finlex.fi or data.finlex.fi/eli/sd/{year}/{number}, consolidated text without legal force, unit \"36 §\" or \"3 luku 1 §\"; /alkup for the Statute Book original), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
+        description: "Read the text of an article of the legislation of the country chosen as the legal system in Settings, from its official source (offered only when that country is not Poland; another country's source is refused). " +
+            "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), MC (legimonaco.mc), LV (likumi.lv), LU (legilux.public.lu ELI of an act), SE (data.riksdagen.se/dokument/sfs-{year}-{number}, unit \"36 §\" or \"3 kap. 5 §\"), FR (legifrance.gouv.fr address with LEGITEXT/LEGIARTI id + unit, read from the local LEGI index, without legal force; date gives the version in force), EE (riigiteataja.ee act title or …/akt/{id}, unit \"§ 106\"; date gives the version in force), FI (finlex.fi or data.finlex.fi/eli/sd/{year}/{number}, consolidated text without legal force, unit \"36 §\" or \"3 luku 1 §\"; /alkup for the Statute Book original), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
             "The answer gives the article, the source's legal status and the amending acts the source names; a scanned PDF is reported as such and is never quoted.",
         parameters: {
             type: "object",
@@ -786,7 +787,8 @@ export class LegalFederationToolRuntime {
             FETCH_AUXILIARY_SOURCE_SCHEMA,
             WEB_SEARCH_SCHEMA,
             COVERAGE_SCHEMA,
-            NATIONAL_LAW_SCHEMA
+            // Another country's law only when that country is the chosen legal system (jurisdiction.ts).
+            ...(activeCountry() === "PL" ? [] : [NATIONAL_LAW_SCHEMA])
         ];
     }
     handles(name) {
@@ -1026,7 +1028,7 @@ export class LegalFederationToolRuntime {
             const url = typeof call.input.url === "string" ? call.input.url.trim() : "";
             const unit = typeof call.input.unit === "string" ? call.input.unit.trim().slice(0, 40) : undefined;
             const date = typeof call.input.date === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(call.input.date) ? call.input.date : undefined;
-            const answer = await readNationalLaw({ url, ...(unit ? { unit } : {}), ...(date ? { date } : {}) });
+            const answer = await readNationalLaw({ url, ...(unit ? { unit } : {}), ...(date ? { date } : {}), country: activeCountry() });
             // Kept for the quote check of this turn (quote-source-check.ts): "art. N" with its wording.
             for (const article of answer.articles) {
                 this.readings.push({ claim: `art. ${article.unit.replace(/^(?:art\.?|§)\s*/iu, "")} (${answer.country})`, evidence: article.text });

@@ -489,7 +489,7 @@ export class ModelAutoRouter {
       );
 
     const routingMap =
-      localModel
+      localModel || !activeJurisdictionPack()
         ? null
         : this.registry
         .resolveResource(
