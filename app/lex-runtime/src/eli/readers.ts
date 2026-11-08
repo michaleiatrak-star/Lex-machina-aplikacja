@@ -532,6 +532,129 @@ export function readParagraf(html: string, source: string, country: string): Nat
   return { country, source, articles, version: "tekst jednolity wydawcy (Paragraf Lex)", status: "tekst nieurzędowy (Paragraf Lex) — tylko do odnalezienia przepisu; brzmienie potwierdź w dzienniku urzędowym" };
 }
 
+// ---- Common law (family "common-law" in the register): statutes AND judgments are sources. ----
+
+/**
+ * United Kingdom, legislation.gov.uk (The National Archives, open API): …/{type}/{year}/{number}/section/{n}/data.xml
+ * is the revised text of a section (…/section/{n}/{YYYY-MM-DD}/data.xml at a date). P1 = section, P2 = subsection;
+ * the F-commentaries name the amending acts with the date in force ("substituted (3.1.1995) by 1994 c. 35").
+ */
+export function readUnitedKingdom(xml: string, source: string): NationalReading {
+  const commentaries = new Map<string, { act: string; inForce?: string }>();
+  for (const [, id, body] of xml.matchAll(/<Commentary id="([^"]+)" Type="F">([\s\S]*?)<\/Commentary>/gu)) {
+    const text = plainText(body!).replace(/\s+/gu, " ").trim();
+    const date = /\((\d{1,2})\.(\d{1,2})\.(\d{4})\)/u.exec(text);
+    commentaries.set(id!, { act: text.slice(0, 240), ...(date ? { inForce: `${date[3]}-${date[2]!.padStart(2, "0")}-${date[1]!.padStart(2, "0")}` } : {}) });
+  }
+  const articles = [...xml.matchAll(/<P1\b[^>]*id="section-([0-9A-Z]+)"[^>]*>([\s\S]*?)<\/P1>/gu)].map(([, number, body]): NationalArticle => {
+    const parts = [...body!.matchAll(/<P2\b[^>]*>\s*<Pnumber>([\s\S]*?)<\/Pnumber>([\s\S]*?)<\/P2>/gu)].map(([, sub, text]) => `(${plainText(sub!)}) ${plainText(text!).replace(/\s+/gu, " ").trim()}`);
+    const text = parts.length ? parts.join("\n") : plainText(body!.replace(/<Pnumber>[\s\S]*?<\/Pnumber>/u, "")).replace(/\s+/gu, " ").trim();
+    const used = [...new Set([...body!.matchAll(/CommentaryRef="([^"]+)"/gu)].map((match) => match[1]!))];
+    return { unit: number!, heading: `section ${number}`, text: `${number}. ${text}`, amendments: used.map((id) => commentaries.get(id)).filter((item): item is { act: string; inForce?: string } => Boolean(item)) };
+  });
+  const title = plainText(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/u.exec(xml)?.[1] ?? "");
+  const start = /RestrictStartDate="(\d{4}-\d{2}-\d{2})"/u.exec(xml)?.[1];
+  return { country: "GB", source, ...(title ? { title } : {}), articles, version: `revised${start ? `, wersja od ${start}` : ""} (legislation.gov.uk)`, status: "tekst urzędowy zrewidowany (The National Archives, legislation.gov.uk)" };
+}
+
+/**
+ * Ireland, Irish Statute Book (Office of the Attorney General): …/eli/{year}/act/{number}/section/{n}/enacted/en/html
+ * (or the whole act) is the text as enacted; a section opens with "<b>N.</b>—".
+ */
+export function readIreland(html: string, source: string): NationalReading {
+  const content = html.slice(Math.max(0, html.indexOf('class="act-content"'))).split(/Acts? Referred to/u)[0]!;
+  const text = plainText(content.replace(/<b>(\d+[A-Z]?)\.<\/b>\s*(?:&mdash;|—|-)/gu, "\n§§$1§§ "));
+  const marks = [...text.matchAll(/§§(\d+[A-Z]?)§§/gu)];
+  const articles = marks.map((match, index): NationalArticle => {
+    const body = text.slice(match.index! + match[0].length, marks[index + 1]?.index ?? text.length).replace(/\s*\n\s*/gu, "\n").trim();
+    return { unit: match[1]!, heading: `section ${match[1]}`, text: `${match[1]}.—${body}`, amendments: [] };
+  });
+  return { country: "IE", source, articles, version: "tekst uchwalony (enacted); zmiany w aktach zmieniających lub w Revised Acts (Law Reform Commission)", status: "tekst urzędowy (Irish Statute Book)" };
+}
+
+/**
+ * Cyprus, CyLaw (Pancyprian Bar Association, consolidated, unofficial): …/nomoi/enop/non-ind/{id}/full.html,
+ * windows-1253; div.full-section with header, text "N.-(1) …" and the amending laws of that section.
+ */
+export function readCyprus(html: string, source: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  for (const section of html.split('<div class="full-section">').slice(1)) {
+    const text = plainText(/<div class="full-section-text">([\s\S]*?)<\/div>/u.exec(section)?.[1] ?? "").trim();
+    const number = /^(\d+[Α-ΩA-Z]?)\./u.exec(text)?.[1];
+    if (!number) continue;
+    const header = plainText(/<div class="full-section-header">([\s\S]*?)<\/div>/u.exec(section)?.[1] ?? "");
+    const amendments = [...section.matchAll(/<span class="toc-instrument-enum">([^<]+)<\/span>/gu)].map((match) => ({ act: plainText(match[1]!) }));
+    articles.push({ unit: number, heading: header || `${number}.`, text, amendments });
+  }
+  const title = plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "");
+  return { country: "CY", source, ...(title ? { title } : {}), articles, version: "tekst jednolity CyLaw", status: "tekst nieurzędowy (CyLaw, Παγκύπριος Δικηγορικός Σύλλογος) — urzędowa jest Επίσημη Εφημερίδα" };
+}
+
+/**
+ * United States Code, GovInfo (U.S. Government Publishing Office): …/link/uscode/{title}/{section} redirects to the
+ * section's HTML of the current edition; h3.section-head "§N. …", p.statutory-body…, the source credit and the
+ * "Amendments" notes ("<b>2004</b>—Pub. L. 108–237 substituted …").
+ */
+export function readUsCode(html: string, source: string): NationalReading {
+  const edition = /United States Code,\s*(\d{4}) Edition/u.exec(html)?.[1];
+  const articles: NationalArticle[] = [];
+  for (const block of html.split('<h3 class="section-head">').slice(1)) {
+    const head = plainText(block.slice(0, block.indexOf("</h3>")));
+    const number = /^§\s*([\dA-Za-z-]+)\./u.exec(head)?.[1];
+    if (!number) continue;
+    const body = [...block.matchAll(/<p class="statutory-body[^"]*">([\s\S]*?)<\/p>/gu)].map((match) => plainText(match[1]!).replace(/\s+/gu, " ").trim());
+    const notes = block.slice(block.indexOf(">Amendments<") >= 0 ? block.indexOf(">Amendments<") : block.length);
+    const amendments = [...notes.matchAll(/<p class="note-body"><b>(\d{4})<\/b>\s*(?:&mdash;|—)([\s\S]*?)<\/p>/gu)].map((match) => ({ act: `${match[1]}: ${plainText(match[2]!).replace(/\s+/gu, " ").slice(0, 200)}` }));
+    articles.push({ unit: number, heading: head, text: [head, ...body].join("\n"), amendments });
+  }
+  return { country: "US", source, articles, version: edition ? `United States Code, wydanie ${edition}` : "United States Code", status: "tekst urzędowy (GovInfo, U.S. Government Publishing Office); prawo stanowe osobno" };
+}
+
+/**
+ * Judgments (common law: precedent is a source). United Kingdom, Find Case Law (The National Archives),
+ * …/{court}/{year}/{number}/data.xml in Akoma Ntoso: numbered paragraphs, neutral citation, court and date.
+ * Each paragraph is a unit ("[12]" or "12") for quoting.
+ */
+export function readUkJudgment(xml: string, source: string): NationalReading {
+  const name = /<FRBRname value="([^"]+)"/u.exec(xml)?.[1] ?? "";
+  const citation = plainText(/<(?:uk:cite|neutralCitation)>([\s\S]*?)<\/(?:uk:cite|neutralCitation)>/u.exec(xml)?.[1] ?? "");
+  const court = /<uk:court>([^<]+)<\/uk:court>/u.exec(xml)?.[1] ?? "";
+  const date = /<FRBRdate date="(\d{4}-\d{2}-\d{2})" name="judgment"/u.exec(xml)?.[1];
+  const articles: NationalArticle[] = [];
+  for (const [, body] of xml.matchAll(/<paragraph\b[^>]*>([\s\S]*?)<\/paragraph>/gu)) {
+    const number = plainText(/<num[^>]*>([\s\S]*?)<\/num>/u.exec(body!)?.[1] ?? "").replace(/[.\s]/gu, "");
+    const text = plainText(body!.replace(/<num[^>]*>[\s\S]*?<\/num>/u, "")).replace(/\s+/gu, " ").trim();
+    // A numbered heading ("1. Introduction") shares the number with the first paragraph: kept with it.
+    if (!number || !text) continue;
+    const last = articles.at(-1);
+    if (last && last.unit === number) last.text += `\n${text}`;
+    else articles.push({ unit: number, heading: `[${number}]`, text: `[${number}] ${text}`, amendments: [] });
+  }
+  return { country: "GB", source, title: `${name}${citation ? ` ${citation}` : ""}`, articles, version: `${court}${date ? `, ${date}` : ""}`, status: "orzeczenie, tekst urzędowy (Find Case Law, The National Archives)" };
+}
+
+/**
+ * United States judgments, Caselaw Access Project (Harvard Law School, public static data, cases to 2020):
+ * static.case.law/{reporter}/{volume}/cases/{page}-{nn}.json; each opinion (majority, concurrence, dissent) is a unit.
+ */
+export function readCapCase(json: string, source: string): NationalReading {
+  const data = JSON.parse(json) as {
+    name_abbreviation?: string;
+    decision_date?: string;
+    court?: { name?: string };
+    citations?: Array<{ cite?: string; type?: string }>;
+    casebody?: { opinions?: Array<{ type?: string; author?: string; text?: string }> };
+  };
+  const cite = data.citations?.find((item) => item.type === "official")?.cite ?? data.citations?.[0]?.cite ?? "";
+  const articles = (data.casebody?.opinions ?? []).map((opinion, index): NationalArticle => ({
+    unit: `${opinion.type ?? "opinion"}${index ? `-${index + 1}` : ""}`,
+    heading: `${opinion.type ?? "opinion"}${opinion.author ? ` (${opinion.author})` : ""}`,
+    text: opinion.text ?? "",
+    amendments: []
+  }));
+  return { country: "US", source, title: `${data.name_abbreviation ?? ""}${cite ? `, ${cite}` : ""}`, articles, version: `${data.court?.name ?? ""}${data.decision_date ? `, ${data.decision_date}` : ""}`, status: "orzeczenie (Caselaw Access Project, Harvard Law School; zbiór do 2020 r.) — sprawdź późniejsze orzecznictwo" };
+}
+
 /**
  * Sweden, Riksdagen open data (no key): data.riksdagen.se/dokument/sfs-{year}-{number}.text is the
  * consolidated text from Regeringskansliet/Lagrummet ("Ändrad: t.o.m. SFS …"). A section opens

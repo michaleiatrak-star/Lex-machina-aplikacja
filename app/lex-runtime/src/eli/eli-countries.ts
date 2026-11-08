@@ -11,7 +11,16 @@
 // - "wersja-bez-mocy": a consolidated text without legal force next to the original (BE, FR);
 // - "nieustalone": the register does not say.
 
-export type LegalFamily = "kontynentalne" | "nordyckie" | "mieszane";
+// Legal family: decides the method (jurisdiction.ts). Common law: statute AND precedent are sources, the
+// judgments are read like the acts; mixed: both traditions, by field (familyNote says which).
+export type LegalFamily = "kontynentalne" | "nordyckie" | "mieszane" | "common-law";
+
+export const LEGAL_FAMILY_LABELS: Readonly<Record<LegalFamily, string>> = {
+  kontynentalne: "Prawo kontynentalne",
+  nordyckie: "Prawo nordyckie",
+  mieszane: "Systemy mieszane",
+  "common-law": "Common law"
+};
 
 export type EliConsolidation = "osobny-akt" | "wersja-z-data" | "wersja-bez-mocy" | "nieustalone";
 
@@ -70,6 +79,10 @@ export type EliCountry = {
   // The country's machine API (REST, SPARQL, Akoma Ntoso), checked live from the app's network.
   api?: EliApi;
   text?: { reading: TextReading; note: string };
+  // Mixed systems: which fields follow which tradition, and the language rule where texts differ.
+  familyNote?: string;
+  // Common law and mixed systems: where the judgments are read (precedent is a source).
+  caseLaw?: { reading: TextReading; source: string; note: string };
 };
 
 export type EliApi = {
@@ -371,6 +384,10 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
   { code: "GE", name: "Gruzja", family: "kontynentalne", portal: "https://matsne.gov.ge", pillars: "brak ELI", consolidation: "wersja-z-data", text: { reading: "CZYTNIK", note: "readMatsne: Matsne (Legislative Herald of Georgia), …/ka/document/view/{id} (tekst urzędowy gruziński; /en/ = tłumaczenie), publikacje skonsolidowane z datami (?publication={n}); date wybiera publikację z tego dnia lub ostatnią wcześniejszą" }, source: "https://matsne.gov.ge/ka/document/view/31702", level: "BRAK-SZABLONU", checked: "200 text/html (Kodeks cywilny, 140 publikacji)" },
   { code: "AM", name: "Armenia", family: "kontynentalne", portal: "https://www.arlis.am", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "2026-11-08: DocumentView.aspx?docid={id} odpowiada, tekst ładowany osobno — ARLIS odpowiada — czytnik do zrobienia" }, source: "https://www.arlis.am/", level: "BRAK-SZABLONU", checked: "200 text/html" },
   { code: "AZ", name: "Azerbejdżan", family: "kontynentalne", portal: "https://e-qanun.az", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "JS", note: "e-qanun.az: powłoka aplikacji JavaScript" }, source: "https://e-qanun.az/", level: "BRAK-SZABLONU", checked: "200 (powłoka)" },
+  { code: "GB", name: "Wielka Brytania", family: "common-law", portal: "https://www.legislation.gov.uk", pillars: "własne identyfikatory", consolidation: "wersja-z-data", api: { url: "https://www.legislation.gov.uk", kind: "REST", auth: "brak", probe: "https://www.legislation.gov.uk/ukpga/1979/54/section/14/data.xml", checked: "200 application/xml" }, text: { reading: "CZYTNIK", note: "readUnitedKingdom: legislation.gov.uk/{typ}/{rok}/{nr}/section/{n} (tekst zrewidowany; /section/{n}/{RRRR-MM-DD} = brzmienie na dzień), akt zmieniający z datą wejścia w życie z komentarzy F; Szkocja i Irlandia Północna mają odrębne prawo w części dziedzin (zakres terytorialny przy przepisie)" }, caseLaw: { reading: "CZYTNIK", source: "https://caselaw.nationalarchives.gov.uk", note: "readUkJudgment: Find Case Law (The National Archives), /{sąd}/{rok}/{nr}/data.xml, akapity [N], sygnatura neutralna, sąd i data; od 2001 r. (wybrane sądy), starsze: BAILII (nieurzędowe)" }, source: "https://www.legislation.gov.uk/developer", level: "BRAK-SZABLONU", checked: "200" },
+  { code: "IE", name: "Irlandia", family: "common-law", portal: "https://www.irishstatutebook.ie", pillars: "ELI", consolidation: "osobny-akt", template: "https://www.irishstatutebook.ie/eli/{rok}/act/{nr}/{section/{n}/}enacted/en/html", text: { reading: "CZYTNIK", note: "readIreland: Irish Statute Book, tekst uchwalony (enacted); teksty zrewidowane Law Reform Commission (revisedacts.lawreform.ie) tylko dla części aktów; ustawy po irlandzku i angielsku (przy rozbieżności — do ustalenia w Konstytucji, art. 25)" }, caseLaw: { reading: "DO-ZBADANIA", source: "https://www.courts.ie/judgments", note: "courts.ie/judgments odpowiada — czytnik do zrobienia" }, source: "https://www.irishstatutebook.ie/", level: "ADRES", checked: "200", build: (ref) => `https://www.irishstatutebook.ie/eli/${parts(ref.year, "act", ref.number, "enacted", ref.language ?? "en", ref.format ?? "html")}` },
+  { code: "CY", name: "Cypr", family: "mieszane", portal: "https://www.cylaw.org", pillars: "brak ELI", consolidation: "nieustalone", familyNote: "System mieszany: prawo umów, deliktów i procedura oparte na prawie angielskim (np. ustawa o umowach, ΚΕΦ.149, art. 2: wykładnia według zasad prawa angielskiego — odczyt z CyLaw 2026-11-08), prawo rodzinne i administracyjne w tradycji kontynentalnej; precedens sądów wyższych wiąże.", text: { reading: "CZYTNIK", note: "readCyprus: CyLaw (Παγκύπριος Δικηγορικός Σύλλογος), tekst jednolity nieurzędowy z historią zmian przy przepisie, …/nomoi/enop/non-ind/{id}/full.html (windows-1253); urzędowa jest Επίσημη Εφημερίδα" }, caseLaw: { reading: "DO-ZBADANIA", source: "https://www.cylaw.org/apofaseis.html", note: "CyLaw publikuje też orzeczenia — czytnik do zrobienia" }, source: "https://www.cylaw.org/", level: "BRAK-SZABLONU", checked: "200 text/html" },
+  { code: "US", name: "Stany Zjednoczone", family: "common-law", portal: "https://www.govinfo.gov", pillars: "brak ELI", consolidation: "wersja-z-data", text: { reading: "CZYTNIK", note: "readUsCode: GovInfo (GPO) govinfo.gov/link/uscode/{tytuł}/{sekcja}, United States Code z notami zmian; prawo federalne — prawo stanowe (umowy, delikty, rodzina) osobne dla każdego stanu, do wskazania przez użytkownika; eCFR (ecfr.gov/api) dla rozporządzeń" }, caseLaw: { reading: "CZYTNIK", source: "https://static.case.law", note: "readCapCase: Caselaw Access Project (Harvard), static.case.law/{reporter}/{tom}/cases/{strona}-{nn}.json, orzeczenia do 2020 r. (opinia większości, zdania odrębne); nowsze: CourtListener (API z kluczem)" }, source: "https://www.govinfo.gov/developers", level: "BRAK-SZABLONU", checked: "200" },
   { code: "UA", name: "Ukraina", family: "kontynentalne", portal: "https://zakon.rada.gov.ua", pillars: "brak ELI", consolidation: "wersja-z-data", text: { reading: "BRAK-POŁĄCZENIA", note: "2026-11-08: data.gov.ua nie ma zbioru ustaw Rady (tylko wykazy aktów lokalnych); zakon.rada.gov.ua, data.rada.gov.ua (…/laws/show/{nr}.txt) i reestr.minjust.gov.ua: połączenie zerwane z sieci aplikacji, www.rada.gov.ua odpowiada; do sprawdzenia z sieci użytkownika; nieurzędowe kodeksy.com.ua/{kodeks}/statja-{n}.htm (z odesłaniem do Rady) — tylko do odnalezienia artykułu" }, source: "https://zakon.rada.gov.ua/", level: "BRAK-SZABLONU", checked: "połączenie zerwane (zakon i data.rada.gov.ua, reestr.minjust.gov.ua); www.rada.gov.ua 200" },
   { code: "MD", name: "Mołdawia", family: "kontynentalne", portal: "https://www.legis.md", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "BLOKADA", note: "legis.md i parlament.md: 403 dla automatów; monitorul.gov.md (Monitorul Oficial) odpowiada — dziennik urzędowy, do zbadania odczyt aktu" }, source: "https://www.legis.md/", level: "BRAK-SZABLONU", checked: "403" },
   { code: "ME", name: "Czarnogóra", family: "kontynentalne", portal: "https://www.sluzbenilist.me", pillars: "brak ELI", consolidation: "nieustalone", text: { reading: "DO-ZBADANIA", note: "readParagraf: paragraf.me/propisi-crnegore/{nazwa}.html (nieurzędowy tekst jednolity, tylko do odnalezienia); sluzbenilist.me odpowiada (Službeni list CG); akty do odnalezienia w PIS" }, source: "https://www.sluzbenilist.me/", level: "BRAK-SZABLONU", checked: "200 (portal)" },
@@ -393,7 +410,8 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     template: "https://legislation.mt/eli/{type}/{year}*/{natural identifier}/{lang}/{format}",
     consolidation: "osobny-akt",
     consolidatedVersion: "cap / sl = prawo skonsolidowane (bez roku); act / ln = publikacje",
-    text: { reading: "PDF", note: "legislation.mt: PDF z warstwą tekstową przez ELI (cap/sl skonsolidowane; Civil Code cap/16: 615 stron)" },
+    text: { reading: "PDF", note: "legislation.mt: PDF z warstwą tekstową przez ELI (cap/sl skonsolidowane; Civil Code cap/16: 615 stron); artykuły „74. …” także po nocie marginesowej" },
+    familyNote: "System mieszany: prawo prywatne skodyfikowane w tradycji kontynentalnej (Civil Code, Cap. 16), prawo publiczne i proceduralne pod wpływem prawa angielskiego. Ustawy uchwala się po maltańsku i angielsku; przy rozbieżności rozstrzyga tekst maltański (Konstytucja, art. 74 — odczyt z legislation.mt 2026-11-08). Rolę orzecznictwa ustalaj w źródłach, nie zakładaj stare decisis.",
     source: REGISTER("malta"),
     level: "ADRES-NIEPOTWIERDZONY",
     checked: "nie sprawdzano",

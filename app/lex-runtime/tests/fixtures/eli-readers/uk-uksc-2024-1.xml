@@ -1,0 +1,148 @@
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:uk="https://caselaw.nationalarchives.gov.uk/akn">
+  <judgment name="judgment">
+    <meta>
+      <identification source="#tna">
+	<FRBRWork>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/id/uksc/2024/1"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/id/uksc/2024/1"/>
+	  <FRBRdate date="2024-01-11" name="judgment"/>
+	  <FRBRauthor href="#uksc"/>
+	  <FRBRcountry value="GB-UKM"/>
+	  <FRBRnumber value="1"/>
+	  <FRBRname value="Paul and another v Royal Wolverhampton NHS Trust"/>
+	</FRBRWork>
+	<FRBRExpression>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/uksc/2024/1"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/uksc/2024/1"/>
+	  <FRBRdate date="2024-01-11" name="judgment"/>
+	  <FRBRauthor href="#uksc"/>
+	  <FRBRlanguage language="eng"/>
+	</FRBRExpression>
+	<FRBRManifestation>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/uksc/2024/1/data.xml"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/uksc/2024/1/data.xml"/>
+	  <FRBRdate date="2024-11-10T04:15:51" name="transform"/>
+	  <FRBRdate date="2024-11-17T19:49:46" name="tna-enriched"/>
+	  <FRBRauthor href="#tna"/>
+	  <FRBRformat value="application/xml"/>
+	</FRBRManifestation>
+      </identification>
+      <lifecycle source="#">
+	<eventRef date="2024-01-11" refersTo="#judgment" source="#"/>
+      </lifecycle>
+      <references source="#tna">
+	<TLCOrganization eId="uksc" href="https://www.supremecourt.uk/" showAs="The Supreme Court"/>
+	<TLCOrganization eId="tna" href="https://www.nationalarchives.gov.uk/" showAs="The National Archives"/>
+	<TLCEvent eId="judgment" href="#" showAs="judgment"/>
+	<TLCPerson eId="paul-and-another" href="" showAs="Paul and another"/>
+	<TLCPerson eId="royal-wolverhampton-nhs-trust" href="" showAs="Royal Wolverhampton NHS Trust"/>
+	<TLCRole eId="appellant" href="" showAs="Appellant"/>
+	<TLCRole eId="respondent" href="" showAs="Respondent"/>
+	<TLCPerson eId="judge-lord-briggs" href="/judge-lord-briggs" showAs="Lord Briggs"/>
+	<TLCPerson eId="judge-lord-sales" href="/judge-lord-sales" showAs="Lord Sales"/>
+	<TLCPerson eId="judge-lord-leggatt" href="/judge-lord-leggatt" showAs="Lord Leggatt"/>
+	<TLCPerson eId="judge-lord-burrows" href="/judge-lord-burrows" showAs="Lord Burrows"/>
+	<TLCPerson eId="judge-lady-rose" href="/judge-lady-rose" showAs="Lady Rose"/>
+	<TLCPerson eId="judge-lord-richards" href="/judge-lord-richards" showAs="Lord Richards"/>
+      </references>
+      <proprietary source="#">
+	<uk:court>UKSC</uk:court>
+	<uk:year>2024</uk:year>
+	<uk:number>1</uk:number>
+	<uk:cite>[2024] UKSC 1</uk:cite>
+	<uk:parser>0.26.10</uk:parser>
+	<uk:hash>1e273f2cd657e3fe64e5730f7bf38f44d7c61f453689f7999c2fa5ff72bfa27c</uk:hash>
+	<uk:tna-enrichment-engine>6.0.2</uk:tna-enrichment-engine>
+      </proprietary>
+      <presentation source="#">
+	<html:style>
+#judgment { font-size: 12pt; font-family: 'Calibri, sans-serif'; }
+#judgment .Normal { font-family: 'Calibri, sans-serif'; font-size: 12pt; }
+#judgment .Footer { font-family: Univers; font-size: 12pt; }
+#judgment .Caveat { text-align: justify; font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .Header { font-family: 'Calibri, sans-serif'; font-size: 12pt; }
+#judgment .ParaHeading1 { font-weight: bold; text-transform: uppercase; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaNoNumber { font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaLevel1 { margin-left: 0in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaLevel2 { margin-left: 0.5in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Quote { margin-left: 1in; margin-right: 0.87in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .NewSpeech { font-weight: bold; text-transform: uppercase; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Paraheading2 { margin-left: 0.25in; font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Paraheading3 { font-weight: bold; text-decoration-line: underline; text-decoration-style: solid; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Embargo { text-align: justify; font-weight: bold; font-size: 10pt; }
+#judgment .JudgmentReferences { text-align: right; font-size: 12pt; }
+#judgment .Bulletpara { margin-left: 0.5in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Paraheading4 { font-style: italic; font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Paraheading5 { font-style: italic; text-decoration-line: underline; text-decoration-style: solid; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .Paraheading6 { font-style: italic; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .CourtOrder { font-weight: bold; font-size: 13pt; color: #C00000; }
+#judgment .JudgmentTitle { text-align: center; font-weight: bold; font-size: 20pt; }
+#judgment .JudgmentDetail1 { text-align: center; font-weight: bold; font-size: 20pt; }
+#judgment .ParaSubHeading1 { font-style: italic; font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaSubHeading2 { font-style: italic; text-decoration-line: underline; text-decoration-style: solid; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaSubHeading3 { font-style: italic; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaApprovedLevel1 { margin-left: 0in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaApprovedLevel2 { margin-left: 0.5in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .ParaNoNumberApproved { font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .JudgmentJudges { text-align: center; font-weight: bold; font-size: 17pt; }
+#judgment .JudgmentAppRespInt { text-align: center; font-size: 12pt; }
+#judgment .ListParagraph { margin-left: 0.5in; font-size: 11pt; }
+#judgment .ParaLevel3 { margin-left: 1in; font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .FootnoteText { font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .Revision { font-family: 'Calibri, sans-serif'; font-size: 12pt; }
+#judgment .CommentText { font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .CommentSubject { font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .FooterChar { font-family: Univers; font-size: 12pt; }
+#judgment .HeaderChar { font-family: 'Times New Roman'; font-size: 12pt; }
+#judgment .QuoteChar { font-family: 'Calibri, sans-serif'; font-size: 13pt; }
+#judgment .FootnoteTextChar { font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .FootnoteReference { vertical-align: super; }
+#judgment .CommentReference { font-size: 8pt; }
+#judgment .CommentTextChar { font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+#judgment .CommentSubjectChar { font-weight: bold; font-family: 'Calibri, sans-serif'; font-size: 10pt; }
+</html:style>
+      </presentation>
+    </meta>
+    <header>
+      <p class="JudgmentReferences"><img src="image1.png" style="width:99.35pt;height:99.35pt"/></p>
+      <p class="JudgmentReferences"><span style="font-weight:bold;font-family:'Times New Roman'">Hilary Term</span><span style="font-family:'Times New Roman'"/><br/><neutralCitation style="font-weight:bold;font-family:'Times New Roman'">[2024] UKSC 1</neutralCitation><br/><span style="font-style:italic;font-family:'Times New Roman'">On appeal from: </span><ref href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2022/12" style="font-style:italic;font-family:'Times New Roman'" uk:canonical="[2022] EWCA Civ 12" uk:isNeutral="true" uk:origin="parser" uk:type="case">[2022] EWCA Civ 12</ref></p>
+      <p class="JudgmentTitle"><span style="font-family:'Times New Roman'">JUDGMENT</span></p>
+      <p class="JudgmentJudges"><party as="#appellant" refersTo="#paul-and-another" style="font-family:'Times New Roman';font-size:20pt">Paul and another</party><span style="font-family:'Times New Roman';font-size:20pt"> (</span><role refersTo="#appellant" style="font-family:'Times New Roman';font-size:20pt">Appellants</role><span style="font-family:'Times New Roman';font-size:20pt">) </span><span style="font-style:italic;font-family:'Times New Roman';font-size:20pt">v</span><span style="font-family:'Times New Roman';font-size:20pt"/><party as="#respondent" refersTo="#royal-wolverhampton-nhs-trust" style="font-family:'Times New Roman';font-size:20pt">Royal Wolverhampton NHS Trust</party><span style="font-family:'Times New Roman';font-size:20pt"> (</span><role refersTo="#respondent" style="font-family:'Times New Roman';font-size:20pt">Respondent</role><span style="font-family:'Times New Roman';font-size:20pt">)</span><br/><br/><span style="font-family:'Times New Roman';font-size:20pt">Polmear and another (Appellants) </span><span style="font-style:italic;font-family:'Times New Roman';font-size:20pt">v</span><span style="font-family:'Times New Roman';font-size:20pt"> Royal Cornwall Hospitals NHS Trust (Respondent)</span></p>
+      <p class="JudgmentJudges"><span style="font-family:'Times New Roman';font-size:20pt">Purchase (Appellant) </span><span style="font-style:italic;font-family:'Times New Roman';font-size:20pt">v </span><span style="font-family:'Times New Roman';font-size:20pt">Ahmed (Respondent)</span></p>
+      <p class="JudgmentJudges"><span style="font-weight:normal;font-family:'Times New Roman'">before</span><br/><br/><judge refersTo="#judge-lord-briggs" style="font-family:'Times New Roman'">Lord Briggs</judge><br/><judge refersTo="#judge-lord-sales" style="font-family:'Times New Roman'">Lord Sales</judge><br/><judge refersTo="#judge-lord-leggatt" style="font-family:'Times New Roman'">Lord Leggatt</judge><br/><judge refersTo="#judge-lord-burrows" style="font-family:'Times New Roman'">Lord Burrows</judge><br/><judge refersTo="#judge-lady-rose" style="font-family:'Times New Roman'">Lady Rose</judge><br/><judge refersTo="#judge-lord-richards" style="font-family:'Times New Roman'">Lord Richards</judge></p>
+      <p class="JudgmentJudges"><span style="font-family:'Times New Roman'">Lord Carloway</span></p>
+      <p class="JudgmentJudges"><span style="font-family:'Times New Roman'">JUDGMENT GIVEN ON</span><br/><docDate date="2024-01-11" refersTo="#judgment" style="font-family:'Times New Roman'">11 January 2024</docDate><br/><br/><span style="font-family:'Times New Roman'">Heard on 16, 17 and 18 May 2023</span></p>
+      <p style="text-align:center"><span style="font-style:italic;font-family:'Times New Roman'">Appellant - Paul</span><br/><span style="font-family:'Times New Roman'">Robert Weir KC</span></p>
+      <p style="text-align:center"><span style="font-family:'Times New Roman'">Laura Johnson KC</span></p>
+      <p class="JudgmentAppRespInt"><span style="font-family:'Times New Roman'">(Instructed by Shoosmiths LLP (Birmingham))</span></p>
+      <p style="text-align:center"><span style="font-style:italic;font-family:'Times New Roman'">Appellant - Polmear</span><br/><span style="font-family:'Times New Roman'">Henry Pitchers KC</span></p>
+      <p style="text-align:center"><span style="font-family:'Times New Roman'">Oliver May</span><br/><span style="font-family:'Times New Roman'">(Instructed by Wolferstans LLP (Plymouth))</span></p>
+      <p style="text-align:center"><span style="font-style:italic;font-family:'Times New Roman'">Appellant - Purchase</span><br/><span style="font-family:'Times New Roman'">David Tyack KC</span></p>
+      <p style="text-align:center"><span style="font-family:'Times New Roman'">Esther Gamble</span></p>
+      <p class="JudgmentAppRespInt"><span style="font-family:'Times New Roman'">(Instructed by Talbots Law Ltd (Stourbridge))</span></p>
+      <p style="text-align:center"><span style="font-style:italic;font-family:'Times New Roman'">Respondents</span><br/><span style="font-family:'Times New Roman'">Simeon Maskrey KC</span></p>
+      <p style="text-align:center"><span style="font-family:'Times New Roman'">Charles Bagot KC</span></p>
+      <p style="text-align:center"><span style="font-family:'Times New Roman'">Charlotte Jones</span></p>
+      <p class="JudgmentAppRespInt"><span style="font-family:'Times New Roman'">(Instructed by Browne Jacobson LLP (Birmingham) and Bevan Brittan LLP (Bristol))</span></p>
+    </header>
+    <judgmentBody><decision><paragraph eId="para_1">
+	  <num style="font-family:'Times New Roman';font-weight:bold;text-transform:uppercase;font-size:13pt">1.</num>
+	  <content>
+	    <p class="ParaHeading1" style="text-indent:0.5in"><span style="text-transform:none;font-family:'Times New Roman'">Introduction</span></p>
+	  </content>
+	</paragraph><paragraph eId="lvl_1">
+	  <num style="font-family:'Times New Roman';font-size:13pt">1.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">We all die and, when we do, the fact or manner of our deaths may cause harm to other people. Often such harm is readily foreseeable. We all know that the death of someone&#8217;s child, or of their partner, or of a young child&#8217;s parent, will cause grief and suffering and can have prolonged and profound effects on physical and mental health. Death may also have damaging, even ruinous, financial consequences for family members or others who were dependent economically on the deceased. </span></p>
+	  </content>
+	</paragraph><paragraph eId="para_2">
+	  <num style="font-family:'Times New Roman';font-size:13pt">2.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Under the common law the rule was that &#8220;in a civil court, the death of a human being could not be complained of as an injury&#8221; by another person: </span><span style="font-style:italic;font-family:'Times New Roman'">Baker v Bolton</span><span style="font-family:'Times New Roman'"> (1808) 1 Camp 493 (Lord Ellenborough); </span><span style="font-style:italic;font-family:'Times New Roman'">Admiralty Comrs v SS Amerika</span><span style="font-family:'Times New Roman'"> <ref href="#" uk:canonical="[1917] AC 38" uk:isNeutral="false" uk:origin="TNA" uk:type="case" uk:year="1917">[1917] AC 38</ref>. This is still the general rule. The same rule applies where the victim does not die but is severely injured. Essentially, the common law does not recognise one person as having any legally compensable interest in the physical well-being of another. The law affords compensation to the victim but not to others who suffer harm in consequence of the victim&#8217;s injuries or death, however severely affected they may be: see eg </span><span style="font-style:italic;font-family:'Times New Roman'">D v East Berkshire Community Health NHS Trust</span><span style="font-family:'Times New Roman'"> <ref href="https://caselaw.nationalarchives.gov.uk/ukhl/2005/23" uk:canonical="[2005] UKHL 23" uk:isNeutral="true" uk:origin="TNA" uk:type="case" uk:year="2005">[2005] UKHL 23</ref>, <ref href="#" uk:canonical="[2005] 2 AC 373" uk:isNeutral="false" uk:origin="TNA" uk:type="case" uk:year="2005">[2005] 2 AC 373</ref>, paras 102-105. </span></p>
+	  </content>
+	</paragraph><paragraph eId="para_3">
+	  <num style="font-family:'Times New Roman';font-size:13pt">3.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">There is a statutory exception, introduced by <ref href="http://www.legislation.gov.uk/id/ukpga/Vict/9-10/93" uk:canonical="1846 (9 &amp; 10 Vict.) c. 93" uk:origin="TNA" uk:type="legislation">the Fatal Accidents Act 1846</ref> (9 &amp; 19 Vict c 93) and now contained in the <ref href="http://www.legislation.gov.uk/id/ukpga/1976/30" uk:canonical="1976 c. 30" uk:origin="TNA" uk:type="legislation">Fatal Accidents Act 1976</ref>, which gives certain dependants of a person whose death is caused by a wrongful act, neglect or default the right to sue and recover damages from the person who (if death had not ensued) would have been liable to the deceased. Originally such damages were only recoverable to compensate dependants for financial loss resulting from the death. Since 1991, when a new provision was added to <ref href="http://www.legislation.gov.uk/id/ukpga/1976/30" uk:canonical="1976 c. 30" uk:origin="TNA" uk:type="legislation">the 1976 Act</ref>, a spouse or partner or parents (if the child was an unmarried minor) of the deceased can recover damages for bereavement whether or not they were dependent on the deceased; but these damages are limited to a fixed sum (currently &#163;15,120). No remedy under <ref href="http://www.legislation.gov.uk/id/ukpga/1976/30" uk:canonical="1976 c. 30" uk:origin="TNA" uk:type="legislation">that Act</ref> is otherwise available for physical or psychological harm caused to relatives or others by the death. </span></p>
+	  </content>
+	</paragraph></decision></judgmentBody></judgment></akomaNtoso>

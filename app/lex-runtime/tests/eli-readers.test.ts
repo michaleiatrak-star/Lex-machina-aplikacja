@@ -295,3 +295,63 @@ describe("Paragraf Lex (RS, ME, BA)", () => {
     expect(reading.status).toMatch(/nieurzędowy/u);
   });
 });
+
+describe("common law and mixed systems: statutes and judgments", () => {
+  it("GB statute: section with subsections and the amending act from the F-commentary", async () => {
+    const { readUnitedKingdom } = await import("../src/eli/readers.js");
+    const reading = readUnitedKingdom(fixture("uk-sga-1979-s14.xml"), "x");
+    expect(reading.title).toBe("Sale of Goods Act 1979");
+    expect(reading.articles[0]!.text).toContain("(2A) For the purposes of this Act, goods are of satisfactory quality");
+    expect(reading.articles[0]!.amendments[0]).toMatchObject({ inForce: "1995-01-03" });
+  });
+
+  it("GB judgment (Find Case Law): numbered paragraphs, neutral citation, court and date", async () => {
+    const { readUkJudgment } = await import("../src/eli/readers.js");
+    const reading = readUkJudgment(fixture("uk-uksc-2024-1.xml"), "x");
+    expect(reading.title).toContain("Paul and another v Royal Wolverhampton NHS Trust");
+    expect(reading.version).toBe("UKSC, 2024-01-11");
+    expect(reading.articles[0]!.text).toMatch(/^\[1\] Introduction/u);
+    expect(reading.status).toMatch(/orzeczenie/u);
+  });
+
+  it("IE: section as enacted, without the 'Act Referred to' table", async () => {
+    const { readIreland } = await import("../src/eli/readers.js");
+    const reading = readIreland(fixture("ie-1980-40-s2.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["2"]);
+    expect(reading.articles[0]!.text).not.toContain("Referred");
+  });
+
+  it("CY: windows-1253 decoded by its meta charset; marked unofficial", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", "cy-kef149.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) });
+    const answer = await readNationalLaw({ url: "https://www.cylaw.org/nomoi/enop/non-ind/0_149/full.html", unit: "2", country: "CY" }, fetchImpl as never);
+    expect(answer.articles[0]!.text).toMatch(/^2\.-\(1\) Ο Νόμος αυτός ερμηνεύεται/u);
+    expect(answer.status).toMatch(/nieurzędowy/u);
+  });
+
+  it("US Code: section with the edition and the amendment notes", async () => {
+    const { readUsCode } = await import("../src/eli/readers.js");
+    const reading = readUsCode(fixture("us-15-usc-1.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1"]);
+    expect(reading.version).toBe("United States Code, wydanie 2024");
+    expect(reading.articles[0]!.amendments[0]!.act).toMatch(/^2004: Pub\. L\. 108–237/u);
+  });
+
+  it("US judgment (Caselaw Access Project): official citation, court, date, the opinion", async () => {
+    const { readCapCase } = await import("../src/eli/readers.js");
+    const reading = readCapCase(fixture("us-cap-347-us-483.json"), "x");
+    expect(reading.title).toBe("Brown v. Board of Education, 347 U.S. 483");
+    expect(reading.version).toBe("Supreme Court of the United States, 1954-05-17");
+    expect(reading.articles[0]!.unit).toBe("majority");
+  });
+
+  it("method follows the family: common law asks for precedent, the USA for the state; mixed systems quote their note", async () => {
+    const { familyMethod } = await import("../src/jurisdiction.js");
+    const { eliCountry } = await import("../src/eli/eli-countries.js");
+    expect(familyMethod(eliCountry("GB"))).toContain("ratio decidendi");
+    expect(familyMethod(eliCountry("US"))).toContain("prawo federalne i stanowe");
+    expect(familyMethod(eliCountry("MT"))).toContain("tekst maltański");
+    expect(familyMethod(eliCountry("DE"))).toBe("");
+  });
+});

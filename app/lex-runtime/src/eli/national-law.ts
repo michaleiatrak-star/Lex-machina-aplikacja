@@ -4,9 +4,9 @@
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readParagraf, readMatsne, matsneVersions, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readParagraf, readUnitedKingdom, readIreland, readCyprus, readUsCode, readUkJudgment, readCapCase, readMatsne, matsneVersions, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
-type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
+type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string; address?: (url: URL) => string };
 
 const READERS: HostReader[] = [
   { country: "DK", hosts: /^(?:www\.)?retsinformation\.dk$/u, read: readDenmark, accept: "application/xml" },
@@ -22,6 +22,13 @@ const READERS: HostReader[] = [
   { country: "HR", hosts: /^narodne-novine\.nn\.hr$/u, read: readCroatia },
   { country: "SI", hosts: /^(?:www\.)?uradni-list\.si$/u, read: readSlovenia },
   { country: "FO", hosts: /^(?:www\.)?logir\.fo$/u, read: readFaroe },
+  // Common law: statutes and judgments (family "common-law" in the register; Cyprus is mixed).
+  { country: "GB", hosts: /^(?:www\.)?legislation\.gov\.uk$/u, read: readUnitedKingdom, accept: "application/xml", address: (url) => (/\/data\.xml$/u.test(url.pathname) ? url.href : `${url.origin}${url.pathname.replace(/\/$/u, "")}/data.xml`) },
+  { country: "GB", hosts: /^caselaw\.nationalarchives\.gov\.uk$/u, read: readUkJudgment, accept: "application/xml", address: (url) => (/\/data\.xml$/u.test(url.pathname) ? url.href : `${url.origin}${url.pathname.replace(/\/$/u, "")}/data.xml`) },
+  { country: "IE", hosts: /^(?:www\.)?irishstatutebook\.ie$/u, read: readIreland },
+  { country: "CY", hosts: /^(?:www\.)?cylaw\.org$/u, read: readCyprus },
+  { country: "US", hosts: /^(?:www\.)?govinfo\.gov$/u, read: readUsCode },
+  { country: "US", hosts: /^static\.case\.law$/u, read: readCapCase, accept: "application/json" },
   // Unofficial consolidated texts (Paragraf Lex) where the official gazette cannot be read.
   { country: "RS", hosts: /^(?:www\.)?paragraf\.rs$/u, read: (body, url) => readParagraf(body, url, "RS") },
   { country: "ME", hosts: /^(?:www\.)?paragraf\.me$/u, read: (body, url) => readParagraf(body, url, "ME") },
@@ -89,8 +96,9 @@ export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PD
 function unitMatches(article: NationalArticle, unit: string): boolean {
   const wanted = unit
     // Longer words first: "art" would cut "Article 2" to "icle 2".
-    .replace(/^(?:article|artículo|artikel|articolo|artigo|art\.?|madde|მუხლი|članak|člen|neni|canon|kanon|can\.?|čl\.?|§)\s*/iu, "")
+    .replace(/^(?:article|artículo|artikel|articolo|artigo|art\.?|madde|მუხლი|članak|člen|neni|canon|kanon|can\.?|section|sec\.|s\.|paragraph|para\.?|čl\.?|§)\s*/iu, "")
     .replace(/\.?\s*(?:člen|gr)\.?$|\.$/iu, "")
+    .replace(/^\[(\w+)\]$/u, "$1")
     .replace(/\s+/gu, " ")
     .trim()
     .toLowerCase();
@@ -407,7 +415,7 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   const reader = READERS.find((item) => item.hosts.test(host));
   const pdf = PDF_HOSTS.find((item) => item.hosts.test(host));
   if (!reader && !pdf) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
-  const ask = () => fetchImpl(url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
+  const ask = () => fetchImpl(reader?.address ? reader.address(url) : url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
   let response = await ask();
   // A busy portal (gesetze-im-internet.de and narodne-novine.nn.hr answered 503 once and 200 right after,
   // vaticanstate.va 522 through Cloudflare): one retry.
@@ -427,13 +435,25 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     // The article asked for, by its heading in the text ("Art. 12", "Madde 12", "12."): the passage up to the next one.
     const articles: NationalArticle[] = [];
     if (request.unit) {
-      const number = request.unit.replace(/^(?:art\.?|articolo|artikel|article|artículo|artigo|madde|članak|neni)\s*/iu, "").trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const number = request.unit.replace(/^(?:article|articolo|artikel|artículo|artigo|art\.?|madde|članak|neni)\s*/iu, "").trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
       const heads = "Art\\.|Articolo|Artikel|Article|Artículo|Artigo|MADDE|Madde|Članak|Neni";
       const start = new RegExp(`(?:^|\\n)\\s*(?:${heads})\\s*${number}\\b`, "u").exec(text);
       if (start) {
         const rest = text.slice(start.index + start[0].length);
         const next = new RegExp(`\\n\\s*(?:${heads})\\s*\\d`, "u").exec(rest);
         articles.push({ unit: request.unit, heading: start[0].trim(), text: (start[0] + rest.slice(0, next ? next.index : 6000)).trim(), amendments: [] });
+      } else if (/^\d+[A-Z]?$/u.test(number)) {
+        // Articles numbered "74. Save as …" without a word before the number (Malta, Ireland), possibly after a
+        // marginal note on the same line ("Language of Laws. 74. Save …"), up to the next number.
+        // A table of contents also lists "74. Language of Laws.": of all the places, the longest passage is the article.
+        const following = /^\d+$/u.test(number) ? String(Number(number) + 1) : "";
+        const passages = [...text.matchAll(new RegExp(`(?:^|\\n)(?:[^\\n]{0,80}\\.[ \\t]+)?${number}\\.[ \\t]+\\S`, "gu"))].map((bare) => {
+          const rest = text.slice(bare.index);
+          const next = following ? new RegExp(`\\n(?:[^\\n]{0,80}\\.[ \\t]+)?${following}\\.[ \\t]+\\S`, "u").exec(rest.slice(1)) : null;
+          return rest.slice(0, next ? next.index + 1 : 6000).trim();
+        });
+        const best = passages.sort((a, b) => b.length - a.length)[0];
+        if (best) articles.push({ unit: request.unit, heading: `${number}.`, text: best.slice(0, 6000), amendments: [] });
       }
     }
     return { country, url: url.href, status: "tekst z urzędowego PDF", articles, ...(reading.kind === "MIESZANY" ? { note: reading.note } : {}), ...(request.unit && !articles.length ? { note: "artykułu nie znaleziono w tekście PDF" } : {}) };

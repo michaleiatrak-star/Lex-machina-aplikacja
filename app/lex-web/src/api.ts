@@ -4160,7 +4160,11 @@ export type JurisdictionOption = {
   missing: string[];
 };
 
-export type LegalSystemOption = { code: string; name: string; reading: string; note: string; portal: string; pack: string | null };
+export type LegalSystemOption = { code: string; name: string;
+  // Legal family (category in Settings): civil law, Nordic, mixed or common law.
+  family?: "kontynentalne" | "nordyckie" | "mieszane" | "common-law";
+  familyLabel?: string;
+  familyNote?: string; reading: string; note: string; portal: string; pack: string | null };
 
 export type JurisdictionSettings = { active: string; country: string; countries: LegalSystemOption[]; jurisdictions: JurisdictionOption[] };
 
