@@ -165,7 +165,8 @@ const RAG_NOTE = "skan bez warstwy tekstowej: kandydat do OCR i indeksu RAG, nie
 
 /** A legislation PDF: its text layer is read; pages without one are named for OCR/RAG. */
 export async function readLegislationPdf(data: Uint8Array): Promise<PdfReading> {
-  const result = await new LocalPdfTextExtractor(undefined, { lines: true, allowEmpty: true }).extract(data);
+  // A code is longer than a case document (Liechtenstein's PGR, Malta's Civil Code: over 600 pages).
+  const result = await new LocalPdfTextExtractor({ maxBytes: 64 * 1024 * 1024, maxPages: 4000, maxTextChars: 40_000_000 }, { lines: true, allowEmpty: true }).extract(data);
   const pages = result.pageTexts ?? [result.text];
   const empty = pages.map((page, index) => (page.replace(/\s+/gu, "").length < 20 ? index + 1 : 0)).filter(Boolean);
   if (empty.length === pages.length) return { kind: "SKAN", pages: pages.length, note: RAG_NOTE };
