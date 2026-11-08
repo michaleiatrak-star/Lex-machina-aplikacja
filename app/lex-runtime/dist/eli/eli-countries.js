@@ -248,7 +248,7 @@ export const ELI_COUNTRIES = [
         consolidation: "wersja-z-data",
         example: "https://fedlex.data.admin.ch/eli/cc/1958/505_527_527/fr",
         api: { url: "https://fedlex.data.admin.ch/sparqlendpoint", kind: "SPARQL", auth: "brak", probe: "ASK {?s ?p ?o}", checked: "200 boolean true" },
-        text: { reading: "DO-ZBADANIA", note: "Fedlex: SPARQL i pliki HTML/XML/PDF w Casemates" },
+        text: { reading: "CZYTNIK", note: "readSwitzerland: Akoma Ntoso XML wersji z datą (filestore …/eli/cc/{id}/{RRRRMMDD}/{lang}/xml/…), adres pliku z SPARQL (jolux:isExemplifiedBy); przypisy ze zmianami (AS, in Kraft seit)" },
         source: REGISTER("switzerland"),
         level: "ADRES",
         checked: "200",
@@ -268,7 +268,7 @@ export const ELI_COUNTRIES = [
         level: "BRAK-SZABLONU",
         checked: "200 (portal); szablonu aktu rejestr nie podaje"
     },
-    { code: "CZ", name: "Czechy", family: "kontynentalne", portal: "https://e-sbirka.gov.cz", pillars: "1", consolidation: "wersja-z-data", text: { reading: "KLUCZ", note: "e-Sbírka: strona JavaScript, API api.e-sbirka.gov.cz odpowiada 401 (klucz)" },
+    { code: "CZ", name: "Czechy", family: "kontynentalne", portal: "https://e-sbirka.gov.cz", pillars: "1", consolidation: "wersja-z-data", api: { url: "https://api.e-sbirka.gov.cz", kind: "REST", auth: "klucz", probe: "bez nagłówka esel-api-access-key", checked: "401 NEPLATNY_API_KLIC (klucz: wniosek do datové schránky MV 6bnaawp, temat „e-Sbírka a e-Legislativa – registrace REST API”, ocena do 10 dni roboczych; nagłówek esel-api-access-key)" }, text: { reading: "KLUCZ", note: "e-Sbírka: strona JavaScript, API api.e-sbirka.gov.cz odpowiada 401 (klucz)" },
         source: "https://e-sbirka.gov.cz/pristup-pres-stale-url-a-eli", level: "BRAK-SZABLONU", checked: "200 (strona schematu ładowana skryptem; schemat do odczytania ręcznie)" },
     { code: "SK", name: "Słowacja", family: "kontynentalne", portal: "https://www.slov-lex.sk", pillars: "1", consolidation: "nieustalone", text: { reading: "JS", note: "Slov-Lex wymaga JavaScriptu" },
         source: REGISTER("slovakia"), level: "BRAK-SZABLONU", checked: "rejestr nie podaje szablonu" },

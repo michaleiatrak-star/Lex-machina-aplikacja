@@ -57,3 +57,14 @@ describe("legislation PDF: text layer read, a scan goes to OCR/RAG", () => {
     expect(scan.kind === "SKAN" && scan.note).toMatch(/kandydat do OCR i indeksu RAG/u);
   });
 });
+
+describe("Switzerland: Fedlex Akoma Ntoso", () => {
+  it("articles without the notes, the amending acts (AS) with their dates in force", async () => {
+    const { readSwitzerland } = await import("../src/eli/readers.js");
+    const reading = readSwitzerland(fixture("ch-zgb.xml"), "fedlex.data.admin.ch/eli/cc/24/233_245_233/20260701/de");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[0]!.text).toMatch(/^1 Das Gesetz findet auf alle Rechtsfragen Anwendung/u);
+    expect(reading.articles[0]!.text).not.toContain("in Kraft seit");
+    expect(reading.articles[0]!.amendments).toContainEqual({ act: "https://fedlex.data.admin.ch/eli/oc/1999/149", inForce: "2000-01-01" });
+  });
+});

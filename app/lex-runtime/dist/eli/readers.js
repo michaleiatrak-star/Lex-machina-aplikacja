@@ -94,6 +94,36 @@ export function readGermany(html, source) {
     const articles = unit ? [{ unit, heading: `${unit} ${heading}`.trim(), text: paragraphs.join("\n"), amendments: [] }] : [];
     return { country: "DE", source, title, articles, version: "wersja obowiązująca (bez daty w adresie)", status: "tekst nieurzędowy (gesetze-im-internet.de); urzędowy: BGBl. (recht.bund.de)" };
 }
+const GERMAN_MONTHS = { jan: "01", feb: "02", "mär": "03", mar: "03", apr: "04", mai: "05", juni: "06", jun: "06", juli: "07", jul: "07", aug: "08", sept: "09", sep: "09", okt: "10", nov: "11", dez: "12" };
+/** "1. Jan. 2000" -> "2000-01-01" (Fedlex notes in German). */
+function germanDate(value) {
+    const match = /(\d{1,2})\.\s*([A-Za-zäÄ]+)\.?\s*(\d{4})/u.exec(value);
+    const month = match ? GERMAN_MONTHS[match[2].toLowerCase().slice(0, match[2].toLowerCase().startsWith("ju") ? 4 : 3)] ?? GERMAN_MONTHS[match[2].toLowerCase()] : undefined;
+    return match && month ? `${match[3]}-${month}-${match[1].padStart(2, "0")}` : undefined;
+}
+/**
+ * Switzerland, Fedlex (Akoma Ntoso XML of the consolidated version, one file per date in force:
+ * …/filestore/fedlex.data.admin.ch/eli/cc/{id}/{YYYYMMDD}/{lang}/xml/…xml, found by SPARQL from
+ * the work's consolidations). Each change is an authorialNote naming the amending act (an ELI
+ * link to the Official Compilation AS) and "in Kraft seit …". The text has legal force (SR).
+ */
+export function readSwitzerland(xml, source) {
+    const title = plainText(/<docTitle>([\s\S]*?)<\/docTitle>/u.exec(xml)?.[1] ?? "");
+    const articles = [...xml.matchAll(/<article eId="([^"]+)">([\s\S]*?)<\/article>/gu)].map(([, , body]) => {
+        const heading = plainText(/<num>([\s\S]*?)<\/num>/u.exec(body)?.[1] ?? "");
+        const notes = [...body.matchAll(/<authorialNote>([\s\S]*?)<\/authorialNote>/gu)].map((match) => match[1]);
+        const amendments = notes.flatMap((note) => {
+            const act = /<ref href="(https:\/\/fedlex\.data\.admin\.ch\/eli\/oc\/[^"]+)"/u.exec(note)?.[1];
+            if (!act)
+                return [];
+            const inForce = germanDate(/in Kraft seit ([^(;]+)/u.exec(plainText(note))?.[1] ?? "");
+            return [{ act, ...(inForce ? { inForce } : {}) }];
+        });
+        const text = plainText(body.replace(/<authorialNote>[\s\S]*?<\/authorialNote>/gu, "").replace(/<num>[\s\S]*?<\/num>/u, ""));
+        return { unit: heading.replace(/^Art\.\s*/u, ""), heading, text, amendments };
+    });
+    return { country: "CH", source, ...(title ? { title } : {}), articles, version: "wersja skonsolidowana z datą (eli/cc/{id}/{RRRRMMDD})", status: "tekst urzędowy (Fedlex, SR)" };
+}
 const RAG_NOTE = "skan bez warstwy tekstowej: kandydat do OCR i indeksu RAG, nie brzmienie zweryfikowane";
 /** A legislation PDF: its text layer is read; pages without one are named for OCR/RAG. */
 export async function readLegislationPdf(data) {
@@ -106,4 +136,4 @@ export async function readLegislationPdf(data) {
         return { kind: "MIESZANY", text: result.text, pages: pages.length, pagesWithoutText: empty, note: `strony ${empty.join(", ")}: ${RAG_NOTE}` };
     return { kind: "TEKST", text: result.text, pages: pages.length };
 }
-export const NATIONAL_READERS = { DK: readDenmark, NL: readNetherlands, BE: readBelgium, IT: readItaly, DE: readGermany };
+export const NATIONAL_READERS = { DK: readDenmark, NL: readNetherlands, BE: readBelgium, IT: readItaly, DE: readGermany, CH: readSwitzerland };
