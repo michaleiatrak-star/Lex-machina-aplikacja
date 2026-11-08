@@ -82,7 +82,17 @@ jobs:
 
       - name: Build NSIS online installer
         working-directory: app/lex-desktop
-        run: npx tauri build --bundles nsis
+        shell: pwsh
+        # Tauri downloads NSIS from GitHub release assets; a 503/504 there (2026-11-08, three runs)
+        # failed the build with nothing wrong in the code: the build is retried with a pause.
+        run: |
+          foreach ($attempt in 1..4) {
+            npx tauri build --bundles nsis
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 4) { throw "TAURI_BUILD_FAILED:$LASTEXITCODE" }
+            Write-Host "tauri build failed ($LASTEXITCODE), retry $attempt of 3 after $(30 * $attempt) s"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
 
       - name: Windows branding acceptance
         shell: pwsh

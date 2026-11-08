@@ -321,13 +321,14 @@ jobs:
           LEX_WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.LEX_WINDOWS_SIGNING_PFX_PASSWORD }}
         shell: pwsh
         run: |
-          if ("${{ inputs.signed }}" -eq "true") {
-            npx tauri build --bundles nsis --config src-tauri/tauri.offline.signed.conf.json
-          } else {
-            npx tauri build --bundles nsis --config src-tauri/tauri.offline.conf.json
-          }
-          if ($LASTEXITCODE -ne 0) {
-            throw "OFFLINE_TAURI_BUILD_FAILED:$LASTEXITCODE"
+          # NSIS comes from GitHub release assets: a 503/504 there is retried (see lex-installer.yml).
+          $config = if ("${{ inputs.signed }}" -eq "true") { "src-tauri/tauri.offline.signed.conf.json" } else { "src-tauri/tauri.offline.conf.json" }
+          foreach ($attempt in 1..4) {
+            npx tauri build --bundles nsis --config $config
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 4) { throw "OFFLINE_TAURI_BUILD_FAILED:$LASTEXITCODE" }
+            Write-Host "tauri build failed ($LASTEXITCODE), retry $attempt of 3 after $(30 * $attempt) s"
+            Start-Sleep -Seconds (30 * $attempt)
           }
 
       - name: Windows branding acceptance for inner offline installer
