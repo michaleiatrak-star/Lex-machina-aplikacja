@@ -165,7 +165,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     consolidation: "wersja-z-data",
     example: "https://data.finlex.fi/eli/sd/2008/521/alkup.html",
     api: { url: "https://opendata.finlex.fi/finlex/avoindata/v1", kind: "AKN", auth: "brak", probe: "/akn/fi/act/statute-consolidated/list?page=1&limit=1", checked: "200 application/json (URI Akoma Ntoso)" },
-    text: { reading: "DO-ZBADANIA", note: "API Finlex AKN odpowiada listą URI; tekst do pobrania z URI" },
+    text: { reading: "DO-ZBADANIA", note: "API Finlex AKN (bez klucza): dokument XML pod pełnym URI z wersją (…/statute-consolidated/{rok}/{nr}/{lang}@{wersja}); lista po roku ma limit 10 i nie jest posortowana — do aktu trzeba dojść stronicowaniem; wyszukiwanie po numerze do ustalenia" },
     source: REGISTER("finland"),
     level: "BRAK-SZABLONU",
     // The register's example and its template page answer 404: the service moved.
