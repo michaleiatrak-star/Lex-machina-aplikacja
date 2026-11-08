@@ -11,6 +11,8 @@ import type {
 import type {
   OcrPageResult
 } from "../document-ingestion.js";
+import type { OcrAccelEnvironment } from "./ocr-acceleration.js";
+import { ocrServePool } from "./ocr-serve-pool.js";
 
 export type LocalPaddleImageOcrOptions = {
   python?: string;
@@ -19,6 +21,10 @@ export type LocalPaddleImageOcrOptions = {
   timeoutMs?: number;
   // Line images for the local vision model; asked for only when the model is installed.
   lineCrops?: () => boolean;
+  // The graphics card when it is on here (ocr-acceleration.ts), as for PDF scans.
+  acceleration?: () => OcrAccelEnvironment | null;
+  // A long-lived worker with the models loaded (ocr-serve-pool.ts), shared with PDF pages.
+  persistent?: boolean;
 };
 
 function defaultWorkerPath(): string {
@@ -46,6 +52,8 @@ implements ImageOcrEngine {
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
   private readonly lineCrops: () => boolean;
+  private readonly acceleration: () => OcrAccelEnvironment | null;
+  private readonly persistent: boolean;
 
   constructor(
     options: LocalPaddleImageOcrOptions = {}
@@ -66,6 +74,8 @@ implements ImageOcrEngine {
     this.timeoutMs =
       options.timeoutMs ?? 10 * 60 * 1000;
     this.lineCrops = options.lineCrops ?? (() => false);
+    this.acceleration = options.acceleration ?? (() => null);
+    this.persistent = (options.persistent ?? false) && process.env.LEX_OCR_PERSISTENT !== "off";
   }
 
   async recognizeImage(
@@ -84,6 +94,7 @@ implements ImageOcrEngine {
       "result.json"
     );
 
+    const acceleration = this.acceleration();
     try {
       await writeFile(input, data);
       const args = [
@@ -108,7 +119,9 @@ implements ImageOcrEngine {
         args.push("--line-crops");
       }
 
-      await new Promise<void>((resolve, reject) => {
+      if (this.persistent) {
+        await this.recognizeServed(input, output, path.join(tempRoot, "evidence"), acceleration);
+      } else await new Promise<void>((resolve, reject) => {
         const child = spawn(
           this.python,
           args,
@@ -116,7 +129,10 @@ implements ImageOcrEngine {
             stdio: ["ignore", "ignore", "pipe"],
             env: {
               ...process.env,
-              PYTHONUNBUFFERED: "1"
+              PYTHONUNBUFFERED: "1",
+              // Photos and image scans on the card too: before, the worker got no card
+              // settings and read every image on the processor.
+              ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
             }
           }
         );
@@ -169,6 +185,52 @@ implements ImageOcrEngine {
         recursive: true,
         force: true
       });
+    }
+  }
+
+  /** One image on a long-lived worker: no model loading per photo. */
+  private async recognizeServed(input: string, output: string, evidenceDir: string, acceleration: OcrAccelEnvironment | null): Promise<void> {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" })
+    };
+    delete env.LEX_OCR_PAUSE_FILE;
+    // The same key as a PDF pass with all cores: an image reuses that worker's models.
+    const key = JSON.stringify({ python: this.python, worker: this.workerPath, threads: null, accel: acceleration?.env ?? null, device: this.device ?? null });
+    let stderr = "";
+    const run = ocrServePool.run({
+      key,
+      python: this.python,
+      workerArgs: [this.workerPath, "--serve"],
+      env,
+      job: {
+        input,
+        output,
+        pages: "1",
+        lang: "pl",
+        ...(this.device ? { device: this.device } : {}),
+        evidenceDir,
+        lineCrops: this.lineCrops(),
+        mode: "image",
+        pauseFile: ""
+      },
+      onStderr: (text) => {
+        stderr = (stderr + text).slice(-32_000);
+      }
+    });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      run.kill();
+    }, this.timeoutMs);
+    try {
+      await run.done;
+    } catch (error) {
+      if (timedOut) throw new Error("OCR_ENGINE_TIMEOUT: Local PaddleOCR image worker exceeded the configured timeout.");
+      throw ocrWorkerFailure(stderr, (error as { exitCode?: number | null }).exitCode ?? 1, "image worker");
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

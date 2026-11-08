@@ -1488,6 +1488,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/vision-ocr"
         | "/api/local-models/transcription"
         | "/api/local-models/ocr-acceleration"
+        | "/api/diagnostics/chat-turns"
+        | "/api/courts/wokanda"
         | "/api/local-models/transcription-acceleration"
         | "/api/skills/update/status"
         | "/api/guide/state"
@@ -1497,6 +1499,10 @@ fn route_allowed(method: &str, path: &str) -> bool {
         }
         "/api/skills/channel/status" => method == "GET",
         "/api/skills/channel/refresh" => method == "POST",
+        // Wokandy of the common courts: re-checked from this computer (administrator).
+        "/api/courts/wokanda/recheck" => method == "POST",
+        // A court's browser verification passed by the user in the court's window (as for sn.pl).
+        "/api/courts/wokanda/session/probe" => method == "POST",
         "/api/update/download"
         | "/api/local-models/provision"
         | "/api/local-models/repair"
@@ -1508,6 +1514,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/vision-ocr/remove"
         | "/api/local-models/transcription/install"
         | "/api/local-models/transcription/remove"
+        | "/api/local-models/transcription/speakers"
         | "/api/local-models/ocr-acceleration/install"
         | "/api/local-models/ocr-acceleration/measure"
         | "/api/local-models/ocr-acceleration/remove"
@@ -1550,6 +1557,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/core-law/settings" => method == "PUT",
         // Model zapasowy routingu dziedzin (Ustawienia; lex-web api.ts).
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
+        // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
+        "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
         "/api/diagnostics/anomalies/export" => method == "GET",
@@ -2232,6 +2241,9 @@ mod tests {
         assert!(route_allowed("GET", "/api/settings/domain-fallback"));
         assert!(route_allowed("PUT", "/api/settings/domain-fallback"));
         assert!(!route_allowed("DELETE", "/api/settings/domain-fallback"));
+        assert!(route_allowed("GET", "/api/settings/jurisdiction"));
+        assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
+        assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));
         assert!(route_allowed("POST", "/api/core-law/acts"));
         assert!(route_allowed("POST", "/api/core-law/acts/lookup"));
         assert!(route_allowed("POST", "/api/core-law/acts/remove"));
@@ -2281,12 +2293,19 @@ mod tests {
         assert!(route_allowed("GET", "/api/local-models/transcription"));
         assert!(route_allowed("POST", "/api/local-models/transcription/install"));
         assert!(route_allowed("POST", "/api/local-models/transcription/remove"));
+        assert!(route_allowed("POST", "/api/local-models/transcription/speakers"));
         assert!(!route_allowed("GET", "/api/local-models/transcription/install"));
         assert!(route_allowed("GET", "/api/local-models/ocr-acceleration"));
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/install"));
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/measure"));
         assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/remove"));
         assert!(!route_allowed("GET", "/api/local-models/ocr-acceleration/measure"));
+        assert!(route_allowed("GET", "/api/diagnostics/chat-turns"));
+        assert!(route_allowed("GET", "/api/courts/wokanda"));
+        assert!(route_allowed("POST", "/api/courts/wokanda/recheck"));
+        assert!(route_allowed("POST", "/api/courts/wokanda/session/probe"));
+        assert!(route_allowed("PATCH", "/api/cases/case_1/court"));
+        assert!(route_allowed("POST", "/api/cases/case_1/wokanda"));
         assert!(route_allowed("GET", "/api/local-models/transcription-acceleration"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/install"));
         assert!(route_allowed("POST", "/api/local-models/transcription-acceleration/measure"));

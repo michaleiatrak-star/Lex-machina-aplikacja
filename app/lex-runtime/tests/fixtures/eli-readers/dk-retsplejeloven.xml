@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2014/09/26/LBKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>LBK H#LOKDOK03</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>A20140130829</AccessionNumber>
+    <DocumentId>AA008075</DocumentId>
+    <UniqueDocumentId>164280</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse af lov om rettens pleje</DocumentTitle>
+    <Year>2014</Year>
+    <DiesSigni>2014-12-09</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2014-12-12</StartDate>
+    <EndDate REFid="submit_1">2023-07-13</EndDate>
+    <Status>Historic</Status>
+    <Number>1308</Number>
+    <PopularTitle>Retsplejeloven</PopularTitle>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2014-12-12</DiesEdicti>
+    <DateOfHistoricMark>2015-11-17</DateOfHistoricMark>
+    <Change id="change_1" />
+    <Ref_Accn REFid="change_1">A20120124230</Ref_Accn>
+    <Ref_Af REFid="change_1">2012-12-18</Ref_Af>
+    <Ref_Text REFid="change_1">Lov om ændring af retsplejeloven, straffeloven og lov om elektroniske kommunikationsnet og -tjenester\n(Revision af reglerne om forkyndelse m.v.)</Ref_Text>
+    <Change id="change_2" />
+    <Ref_Accn REFid="change_2">A20150017630</Ref_Accn>
+    <Ref_Af REFid="change_2">2015-02-24</Ref_Af>
+    <Ref_Text REFid="change_2">Lov om ændring af lov om pas til danske statsborgere m.v., udlændingeloven og retsplejeloven (Styrket indsats mod rekruttering til væbnede konflikter i udlandet m.v.)</Ref_Text>
+    <Change id="change_3" />
+    <Ref_Accn REFid="change_3">A20150027030</Ref_Accn>
+    <Ref_Af REFid="change_3">2015-03-25</Ref_Af>
+    <Ref_Text REFid="change_3">Lov om ændring af forældreansvarsloven og retsplejeloven (Imødegåelse af samarbejdschikane m.v.)</Ref_Text>
+    <Change id="change_4" />
+    <Ref_Accn REFid="change_4">A20150052430</Ref_Accn>
+    <Ref_Af REFid="change_4">2015-04-29</Ref_Af>
+    <Ref_Text REFid="change_4">Lov om alternativ tvistløsning i forbindelse med forbrugerklager (forbrugerklageloven)</Ref_Text>
+    <Change id="change_5" />
+    <Ref_Accn REFid="change_5">A20150074030</Ref_Accn>
+    <Ref_Af REFid="change_5">2015-06-01</Ref_Af>
+    <Ref_Text REFid="change_5">Lov om ændring af lov om detailsalg fra butikker m.v., lov om forbrugerbeskyttelse ved erhvervelse af fast ejendom m.v., lov om søfarendes ansættelsesforhold m.v., lov om kommuners og regioners udførelse af opgaver for andre offentlige myndigheder og kommuners og regioners deltagelse i selskaber og forskellige andre love og om ophævelse af lov om translatører og tolke og ophævelse af lov om dispachører (Lempelse af dispensationsadgang for detailsalg på helligdage, afskaffelse af maksimalpriser i huseftersynsordningen, minimumsbeskyttelse af visse personkategorier om bord på skibe, afskaffelse af indberetningspligten for kommuners og regioners deltagelse i selskaber og afskaffelse af beskikkelsesordning for translatører og tolke samt for dispachører m.v.)</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Mette Frederiksen</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Henrik Hjort Elmquist</Signature>
+    <PlaceOfSignature>Justitsministeriet</PlaceOfSignature>
+    <JournalNumber>Justitsmin., j.nr. 2014-4000-0134</JournalNumber>
+    <Ministry>Justitsministeriet</Ministry>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Bekendtgørelse af lov om rettens pleje</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold><Paragraf id="Par1">
+              <Explicatus>§ 1.</Explicatus>
+              <Stk id="Par1_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>De almindelige domstole er Højesteret, landsretterne og byretterne samt Sø- og Handelsretten og Tinglysningsretten.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1_Stk2">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Denne lovs regler finder alene anvendelse på rettens pleje ved de almindelige domstole, medmindre andet er bestemt i denne eller anden lov.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1_Stk3">
+                <Explicatus>Stk. 3.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Militære straffesager behandles efter militær retsplejelov.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+            <Paragraf id="Par1a">
+              <Explicatus>§ 1 a.</Explicatus>
+              <Stk id="Par1a_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>Den Særlige Klageret behandler og påkender</Char>
+                  </Linea>
+                </Exitus>
+                <Exitus>
+                  <Index id="Par1a_Stk1_X1">
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num1">
+                      <Explicatus>1)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>begæringer om genoptagelse af en straffesag, jf. kapitel 86,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num2">
+                      <Explicatus>2)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>kæremål vedrørende udelukkelse af en forsvarer, jf. § 737,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num3">
+                      <Explicatus>3)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>klager, der henvises efter § 48,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num4">
+                      <Explicatus>4)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>sager om suspension, disciplinærforfølgning og afsked på grund af sygdom i de i §§ 49, 49 a, 50 og 55 nævnte tilfælde,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num5">
+                      <Explicatus>5)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>sager efter § 51 f om afsked før tilkaldeperiodens udløb,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num6">
+                      <Explicatus>6)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>sager efter § 54 a om afsked og ændring af tjenestested og</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par1a_Stk1_Num7">
+                      <Explicatus>7)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>sager om afsættelse af medlemmer af Domstolsstyrelsens bestyrelse, jf. § 6, stk. 3, i lov om Domstolsstyrelsen.</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                  </Index>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1a_Stk2">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Klageretten består af 5 medlemmer, der efter indstilling af justitsministeren beskikkes af kongen for en periode på 10 år.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Rettens medlemmer kan kun afsættes ved dom.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Et medlem udtræder, når betingelserne for medlemmets beskikkelse bortfalder.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Beskikkelsen ophører senest ved udgangen af den måned, hvori den pågældende fylder 70 år.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Genbeskikkelse kan ikke finde sted.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1a_Stk3">
+                <Explicatus>Stk. 3.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Klagerettens medlemmer skal være en højesteretsdommer (Klagerettens formand), en landsdommer og en byretsdommer, der beskikkes efter indstilling til justitsministeren fra henholdsvis Højesteret, landsretterne og Den Danske Dommerforening, samt en advokat, der beskikkes efter indstilling til justitsministeren fra Advokatrådet, og en universitetslærer i retsvidenskab eller anden jurist med særlig videnskabelig uddannelse.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1a_Stk4">
+                <Explicatus>Stk. 4.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>For hvert af rettens medlemmer beskikker kongen efter tilsvarende regler som for vedkommende medlem en første- og andensuppleant.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Suppleanterne tiltræder om nødvendigt retten, således at førstesuppleanten går forud for andensuppleanten.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par1a_Stk5">
+                <Explicatus>Stk. 5.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Klagerettens sekretariatsopgaver udføres af Højesteret efter aftale mellem Højesterets præsident og Klagerettens formand.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+            <Paragraf id="Par2">
+              <Explicatus>§ 2.</Explicatus>
+              <Stk id="Par2_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>Højesteret er øverste domstol for hele riget.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Den har sit sæde i København og består af en præsident og 15 andre højesteretsdommere.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par2_Stk2">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Præsidenten er ansvarlig for varetagelsen af de bevillingsmæssige og administrative forhold, der er henlagt til embedet.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Præsidenten skal herunder sørge for en forsvarlig og hensigtsmæssig drift af embedet og skal tage de fornødne initiativer til sikring heraf.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par2_Stk3">
+                <Explicatus>Stk. 3.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>I præsidentens sted træder i fornødent fald den efter embedsalder ældste af rettens tilstedeværende dommere.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+            <Paragraf id="Par3">
+              <Explicatus>§ 3.</Explicatus>
+              <Stk id="Par3_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>I afgørelsen af sager ved Højesteret deltager, medmindre andet er bestemt, mindst 5 dommere.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Præsidenten træffer efter forhandling med rettens medlemmer bestemmelse om sagernes fordeling mellem dommerne og om sagernes administrative behandling.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Er i en sag det nødvendige antal højesteretsdommere ikke til rådighed, kan præsidenten tilkalde en eller flere landsdommere til at deltage i sagens behandling.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par3_Stk2">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Når præsidenten ikke deltager i behandlingen af en sag, beklædes formandspladsen af den dommer, præsidenten efter forhandling med rettens medlemmer udpeger dertil.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par3_Stk3">
+                <Explicatus>Stk. 3.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Efter rettens nærmere bestemmelse kan følgende afgørelser træffes af udvalg, der består af mindst 3 dommere, og som sammensættes af præsidenten efter forhandling med rettens medlemmer:</Char>
+                  </Linea>
+                </Exitus>
+                <Exitus>
+                  <Index id="Par3_Stk3_X1">
+                    <Indentatio formaInd="Nummer" id="Par3_Stk3_Num1">
+                      <Explicatus>1)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>Beslutninger og kendelser, der ikke træffes under hovedforhandlingen i domssager,</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par3_Stk3_Num2">
+                      <Explicatus>2)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>i borgerlige sager domme, hvorved anke afvises, domme i sager, hvor indstævnte møder uden at rejse indsigelse, og domme, hvorved der alene tages stilling til spørgsmål om sagsomkostninger, og</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                    <Indentatio formaInd="Nummer" id="Par3_Stk3_Num3">
+                      <Explicatus>3)</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>domme i kæresager.</Char>
+                        </Linea>
+                      </Exitus>
+                    </Indentatio>
+                  </Index>
+                </Exitus>
+              </Stk>
+              <Stk id="Par3_Stk4">
+                <Explicatus>Stk. 4.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>I det omfang retten finder det formålstjenligt, kan et enkelt af medlemmerne handle på udvalgets vegne.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>I vedtagelsen af domme og kendelser bortset fra kendelser om afvisning af kæremål skal dog alle udvalgets medlemmer deltage.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+            </DokumentIndhold></Dokument>

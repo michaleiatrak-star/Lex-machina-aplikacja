@@ -288,8 +288,8 @@ implements ProviderAdapter {
 
     const statuteResources = [
       "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-      "shared/PRAWO-HARDGATE.md",
-      "shared/HIERARCHIA-ZRODEL.md",
+      "JUR:weryfikacja-przepisow-kanon",
+      "JUR:hierarchia-zrodel",
       "shared/SELF-CHECK-ANTY-FASADA.md"
     ] as const;
     const readResults =

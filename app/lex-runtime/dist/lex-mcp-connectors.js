@@ -1,4 +1,4 @@
-// Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers, pakiet dist/lex-mcp.mjs).
+// Konektory MCP Lex Machina (pakiet jurysdykcji: pole `konektory`, PL: prawo-polskie-v2/mcp-servers, dist/lex-mcp.mjs).
 // Zastępują flotę @matematicsolutions/* i agregator prawo-pl-mcp. Lista, grupy i link do
 // klucza CEIDG odpowiadają instaluj_serwery_mcp.py (FAZA 0E audytu) — tam jest źródło prawdy.
 import { createHash } from "node:crypto";
@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { activeJurisdiction, DEFAULT_JURISDICTION_PACK, jurisdictionConnectorPackage } from "./jurisdiction.js";
 export const LEX_MCP_SERVER_IDS = [
     "isap",
     "eurlex",
@@ -89,11 +90,17 @@ const PASSED_ENV = [
 export function isLexMcpServerId(value) {
     return LEX_MCP_SERVER_IDS.includes(value);
 }
+// The connectors of the chosen jurisdiction (field `konektory` of its JURYSDYKCJA.md).
 export function lexMcpPackagePath(skillsRoot) {
     const configured = process.env.LEX_MCP_PACKAGE?.trim();
     if (configured)
         return path.resolve(configured);
-    return path.join(skillsRoot, "audyt-systemu-v4", "mcp-servers", "dist", "lex-mcp.mjs");
+    return jurisdictionConnectorPackage(skillsRoot) ?? path.join(skillsRoot, DEFAULT_JURISDICTION_PACK, "mcp-servers", "dist", "lex-mcp.mjs");
+}
+/** Servers shown and run for the chosen jurisdiction (field `konektory-serwery`); all when it names none. */
+export function jurisdictionServerIds(skillsRoot) {
+    const named = activeJurisdiction(skillsRoot)?.connectorServers;
+    return named?.length ? LEX_MCP_SERVER_IDS.filter((id) => named.includes(id)) : [...LEX_MCP_SERVER_IDS];
 }
 function defaultStateDir() {
     const configured = process.env.LEX_MCP_STATE_DIR?.trim();
@@ -307,6 +314,10 @@ export class LexMcpConnectorStore {
     get packagePath() {
         return lexMcpPackagePath(this.skillsRoot);
     }
+    /** The corpus the connectors and the jurisdiction packages come from. */
+    get corpusRoot() {
+        return this.skillsRoot;
+    }
     get command() {
         return this.nodeCommand;
     }
@@ -436,9 +447,14 @@ export class LexMcpConnectorStore {
             return null;
         }
     }
+    // Only the chosen jurisdiction's connectors run; another country's stay installed but idle.
     installedServers() {
         const installed = new Set(this.readState().installed);
-        return LEX_MCP_SERVER_IDS.filter((id) => installed.has(id));
+        return jurisdictionServerIds(this.skillsRoot).filter((id) => installed.has(id));
+    }
+    /** Called when the jurisdiction changes: the MCP client restarts with the new country's connectors. */
+    jurisdictionChanged() {
+        this.revisionValue += 1;
     }
     // Serwery, które klient MCP aplikacji faktycznie uruchamia.
     readyServers() {
@@ -552,7 +568,8 @@ export class LexMcpConnectorStore {
                 sessionSavedAt: this.snSessionSavedAt()
             },
             desktop: desktopLocation,
-            servers: LEX_MCP_CATALOG.map((server) => ({
+            // The list shows the chosen jurisdiction's connectors only.
+            servers: LEX_MCP_CATALOG.filter((server) => jurisdictionServerIds(this.skillsRoot).includes(server.id)).map((server) => ({
                 ...server,
                 installed: installed.has(server.id),
                 ready: ready.has(server.id),

@@ -184,8 +184,11 @@ def _line_crop(image: np.ndarray, poly) -> str | None:
 # stamp over 26 printed lines: printed text 86.2% / 86.5% -> 99.4% / 99.5% of characters (red
 # / blue), 5-6 damaged lines -> 0, the stamp's own words read 0 -> 65-74%. The page is read
 # from its text layer (coloured ink removed, black letters under it kept) and every stamp from
-# its own layer, as separate lines marked "stamp". A black or grey stamp has no colour to split
-# by: its lines stay as read and the review flags them.
+# its own layer, as separate lines marked "stamp". A grey stamp is split by lightness
+# (split_grey_stamp). A black stamp has nothing to split by (as dark as the print): its lines
+# stay as read and the review flags them. Measured 2026-11-05 (20 printed lines, a framed
+# 4-line stamp over 7 of them; printed lines under the stamp / the stamp's words):
+# blue 99.7% 10/11, red 99.6% 10/11, grey 93.6% 2/11 -> 100% 6/11, black 65.2% 1/11.
 STAMP_INK_MIN_SHARE = 0.0005
 # More coloured ink than this: a colour photo or a colour document, not a stamp on a letter.
 STAMP_INK_MAX_SHARE = 0.15
@@ -193,41 +196,93 @@ STAMP_MIN_PIXELS = 400
 STAMP_MARK = "[PIECZĘĆ lub kolorowy tusz]"
 
 
-def split_stamp_ink(image: np.ndarray):
-    """(text layer, [(x0, y0, stamp layer crop)]) or None without coloured stamp ink."""
+def _stamp_layers(image: np.ndarray, ink: np.ndarray, letter: np.ndarray, high: np.ndarray, min_size: tuple[int, int] = (40, 20)):
+    """(text layer, [(x0, y0, stamp layer crop)]) from the stamp's ink mask, or None."""
     import cv2
 
     rgb = image[:, :, :3].astype(np.int16)
-    high = rgb.max(axis=2)
-    chroma = high - rgb.min(axis=2)
-    ink = (chroma > 38) & (255 - high > 25)
-    share = float(ink.mean())
-    if share < STAMP_INK_MIN_SHARE or share > STAMP_INK_MAX_SHARE:
-        return None
     kernel = np.ones((3, 3), np.uint8)
     spread = cv2.dilate(ink.astype(np.uint8), kernel) > 0
-    # Under the ink a black letter stays dark and grey: it remains in the text layer.
-    letter = (chroma < 60) & (high < 90)
     text = image[:, :, :3].copy()
     bright = high > 200
     paper = np.median(rgb[bright], axis=0).astype(np.uint8) if bright.any() else np.array([255, 255, 255], np.uint8)
+    # Under the ink a black letter stays dark: it remains in the text layer.
     text[spread & ~letter] = paper
     darkness = np.clip(255 - (255 - high).astype(np.float32) * 1.6, 0, 255).astype(np.uint8)
     count, _, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(ink.astype(np.uint8), np.ones((25, 25), np.uint8)))
     regions = []
+    boxes = []
     height, width = ink.shape
     for index in range(1, count):
         x, y, w, h, _ = stats[index]
         x0, y0, x1, y1 = max(0, x - 10), max(0, y - 10), min(width, x + w + 10), min(height, y + h + 10)
         own = ink[y0:y1, x0:x1]
-        if w < 40 or h < 20 or int(own.sum()) < STAMP_MIN_PIXELS:
+        if w < min_size[0] or h < min_size[1] or int(own.sum()) < STAMP_MIN_PIXELS:
             continue
+        boxes.append((x0, y0, x1, y1))
+    # A framed stamp: the frame's block already holds the lines inside it, which form blocks of
+    # their own; read once (each line was read twice, the stamp's text doubled in the result).
+    kept = [box for box in boxes if not any(other != box and other[0] <= box[0] and other[1] <= box[1] and other[2] >= box[2] and other[3] >= box[3] for other in boxes)]
+    for x0, y0, x1, y1 in kept:
+        own = ink[y0:y1, x0:x1]
         layer = np.full((y1 - y0, x1 - x0), 255, np.uint8)
         layer[own] = darkness[y0:y1, x0:x1][own]
         regions.append((x0, y0, np.repeat(layer[:, :, None], 3, axis=2)))
     if not regions:
         return None
     return text, regions
+
+
+def split_stamp_ink(image: np.ndarray):
+    """(text layer, [(x0, y0, stamp layer crop)]) or None without stamp ink to split by."""
+    rgb = image[:, :, :3].astype(np.int16)
+    high = rgb.max(axis=2)
+    chroma = high - rgb.min(axis=2)
+    ink = (chroma > 38) & (255 - high > 25)
+    share = float(ink.mean())
+    if share > STAMP_INK_MAX_SHARE:
+        return None
+    if share >= STAMP_INK_MIN_SHARE:
+        return _stamp_layers(image, ink, (chroma < 60) & (high < 90), high)
+    if os.environ.get("LEX_OCR_GREY_STAMPS", "on") == "off":
+        return None
+    return split_grey_stamp(image, high, chroma)
+
+
+# A grey stamp (a worn pad, a black-and-white copy of a coloured one) has no colour, but it is
+# lighter than printed black: the mid-grey strokes away from any dark letter are its ink.
+# Left alone (checked): a pale copy or grey print (few dark letters next to it), a grey table
+# background, form lines, a filled grey logo (not strokes).
+GREY_STAMP_LEVELS = (95, 190)
+GREY_STAMP_MAX_AREA = 0.2
+GREY_STAMP_MAX_FILL = 0.45
+
+
+def split_grey_stamp(image: np.ndarray, high: np.ndarray, chroma: np.ndarray):
+    import cv2
+
+    dark = high < 80
+    mid = (chroma < 40) & (high >= GREY_STAMP_LEVELS[0]) & (high <= GREY_STAMP_LEVELS[1])
+    # Edges of black letters are mid-grey too: nothing next to a dark pixel counts as stamp ink.
+    near_letter = cv2.dilate(dark.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    ink = mid & ~near_letter
+    # A stamp is strokes; a filled grey area (a logo, a shaded field) is not one.
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(ink.astype(np.uint8), np.ones((25, 25), np.uint8)))
+    for index in range(1, count):
+        x, y, w, h, _ = stats[index]
+        block = labels[y:y + h, x:x + w] == index
+        if float(ink[y:y + h, x:x + w][block].mean()) > GREY_STAMP_MAX_FILL:
+            ink[y:y + h, x:x + w][block] = False
+    share = float(ink.mean())
+    if share < STAMP_INK_MIN_SHARE or share > STAMP_INK_MAX_SHARE or 2 * int(dark.sum()) < int(ink.sum()):
+        return None
+    split = _stamp_layers(image, ink, dark, high, min_size=(120, 60))
+    if split is None:
+        return None
+    area = sum(layer.shape[0] * layer.shape[1] for _, _, layer in split[1])
+    if area > GREY_STAMP_MAX_AREA * ink.size:
+        return None
+    return split
 
 
 def read_stamps(ocr, regions) -> list[dict]:
@@ -1018,42 +1073,9 @@ def wait_while_paused() -> None:
         time.sleep(0.25)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--pages", default="1")
-    parser.add_argument("--lang", default="pl")
-    parser.add_argument("--dpi", type=int, default=220)
-    parser.add_argument("--device", default=None)
-    parser.add_argument("--evidence-dir", default=None)
-    # Straightened image of every line (base64 JPEG) for the local vision model.
-    parser.add_argument("--line-crops", action="store_true")
-    parser.add_argument(
-        "--mode",
-        choices=("pdf", "image"),
-        default="pdf",
-    )
-    # UVDoc straightens a photographed, bent page. On a flat scan it bends the
-    # text and merges neighbouring lines (a whole "KRS ... NIP ... ul." line was
-    # lost on a real scan), so by default it runs for photographs only.
-    parser.add_argument(
-        "--unwarp",
-        choices=("auto", "on", "off"),
-        default=os.environ.get("LEX_OCR_UNWARP", "auto"),
-    )
-    args = parser.parse_args()
+def load_engine(lang: str, unwarp: bool, device: str | None) -> dict:
+    """Models of one configuration, loaded once: the one-shot run and every job of --serve."""
     started = time.perf_counter()
-    try:
-        # OpenCV's own pool (image steps around the networks) to the worker's share as well.
-        import cv2
-
-        cv2.setNumThreads(cpu_threads())
-    except Exception:  # noqa: BLE001
-        pass
-    page_seconds: list[float] = []
-
-    pages = parse_pages(args.pages)
     model_root_raw = os.environ.get("LEX_PADDLE_MODEL_DIR", "").strip()
     if not model_root_raw:
         raise RuntimeError("LEX_PADDLE_MODEL_DIR is required; network model downloads are disabled")
@@ -1088,10 +1110,10 @@ def main() -> None:
         raise SystemExit(3)
 
     ocr_kwargs = dict(
-        lang=args.lang,
+        lang=lang,
         ocr_version="PP-OCRv6",
         use_doc_orientation_classify=True,
-        use_doc_unwarping=(args.unwarp == "on" or (args.unwarp == "auto" and args.mode == "image")),
+        use_doc_unwarping=unwarp,
         # Per-line orientation (the model stays installed) turned lines of degraded
         # scans upside down and garbled them; page orientation is still corrected.
         use_textline_orientation=False,
@@ -1101,32 +1123,40 @@ def main() -> None:
             for key, value in required_models.items()
         },
     )
-    if args.device:
-        ocr_kwargs["device"] = args.device
+    if device:
+        ocr_kwargs["device"] = device
 
     # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
     latin_dir = native_model_root / LATIN_REC
     ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
-    load_seconds = time.perf_counter() - started
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
+    return {"ocr": ocr, "fold": fold, "kwargs": ocr_kwargs, "loadSeconds": time.perf_counter() - started}
+
+
+def run_job(engine: dict, input_path: str, output_path: str, pages: list[int], mode: str, dpi: int, evidence: str | None, line_crops: bool, load_seconds: float) -> None:
+    """One document (or its pages) read with loaded models; the result file and the stats line."""
+    ocr = engine["ocr"]
+    fold = engine["fold"]
+    ocr_kwargs = engine["kwargs"]
+    page_seconds: list[float] = []
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).
     stamp_split = os.environ.get("LEX_OCR_STAMPS", "on") != "off"
     results = []
-    evidence_dir = Path(args.evidence_dir) if args.evidence_dir else None
+    evidence_dir = Path(evidence) if evidence else None
     if evidence_dir is not None:
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.mode == "image":
+    if mode == "image":
         if pages != [1]:
             raise ValueError("image mode accepts only page 1")
-        with Image.open(args.input) as source:
+        with Image.open(input_path) as source:
             image = np.array(source.convert("RGB"))
         results.append(
-            predict_page(ocr, image, 1, evidence_dir, args.line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"], fold=fold)
+            predict_page(ocr, image, 1, evidence_dir, line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"], fold=fold)
         )
     else:
-        doc = fitz.open(args.input)
+        doc = fitz.open(input_path)
         try:
             for page_number in pages:
                 wait_while_paused()
@@ -1138,7 +1168,7 @@ def main() -> None:
                 page_started = time.perf_counter()
                 page = doc.load_page(page_number - 1)
                 pix = page.get_pixmap(
-                    dpi=args.dpi,
+                    dpi=dpi,
                     alpha=False,
                 )
                 channels = pix.n
@@ -1159,7 +1189,7 @@ def main() -> None:
                         image,
                         page_number,
                         evidence_dir,
-                        args.line_crops,
+                        line_crops,
                         stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"],
                         fold=fold,
                     )
@@ -1170,7 +1200,7 @@ def main() -> None:
         finally:
             doc.close()
 
-    Path(args.output).write_text(
+    Path(output_path).write_text(
         json.dumps(results, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -1186,6 +1216,99 @@ def main() -> None:
         "marks": getattr(ocr, "latin_dir", None) is not None,
     }
     print("LEX_OCR_STATS " + json.dumps(stats), file=sys.stderr, flush=True)
+
+
+def unwarp_for(choice: str, mode: str) -> bool:
+    return choice == "on" or (choice == "auto" and mode == "image")
+
+
+def opencv_threads() -> None:
+    try:
+        # OpenCV's own pool (image steps around the networks) to the worker's share as well.
+        import cv2
+
+        cv2.setNumThreads(cpu_threads())
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def serve() -> None:
+    """Jobs as JSON lines on stdin, the models loaded once per configuration: a document no
+    longer waits 3-12 s for the models. On stdout "LEX_OCR_JOB_DONE <id>" or
+    "LEX_OCR_JOB_FAILED <id> <reason>" ends each job; stderr carries pages and stats as before."""
+    opencv_threads()
+    engines: dict = {}
+    print("LEX_OCR_SERVE_READY", flush=True)
+    for raw in sys.stdin:
+        raw = raw.strip()
+        if not raw:
+            continue
+        job_id = "?"
+        try:
+            job = json.loads(raw)
+            job_id = str(job.get("id", "?"))
+            pause = str(job.get("pauseFile") or "")
+            if pause:
+                os.environ["LEX_OCR_PAUSE_FILE"] = pause
+            else:
+                os.environ.pop("LEX_OCR_PAUSE_FILE", None)
+            mode = job.get("mode", "pdf")
+            key = (job.get("lang", "pl"), unwarp_for(job.get("unwarp", os.environ.get("LEX_OCR_UNWARP", "auto")), mode), job.get("device"))
+            load_seconds = 0.0
+            if key not in engines:
+                engines[key] = load_engine(*key)
+                load_seconds = engines[key]["loadSeconds"]
+            run_job(
+                engines[key],
+                job["input"],
+                job["output"],
+                parse_pages(str(job.get("pages", "1"))),
+                mode,
+                int(job.get("dpi", 220)),
+                job.get("evidenceDir"),
+                bool(job.get("lineCrops")),
+                load_seconds,
+            )
+            print(f"LEX_OCR_JOB_DONE {job_id}", flush=True)
+        except SystemExit as stop:
+            print(f"LEX_OCR_JOB_FAILED {job_id} EXIT:{stop.code}", flush=True)
+        except Exception as error:  # noqa: BLE001
+            print(f"{type(error).__name__}: {str(error)[:400]}", file=sys.stderr, flush=True)
+            print(f"LEX_OCR_JOB_FAILED {job_id} {type(error).__name__}", flush=True)
+
+
+def main() -> None:
+    if "--serve" in sys.argv[1:]:
+        serve()
+        return
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--pages", default="1")
+    parser.add_argument("--lang", default="pl")
+    parser.add_argument("--dpi", type=int, default=220)
+    parser.add_argument("--device", default=None)
+    parser.add_argument("--evidence-dir", default=None)
+    # Straightened image of every line (base64 JPEG) for the local vision model.
+    parser.add_argument("--line-crops", action="store_true")
+    parser.add_argument(
+        "--mode",
+        choices=("pdf", "image"),
+        default="pdf",
+    )
+    # UVDoc straightens a photographed, bent page. On a flat scan it bends the
+    # text and merges neighbouring lines (a whole "KRS ... NIP ... ul." line was
+    # lost on a real scan), so by default it runs for photographs only.
+    parser.add_argument(
+        "--unwarp",
+        choices=("auto", "on", "off"),
+        default=os.environ.get("LEX_OCR_UNWARP", "auto"),
+    )
+    args = parser.parse_args()
+    opencv_threads()
+    pages = parse_pages(args.pages)
+    engine = load_engine(args.lang, unwarp_for(args.unwarp, args.mode), args.device)
+    run_job(engine, args.input, args.output, pages, args.mode, args.dpi, args.evidence_dir, args.line_crops, engine["loadSeconds"])
 
 
 if __name__ == "__main__":

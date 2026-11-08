@@ -8,8 +8,12 @@ import {
 } from "./api.js";
 import { PageScanView } from "./PageScanView.js";
 import { InfoTip } from "./InfoTip";
+import { TranscriptEditor } from "./TranscriptEditor.js";
+import { isTranscript } from "./transcript.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
+import { keepOpenReview, replaceOcrLine } from "./ocr-line-fix.js";
+import { ScanSnippet } from "./ScanSnippet.js";
 
 /**
  * The preview every processed document passes before it is finalized: what to decide first
@@ -25,6 +29,8 @@ export type PrivacyPreviewRequest = {
   keepClear: boolean;
   // Runs the processing again without the local model's OCR corrections.
   onUndoOcrFixes?: () => void;
+  // A recording transcribed again with this many speakers (0 = estimated).
+  onRetranscribe?: (speakers: number) => void;
 };
 
 type Suggestion = DocumentReviewResponse["suggestions"][number];
@@ -77,11 +83,21 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const [markAction, setMarkAction] = useState<"PSEUDONYMIZE" | "LABEL">("PSEUDONYMIZE");
   const [markLabel, setMarkLabel] = useState("");
   const [editing, setEditing] = useState<{ page: number; text: string } | null>(null);
+  // Corrections typed straight in the "Niepewne" list, by page and line.
+  const [lineFixes, setLineFixes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // The doubtful line whose scan fragment is shown in a bubble (a click on it or its field).
+  const [snippetKey, setSnippetKey] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ page: number; start: number; end: number } | null>(null);
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [error, setError] = useState("");
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
+  // The preview opens where the user is: a read file waited below the chat for a decision while
+  // the user did not know what to wait for (user report 2026-11-06).
+  const previewRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    previewRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [props.fileName]);
   // Scanned pages: the original is shown next to the text, the page in view follows the text.
   const scanned = review.pages.some((page) => page.source === "OCR");
   const [scanPage, setScanPage] = useState(() => (review.pages.find((page) => page.source === "OCR") ?? review.pages[0])?.page ?? 1);
@@ -223,20 +239,40 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   }
 
 
+  /** One doubtful line corrected in the list: the page text changes there and is saved. */
+  async function saveLineFix(line: { page: number; line: number; text: string }, key: string): Promise<void> {
+    const corrected = (lineFixes[key] ?? line.text).trim();
+    const pageText = review.pages.find((page) => page.page === line.page)?.text ?? "";
+    const next = replaceOcrLine(pageText, line, corrected);
+    if (next === null) {
+      // Not found in the page text (or unchanged): the page editor at that line.
+      if (corrected !== line.text) {
+        if (scanned) showOnScan(line.page, { line: line.line });
+        setEditing({ page: line.page, text: pageText });
+        setEditLine(line.text);
+      }
+      return;
+    }
+    const saved = await savePage({ page: line.page, text: next });
+    if (saved) setLineFixes((current) => Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)));
+  }
+
   // The review and decisions after the save; null when the page was not saved.
-  async function savePage(): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
-    if (!editing) return { review, directives };
+  async function savePage(
+    target: { page: number; text: string } | null = editing
+  ): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
+    if (!target) return { review, directives };
     setSaving(true);
     setError("");
     try {
-      const result = await editDocumentPage(props.caseId, review.documentId, editing.page, editing.text);
+      const result = await editDocumentPage(props.caseId, review.documentId, target.page, target.text);
       const nextReview = {
         ...review,
-        pages: review.pages.map((page) => (page.page === editing.page ? result.page : page)),
-        suggestions: [...review.suggestions.filter((item) => item.page !== editing.page), ...result.suggestions]
+        pages: review.pages.map((page) => (page.page === target.page ? keepOpenReview(page, result.page) : page)),
+        suggestions: [...review.suggestions.filter((item) => item.page !== target.page), ...result.suggestions]
       };
       // Offsets of the old text no longer apply.
-      const nextDirectives = directives.filter((item) => item.page !== editing.page);
+      const nextDirectives = directives.filter((item) => item.page !== target.page);
       setReview(nextReview);
       setDirectives(nextDirectives);
       setEditing(null);
@@ -247,6 +283,34 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     } catch (failure) {
       setError(`Nie udało się zapisać tekstu strony: ${failure instanceof Error ? failure.message : String(failure)}`);
       return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // A recording's transcript: the pages its editor changed, saved one after another.
+  const transcript = useMemo(() => isTranscript(review.pages, props.fileName), [review.pages, props.fileName]);
+  async function saveTranscriptPages(changed: Array<{ page: number; text: string }>): Promise<boolean> {
+    setSaving(true);
+    setError("");
+    try {
+      let next = review;
+      for (const target of changed) {
+        const result = await editDocumentPage(props.caseId, next.documentId, target.page, target.text);
+        next = {
+          ...next,
+          pages: next.pages.map((page) => (page.page === target.page ? result.page : page)),
+          suggestions: [...next.suggestions.filter((item) => item.page !== target.page), ...result.suggestions]
+        };
+      }
+      const pagesChanged = new Set(changed.map((item) => item.page));
+      setReview(next);
+      setDirectives((current) => current.filter((item) => !pagesChanged.has(item.page)));
+      setSelection(null);
+      return true;
+    } catch (failure) {
+      setError(`Nie udało się zapisać transkrypcji: ${failure instanceof Error ? failure.message : String(failure)}`);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -310,7 +374,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   );
 
   return (
-    <section className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
+    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
       <header className="privacy-preview-head">
         <div>
           <strong>Podgląd przed zatwierdzeniem: {props.fileName}</strong>
@@ -364,6 +428,13 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         </div>
         {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
+      {transcript ? <TranscriptEditor
+          pages={review.pages}
+          fileName={props.fileName}
+          busy={saving || props.busy}
+          onSave={saveTranscriptPages}
+          {...(props.onRetranscribe ? { onRetranscribe: props.onRetranscribe } : {})}
+        /> : null}
 
       {!props.keepClear && review.recognizerWarnings?.length ? (
         <p className="field-error" role="alert">
@@ -441,15 +512,56 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             <details className="privacy-preview-group" open>
               <summary>Niepewne ({doubtful.length})</summary>
               <small>
-                Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.
+                Odczyt niepewny: porównaj z oryginałem i popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony)
+                albo w całym tekście strony.
                 {doubtful.some((line) => line.stamp)
                   ? " Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma: gdy niosą istotne dane (data wpływu, podpis, kwota), dopisz je przez „Popraw tekst strony”."
                   : ""}
               </small>
               <ul>
-                {doubtful.map((line, index) => (
+                {doubtful.map((line, index) => {
+                  // By the line, not its place in the list: a saved line leaves it, the rest keep their typing.
+                  const key = `${line.page}:${line.line}:${line.text}`;
+                  const value = lineFixes[key] ?? line.text;
+                  return (
                   <li key={`ocr-${line.page}-${index}`}>
-                    <span>s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”</span>
+                    <button
+                      type="button"
+                      className="privacy-preview-line-label"
+                      aria-expanded={scanned ? snippetKey === key : undefined}
+                      onClick={() => setSnippetKey(snippetKey === key ? null : key)}
+                      title={scanned ? "Pokaż ten fragment skanu" : undefined}
+                    >
+                      s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”
+                    </button>
+                    {scanned && snippetKey === key ? (
+                      <ScanSnippet caseId={props.caseId} documentId={review.documentId} page={line.page} line={line.line} onClose={() => setSnippetKey(null)} />
+                    ) : null}
+                    {line.stamp ? null : (
+                      <span className="privacy-preview-line-fix">
+                        <input
+                          type="text"
+                          lang="pl"
+                          aria-label={`Poprawka linii: ${line.text}`}
+                          value={value}
+                          disabled={saving}
+                          onFocus={() => {
+                            setSnippetKey(key);
+                            if (scanned) showOnScan(line.page, { line: line.line });
+                          }}
+                          onChange={(event) => setLineFixes((current) => ({ ...current, [key]: event.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void saveLineFix(line, key);
+                            }
+                          }}
+                        />
+                        <button type="button" disabled={saving || value.trim() === line.text} onClick={() => void saveLineFix(line, key)}>
+                          Zapisz
+                        </button>
+                      </span>
+                    )}
                     <span className="privacy-preview-todo-actions">
                       {scanned ? (
                         <button type="button" onClick={() => showOnScan(line.page, { line: line.line }, true)}>
@@ -468,7 +580,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       </button>
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </details>
           ) : null}

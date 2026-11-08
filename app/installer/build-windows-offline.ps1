@@ -141,6 +141,38 @@ Invoke-WebRequest -UseBasicParsing -Uri $vcSource.url -OutFile $vcRedist
 Assert-Sha256 $vcRedist $vcSource.sha256 "visual-cpp-runtime-source"
 Copy-Item $vcRedist (Join-Path $prerequisites "vc_redist.x64.exe")
 
+# App-local Visual C++ runtime, used by the offline install only when the system
+# runtime is older than required and cannot be upgraded (MSI 1603 after a
+# cleaned Package Cache). Source: the redistributable folder of Visual Studio on
+# the build machine, the source Microsoft documents for app-local deployment.
+Write-Host "[7b/10] App-local Visual C++ runtime"
+# The floor the bootstrap accepts for a working runtime (read from it, not repeated here).
+$vcRequired = [Version]([regex]::Match((Get-Content -Raw (Join-Path $installer "windows-offline-bundle-install.ps1")), '\$script:VcRuntimeFloor = \[Version\]"([0-9.]+)"').Groups[1].Value)
+$fileVersion = { param($path) $info = (Get-Item -LiteralPath $path).VersionInfo; [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart) }
+$vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+$vsRoots = if (Test-Path -LiteralPath $vswhere) { @(& $vswhere -all -products * -property installationPath) } else { @() }
+$crt = $vsRoots |
+  ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $_ "VC\Redist\MSVC") -Directory -ErrorAction SilentlyContinue } |
+  ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $_.FullName "x64") -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue } |
+  Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "vcruntime140.dll") } |
+  Sort-Object { & $fileVersion (Join-Path $_.FullName "vcruntime140.dll") } -Descending |
+  Select-Object -First 1
+if (-not $crt) {
+  Write-Warning "VC_APPLOCAL_NOT_BUNDLED: no Visual Studio redistributable CRT on the build machine"
+} else {
+  $crtVersion = & $fileVersion (Join-Path $crt.FullName "vcruntime140.dll")
+  if ($crtVersion -lt $vcRequired) {
+    Write-Warning "VC_APPLOCAL_NOT_BUNDLED: build machine CRT $crtVersion is older than the floor $vcRequired"
+  } else {
+    $vcAppLocal = Join-Path $payload "prerequisites\vc-applocal"
+    New-Item $vcAppLocal -ItemType Directory -Force | Out-Null
+    Copy-Item (Join-Path $crt.FullName "*.dll") $vcAppLocal
+    $openMp = Get-ChildItem -LiteralPath $crt.Parent.FullName -Directory -Filter "Microsoft.VC*.OpenMP" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($openMp) { Copy-Item (Join-Path $openMp.FullName "*.dll") $vcAppLocal }
+    Write-Host "VC_APPLOCAL_BUNDLED: $crtVersion from $($crt.FullName) ($((Get-ChildItem $vcAppLocal -Filter *.dll).Count) DLLs)"
+  }
+}
+
 Write-Host "Install bundled Visual C++ runtime prerequisite for payload self-test"
 $vcInstall = Start-Process -FilePath $vcRedist -ArgumentList @(
   "/install", "/quiet", "/norestart"

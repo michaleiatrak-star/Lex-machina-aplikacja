@@ -24,7 +24,7 @@ it("names a mandatory resource it could not read, to the model and in the answer
   const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
   const read = (executor as unknown as { readCorpus(resource: string): string | null }).readCorpus.bind(executor);
   (executor as unknown as { readCorpus(resource: string): string | null }).readCorpus = (resource) =>
-    resource.endsWith("HIERARCHIA-ZRODEL.md") ? null : read(resource);
+    resource.endsWith("HIERARCHIA-ZRODEL.md") || resource === "JUR:hierarchia-zrodel" ? null : read(resource);
 
   const result = await executor.execute({
     query: "Wykaż różnice pomiędzy 233 kk i 234 kk.",
@@ -35,7 +35,8 @@ it("names a mandatory resource it could not read, to the model and in the answer
     mode: "PRAWNIK"
   });
 
-  expect(calls[0]!.systemPrompt).toContain("Aplikacja nie wczytała: shared/HIERARCHIA-ZRODEL.md");
-  expect(result.answer).toContain("⛔ TRYB ZDEGRADOWANY");
-  expect(result.answer).toContain("nie wczytano: shared/HIERARCHIA-ZRODEL.md");
+  expect(calls[0]!.systemPrompt).toContain("Aplikacja nie wczytała: JUR:hierarchia-zrodel");
+  // Named to the user in plain words; the resource itself stays in the audit and the path report.
+  expect(result.answer).toMatch(/^⚠️ Uwaga: nie wszystkie kroki kontroli zostały wykonane/u);
+  expect(result.answer).not.toContain("TRYB ZDEGRADOWANY");
 }, 120_000);

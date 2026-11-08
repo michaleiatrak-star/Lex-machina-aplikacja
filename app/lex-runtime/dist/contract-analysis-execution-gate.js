@@ -1,4 +1,4 @@
-import { completeContractCheckpoint, nextContractCheckpoint, validateContractAnalysisState } from "./contract-analysis-state.js";
+import { completeContractCheckpoint, contractCheckpointBatch, nextContractCheckpoint, validateContractAnalysisState } from "./contract-analysis-state.js";
 export function requireContractExecutionPermit(input) {
     if (!input) {
         throw new Error("CONTRACT_STATE_REQUIRED");
@@ -16,10 +16,11 @@ export function requireContractExecutionPermit(input) {
         revision: state.revision,
         mode: state.mode,
         stage: state.stage,
-        checkpoint
+        checkpoint,
+        checkpoints: contractCheckpointBatch(state)
     };
 }
-export function completeContractExecution(input, permit, auditRefs) {
+export function completeContractExecution(input, permit, auditRefs, closed) {
     const state = validateContractAnalysisState(input);
     if (state.revision !==
         permit.revision ||
@@ -33,5 +34,15 @@ export function completeContractExecution(input, permit, auditRefs) {
         permit.checkpoint) {
         throw new Error("CONTRACT_CHECKPOINT_CONFLICT");
     }
-    return completeContractCheckpoint(state, permit.checkpoint, auditRefs);
+    // The checkpoints the answer closed, in the order of the batch; the first one at least
+    // (the turn passed every gate).
+    const batch = permit.checkpoints?.length ? permit.checkpoints : [permit.checkpoint];
+    const wanted = new Set(closed ?? [permit.checkpoint]);
+    let next = state;
+    for (const [index, checkpoint] of batch.entries()) {
+        if (index > 0 && !wanted.has(checkpoint))
+            break;
+        next = completeContractCheckpoint(next, checkpoint, auditRefs);
+    }
+    return next;
 }

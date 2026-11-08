@@ -288,3 +288,23 @@ describe("register and firm names as whole elements", () => {
     expect(findNameApproximately("Transkon", "Transkom")).toEqual([]);
   });
 });
+
+describe("register facts for the analysis (comparison with the chat, 2026-11-06)", () => {
+  it("what KRS and the white list said: legal form, status, VAT, accounts — shown with the source and date", async () => {
+    const { registryFactsText } = await import("../src/privacy/registry-enrichment.js");
+    const wl = { status: "FOUND", result: { ...WL_COMPANY.result, nip: "5261040828", status_vat: "Czynny", data_rejestracji_vat: "2023-03-31", rachunki: ["61105012141000009032934763"] } };
+    const krs = { status: "FOUND", result: { ...KRS.result, identyfikator: "KRS 0000019193", status_rejestru: "wpisany", forma_prawna: "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", stan_z_dnia: "15.08.2026", nip: "5261040828" } };
+    const enrichment = new RegistryEnrichment(async ({ source }) => ({ ok: true, result: source === "wl" ? wl : source === "krs" ? krs : { status: "NOT_FOUND" } }), { now: () => Date.parse("2026-11-06T12:00:00Z") });
+    await enrichment.forms("NIP 526-104-08-28, KRS 0000019193");
+    const facts = enrichment.facts(["526-104-08-28"]);
+    expect(facts).toHaveLength(1);
+    const shown = registryFactsText(facts);
+    expect(shown).toContain("KRS 0000019193");
+    expect(shown).toContain("forma: spółka z ograniczoną odpowiedzialnością");
+    expect(shown).toContain("KRS: wpisany (odpis aktualny, stan z 15.08.2026)");
+    expect(shown).toContain("VAT: Czynny od 2023-03-31");
+    expect(shown).toContain("rachunki na białej liście: 61105012141000009032934763");
+    expect(shown).toContain("odczyt 2026-11-06");
+    expect(registryFactsText([])).toBe("");
+  });
+});

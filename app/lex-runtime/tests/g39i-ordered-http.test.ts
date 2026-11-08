@@ -49,6 +49,7 @@ import {
   type SessionExecutionResponse,
   type SessionExecutor
 } from "../src/session-executor.js";
+import { FIXTURE_JURISDICTION, writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR =
@@ -59,6 +60,11 @@ function put(
   relative: string,
   content: string
 ): void {
+  // JUR:<key>: the module the jurisdiction manifest addresses (as prawo-polskie-v2 in the corpus).
+  if (relative.startsWith("JUR:")) {
+    writeJurisdictionManifest(root);
+    relative = FIXTURE_JURISDICTION[relative]!;
+  }
   const target =
     path.join(
       root,
@@ -138,7 +144,7 @@ function registry():
   for (
     const relative
     of [
-      "shared/PRAWO-HARDGATE.md",
+      "JUR:weryfikacja-przepisow-kanon",
       "shared/SELF-CHECK-ANTY-FASADA.md",
       "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
       "shared/MOD-STEP-TRACKER.md",

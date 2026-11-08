@@ -424,7 +424,8 @@ export class LocalVisionLineReader {
     while (Date.now() < deadline) {
       if (child.exitCode !== null) throw new Error(`VISION_MODEL_START_FAILED:${stderr.trim().split("\n").at(-1) ?? ""}`);
       try {
-        const health = await fetch(`http://127.0.0.1:${this.port}/health`);
+        // A server that accepts but does not answer must not stall the start loop past its deadline.
+        const health = await fetch(`http://127.0.0.1:${this.port}/health`, { signal: AbortSignal.timeout(5_000) });
         if (health.ok) return;
       } catch {
         // Not listening yet.

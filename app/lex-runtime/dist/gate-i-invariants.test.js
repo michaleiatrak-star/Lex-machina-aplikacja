@@ -17,7 +17,7 @@ function baseEvents() {
         {
             sequence: 3,
             type: "resource_read",
-            target: "shared/PRAWO-HARDGATE.md",
+            target: "JUR:weryfikacja-przepisow-kanon",
             status: "OK"
         },
         {

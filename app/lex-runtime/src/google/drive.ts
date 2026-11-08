@@ -24,7 +24,8 @@ export type DriveItem = { id: string; name: string; mimeType: string; folder: bo
 async function call(fetchImpl: FetchLike, token: string, url: string): Promise<Response> {
   let response: Response;
   try {
-    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+    // Downloads included: long enough for a large file, not forever.
+    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(300_000) });
   } catch {
     throw new GoogleIntegrationError("GOOGLE_NETWORK_ERROR", 502);
   }

@@ -24,7 +24,7 @@ concurrency:
 env:
   # "false": the release carries the online installers only (Windows and macOS); the
   # offline Windows installer is neither built nor published. Set to "true" to ship it.
-  RELEASE_OFFLINE_INSTALLER: "false"
+  RELEASE_OFFLINE_INSTALLER: "true"
 
 jobs:
   version:
@@ -63,6 +63,16 @@ jobs:
       asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Online.pkg
     secrets: inherit
 
+  # The macOS offline package, shipped with the Windows offline installer (RELEASE_OFFLINE_INSTALLER).
+  macos_offline:
+    needs: version
+    if: needs.version.outputs.released != 'true' && needs.version.outputs.offline == 'true'
+    uses: ./.github/workflows/macos-installer.yml
+    with:
+      asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Offline.pkg
+      offline: true
+    secrets: inherit
+
   runtime:
     uses: ./.github/workflows/lex-runtime.yml
     # Release 0.1.20 only (user's decision): sn.pl search (snproxy) answers HTTP 403
@@ -98,6 +108,7 @@ jobs:
       - online
       - offline
       - macos
+      - macos_offline
     # A skipped offline build (RELEASE_OFFLINE_INSTALLER) does not hold the release back;
     # every other job must have passed.
     if: >-
@@ -108,7 +119,9 @@ jobs:
           needs.online.result == 'success' &&
           needs.macos.result == 'success' &&
           (needs.offline.result == 'success' ||
-           (needs.offline.result == 'skipped' && needs.version.outputs.offline != 'true')) }}
+           (needs.offline.result == 'skipped' && needs.version.outputs.offline != 'true')) &&
+          (needs.macos_offline.result == 'success' ||
+           (needs.macos_offline.result == 'skipped' && needs.version.outputs.offline != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -155,6 +168,13 @@ jobs:
         with:
           name: LexMachina-macOS-Online-Installer
           path: release-input/macos
+
+      - name: Download accepted macOS offline installer
+        if: needs.version.outputs.offline == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-macOS-Offline-Installer
+          path: release-input/macos-offline
 
       - name: Verify acceptance receipts and normalize asset names
         id: assets
@@ -216,10 +236,23 @@ jobs:
             exit 1
           fi
           cp "$mac_pkg" "$out/$mac_name"
+          summed+=("$mac_name")
+
+          if [[ "$OFFLINE" == "true" ]]; then
+            mac_offline_name="Lex-Machina-${version}-macOS-arm64-Offline.pkg"
+            mac_offline_pkg="release-input/macos-offline/$mac_offline_name"
+            mac_offline_expected="$(awk -F= '$1=="sha256"{print $2}' release-input/macos-offline/SHA256.txt | tr -d '\r\n ')"
+            if [[ ! -f "$mac_offline_pkg" || "$(sha256sum "$mac_offline_pkg" | awk '{print $1}')" != "$mac_offline_expected" ]]; then
+              echo "RELEASE_MACOS_OFFLINE_HASH_MISMATCH:$mac_offline_name" >&2
+              exit 1
+            fi
+            cp "$mac_offline_pkg" "$out/$mac_offline_name"
+            summed+=("$mac_offline_name")
+          fi
 
           (
             cd "$out"
-            sha256sum "${summed[@]}" "$mac_name" "windows-release-source.json" > SHA256SUMS.txt
+            sha256sum "${summed[@]}" "windows-release-source.json" > SHA256SUMS.txt
           )
 
           echo "online=$online_name" >> "$GITHUB_OUTPUT"

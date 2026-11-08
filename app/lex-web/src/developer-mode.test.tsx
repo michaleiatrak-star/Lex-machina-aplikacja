@@ -152,3 +152,25 @@ describe("tryb dewelopera: wybór dalszego etapu", () => {
     expect(html).toContain("Dalsza analiza: analizator-dowodow-v3");
   });
 });
+
+describe("the draft while the answer is written (live 2026-11-06)", () => {
+  it("a model's ✅ is pending, the gate blocks are gone for the user", async () => {
+    const { draftDisplayText } = await import("./developer-mode.js");
+    const draft = [
+      "> **art. 483 § 1 KC** ✅ [VER: https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf#page=50, 2026-10-23] — kara umowna należy się.",
+      "",
+      "## Bloki techniczne (bramki routera)",
+      "",
+      "**CN-GATE — norma centralna**",
+      "```",
+      "Oś 1: ważność pkt 11",
+      "```",
+      "",
+      "**OŚ-GATE** (daty: 9.10.2024): jeden reżim czasowy."
+    ].join("\n");
+    const shown = draftDisplayText(draft, false);
+    expect(shown).toContain("art. 483 § 1 KC** ⏳ [weryfikacja w toku]");
+    expect(shown).not.toMatch(/✅|CN-GATE|OŚ-GATE|Bloki techniczne|Oś 1/u);
+    expect(draftDisplayText(draft, true)).toContain("CN-GATE");
+  });
+});

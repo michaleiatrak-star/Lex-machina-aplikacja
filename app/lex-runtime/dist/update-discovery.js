@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.65";
+export const CURRENT_APPLICATION_VERSION = "0.1.70";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
@@ -128,7 +128,8 @@ export class GitHubReleaseUpdateDiscovery {
                 headers: {
                     Accept: "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28"
-                }
+                },
+                signal: AbortSignal.timeout(30_000)
             });
             if (!response.ok) {
                 return {

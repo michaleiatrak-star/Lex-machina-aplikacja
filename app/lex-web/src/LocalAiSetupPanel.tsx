@@ -39,7 +39,8 @@ type LocalModel = {
 type BackendPreference =
   | "AUTO"
   | "VULKAN_X64"
-  | "CPU_X64_PORTABLE";
+  | "CPU_X64_PORTABLE"
+  | "METAL_ARM64";
 
 type BackendPolicy = {
   allowed:
@@ -80,7 +81,8 @@ type LocalRuntimeStatus = {
     engine: "llama.cpp";
     backend?:
       | "VULKAN_X64"
-      | "CPU_X64_PORTABLE";
+      | "CPU_X64_PORTABLE"
+      | "METAL_ARM64";
     startupMs: number;
     validatedAt: string;
   } | null;
@@ -113,6 +115,7 @@ type LocalRuntimeStatus = {
     configuredBackend:
       | "VULKAN_X64"
       | "CPU_X64_PORTABLE"
+      | "METAL_ARM64"
       | null;
     backendSelectionMode:
       BackendPreference | null;
@@ -144,6 +147,7 @@ type ModelPackUpdateStatus = {
     | "UNAVAILABLE"
     | "BLOCKED";
   checkedAt: string;
+  packPublished?: boolean;
   modelId?: string;
   modelFamily?: "BIELIK" | "MISTRAL";
   currentSha256?: string;
@@ -264,15 +268,18 @@ function contextLabel(
 }
 
 function backendLabel(
-  value: BackendPreference
+  value: BackendPreference,
+  mac = false
 ): string {
   switch (value) {
     case "AUTO":
-      return "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
+      return mac ? "Auto · karta graficzna Apple (Metal)" : "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
     case "VULKAN_X64":
       return "Vulkan GPU · bez automatycznego fallbacku";
     case "CPU_X64_PORTABLE":
       return "CPU · maksymalna zgodność";
+    case "METAL_ARM64":
+      return "Metal · karta graficzna Apple";
   }
 }
 
@@ -412,7 +419,19 @@ type OcrAccelStatus = {
     reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
   } | null;
   auto: boolean;
-  lastRun: { at: string; loadSeconds: number; pageSeconds: number[]; threads: number | null; mkldnn: boolean; mkldnnError?: string | null; accel: string | null; workers: number } | null;
+  lastRun: {
+    at: string;
+    loadSeconds: number;
+    pageSeconds: number[];
+    threads: number | null;
+    mkldnn: boolean;
+    mkldnnError?: string | null;
+    accel: string | null;
+    workers: number;
+    pages?: number;
+    wallSeconds?: number;
+    textModelResident?: boolean;
+  } | null;
   error?: string;
 };
 
@@ -436,6 +455,18 @@ export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): stri
   const pages = run.pageSeconds.length;
   const average = pages ? run.pageSeconds.reduce((sum, value) => sum + value, 0) / pages : 0;
   const engine = run.accel ? `karta (${run.accel.replace("ExecutionProvider", "")})` : `procesor${run.mkldnn ? " z oneDNN" : " BEZ oneDNN (wolny tryb)"}`;
+  // The whole document: what the user waited per page; per process it is longer when several
+  // processes read pages at once.
+  if (run.pages && run.wallSeconds) {
+    return (
+      `Ostatni OCR: ${run.pages} str. w ${number(run.wallSeconds)} s, ${number(run.wallSeconds / run.pages)} s/str. dokumentu` +
+      (run.workers > 1 ? ` (${run.workers} procesy naraz, w każdym ${number(average)} s/str.)` : "") +
+      ` (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}${run.threads ? `, ${run.threads} wątków` : ""}` +
+      (run.accel && run.textModelResident ? ", model tekstowy w pamięci karty" : "") +
+      "." +
+      (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
+    );
+  }
   return (
     `Ostatni OCR: ${pages} str., ${number(average)} s/str. (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}` +
     `${run.threads ? `, ${run.threads} wątków` : ""}${run.workers > 1 ? `, ${run.workers} procesy` : ""}.` +
@@ -703,6 +734,68 @@ function TranscriptionAccelerationSection({ admin, modelInstalled }: { admin: bo
   );
 }
 
+type ChatTurnsSummary = {
+  file: string;
+  turns: number;
+  paths: Array<{
+    path: string;
+    modelKind: "local" | "api" | "account";
+    turns: number;
+    errors: number;
+    blocked: number;
+    p50Ms: number;
+    p95Ms: number;
+    maxMs: number;
+    phasesP50Ms: Partial<Record<"PREPARE" | "ROUTING" | "SKILLS" | "MODEL" | "VERIFY" | "RESTORE", number>>;
+  }>;
+};
+
+const PHASE_SHORT: Record<string, string> = {
+  PREPARE: "anonimizacja",
+  ROUTING: "routing",
+  SKILLS: "skille",
+  MODEL: "model",
+  VERIFY: "weryfikacja",
+  RESTORE: "przywrócenie"
+};
+
+/** "local · pisma-procesowe-v3: 12 tur, mediana 41 s, 95% do 78 s, błędy 1 (model 36 s, anonimizacja 3 s)". */
+export function chatPathLine(row: ChatTurnsSummary["paths"][number]): string {
+  const sec = (ms: number) => (ms / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const kind = row.modelKind === "local" ? "lokalny" : row.modelKind === "account" ? "konto" : "API";
+  const phases = Object.entries(row.phasesP50Ms)
+    .filter(([, ms]) => (ms ?? 0) >= 500)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([phase, ms]) => `${PHASE_SHORT[phase] ?? phase} ${sec(ms ?? 0)} s`)
+    .join(", ");
+  return (
+    `${kind} · ${row.path}: ${row.turns} tur, mediana ${sec(row.p50Ms)} s, 95% do ${sec(row.p95Ms)} s` +
+    (row.errors ? `, błędy ${row.errors}` : "") +
+    (row.blocked ? `, zablokowane ${row.blocked}` : "") +
+    (phases ? ` (${phases})` : "")
+  );
+}
+
+/** Developer mode: times of the chat paths on this computer (no text of the messages). */
+function ChatTurnsSection() {
+  const developer = useDeveloperMode();
+  const [data, setData] = useState<ChatTurnsSummary | null>(null);
+  useEffect(() => {
+    if (!developer) return;
+    request<ChatTurnsSummary>("/api/diagnostics/chat-turns").then(setData, () => setData(null));
+  }, [developer]);
+  if (!developer || !data) return null;
+  return (
+    <div className="local-ai-facts">
+      <strong>
+        Czas czatu na tym komputerze
+        <InfoTip>Ostatnie {data.turns} tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik: {data.file}</InfoTip>
+      </strong>
+      {data.paths.length === 0 ? <small>Brak zapisanych tur.</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
+    </div>
+  );
+}
+
 type TranscriptionStatus = {
   modelId: string;
   label: string;
@@ -712,6 +805,10 @@ type TranscriptionStatus = {
   state: "IDLE" | "DOWNLOADING" | "FAILED";
   progress: { file: string; received: number; total: number; percent: number } | null;
   error?: string;
+  // Who speaks when (older runtimes do not send it); count 0 = estimated.
+  speakers?: { installed: boolean; bytes: number; count?: number };
+  // Mac with Apple Silicon: the copy of the model for the GPU (null elsewhere).
+  gpu?: { installed: boolean; bytes: number } | null;
 };
 
 /**
@@ -749,6 +846,15 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
     }
   }
 
+  async function setSpeakers(count: number): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<TranscriptionStatus>("/api/local-models/transcription/speakers", { method: "POST", body: JSON.stringify({ count }) }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
   if (!status) return null;
   const progress = status.progress;
   return (
@@ -778,14 +884,52 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
           ) : null}
         </div>
       ) : status.installed ? (
-        <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst.</small>
+        <>
+          <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst ze znacznikami czasu.</small>
+          {status.speakers ? (
+            <small>
+              Rozpoznawanie rozmówców:{" "}
+              {status.speakers.installed
+                ? "gotowe (transkrypcja dzieli tekst na osoby, nazwy zmienisz w podglądzie dokumentu)."
+                : `modele (${Math.round(status.speakers.bytes / 1_000_000)} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+            </small>
+          ) : null}
+          {status.gpu ? (
+            <small>
+              Karta graficzna Apple:{" "}
+              {status.gpu.installed
+                ? "model gotowy; przy pierwszym nagraniu aplikacja zmierzy, czy karta jest szybsza od procesora, i wtedy jej użyje."
+                : `model (${Math.round(status.gpu.bytes / 1_000_000)} MB) pobierze się sam w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+            </small>
+          ) : null}
+          {status.speakers?.installed && admin ? (
+            <label className="local-ai-inline-select">
+              Liczba rozmówców w nagraniach
+              <InfoTip>Znana liczba osób (np. 3 na rozprawie: sąd i dwie strony) daje dokładniejszy podział niż ocena automatyczna.</InfoTip>
+              <select value={status.speakers.count ?? 0} onChange={(event) => void setSpeakers(Number(event.target.value))}>
+                <option value={0}>automatycznie</option>
+                <option value={2}>2</option>
+                <option value={3}>3 (np. rozprawa)</option>
+                {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </>
       ) : (
         <small>Nie zainstalowany.</small>
       )}
       {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
       {admin ? (
         <div className="local-ai-actions">
-          <button type="button" disabled={status.installed || status.state === "DOWNLOADING"} onClick={() => void act("install")}>
+          <button
+            type="button"
+            disabled={(status.installed && (status.speakers?.installed ?? true) && (status.gpu?.installed ?? true)) || status.state === "DOWNLOADING"}
+            onClick={() => void act("install")}
+          >
             Pobierz model transkrypcji
           </button>
           <button
@@ -978,10 +1122,11 @@ export function LocalAiSetupPanel({
   const extended = Boolean(
     selected && contextTokens > selected.nativeContextWindow
   );
-  // Installation runs on Windows only (runtime: LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED);
-  // elsewhere the action is not offered as available.
-  const provisioningSupported =
-    data?.runtime.hardware?.platform ? data.runtime.hardware.platform === "win32" : !/Macintosh|Mac OS X|Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
+  // Installation runs on Windows and on Macs with Apple Silicon (runtime:
+  // LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED elsewhere); elsewhere it is not offered.
+  const provisioningSupported = data?.runtime.hardware?.platform
+    ? data.runtime.hardware.platform === "win32" || (data.runtime.hardware.platform === "darwin" && data.runtime.hardware.arch === "arm64")
+    : !/Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
   const canProvision =
     provisioningSupported &&
     user.appRole === "ADMIN" &&
@@ -1372,7 +1517,7 @@ export function LocalAiSetupPanel({
       <div className="local-ai-body">
         {provisioningSupported ? null : (
           <p className="local-ai-error" role="note">
-            Instalacja modelu lokalnego jest dostępna tylko w Windows. W tym systemie korzystaj z modeli
+            Instalacja modelu lokalnego jest dostępna w Windows i na Macach z procesorem Apple. W tym systemie korzystaj z modeli
             przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
           </p>
         )}
@@ -1416,7 +1561,7 @@ export function LocalAiSetupPanel({
                   >
                     {data.runtime.backendPolicy.allowed.map((value) => (
                       <option key={value} value={value}>
-                        {backendLabel(value)}
+                        {backendLabel(value, data.runtime.backendPolicy.allowed.includes("METAL_ARM64"))}
                       </option>
                     ))}
                   </select>
@@ -1496,7 +1641,9 @@ export function LocalAiSetupPanel({
                           ? "Mistral"
                           : "modelu"}:{" "}
                       {modelUpdate.status === "UP_TO_DATE"
-                        ? "aktualny"
+                        ? modelUpdate.packPublished === false
+                          ? "aktualny (model z instalatora; nowsza paczka modelu nie została opublikowana)"
+                          : "aktualny"
                         : modelUpdate.status === "AVAILABLE"
                           ? [
                               modelUpdate.signatureMode === "SIGNED_REQUIRED"
@@ -1637,6 +1784,7 @@ export function LocalAiSetupPanel({
         <TranscriptionSection admin={user.appRole === "ADMIN"} />
 
         <OcrAccelerationSection admin={user.appRole === "ADMIN"} />
+        {user.appRole === "ADMIN" ? <ChatTurnsSection /> : null}
 
         {message ? <p className="local-ai-message">{message}</p> : null}
 

@@ -419,3 +419,22 @@ li.anomaly-error > strong {
 .update-prompt-error {
   color: var(--lm-t73);
 }
+
+.update-prompt-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+.update-prompt-progress ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--lm-t24);
+}
+
+.update-prompt-progress li.done {
+  text-decoration: line-through;
+}
+
+.update-prompt-progress li.current {
+  font-weight: 600;
+}

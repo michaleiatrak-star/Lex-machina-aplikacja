@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "../jurisdiction.js";
 
 export type RouteValidation = {
   valid: boolean;
@@ -12,12 +13,12 @@ export class RoutingCatalog {
 
   listDrSkills(): string[] {
     return [...this.registry.skills.keys()]
-      .filter((name) => /^dr-\d{2}-/.test(name))
+      .filter((name) => isDomainSkill(name))
       .sort();
   }
 
   validate(primarySkill: string): RouteValidation {
-    if (!/^dr-\d{2}-/.test(primarySkill)) {
+    if (!isDomainSkill(primarySkill)) {
       return {
         valid: false,
         primarySkill,
@@ -34,8 +35,8 @@ export class RoutingCatalog {
     }
 
     const routingMap = this.registry.resolveResource(
-      "prawo-polskie-v2",
-      "prawo-polskie-v2/ROUTING-MAP.md"
+      activeJurisdictionPack(),
+      jurisdictionDomainMap(this.registry.root)
     );
     if (!routingMap) {
       return {

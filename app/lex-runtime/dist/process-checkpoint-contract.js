@@ -15,9 +15,9 @@ export const CHECKPOINT_RESOURCES = {
     "CP-1d-anomalie": ["shared/MOD-DOKUMENT-ANOMALIE_v1.1.0.md"],
     "CP-1d": ["shared/MOD-POSZLAKI-KONTEKST.md"],
     "CP-W1": ["pisma-procesowe-v3/references/W1-SZCZEGOLY.md"],
-    "CP-PRE-W2": ["shared/PRE-W2-VERIFICATION-GATE.md"],
+    "CP-PRE-W2": ["JUR:pre-w2-verification-gate"],
     "CP-ATAK": ["shared/MOD-ATAK-NA-DRAFT.md", "pisma-procesowe-v3/references/W2-SZCZEGOLY.md"],
-    "CP-PODMIOT": ["pisma-procesowe-v3/references/W3-PODMIOT-GATE.md"],
+    "CP-PODMIOT": ["JUR:pisma-w3-podmiot-gate"],
     "CP-QUALITY": ["shared/LEGAL-QUALITY-GATE.md", "shared/MOD-WALIDACJA_v2.md", "pisma-procesowe-v3/references/W3-WERYFIKACJA.md"],
     "CP-AUDYT": ["shared/AUDYT-KONCOWY.md"],
     "CP-PEER": ["shared/MOD-PEER-REVIEW.md", "shared/POST-VALIDATION.md"]
@@ -110,7 +110,13 @@ export function checkpointPrompt(checkpoint, resources, register) {
     return [
         `# CHECKPOINT ${checkpoint} — KONTRAKT (CP-REJESTR, shared/CP-GATE.md; AUTOMAT-STANOW)`,
         `- Zakończ odpowiedź raportem [${checkpoint}] w formacie skilla; aplikacja zamknie ${checkpoint} tylko z tym raportem.`,
+        // C10-004 (live 2026-11-06): the start information was shown again in W1 and the user asked
+        // to decide once more, after "Akceptuję warunki i rozpoczynam" in the application.
+        "- Informację wstępną (KROK CG-1, warunki i zakres pisma) użytkownik już zobaczył i zaakceptował w aplikacji: nie wyświetlaj jej ponownie i nie pytaj o zgodę na start; zacznij od pracy tego kroku.",
         "- Brak dokumentu (nie wgrany, „uzupełnię później”, pozycja rejestru bez treści) = BRAK-DOK (shared/CP-GATE.md §3B): wypisz brakujące pozycje w raporcie i zamknij checkpoint jako ZAMKNIĘTY Z BRAKAMI. Nie odmawiaj zamknięcia z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.",
+        // C09-026 (live 2026-11-01): CP-1a refused to close for facts not given, and every "kontynuuj"
+        // repeated the same questions at the cost of a whole model turn.
+        "- Brak faktu lub danych (strona, data doręczenia, kwota, stanowisko klienta) = BRAK-FAKT: przyjmij to, co wynika z akt (np. powód z „z powództwa …”, pozwany z „przeciwko …”), oznacz założenie, zadaj pytania jednym blokiem „Pytania do klienta” i zamknij checkpoint jako ZAMKNIĘTY Z BRAKAMI. Brak danych nie blokuje kroku; „kontynuuj” bez odpowiedzi oznacza: idź dalej na założeniach, nie powtarzaj pytań.",
         ...(CONDITIONAL_CHECKPOINTS.has(checkpoint)
             ? [`- ${checkpoint} jest warunkowy: gdy warunek techniczny nie zachodzi, napisz wprost „[${checkpoint}] N/A — <powód>” (N/A wyłącznie per warunek techniczny, ZAKAZ-14).`]
             : [`- ${checkpoint} jest obowiązkowy: N/A niedozwolone.`]),

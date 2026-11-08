@@ -14,18 +14,9 @@ on:
       LEX_WINDOWS_SIGNING_PFX_PASSWORD:
         required: false
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "app/installer/**"
-      - "app/lex-desktop/**"
-      - "app/lex-runtime/**"
-      - "app/lex-web/**"
-      - "app/ocr/**"
-      - "app/privacy/**"
-      - "app/storage/**"
-      - "app/lex-version.yaml"
-      - "Wersja rozwojowa rozpakowana/**"
-      - ".github/workflows/offline-windows-installer.yml"
+  # Not on every pull request: releases ship the online installers only
+  # (publish-windows-installers.yml RELEASE_OFFLINE_INSTALLER). Built on demand or by the
+  # release workflow when the offline installer is shipped again.
 
 permissions:
   contents: read
@@ -73,9 +64,51 @@ jobs:
         working-directory: app/lex-desktop
         run: npm install --no-audit --no-fund
 
+      # The online installer's acceptance, kept in step (lex-installer.yml).
+      - name: Embedded Python hidden-stdio smoke test
+        shell: pwsh
+        run: ./app/installer/windows-embedded-python-smoke.ps1
+
+      - name: Local primary model chat selection contract
+        working-directory: app/lex-web
+        run: npx vitest run src/MatterChatApp.primary-model.test.ts
+
       - name: Build complete offline private runtime payload
         shell: pwsh
         run: ./app/installer/build-windows-offline.ps1
+
+      - name: VC++ app-local deployment when the system runtime cannot be upgraded
+        shell: pwsh
+        run: |
+          # The bootstrap's own functions (read from the script, not copied) on the
+          # payload just built: the bundled runtime is complete, not older than
+          # required, and lands next to an executable, as on a machine whose older
+          # system runtime fails to upgrade (MSI 1603).
+          $errors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "app/installer/windows-online-bootstrap.ps1"), [ref]$null, [ref]$errors)
+          if ($errors) { throw "BOOTSTRAP_PARSE_FAILED: $($errors -join '; ')" }
+          # The floor the bootstrap accepts for a working runtime.
+          $floor = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$script:VcRuntimeFloor' }, $true) | Select-Object -First 1
+          if (-not $floor) { throw "VC_RUNTIME_FLOOR_MISSING" }
+          . ([scriptblock]::Create($floor.Extent.Text))
+          $required = $script:VcRuntimeFloor
+          $wanted = @("Get-DllVersion", "Get-VcRuntimeAppLocal", "Copy-VcRuntimeAppLocal")
+          $functions = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $wanted }, $true)
+          if ($functions.Count -ne $wanted.Count) { throw "VC_APPLOCAL_FUNCTIONS_MISSING" }
+          . ([scriptblock]::Create((($functions | ForEach-Object { $_.Extent.Text }) -join "`n")))
+          $payload = Resolve-Path "app/lex-desktop/src-tauri/runtime"
+          $dllDir = Get-VcRuntimeAppLocal $payload $required
+          $target = Join-Path $env:RUNNER_TEMP "vc-applocal-target"
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-VcRuntimeAppLocal $dllDir @($target)
+          foreach ($name in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            $path = Join-Path $target $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "VC_APPLOCAL_NOT_PLACED:$name" }
+            $version = Get-DllVersion $path
+            if ($version -lt $required) { throw "VC_APPLOCAL_TOO_OLD:${name}:$version" }
+            Write-Host "$name $version"
+          }
+          Write-Host "VC_APPLOCAL_PASS: $((Get-ChildItem $target -Filter *.dll).Count) DLLs >= $required"
 
       - name: Stage external offline runtime bundle
         id: runtime_bundle
@@ -288,13 +321,14 @@ jobs:
           LEX_WINDOWS_SIGNING_PFX_PASSWORD: ${{ secrets.LEX_WINDOWS_SIGNING_PFX_PASSWORD }}
         shell: pwsh
         run: |
-          if ("${{ inputs.signed }}" -eq "true") {
-            npx tauri build --bundles nsis --config src-tauri/tauri.offline.signed.conf.json
-          } else {
-            npx tauri build --bundles nsis --config src-tauri/tauri.offline.conf.json
-          }
-          if ($LASTEXITCODE -ne 0) {
-            throw "OFFLINE_TAURI_BUILD_FAILED:$LASTEXITCODE"
+          # NSIS comes from GitHub release assets: a 503/504 there is retried (see lex-installer.yml).
+          $config = if ("${{ inputs.signed }}" -eq "true") { "src-tauri/tauri.offline.signed.conf.json" } else { "src-tauri/tauri.offline.conf.json" }
+          foreach ($attempt in 1..4) {
+            npx tauri build --bundles nsis --config $config
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 4) { throw "OFFLINE_TAURI_BUILD_FAILED:$LASTEXITCODE" }
+            Write-Host "tauri build failed ($LASTEXITCODE), retry $attempt of 3 after $(30 * $attempt) s"
+            Start-Sleep -Seconds (30 * $attempt)
           }
 
       - name: Windows branding acceptance for inner offline installer
@@ -373,6 +407,70 @@ jobs:
           Get-ChildItem -LiteralPath $env:LEX_SIGNING_RECEIPT_DIR -File -Filter "*.json" |
             Copy-Item -Destination $receiptDest -Force
 
+      - name: Reproduce pre-existing same-version Python registration
+        shell: pwsh
+        run: |
+          # RC3 field failure: the CPython full installer can enter maintenance
+          # mode when the same version is already registered and then return 0
+          # without provisioning Lex Machina's requested private TargetDir.
+          # Register the exact pinned Python first; the product installer must
+          # still succeed because it now uses the application-local embeddable
+          # distribution and never reuses this registered installation.
+          $manifest = Get-Content -Raw "app/installer/windows-release-source.json" | ConvertFrom-Json
+          $python = $manifest.runtime.python
+          $foreignInstaller = Join-Path $env:RUNNER_TEMP "foreign-python-$($python.version)-amd64.exe"
+          Invoke-WebRequest -UseBasicParsing -Uri $python.url -OutFile $foreignInstaller
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $foreignInstaller).Hash.ToLowerInvariant()
+          if ($actualHash -ne $python.sha256.ToLowerInvariant()) {
+            throw "ACCEPTANCE_FOREIGN_PYTHON_HASH_MISMATCH expected=$($python.sha256) actual=$actualHash"
+          }
+
+          # The offline build installs this very version per-user to make the wheels: the
+          # registration is already there (a second install of it ends in MSI 1603), and it is
+          # the state this step reproduces.
+          $short = ($python.version -split "\.")[0..1] -join "."
+          $registered = Get-ItemProperty -Path "HKCU:\Software\Python\PythonCore\$short\InstallPath" -ErrorAction SilentlyContinue
+          # The registration is the state under test; the build's payload directory it points to
+          # has been packaged away by now, so its python.exe may be gone.
+          if ($registered) {
+            $foreignExe = Join-Path ([string]$registered.'(default)') "python.exe"
+            if (Test-Path -LiteralPath $foreignExe -PathType Leaf) {
+              $foreignVersion = (& $foreignExe --version 2>&1 | Select-Object -First 1).ToString().Trim()
+              if ($foreignVersion -ne "Python $($python.version)") {
+                throw "ACCEPTANCE_FOREIGN_PYTHON_VERSION_INVALID:$foreignVersion"
+              }
+            }
+            Write-Host "Pre-existing registered Python $short (registered by the build): $($registered.'(default)')"
+            exit 0
+          }
+          $foreignRoot = Join-Path $env:RUNNER_TEMP ("Foreign Python " + $python.version)
+          $foreignArgs = @(
+            "/quiet",
+            "InstallAllUsers=0",
+            ('TargetDir="{0}"' -f $foreignRoot),
+            "Include_launcher=0",
+            "Include_test=0",
+            "Include_doc=0",
+            "Include_tcltk=0",
+            "Include_tools=0",
+            "Include_pip=0",
+            "PrependPath=0",
+            "Shortcuts=0"
+          ) -join " "
+          $proc = Start-Process -FilePath $foreignInstaller -ArgumentList $foreignArgs -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            throw "ACCEPTANCE_FOREIGN_PYTHON_INSTALL_FAILED:$($proc.ExitCode)"
+          }
+          $foreignExe = Join-Path $foreignRoot "python.exe"
+          if (-not (Test-Path -LiteralPath $foreignExe -PathType Leaf)) {
+            throw "ACCEPTANCE_FOREIGN_PYTHON_MISSING:$foreignExe"
+          }
+          $foreignVersion = (& $foreignExe --version 2>&1 | Select-Object -First 1).ToString().Trim()
+          if ($foreignVersion -ne "Python $($python.version)") {
+            throw "ACCEPTANCE_FOREIGN_PYTHON_VERSION_INVALID:$foreignVersion"
+          }
+          Write-Host "Pre-existing registered Python ready: $foreignRoot"
+
       - name: Offline clean-machine standalone EXE acceptance
         shell: pwsh
         run: |
@@ -383,6 +481,8 @@ jobs:
             ForceVisualCppRuntimeInstall = $true
             StandaloneOfflineExe = $true
             InstallTimeoutSeconds = 6000
+            # Spaces and a Polish letter in the per-user path, as in the online acceptance.
+            InstallRoot = Join-Path $env:RUNNER_TEMP ("Lex Machina Michał Offline-" + [Guid]::NewGuid().ToString("N"))
           }
           if ("${{ inputs.signed }}" -eq "true") {
             $arguments.RequireAuthenticode = $true

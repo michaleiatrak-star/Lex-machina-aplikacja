@@ -2352,6 +2352,63 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.privacy-preview-line-label {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.privacy-preview-line-label:hover,
+.privacy-preview-line-label[aria-expanded="true"] {
+  text-decoration: underline dotted;
+}
+
+/* The scan fragment of a doubtful line, as a bubble over its field. */
+.scan-snippet {
+  position: relative;
+  flex-basis: 100%;
+  padding: 8px 32px 8px 8px;
+  border: 1px solid var(--lm-line, #c9d2cc);
+  border-radius: 8px;
+  background: var(--lm-surface, #fff);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
+}
+
+.scan-snippet::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 24px;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid var(--lm-line, #c9d2cc);
+  border-left: 1px solid var(--lm-line, #c9d2cc);
+  background: inherit;
+  transform: rotate(45deg);
+}
+
+.scan-snippet-image {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  background: #fff;
+}
+
+.scan-snippet-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .privacy-preview-edit,
 .privacy-preview-selection {
   display: grid;
@@ -2452,6 +2509,21 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* A doubtful OCR line corrected straight in the list. */
+.privacy-preview-line-fix {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.privacy-preview-line-fix input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 3px 6px;
 }
 
 .page-scan {

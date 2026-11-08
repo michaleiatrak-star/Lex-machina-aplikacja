@@ -103,7 +103,7 @@ def main() -> int:
         "expectedUserActionAfterInstall": "PROVIDER_API_KEY_OR_OPTIONAL_LOCAL_AI_SETUP",
         "localAi": {
             "requiredForApplicationHealth": False,
-            "delivery": "NOT_AVAILABLE_ON_MACOS_YET",
+            "delivery": "USER_INITIATED_AFTER_INSTALL",
         },
         "codeRoot": str(code_root),
         "components": rows,

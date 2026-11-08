@@ -11,6 +11,11 @@ on:
       asset_name:
         type: string
         required: true
+      offline:
+        # The offline package: every component inside, the install needs no network.
+        type: boolean
+        required: false
+        default: false
   push:
     branches:
       - "claude/modest-knuth-re40mu"
@@ -26,18 +31,24 @@ on:
       - "app/lex-desktop/src-tauri/Cargo.toml"
       - "app/lex-desktop/src-tauri/build.rs"
   workflow_dispatch:
+    inputs:
+      offline:
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 env:
-  ASSET_NAME: ${{ inputs.asset_name || 'Lex-Machina-macOS-arm64-Online-dryrun.pkg' }}
+  ASSET_NAME: ${{ inputs.asset_name || (inputs.offline && 'Lex-Machina-macOS-arm64-Offline-dryrun.pkg' || 'Lex-Machina-macOS-arm64-Online-dryrun.pkg') }}
+  LEX_MACOS_OFFLINE: ${{ inputs.offline && '1' || '0' }}
 
 jobs:
   build-and-accept:
-    name: macOS online installer (Apple silicon) build and acceptance
+    name: macOS ${{ inputs.offline && 'offline' || 'online' }} installer (Apple silicon) build and acceptance
     runs-on: macos-15
-    timeout-minutes: 150
+    timeout-minutes: 210
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -66,6 +77,13 @@ jobs:
           tail -60 "$HOME/Library/Logs/LexMachina/install.log" || true
           [ "$status" -eq 0 ]
           grep -q BOOTSTRAP_PASS "$HOME/Library/Logs/LexMachina/install.log"
+          if [ "$LEX_MACOS_OFFLINE" = 1 ]; then
+            # Every component from the package: no download line, pip without an index.
+            log="$HOME/Library/Logs/LexMachina/install.log"
+            grep -q "OFFLINE_BUNDLE:" "$log"
+            ! grep -q "^Downloading " "$log" || { echo "OFFLINE_INSTALL_DOWNLOADED" >&2; exit 1; }
+            ! grep -q "Model prefetch via official source" "$log" || { echo "OFFLINE_INSTALL_PREFETCHED" >&2; exit 1; }
+          fi
 
       - name: Runtime self-test and health from the installed app
         run: |
@@ -94,6 +112,30 @@ jobs:
             -d '{"loginName":"admin","password":"admin"}' "$address/api/auth/login" | grep -q sessionToken \
             || { echo "ADMIN_ADMIN_LOGIN_FAILED" >&2; kill "$pid"; exit 1; }
           kill "$pid"
+
+      - name: Local model engine (llama.cpp Metal) from the release manifest
+        run: |
+          set -euo pipefail
+          # The archive the app downloads for a local model: checksum, safe layout, the server runs.
+          manifest="/Applications/Lex Machina.app/Contents/Resources/runtime/release-source.json"
+          read -r url sha < <(python3 -c 'import json,sys; b=[x for x in json.load(open(sys.argv[1]))["runtime"]["llamaCpp"]["backends"] if x["id"]=="METAL_ARM64"][0]; print(b["url"], b["sha256"])' "$manifest")
+          work="$RUNNER_TEMP/llama-metal"
+          mkdir -p "$work/x"
+          curl -fsSL -o "$work/engine.tar.gz" "$url"
+          echo "$sha  $work/engine.tar.gz" | shasum -a 256 -c -
+          if tar -tzf "$work/engine.tar.gz" | grep -E '^/|(^|/)\.\.(/|$)'; then echo "ENGINE_ARCHIVE_UNSAFE" >&2; exit 1; fi
+          tar -xzf "$work/engine.tar.gz" -C "$work/x"
+          server="$(find "$work/x" -type f -name llama-server | head -1)"
+          [ -n "$server" ] || { echo "LLAMA_SERVER_MISSING" >&2; exit 1; }
+          "$server" --version
+          "$server" --list-devices || true
+
+      - name: Transcription on the Apple GPU (MLX) is installed
+        run: |
+          set -euo pipefail
+          py="$HOME/Library/Application Support/LexMachina/runtime/python/bin/python3"
+          # The packages the worker uses on Apple Silicon; the GPU itself is measured on the user's Mac.
+          "$py" -c 'import mlx.core as mx, mlx_whisper, importlib.metadata as m; print("mlx", m.version("mlx"), "mlx-whisper", m.version("mlx-whisper"), "metal", mx.metal.is_available())'
 
       - name: Launch the installed app (it must start its runtime)
         run: |
@@ -133,7 +175,7 @@ jobs:
       - name: Upload accepted macOS installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: LexMachina-macOS-Online-Installer
+          name: ${{ inputs.offline && 'LexMachina-macOS-Offline-Installer' || 'LexMachina-macOS-Online-Installer' }}
           path: mac-out/
           retention-days: 14
 

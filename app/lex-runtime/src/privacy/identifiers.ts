@@ -24,6 +24,17 @@ export function validPesel(value: string): boolean {
   return (10 - (weighted(raw, [1, 3, 7, 9, 1, 3, 7, 9, 1, 3]) % 10)) % 10 === Number(raw[10]);
 }
 
+/** Sex from a PESEL (10th digit: even = female), and its date of birth; null when the number is invalid. */
+export function peselFacts(value: string): { sex: "f" | "m"; birthDate: string } | null {
+  const raw = digits(value);
+  if (!validPesel(raw)) return null;
+  const monthCode = Number(raw.slice(2, 4));
+  const century = [1900, 2000, 2100, 2200, 1800][Math.floor(monthCode / 20)]!;
+  const year = century + Number(raw.slice(0, 2));
+  const month = String(monthCode % 20).padStart(2, "0");
+  return { sex: Number(raw[9]) % 2 === 0 ? "f" : "m", birthDate: `${year}-${month}-${raw.slice(4, 6)}` };
+}
+
 export function validNip(value: string): boolean {
   const raw = digits(value);
   if (!/^\d{10}$/.test(raw) || /^0{10}$/.test(raw)) return false;
@@ -138,6 +149,9 @@ const DETECTORS: Detector[] = [
     regex: /(?<!\d[ \u00a0-]?)\d(?:[ \u00a0-]?\d){10}(?![ \u00a0-]?\d)/g,
     validate: (value) => /[ \u00a0-]/.test(value) && validPesel(value)
   },
+  // After its label a PESEL is masked also when its check digit fails (a typo or OCR still
+  // identifies the person; contract test 2026-11-08: "PESEL 44051401459" left in the clear).
+  { kind: "PESEL", regex: /\bPESEL\s*(?:nr\.?|numer)?\s*:?\s*(\d{11})(?!\d)/gu, group: 1 },
   {
     kind: "NIP",
     regex: /(?<![\w-])(?:PL\s?)?(?:\d{3}-\d{3}-\d{2}-\d{2}|\d{3}-\d{2}-\d{2}-\d{3}|\d{3} \d{3} \d{2} \d{2}|\d{10})(?![\w-])/g,

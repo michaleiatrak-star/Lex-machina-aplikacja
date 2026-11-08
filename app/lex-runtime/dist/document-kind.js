@@ -32,7 +32,9 @@ const RULES = [
     { kind: "POLITYKA_RODO", label: "polityka prywatności / klauzula informacyjna RODO", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:POLITYKA\s+PRYWATNOŚCI|KLAUZULA\s+INFORMACYJNA|POLITYKA\s+OCHRONY\s+DANYCH)\b/iu, /\badministratorem\s+(?:Twoich\s+|Pani\/?Pana\s+)?danych\s+osobowych\s+jest\b/iu] },
     { kind: "OFERTA", label: "oferta", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*OFERTA\b/u, /\b(?:oferujemy|ważność\s+oferty|warunki\s+(?:płatności|dostawy)|cena\s+(?:netto|brutto))\b/iu], minHits: 2 },
     { kind: "OSWIADCZENIE_WOLI", label: "oświadczenie (wypowiedzenie / odstąpienie / potrącenie)", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:WYPOWIEDZENIE(?:\s+UMOWY)?|OŚWIADCZENIE\s+O\s+(?:ODSTĄPIENIU|WYPOWIEDZENIU|POTRĄCENIU|UCHYLENIU\s+SIĘ))\b/u, /\b(?:niniejszym\s+)?(?:wypowiadam\s+umowę|odstępuję\s+od\s+umowy|oświadczam\s+o\s+(?:odstąpieniu|potrąceniu|wypowiedzeniu))\b/iu] },
-    { kind: "POROZUMIENIE", label: "porozumienie / ugoda", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:POROZUMIENIE|UGODA)\b/u, /\b(?:zawart\p{L}+\s+w\s+dniu|strony\s+(?:zgodnie\s+)?(?:postanawiają|ustalają|oświadczają))\b/iu], minHits: 2 },
+    // "Porozumienie stron o rozwiązaniu umowy o pracę" in mixed case, the parties named by role
+    // ("Pracodawca i Pracownik zgodnie postanawiają"): read as "nierozpoznany" (user report 2026-11-06).
+    { kind: "POROZUMIENIE", label: "porozumienie / ugoda", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:POROZUMIENIE|UGODA)\b|(?:^|\n)\s*(?:porozumienie|ugoda)\s+(?:stron|w\s+sprawie|o\s+)/iu, /\b(?:zawart\p{L}+\s+w\s+dniu|strony\s+(?:zgodnie\s+)?(?:postanawiają|ustalają|oświadczają)|zgodnie\s+postanawiają)\b/iu], minHits: 2 },
     { kind: "REGULAMIN", label: "regulamin", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*REGULAMIN\b/u, /\bregulamin\s+(?:świadczenia|sklepu|serwisu|pracy|wynagradzania)\b/iu] },
     { kind: "UMOWA", label: "umowa", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*UMOWA\b/u, /\bzawarta\s+w\s+dniu\b/iu, /\bstrony\s+(?:zgodnie\s+)?postanawiają\b|\bstrony\s+ustalają\b/iu, /§\s*1\b/u], minHits: 2 },
     { kind: "OPINIA_BIEGLEGO", label: "opinia biegłego", category: "DOWOD", evidence: true, patterns: [/\bopinia\s+biegłego\b/iu, /\bbiegł\p{L}+\s+sądow\p{L}+/iu] },
@@ -94,6 +96,9 @@ export function recognisedDocumentsPrompt(documents) {
         "# ROZPOZNANE MATERIAŁY (aplikacja, lokalnie z treści dokumentów)",
         ...documents.map((document) => `- ${document.documentId}: ${document.label}${document.evidence ? " — materiał dowodowy" : ""}${document.signals.length ? ` (sygnały: ${document.signals.map((signal) => `„${signal}”`).join(", ")})` : ""}`),
         evidence ? `Materiałów dowodowych: ${evidence}. Każdy wymaga skanu kompletności i oceny (MOD-SKAN-DOWODOW-KOMPLETNY), nie tylko streszczenia.` : "",
+        documents.some((document) => document.category === "UMOWA")
+            ? "Dokument między stronami (umowa, porozumienie, ugoda, regulamin, OWU, statut, uchwała, pełnomocnictwo, polityka, oferta, oświadczenie): oceń go jako całość — CAL-GATE z analizator-umow-v1 (relacje między postanowieniami, sekcja „Relacje między postanowieniami”), niezależnie od skilla wiodącego."
+            : "",
         "Rozpoznanie jest wskazówką: gdy treść dokumentu przeczy rozpoznanemu rodzajowi, powiedz to wprost i postępuj według rzeczywistego rodzaju."
     ]
         .filter(Boolean)

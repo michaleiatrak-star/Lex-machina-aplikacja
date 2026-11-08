@@ -85,6 +85,59 @@ export const TRANSCRIPTION_MODEL = {
   ].map((file) => ({ ...file, url: `${BASE}/${file.filename}` })) as TranscriptionModelFile[]
 };
 
+// Speakers of a recording (whisper_worker.py --diarize-dir): pyannote segmentation 3.0 (MIT) and
+// a speaker embedding model, run by sherpa-onnx; small files next to the transcription model.
+const SEGMENTATION_REVISION = "9403a6902bb58e3d5ae8c7e77c3422de279db2e0";
+export const SPEAKER_MODEL = {
+  id: "speakers-pyannote-seg3-campplus-zh-en",
+  // Clustering threshold of the embedding model, measured 2026-11-05 on 2, 3 and 4 Polish readers
+  // (LibriVox): 0.8 found 2/4/4 speakers at 94/77/79% of the time right; eres2netv2 was better
+  // with three (83%) but three times slower, int8 models 3.5-6 times slower. With the number of
+  // speakers given (a hearing: 3 or more) the models need not estimate it.
+  threshold: 0.8,
+  files: [
+    {
+      filename: "segmentation.onnx",
+      bytes: 5992913,
+      sha256: "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+      url: `https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/${SEGMENTATION_REVISION}/model.onnx`
+    },
+    {
+      // 3D-Speaker CAM++ (Apache-2.0), trained on Chinese and English speech, 192-dim embeddings.
+      filename: "embedding.onnx",
+      bytes: 28281164,
+      sha256: "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+      url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+    }
+  ] as TranscriptionModelFile[]
+};
+
+// macOS on Apple Silicon: the same model (large-v3-turbo, MIT) converted to MLX for the GPU
+// (whisper_worker.py --mlx-dir, mlx-whisper). Used only after a measurement on that Mac.
+const MLX_REVISION = "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb";
+export const MLX_MODEL = {
+  id: "whisper-large-v3-turbo-mlx",
+  files: [
+    {
+      filename: "config.json",
+      bytes: 268,
+      sha256: "b34fc29e4e11e0a25e812775dd67f4dd16fc2c8eb43d28ae25ff7d660ecb6379",
+      url: `https://huggingface.co/mlx-community/whisper-large-v3-turbo/resolve/${MLX_REVISION}/config.json`
+    },
+    {
+      filename: "weights.safetensors",
+      bytes: 1613977612,
+      sha256: "951ed3fc1203e6a62467abb2144a96ce7eafca8fa77e3704fdb8635ff3e7f8a6",
+      url: `https://huggingface.co/mlx-community/whisper-large-v3-turbo/resolve/${MLX_REVISION}/weights.safetensors`
+    }
+  ] as TranscriptionModelFile[]
+};
+
+/** The Apple GPU model applies on macOS with Apple Silicon only. */
+export function mlxTranscriptionSupported(platform: string = process.platform, arch: string = process.arch): boolean {
+  return platform === "darwin" && arch === "arm64";
+}
+
 export type TranscriptionModelStatus = {
   modelId: string;
   label: string;
@@ -94,12 +147,16 @@ export type TranscriptionModelStatus = {
   state: "IDLE" | "DOWNLOADING" | "FAILED";
   progress: { file: string; received: number; total: number; percent: number } | null;
   error?: string;
+  // Who speaks when: the speaker models next to the transcription model; count 0 = estimated.
+  speakers: { installed: boolean; bytes: number; count: number };
+  // Apple Silicon: the GPU copy of the model (null elsewhere).
+  gpu: { installed: boolean; bytes: number } | null;
 };
 
 /** The model folder holds every file of the pinned revision and the record written after the check. */
-export function installedTranscriptionModel(dir: string, files: readonly TranscriptionModelFile[] = TRANSCRIPTION_MODEL.files): boolean {
+export function installedTranscriptionModel(dir: string, files: readonly TranscriptionModelFile[] = TRANSCRIPTION_MODEL.files, recordName = "transcription.json"): boolean {
   try {
-    const record = JSON.parse(fs.readFileSync(path.join(dir, "transcription.json"), "utf8")) as { revision?: unknown; files?: Record<string, unknown> };
+    const record = JSON.parse(fs.readFileSync(path.join(dir, recordName), "utf8")) as { revision?: unknown; files?: Record<string, unknown> };
     return files.every((file) => record.files?.[file.filename] === file.sha256 && sizeOf(path.join(dir, file.filename)) === file.bytes);
   } catch {
     return false;
@@ -111,18 +168,19 @@ export async function installTranscriptionModel(
   dir: string,
   onProgress?: (progress: { file: string; received: number; total: number }) => void,
   files: readonly TranscriptionModelFile[] = TRANSCRIPTION_MODEL.files,
-  fetchImpl: FetchLike = fetch as unknown as FetchLike
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+  model: { id: string; revision: string; record: string } = { id: TRANSCRIPTION_MODEL.id, revision: TRANSCRIPTION_MODEL.revision, record: "transcription.json" }
 ): Promise<void> {
   fs.mkdirSync(dir, { recursive: true });
-  const record = path.join(dir, "transcription.json");
+  const record = path.join(dir, model.record);
   fs.rmSync(record, { force: true });
   for (const file of files) {
     await downloadVerified(file, path.join(dir, file.filename), "TRANSCRIPTION_MODEL", onProgress, fetchImpl);
   }
   const content = {
     schemaVersion: 1,
-    id: TRANSCRIPTION_MODEL.id,
-    revision: TRANSCRIPTION_MODEL.revision,
+    id: model.id,
+    revision: model.revision,
     installedAt: new Date().toISOString(),
     files: Object.fromEntries(files.map((file) => [file.filename, file.sha256]))
   };
@@ -134,10 +192,51 @@ export async function installTranscriptionModel(
 export class TranscriptionModelManager {
   private install: { state: TranscriptionModelStatus["state"]; progress: TranscriptionModelStatus["progress"]; error?: string } = { state: "IDLE", progress: null };
 
-  constructor(readonly dir: string) {}
+  constructor(
+    readonly dir: string,
+    private readonly mlxSupported: boolean = mlxTranscriptionSupported()
+  ) {}
+
+  /** The MLX copy of the model for the Apple GPU. */
+  get mlxDir(): string {
+    return path.join(this.dir, "mlx");
+  }
+
+  mlxInstalled(): boolean {
+    return installedTranscriptionModel(this.mlxDir, MLX_MODEL.files, "mlx.json");
+  }
+
+  /** Every model this computer uses: the GPU copy counts only where it applies. */
+  complete(): boolean {
+    return this.installed() && this.speakersInstalled() && (!this.mlxSupported || this.mlxInstalled());
+  }
 
   installed(): boolean {
     return installedTranscriptionModel(this.dir);
+  }
+
+  /** The speaker models (a folder of the transcription model's). */
+  get speakersDir(): string {
+    return path.join(this.dir, "speakers");
+  }
+
+  speakersInstalled(): boolean {
+    return installedTranscriptionModel(this.speakersDir, SPEAKER_MODEL.files, "speakers.json");
+  }
+
+  /** People speaking in recordings as set by the administrator: 0 = estimated by the models. */
+  speakerCount(): number {
+    try {
+      const value = Number((JSON.parse(fs.readFileSync(path.join(this.dir, "speakers-setting.json"), "utf8")) as { count?: unknown }).count);
+      return Number.isInteger(value) && value >= 0 && value <= 12 && value !== 1 ? value : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  setSpeakerCount(count: number): void {
+    fs.mkdirSync(this.dir, { recursive: true });
+    fs.writeFileSync(path.join(this.dir, "speakers-setting.json"), JSON.stringify({ count }));
   }
 
   status(): TranscriptionModelStatus {
@@ -147,6 +246,8 @@ export class TranscriptionModelManager {
       license: TRANSCRIPTION_MODEL.license,
       bytes: TRANSCRIPTION_MODEL.files.reduce((sum, file) => sum + file.bytes, 0),
       installed: this.installed(),
+      speakers: { installed: this.speakersInstalled(), bytes: SPEAKER_MODEL.files.reduce((sum, file) => sum + file.bytes, 0), count: this.speakerCount() },
+      gpu: this.mlxSupported ? { installed: this.mlxInstalled(), bytes: MLX_MODEL.files.reduce((sum, file) => sum + file.bytes, 0) } : null,
       state: this.install.state,
       progress: this.install.progress ? { ...this.install.progress } : null,
       ...(this.install.error ? { error: this.install.error } : {})
@@ -157,14 +258,19 @@ export class TranscriptionModelManager {
   start(fetchImpl?: FetchLike): Promise<void> {
     if (this.install.state === "DOWNLOADING") throw new Error("TRANSCRIPTION_MODEL_INSTALL_IN_PROGRESS");
     this.install = { state: "DOWNLOADING", progress: null };
-    const task = installTranscriptionModel(
-      this.dir,
-      (progress) => {
-        this.install.progress = { ...progress, percent: Math.min(100, Math.floor((progress.received / Math.max(1, progress.total)) * 100)) };
-      },
-      TRANSCRIPTION_MODEL.files,
-      fetchImpl
-    );
+    const progress = (value: { file: string; received: number; total: number }) => {
+      this.install.progress = { ...value, percent: Math.min(100, Math.floor((value.received / Math.max(1, value.total)) * 100)) };
+    };
+    // The transcription model when missing, then the speaker models when missing.
+    const task = (async () => {
+      if (!this.installed()) await installTranscriptionModel(this.dir, progress, TRANSCRIPTION_MODEL.files, fetchImpl);
+      if (!this.speakersInstalled()) {
+        await installTranscriptionModel(this.speakersDir, progress, SPEAKER_MODEL.files, fetchImpl, { id: SPEAKER_MODEL.id, revision: SEGMENTATION_REVISION, record: "speakers.json" });
+      }
+      if (this.mlxSupported && !this.mlxInstalled()) {
+        await installTranscriptionModel(this.mlxDir, progress, MLX_MODEL.files, fetchImpl, { id: MLX_MODEL.id, revision: MLX_REVISION, record: "mlx.json" });
+      }
+    })();
     return task.then(
       () => {
         this.install = { state: "IDLE", progress: null };
@@ -183,12 +289,15 @@ export class TranscriptionModelManager {
 
 // --- Transcription ----------------------------------------------------------------------
 
-export type TranscriptSegment = { start: number; end: number; text: string };
-export type Transcript = { duration: number; segments: TranscriptSegment[] };
+// speaker: 1, 2, … in order of first appearance, when the speaker models ran.
+export type TranscriptSegment = { start: number; end: number; text: string; speaker?: number };
+export type Transcript = { duration: number; segments: TranscriptSegment[]; speakers?: number };
+
+export type TranscribeOptions = { speakers?: number };
 
 export interface RecordingTranscriber {
   available(): boolean;
-  transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: (seconds: number, total: number) => void): Promise<Transcript>;
+  transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: (seconds: number, total: number) => void, options?: TranscribeOptions): Promise<Transcript>;
 }
 
 function defaultWorkerPath(): string {
@@ -205,6 +314,16 @@ export function timestamp(seconds: number, long: boolean): string {
   return long ? `[${two(hh)}:${two(mm)}:${two(ss)}]` : `[${two(mm)}:${two(ss)}]`;
 }
 
+/** The label of a speaker in the transcript; the user may rename it in the transcript's editor. */
+export function speakerLabel(speaker: number): string {
+  return `Osoba ${speaker}`;
+}
+
+/** "[01:23] Osoba 1: tekst" (or "[01:23] tekst" without speakers): one line of the transcript. */
+export function transcriptLine(segment: TranscriptSegment, long: boolean): string {
+  return `${timestamp(segment.start, long)} ${segment.speaker ? `${speakerLabel(segment.speaker)}: ` : ""}${segment.text}`;
+}
+
 /**
  * The transcript as pages of the document: one page per `minutes` of the recording, each
  * segment on its own line with the time it starts, so a quotation can be found in the recording.
@@ -216,7 +335,7 @@ export function transcriptPages(transcript: Transcript, minutes = 10): Array<{ p
   for (const segment of transcript.segments) {
     const page = Math.floor(segment.start / span) + 1;
     const lines = pages.get(page) ?? [];
-    lines.push(`${timestamp(segment.start, long)} ${segment.text}`);
+    lines.push(transcriptLine(segment, long));
     pages.set(page, lines);
   }
   const last = Math.max(1, Math.ceil(transcript.duration / span));
@@ -270,24 +389,46 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
   private readonly workerPath: string;
   private readonly timeoutMs: number;
   private readonly acceleration: () => Record<string, string> | null;
+  private readonly speakersDir: () => string | null;
+  private readonly speakerCount: () => number;
+  private readonly mlxDir: () => string | null;
 
   constructor(
     private readonly modelDir: () => string,
-    options: { python?: string; workerPath?: string; timeoutMs?: number; acceleration?: () => Record<string, string> | null } = {}
+    options: {
+      python?: string;
+      workerPath?: string;
+      timeoutMs?: number;
+      acceleration?: () => Record<string, string> | null;
+      // The speaker models' folder when installed (null: a transcript without speakers).
+      speakersDir?: () => string | null;
+      // People speaking: 0 = estimated.
+      speakerCount?: () => number;
+      // Apple Silicon: the MLX model's folder when installed (the worker measures it once).
+      mlxDir?: () => string | null;
+    } = {}
   ) {
     this.python = options.python ?? process.env.LEX_OCR_PYTHON ?? "python3";
     this.workerPath = options.workerPath ?? process.env.LEX_STT_WORKER ?? defaultWorkerPath();
     // Hours of a hearing at about a third of real time; the limit only stops a hung worker.
     this.timeoutMs = options.timeoutMs ?? 6 * 60 * 60 * 1000;
     this.acceleration = options.acceleration ?? (() => null);
+    this.speakersDir = options.speakersDir ?? (() => null);
+    this.speakerCount = options.speakerCount ?? (() => 0);
+    this.mlxDir = options.mlxDir ?? (() => null);
   }
 
   available(): boolean {
     return installedTranscriptionModel(this.modelDir());
   }
 
-  async transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: (seconds: number, total: number) => void): Promise<Transcript> {
-    const { transcript, stats } = await this.run(data, mediaType, this.acceleration(), onProgress);
+  async transcribe(
+    data: Uint8Array,
+    mediaType: RecordingMediaType,
+    onProgress?: (seconds: number, total: number) => void,
+    options: TranscribeOptions = {}
+  ): Promise<Transcript> {
+    const { transcript, stats } = await this.run(data, mediaType, this.acceleration(), onProgress, options.speakers);
     if (stats) lastRun = stats;
     return transcript;
   }
@@ -308,7 +449,8 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
     data: Uint8Array,
     mediaType: RecordingMediaType,
     acceleration: Record<string, string> | null,
-    onProgress?: (seconds: number, total: number) => void
+    onProgress?: (seconds: number, total: number) => void,
+    speakerCount?: number
   ): Promise<{ transcript: Transcript; stats: TranscriptionRunStats | null }> {
     if (!this.available()) throw new Error("TRANSCRIPTION_MODEL_MISSING");
     const dir = await mkdtemp(path.join(os.tmpdir(), "lex-stt-"));
@@ -319,7 +461,12 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
       const stderrAll = await new Promise<string>((resolve, reject) => {
         const env: NodeJS.ProcessEnv = { ...process.env, PYTHONUNBUFFERED: "1", ...(acceleration ?? {}) };
         if (!acceleration) delete env.LEX_STT_DEVICE;
-        const child = spawn(this.python, [this.workerPath, "--input", input, "--output", output, "--model-dir", this.modelDir()], {
+        const speakers = this.speakersDir();
+        const args = [this.workerPath, "--input", input, "--output", output, "--model-dir", this.modelDir()];
+        if (speakers) args.push("--diarize-dir", speakers, "--diarize-threshold", String(SPEAKER_MODEL.threshold), "--speakers", String(speakerCount ?? this.speakerCount()));
+        const mlx = this.mlxDir();
+        if (mlx) args.push("--mlx-dir", mlx);
+        const child = spawn(this.python, args, {
           stdio: ["ignore", "ignore", "pipe"],
           env
         });
@@ -343,17 +490,28 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
           else reject(transcriptionFailure(stderr, code));
         });
       });
-      const raw = JSON.parse(await readFile(output, "utf8")) as { duration?: unknown; segments?: unknown };
+      const raw = JSON.parse(await readFile(output, "utf8")) as { duration?: unknown; segments?: unknown; speakers?: unknown };
       const segments = Array.isArray(raw.segments)
         ? raw.segments.flatMap((item) => {
             const segment = item as Record<string, unknown>;
             return typeof segment.start === "number" && typeof segment.end === "number" && typeof segment.text === "string" && segment.text.trim()
-              ? [{ start: segment.start, end: segment.end, text: segment.text.trim() }]
+              ? [
+                  {
+                    start: segment.start,
+                    end: segment.end,
+                    text: segment.text.trim(),
+                    ...(typeof segment.speaker === "number" && Number.isInteger(segment.speaker) && segment.speaker > 0 ? { speaker: segment.speaker } : {})
+                  }
+                ]
               : [];
           })
         : [];
       return {
-        transcript: { duration: typeof raw.duration === "number" ? raw.duration : 0, segments },
+        transcript: {
+          duration: typeof raw.duration === "number" ? raw.duration : 0,
+          segments,
+          ...(typeof raw.speakers === "number" && raw.speakers > 0 ? { speakers: raw.speakers } : {})
+        },
         stats: parseTranscriptionStats(stderrAll)
       };
     } finally {

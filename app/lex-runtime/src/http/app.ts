@@ -271,6 +271,7 @@ import {
   chronologyTemporalGateRequired
 } from "../chronology-date-trigger.js";
 import {
+  contractCheckpointsClosedByAnswer,
   nextContractCheckpoint,
   type ContractAnalysisState
 } from "../contract-analysis-state.js";
@@ -293,6 +294,8 @@ import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../c
 import { overviewBlock, overviewFromAnswer, overviewRequested, queryWithOverviewTemplate } from "../case-overview.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
 import { addresseeCourt, courtOfCaseDocuments, type CaseCourt } from "../courts/case-court.js";
+import { courtByName } from "../courts/court-base.js";
+import { checkWokanda, defaultFetchText, effectiveWokandaCourt, parseCommonSignature, type FetchText } from "../courts/wokanda.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import {
@@ -310,6 +313,7 @@ import {
   type OrderedCaseWorkflowId,
   type OrderedCaseWorkflowState
 } from "../ordered-case-workflow-state.js";
+import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
 
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
@@ -626,6 +630,8 @@ export type LexHttpAppOptions = {
   >;
   // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
   caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
+  // Tests: the court sites of the wokanda check (courts/wokanda.ts).
+  wokandaFetch?: FetchText;
   orderedCaseWorkflowStore?: Pick<
     EncryptedCaseWorkspaceStore,
     | "getOrderedCaseWorkflowState"
@@ -768,9 +774,14 @@ export type LexHttpAppOptions = {
 };
 
 /** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+// Lookups whose refusal is already in the answer (the provision or judgment marked ⚠️): a
+// local model asking for a provision that does not exist held every step of the workflow,
+// with a "powtórz etap" notice on each answer (Bielik, user report 2026-11-06).
+const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_law_library|verify_case_law)\b/u;
+
 export function blockedAuditSteps(result: SessionExecutionResponse): string[] {
   return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
-    .filter((event) => event.status === "BLOCKED")
+    .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
     .map((event) => String(event.target).slice(0, 120))
     .slice(0, 8);
 }
@@ -1312,7 +1323,7 @@ function publicSkill(skill: {
     ...(typeof fm.description === "string"
       ? { description: fm.description }
       : {}),
-    category: /^dr-\d{2}-/.test(skill.name)
+    category: isDomainSkill(skill.name)
       ? "domain"
       : "execution"
   };
@@ -1584,11 +1595,11 @@ export function applyTrivialChatGate(
     return false;
   }
   const domain =
-    request.primarySkill.startsWith("dr-") &&
+    isDomainSkill(request.primarySkill) &&
     registry.get(request.primarySkill)
       ? request.primarySkill
       : [...registry.skills.keys()]
-          .filter((name) => name.startsWith("dr-"))
+          .filter((name) => isDomainSkill(name))
           .sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
@@ -1613,9 +1624,9 @@ export function applyFactCorrectionGate(registry: LexSkillRegistry, request: Ses
   const envelope = parseSkillSelectionEnvelope(request.query);
   if (envelope.manualSkills.length > 0 || !isFactCorrection(envelope.query)) return false;
   const domain =
-    request.primarySkill.startsWith("dr-") && registry.get(request.primarySkill)
+    isDomainSkill(request.primarySkill) && registry.get(request.primarySkill)
       ? request.primarySkill
-      : [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+      : [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
   request.query = SKILL_SELECTION_ENVELOPE_PREFIX + " " + JSON.stringify({ auto: false, manual: [], workflow: null }) + "\n" + envelope.query;
@@ -1651,7 +1662,7 @@ export function applyNonLegalChatGate(
   ) {
     return false;
   }
-  const domain = [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+  const domain = [...registry.skills.keys()].filter((name) => isDomainSkill(name)).sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
   request.query =
@@ -1663,6 +1674,11 @@ export function applyNonLegalChatGate(
   request.conversationalOnly = true;
   delete request.modelSelectsSkills;
   return true;
+}
+
+/** People speaking in a recording asked for at processing: 0 (estimated) or 2-12; else none. */
+export function transcriptSpeakers(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && (value === 0 || (value >= 2 && value <= 12)) ? value : undefined;
 }
 
 /**
@@ -2206,7 +2222,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         const placeholder =
           [...options.registry.skills.keys()]
             .filter((name) =>
-              name.startsWith("dr-") &&
+              isDomainSkill(name) &&
               (
                 !autoEnvelope.domainRestrictionActive ||
                 autoEnvelope.domainAllowList.includes(name)
@@ -3322,7 +3338,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               {
                 loginName,
                 displayName,
-                password
+                password,
+                ...(req.body?.accountKind === "INDIVIDUAL" ? { accountKind: "INDIVIDUAL" as const } : {})
               }
             );
         res.status(201).json({
@@ -3395,6 +3412,28 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               "USER_STATUS_UPDATE_FAILED"
           });
         }
+      }
+    }
+  );
+
+  // Account kind, set by the administrator (INDIVIDUAL: chat only).
+  app.patch(
+    "/api/admin/users/:userId/account-kind",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      const accountKind = req.body?.accountKind === "INDIVIDUAL" || req.body?.accountKind === "PROFESSIONAL" ? req.body.accountKind : null;
+      if (!accountKind) {
+        res.status(400).json({ error: "INVALID_USER_REQUEST" });
+        return;
+      }
+      try {
+        const user = options.authService.setAccountKind(responseAuthContext(res), String(req.params.userId ?? "").trim(), accountKind);
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
       }
     }
   );
@@ -4012,6 +4051,71 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       });
     } catch (error) {
       if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+    }
+  });
+
+  // The court and signature of a case (courts/case-court.ts), set by the user: documents do not
+  // replace it. The court must be one of the common courts of the court base.
+  app.get("/api/cases/:caseId/court", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    try {
+      const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
+      const court = memory.court ?? null;
+      res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+    }
+  });
+
+  app.patch("/api/cases/:caseId/court", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const name = typeof body.nazwa === "string" ? body.nazwa.trim() : "";
+    const known = name ? courtByName(name) : null;
+    const wydzial = typeof body.wydzial === "string" ? body.wydzial.trim().slice(0, 120) : "";
+    const sygnatura = typeof body.sygnatura === "string" ? body.sygnatura.replace(/\s+/gu, " ").trim() : "";
+    if (name && !known) {
+      res.status(400).json({ error: "CASE_COURT_UNKNOWN" });
+      return;
+    }
+    if (sygnatura && (sygnatura.length > 40 || !parseCommonSignature(sygnatura))) {
+      res.status(400).json({ error: "CASE_SIGNATURE_INVALID" });
+      return;
+    }
+    try {
+      const court: CaseCourt | null = known
+        ? { nazwa: known.nazwa, ...(wydzial ? { wydzial } : {}), ...(sygnatura ? { sygnatura } : {}), zrodlo: "UZYTKOWNIK", at: new Date().toISOString() }
+        : null;
+      await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore!.saveCaseMemory({ ...key, court }));
+      res.json({ court, wokanda: court ? effectiveWokandaCourt(court.nazwa) : null });
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
+    }
+  });
+
+  // The case's hearings on its court's wokanda, on the user's request (courts/wokanda.ts): one
+  // search by the signature and the details of each hearing; never in the background.
+  app.post("/api/cases/:caseId/wokanda", async (req, res) => {
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+      return;
+    }
+    try {
+      const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
+      const court = memory.court;
+      if (!court?.sygnatura) {
+        res.status(409).json({ error: court ? "CASE_SIGNATURE_MISSING" : "CASE_COURT_MISSING" });
+        return;
+      }
+      res.json(await checkWokanda(court.nazwa, court.sygnatura, options.wokandaFetch ?? defaultFetchText, () => new Date(), (name) => effectiveWokandaCourt(name)));
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "WOKANDA_CHECK_FAILED" });
     }
   });
 
@@ -5218,6 +5322,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         ...(req.body?.localAi === true ? { localAi: true } : {}),
         ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
         ...(req.body?.detect === false ? { detect: false } : {}),
+        ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers)! } : {}),
         background: true,
         storeUnderLock: (save) =>
           access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) =>
@@ -5455,7 +5560,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       ...(req.body?.localAi === true ? { localAi: true } : {}),
                       ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                       // OCR only now; personal data later (POST /api/documents/:id/detect).
-                      ...(req.body?.detect === false ? { detect: false } : {})
+                      ...(req.body?.detect === false ? { detect: false } : {}),
+                      ...(transcriptSpeakers(req.body?.speakers) !== undefined ? { speakers: transcriptSpeakers(req.body?.speakers)! } : {})
                     }
                   );
               } finally {
@@ -10118,7 +10224,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // The guide pinned in the chat's envelope (the route is a DR then) as the only
       // executive skill runs LEGAL_GUIDE_V1 too and needs its session state (E2E: 422).
       const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter(
-        (name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== "prawo-polskie-v2" && name !== "shared"
+        (name) => !isDomainSkill(name) && name !== "prawny-router-v3" && name !== activeJurisdictionPack() && name !== "shared"
       );
       if (
         request.primarySkill ===
@@ -10493,7 +10599,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
       // A case's documents name its court (a court's letter, a judgment): found once and kept,
       // the documents of this turn first, then the case's files by a court's head and signature.
-      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA") {
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA" && caseCourt?.zrodlo !== "UZYTKOWNIK") {
         try {
           const actor = responseAuthContext(res);
           const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
@@ -11397,7 +11503,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           stage:
             permit.stage,
           checkpoint:
-            permit.checkpoint
+            permit.checkpoint,
+          checkpoints:
+            permit.checkpoints
         };
         contractContext = {
           caseId:
@@ -12267,7 +12375,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         [
                           auditArtifact
                             .auditRef
-                        ]
+                        ],
+                        // Every checkpoint of the turn the answer's trace closes.
+                        contractCheckpointsClosedByAnswer(
+                          typeof result.answer === "string" ? result.answer : "",
+                          contractContext!.permit.checkpoints
+                        )
                       );
                     return await options
                       .contractWorkflowStore!

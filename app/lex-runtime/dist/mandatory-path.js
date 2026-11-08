@@ -1,9 +1,11 @@
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
+import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
 export const ROUTER_SKILL = "prawny-router-v3";
 const PROFILE = "references/PROFIL-LEKKI.md";
 const ROUTER_FILE = `${ROUTER_SKILL}/SKILL.md`;
-const RESOURCE_PATH = /(?:shared|references)\/[A-Z0-9][A-Z0-9-]*\.md/g;
+// A module named by file, or national law by key (JUR:<key>, the active jurisdiction's manifest).
+const RESOURCE_PATH = /(?:shared|references)\/[A-Z0-9][A-Z0-9-]*\.md|JUR:[a-z0-9-]+/g;
 // Gate blocks and the step identifiers read from each module.
 const GATES = {
     "MOD-CN-GATE.md": { block: "CN-GATE", step: /\bCN-\d+\b/g },
@@ -146,6 +148,7 @@ function preTrigger(name, facts) {
         case "HIERARCHIA-ZRODEL-MIEDZYNARODOWE.md":
             return facts.foreignJurisdiction;
         case "PRE-W2-VERIFICATION-GATE.md":
+        case "JUR:pre-w2-verification-gate":
         case "CP-GATE.md":
         case "HYBRID-VALIDATION.md":
         case "MOD-REJESTR-ZALACZNIKOW-CHECKPOINT.md":
@@ -195,6 +198,7 @@ function postTrigger(name, facts) {
     const references = detectLegalReferences(facts.answer);
     switch (name) {
         case "HIERARCHIA-ZRODEL.md":
+        case "JUR:hierarchia-zrodel":
             return /https?:\/\//.test(facts.answer);
         case "ZRODLA-AKTOW-FALLBACK.md":
             return references.some((reference) => reference.kind === "statute");
@@ -203,8 +207,10 @@ function postTrigger(name, facts) {
         case "DISCLAIMER.md":
             return facts.legal && references.length > 0;
         case "TABELE-OPLAT.md":
+        case "JUR:oplaty-sadowe":
             return /(opłat|wpis|taks)\w*[^.\n]{0,80}\d[\d\s]*(?:,\d+)?\s*(?:zł|PLN)/i.test(facts.answer);
         case "PRAWO-HARDGATE-BLOKADA.md":
+        case "JUR:prawo-hardgate-blokada":
             return facts.records.some((record) => record.substituteFor === "R1" || record.officialAnchor);
         case "MOD-STEP-TRACKER.md":
             return facts.legal;
@@ -222,7 +228,8 @@ function applicationDid(name, facts) {
     switch (name) {
         case "MOD-STEP-TRACKER.md":
             return "rejestr kroków (ST-INIT) prowadzi aplikacja: ten rejestr";
-        case "HIERARCHIA-ZRODEL.md": {
+        case "HIERARCHIA-ZRODEL.md":
+        case "JUR:hierarchia-zrodel": {
             const urls = facts.answer.match(/https?:\/\/[^\s)\]]+/g) ?? [];
             const markerUrls = new Set((facts.answer.match(/\[(?:VER|KOTWICA-URZĘDOWA):\s*(https?:\/\/[^\s,\]]+)/g) ?? []).map((marker) => marker.replace(/^\[[^:]+:\s*/, "")));
             return urls.length > 0 && urls.every((url) => markerUrls.has(url))
@@ -393,7 +400,7 @@ export function evaluateMandatoryPath(model, facts) {
         return { skill: skill, resource: resource, rule: rule ?? "" };
     });
     const domains = new Set([
-        ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => /^dr-\d{2}-/.test(name ?? "")),
+        ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => isDomainSkill(name ?? "")),
         ...mechanical.map((item) => item.skill)
     ]);
     for (const skill of domains) {
@@ -654,14 +661,14 @@ export function gateCorrectionPrompt(missing) {
  * not visible to the application, which says so instead of guessing.
  */
 export function routingTrace(args) {
-    const skipped = new Set([ROUTER_SKILL, "prawo-polskie-v2", "AUTO", ""]);
+    const skipped = new Set([ROUTER_SKILL, activeJurisdictionPack(), "AUTO", ""]);
     const read = (skill) => args.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target === skill);
     const readSkills = args.events
         .filter((event) => event.type === "skill_read" && event.status === "OK" && !skipped.has(event.target))
         .map((event) => event.target);
     const primary = !skipped.has(args.primarySkill)
         ? args.primarySkill
-        : readSkills[0] ?? (read("prawo-polskie-v2") ? "prawo-polskie-v2" : "");
+        : readSkills[0] ?? (read(activeJurisdictionPack()) ? activeJurisdictionPack() : "");
     const primaryRead = Boolean(primary) && read(primary);
     const secondary = [...new Set([...args.loadedSkills, ...readSkills])].filter((skill) => !skipped.has(skill) && skill !== primary);
     const core = args.report.steps.filter((step) => step.layer === "ROUTER" && /^R-\d$/.test(step.id));

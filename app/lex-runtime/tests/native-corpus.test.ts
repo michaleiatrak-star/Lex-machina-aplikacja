@@ -15,6 +15,7 @@ import { LexExecutionEngine } from "../src/execution-engine.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { ProviderGateway, ProviderRegistry } from "../src/providers/gateway.js";
 import type { ProviderAdapter, ProviderStreamParams } from "../src/providers/types.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -38,6 +39,7 @@ function corpus(): LexSkillRegistry {
   skill(DR03, "# karne\n");
   fs.writeFileSync(path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"), `${DR02}\n${DR03}\n`);
   fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+  writeJurisdictionManifest(root);
   fs.mkdirSync(path.join(root, "prawny-router-v3", "references"), { recursive: true });
   fs.writeFileSync(path.join(root, "prawny-router-v3", "references", "KROK0A-anonimizer.md"), "# anon\n");
   fs.writeFileSync(path.join(root, "prawny-router-v3", "references", "KROK1-detekcja.md"), "# detect\n");
@@ -287,10 +289,10 @@ describe("AUTO with native corpus access", () => {
       { tool: "read_legal_resource", target: "prawny-router-v3/SKILL.md", decision: "ALLOW", detail: { preloaded: true } },
       { tool: "read_legal_resource", target: "prawo-polskie-v2/SKILL.md", decision: "ALLOW", detail: { preloaded: true } },
       // R-2..R-4: counted as read only because they are in the prompt.
-      { tool: "read_legal_resource", target: "shared/PRAWO-HARDGATE.md", decision: "ALLOW", detail: { preloaded: true } },
+      { tool: "read_legal_resource", target: "JUR:weryfikacja-przepisow-kanon", decision: "ALLOW", detail: { preloaded: true } },
       { tool: "read_legal_resource", target: "prawny-router-v3/references/KROK0A-anonimizer.md", decision: "ALLOW", detail: { preloaded: true } },
       { tool: "read_legal_resource", target: "prawny-router-v3/references/KROK1-detekcja.md", decision: "ALLOW", detail: { preloaded: true } }
     ]);
-    expect(prompt).toContain("# shared/PRAWO-HARDGATE.md (już wczytany - nie czytaj ponownie)");
+    expect(prompt).toContain("# JUR:weryfikacja-przepisow-kanon (już wczytany - nie czytaj ponownie)");
   });
 });

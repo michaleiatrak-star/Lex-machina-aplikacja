@@ -16,8 +16,8 @@ const lexRoot = path.resolve(process.env.LEX_SKILLS_PATH ??
 const DR02 = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
 const CASE_LAW_WORKFLOW_RESOURCES = [
     "shared/MCP-INTEGRACJA.md",
-    "shared/SYGNATURY.md",
-    "shared/PRAWO-HARDGATE.md",
+    "JUR:sygnatury-repertoria",
+    "JUR:weryfikacja-przepisow-kanon",
     "shared/SELF-CHECK-ANTY-FASADA.md"
 ];
 async function satisfyCaseLawWorkflowPreflight(params, idPrefix) {
@@ -151,8 +151,8 @@ class CaseProvider {
         }
         const requiredReads = [
             "shared/MCP-INTEGRACJA.md",
-            "shared/SYGNATURY.md",
-            "shared/PRAWO-HARDGATE.md",
+            "JUR:sygnatury-repertoria",
+            "JUR:weryfikacja-przepisow-kanon",
             "shared/SELF-CHECK-ANTY-FASADA.md"
         ];
         const readResults = await params.runTools(requiredReads.map((resource, index) => ({

@@ -4,6 +4,8 @@
 #   ad-hoc signed (no Apple Developer ID), wrapped in a .pkg whose postinstall
 #   runs macos-online-bootstrap.sh as the logged-in user.
 # Usage: build-macos-online.sh <output.pkg>
+# LEX_MACOS_OFFLINE=1: the offline package - Node, Python, the Python packages and the OCR/NER
+# models are inside the app (prepare-macos-offline.sh) and the install needs no network.
 set -euo pipefail
 
 OUTPUT="${1:?usage: build-macos-online.sh <output.pkg>}"
@@ -56,18 +58,25 @@ cp -R "$REPO/app/storage" "$PAYLOAD/storage"
 cp -R "$REPO/Wersja rozwojowa rozpakowana" "$PAYLOAD/corpus"
 find "$PAYLOAD" -name "__pycache__" -type d -prune -exec rm -rf {} +
 # MCP connector package must match the skill's CHECKSUMS.sha256 byte for byte.
-expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpus/audyt-systemu-v4/CHECKSUMS.sha256")"
-actual="$(shasum -a 256 "$PAYLOAD/corpus/audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs" | cut -d' ' -f1)"
+expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpus/prawo-polskie-v2/CHECKSUMS.sha256")"
+actual="$(shasum -a 256 "$PAYLOAD/corpus/prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs" | cut -d' ' -f1)"
 [ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "MCP_BUNDLE_CHECKSUM_MISMATCH: $actual != $expected" >&2; exit 1; }
 cp "$REPO/LICENSE" "$PAYLOAD/LICENSE.txt"
 cp "$REPO/POLITYKA-PRYWATNOSCI.md" "$PAYLOAD/POLITYKA-PRYWATNOSCI.md"
 cp "$INSTALLER/macos-release-source.json" "$PAYLOAD/release-source.json"
-cp "$INSTALLER/windows-release-requirements.txt" "$PAYLOAD/release-requirements.txt"
+cp "$INSTALLER/macos-release-requirements.txt" "$PAYLOAD/release-requirements.txt"
 mkdir -p "$PAYLOAD/bootstrap"
-for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-release-models.py verify-python-package-set.py; do
+# llama-*: the standalone llama.cpp server with tools (start-llama-native-agent.sh, written when
+# a local model is installed).
+for file in macos-online-bootstrap.sh generate-component-lock.py prefetch-release-models.py verify-python-package-set.py \
+  llama-web-mcp.py llama-legal-skills-mcp.py llama-local-documents-mcp.py llama-native-system-message.txt \
+  mistral-nemo-web-grounded.jinja bielik-web-grounded.jinja; do
   cp "$INSTALLER/$file" "$PAYLOAD/bootstrap/$file"
 done
 chmod +x "$PAYLOAD/bootstrap/macos-online-bootstrap.sh"
+if [ "${LEX_MACOS_OFFLINE:-0}" = 1 ]; then
+  bash "$INSTALLER/prepare-macos-offline.sh" "$PAYLOAD"
+fi
 
 echo "[3/6] Native runtime sidecar"
 (cd "$DESKTOP" && cargo build --release --bin lex-runtime-sidecar --manifest-path src-tauri/Cargo.toml)
@@ -84,6 +93,11 @@ for required in app/dist/http/server.js app/web/index.html lex-runtime-sidecar r
   bootstrap/macos-online-bootstrap.sh bootstrap/generate-component-lock.py corpus/prawny-router-v3/SKILL.md; do
   [ -e "$RUNTIME/$required" ] || { echo "PAYLOAD_REQUIRED_FILE_MISSING:$required" >&2; exit 1; }
 done
+if [ "${LEX_MACOS_OFFLINE:-0}" = 1 ]; then
+  for required in offline/downloads offline/wheels offline/models/stanza/pl; do
+    [ -e "$RUNTIME/$required" ] || { echo "OFFLINE_PAYLOAD_MISSING:$required" >&2; exit 1; }
+  done
+fi
 chmod +x "$RUNTIME/lex-runtime-sidecar" "$RUNTIME/bootstrap/macos-online-bootstrap.sh"
 
 echo "[5/6] Ad-hoc signature"

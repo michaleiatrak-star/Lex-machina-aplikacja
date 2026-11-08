@@ -7,6 +7,7 @@ import { AuthError } from "../auth/service.js";
 import { isLexMcpServerId } from "../lex-mcp-connectors.js";
 import { fetchSourcePreview } from "../source-preview.js";
 import { CaseAccessError } from "../case-access.js";
+import { activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveJurisdictionPack } from "../jurisdiction.js";
 function requireAdmin(req, res, authService) {
     return authorize(req, res, authService, true);
 }
@@ -365,6 +366,48 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT|SN)_[A-Z0-9_]+$/.test(message) ? message : "CASE_LAW_RESOLVE_FAILED";
             res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
         }
+    });
+    // Jurysdykcja (Ustawienia, domyślnie prawo polskie): pakiet kraju z JURYSDYKCJA.md — treść krajowa,
+    // skille dziedzinowe, konektory MCP i dostawcy komponentów aplikacji. Brak dostawcy = brak nazwany.
+    const jurisdictionView = () => {
+        const root = connectors.corpusRoot;
+        const active = activeJurisdictionPack();
+        return {
+            active,
+            jurisdictions: listJurisdictions(root).map((provider) => {
+                const status = jurisdictionStatus(provider);
+                return {
+                    pack: provider.pack,
+                    country: provider.country,
+                    name: provider.name,
+                    language: provider.language,
+                    currency: provider.currency,
+                    connectors: provider.connectorServers,
+                    missing: status.missing.map((item) => COMPONENT_LABELS[item.component])
+                };
+            })
+        };
+    };
+    app.get("/api/settings/jurisdiction", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json(jurisdictionView());
+    });
+    app.put("/api/settings/jurisdiction", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const pack = req.body?.pack;
+        if (typeof pack !== "string" || !listJurisdictions(connectors.corpusRoot).some((provider) => provider.pack === pack)) {
+            res.status(400).json({ error: "JURISDICTION_UNKNOWN" });
+            return;
+        }
+        if (process.env.LEX_JURISDICTION_PACK?.trim()) {
+            res.status(409).json({ error: "JURISDICTION_FIXED_BY_DEPLOYMENT" });
+            return;
+        }
+        setActiveJurisdictionPack(connectors.corpusRoot, pack);
+        connectors.jurisdictionChanged();
+        res.json(jurisdictionView());
     });
     // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony): gdy reguły nie
     // wskazały dziedziny, krótkie zapytanie do modelu sesji albo lokalnego Bielika/Mistrala.

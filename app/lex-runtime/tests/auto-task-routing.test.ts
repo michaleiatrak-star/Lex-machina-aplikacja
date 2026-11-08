@@ -95,11 +95,11 @@ describe("AUTO: the router's executive skill is loaded mechanically", () => {
       mode: "PRAWNIK"
     });
     const prompt = calls[0]!.systemPrompt ?? "";
-    for (const resource of ["shared/PRAWO-HARDGATE.md", "prawny-router-v3/references/KROK0A-anonimizer.md", "prawny-router-v3/references/KROK1-detekcja.md"]) {
+    for (const resource of ["JUR:weryfikacja-przepisow-kanon", "prawny-router-v3/references/KROK0A-anonimizer.md", "prawny-router-v3/references/KROK1-detekcja.md"]) {
       expect(prompt).toContain(`# ${resource} (już wczytany - nie czytaj ponownie)`);
     }
     // The body, not only a header: the HARD GATE's own heading.
-    const hardGate = fs.readFileSync(path.join(CORPUS, "shared", "PRAWO-HARDGATE.md"), "utf8");
+    const hardGate = fs.readFileSync(path.join(CORPUS, "prawo-polskie-v2", "krajowe", "shared", "PRAWO-HARDGATE.md"), "utf8");
     const heading = hardGate.split("\n").find((line) => line.startsWith("# "))!;
     expect(prompt).toContain(heading);
     const core = result.mandatoryPath!.steps.filter((step) => /^R-[234]/u.test(step.id));
@@ -243,6 +243,104 @@ describe("AUTO with an attached judgment", () => {
   }, 60_000);
 });
 
+describe("AUTO with a demand and the agreement it relies on", () => {
+  it("whatever skill leads, the agreement gets the contract analyser's whole-document check (user report 2026-11-06)", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Analiza." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    await executor.execute({
+      query: "Czy żądanie zapłaty jest zasadne? Co mam zrobić?",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "LAIK",
+      documentAttachments: [
+        {
+          documentId: "doc_wezwanie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "WEZWANIE DO ZAPRZESTANIA NARUSZEŃ WRAZ Z WEZWANIEM DO ZAPŁATY\nwzywam do zapłaty kwoty 60.000,00 zł kary umownej" }]
+        },
+        {
+          documentId: "doc_porozumienie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "Porozumienie stron o rozwiązaniu umowy o pracę\nzawarte w dniu 9 października 2024 r. pomiędzy X, zwaną dalej „Pracodawcą”, a Y, zwanym dalej „Pracownikiem”.\nPracodawca i Pracownik zgodnie postanawiają, co następuje:\n1. Umowa o pracę zostaje rozwiązana z dniem 31 października 2024 r.\n2. Pracodawca zwalnia Pracownika z obowiązku świadczenia pracy z zachowaniem prawa do wynagrodzenia.\n3. Strony zobowiązują się do zachowania poufności.\n4. Za każde naruszenie każda ze stron zobowiązana będzie do zapłaty kary w kwocie 5.000,00 zł\n5. Pracownik zrzeka się wszystkich roszczeń przeszłych i przyszłych." }]
+        }
+      ]
+    });
+    const prompt = calls[0]!.systemPrompt ?? "";
+    expect(prompt).toContain("doc_porozumienie: porozumienie / ugoda");
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)");
+    expect(prompt).toContain("a) ZRZECZENIE");
+    // The agreement's relation graph, and the checklist for the opposing party's demand.
+    expect(prompt).toContain("# GRAF RELACJI POSTANOWIEŃ: doc_porozumienie");
+    expect(prompt).toMatch(/\| pkt 5 \| ZNOSI PRAWO \| pkt 4 \|/u);
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analiza-sadowa-v6/SKILL.md — PISMO PRZECIWNIKA / WEZWANIE — LISTA PP");
+  }, 60_000);
+});
+
+describe("a local model with a demand and the agreement (Bielik, Mistral)", () => {
+  it("gets the document kinds, the whole-document check, the graph and the checklist like a hosted model", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Analiza." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    await executor.execute({
+      query: "Czy żądanie zapłaty jest zasadne? Co mam zrobić?",
+      provider: "openai",
+      model: "local/bielik-test",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "LAIK",
+      documentAttachments: [
+        {
+          documentId: "doc_wezwanie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "WEZWANIE DO ZAPRZESTANIA NARUSZEŃ WRAZ Z WEZWANIEM DO ZAPŁATY\nwzywam do zapłaty kwoty 60.000,00 zł kary umownej" }]
+        },
+        {
+          documentId: "doc_porozumienie",
+          selectedByUser: true,
+          totalPages: 1,
+          chunks: [{ index: 0, pageStart: 1, pageEnd: 1, text: "Porozumienie stron o rozwiązaniu umowy o pracę\nzawarte w dniu 9 października 2024 r. pomiędzy X, zwaną dalej „Pracodawcą”, a Y, zwanym dalej „Pracownikiem”.\nPracodawca i Pracownik zgodnie postanawiają, co następuje:\n1. Umowa o pracę zostaje rozwiązana z dniem 31 października 2024 r.\n2. Pracodawca zwalnia Pracownika z obowiązku świadczenia pracy z zachowaniem prawa do wynagrodzenia.\n3. Strony zobowiązują się do zachowania poufności.\n4. Za każde naruszenie każda ze stron zobowiązana będzie do zapłaty kary w kwocie 5.000,00 zł\n5. Pracownik zrzeka się wszystkich roszczeń przeszłych i przyszłych." }]
+        }
+      ]
+    });
+    const prompt = calls.map((call) => call.systemPrompt ?? "").join("\n");
+    expect(prompt).toContain("doc_porozumienie: porozumienie / ugoda");
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analizator-umow-v1/SKILL.md — KONTROLA CAŁOŚCIOWA DOKUMENTU (CAL-GATE)");
+    expect(prompt).toContain("a) ZRZECZENIE");
+    // The agreement's relation graph, and the checklist for the opposing party's demand.
+    expect(prompt).toContain("# GRAF RELACJI POSTANOWIEŃ: doc_porozumienie");
+    expect(prompt).toMatch(/\| pkt 5 \| ZNOSI PRAWO \| pkt 4 \|/u);
+    expect(prompt).toContain("# MANDATORY PATH RESOURCE: analiza-sadowa-v6/SKILL.md — PISMO PRZECIWNIKA / WEZWANIE — LISTA PP");
+  }, 60_000);
+});
+
 describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
   const markdown = fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8");
   const combinations = parseCombinations(markdown);
@@ -338,5 +436,23 @@ describe("case law next to a provision (ACTIVATION-MATRIX: orzeczenia-sadowe-v2 
     const decision = decideTask(routes, matrix, question);
     expect(decision?.primary).toBe(primary);
     expect(decision?.then ?? null).toBe(then);
+  });
+});
+
+describe("a request with the document pasted after it (test przeglądu umowy 2026-11-07)", () => {
+  const matrix = parseActivationMatrix(fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8"));
+  const contract = [
+    "UMOWA NR 14/2026 O WYKONANIE I UTRZYMANIE SYSTEMU",
+    "§ 1. Wykonawca wykona System.",
+    "§ 4. Wady nieistotne nie uprawniają do odmowy odbioru. O tym, czy wada jest istotna, rozstrzyga Wykonawca.",
+    "§ 11. Wykonawca może wypowiedzieć umowę w każdym czasie z 7-dniowym okresem wypowiedzenia.",
+    "Spory rozstrzyga sąd właściwy dla siedziby Wykonawcy."
+  ].join("\n");
+
+  it.each([
+    `Przejrzyj umowę i wskaż ryzyka dla Zamawiającego.\n\nTreść umowy:\n\n${contract}`,
+    `Jestem prawnikiem Zamawiającego. Przejrzyj umowę i zaproponuj zmiany.\n\n${contract}`
+  ])("the contract's own sentences do not route to a letter: %#", (question) => {
+    expect(decideTask(routes, matrix, question)?.primary).toBe("analizator-umow-v1");
   });
 });

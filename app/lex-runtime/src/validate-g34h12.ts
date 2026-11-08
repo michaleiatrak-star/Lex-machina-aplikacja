@@ -88,6 +88,8 @@ const dataRoot =
   );
 process.env.LEX_DATA_DIR =
   dataRoot;
+// The API is checked here, not the background ELI crawl of the mapped acts.
+process.env.LEX_CORE_LAW_REFRESH ??= "off";
 
 const zipPath =
   path.join(

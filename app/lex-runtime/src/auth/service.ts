@@ -13,6 +13,7 @@ import type {
   PublicLocalUser,
   RecoveryCodeResult,
   LocalUserStatus,
+  AccountKind,
   StoredLocalUser
 } from "./types.js";
 import {
@@ -113,8 +114,14 @@ export interface AuthService {
       loginName: string;
       displayName: string;
       password: string;
+      accountKind?: AccountKind;
     }
   ): Promise<PublicLocalUser>;
+  setAccountKind(
+    actor: AuthenticatedContext,
+    userId: string,
+    accountKind: AccountKind
+  ): PublicLocalUser;
   listUsers(
     actor: AuthenticatedContext
   ): PublicLocalUser[];
@@ -207,6 +214,7 @@ function publicUser(
     loginName: user.loginName,
     displayName: user.displayName,
     appRole: user.appRole,
+    accountKind: user.accountKind ?? "PROFESSIONAL",
     status: user.status,
     passwordSetupPending:
       user.passwordSetupPending === true,
@@ -741,6 +749,7 @@ implements AuthService {
       loginName: string;
       displayName: string;
       password: string;
+      accountKind?: AccountKind;
     }
   ): Promise<PublicLocalUser> {
     if (
@@ -841,6 +850,7 @@ implements AuthService {
           normalizedLoginName,
           displayName,
           appRole: "USER",
+          accountKind: input.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL",
           status: "ACTIVE",
           createdAt: now,
           updatedAt: now,
@@ -919,6 +929,25 @@ implements AuthService {
     return this.store
       .listUsers()
       .map(publicUser);
+  }
+
+  /** Only the administrator sets an account's kind, as the other account settings. */
+  setAccountKind(
+    actor: AuthenticatedContext,
+    userId: string,
+    accountKind: AccountKind
+  ): PublicLocalUser {
+    if (!/^user_[a-f0-9]{32}$/.test(userId) || !["PROFESSIONAL", "INDIVIDUAL"].includes(accountKind)) {
+      throw new AuthError("INVALID_USER_REQUEST", 400);
+    }
+    if (actor.user.appRole !== "ADMIN") {
+      throw new AuthError("AUTHORIZATION_DENIED", 403);
+    }
+    const target = this.store.getUserById(userId);
+    if (!target) throw new AuthError("USER_NOT_FOUND", 404);
+    if ((target.accountKind ?? "PROFESSIONAL") === accountKind) return publicUser(target);
+    this.store.setAccountKind(userId, accountKind, new Date(this.clock.now()).toISOString());
+    return publicUser(this.store.getUserById(userId)!);
   }
 
   setUserStatus(

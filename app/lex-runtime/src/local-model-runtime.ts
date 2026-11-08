@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { provisionLocalAiMacos } from "./local-ai-provision-macos.js";
+import { writeNativeAgentMacos } from "./llama-native-macos.js";
 import type {
   ModelPackEntry
 } from "./model-pack-verifier.js";
@@ -36,7 +38,9 @@ export type LocalModelId = string;
 
 export type LocalBackendId =
   | "CPU_X64_PORTABLE"
-  | "VULKAN_X64";
+  | "VULKAN_X64"
+  // macOS on Apple Silicon: the llama.cpp Metal build (local-ai-provision-macos.ts).
+  | "METAL_ARM64";
 
 export type LocalBackendPreference =
   | "AUTO"
@@ -418,7 +422,8 @@ function isBackendId(
   return (
     value ===
       "CPU_X64_PORTABLE" ||
-    value === "VULKAN_X64"
+    value === "VULKAN_X64" ||
+    value === "METAL_ARM64"
   );
 }
 
@@ -452,6 +457,16 @@ function configSelectionMode(
   )
     ? config.engine.selectionMode
     : configBackend(config);
+}
+
+/** macOS on Apple Silicon: the llama.cpp Metal build. */
+function macMetal(): boolean {
+  return process.platform === "darwin" && process.arch === "arm64";
+}
+
+/** Installation of a local model: Windows (install-local-llm.ps1) and Apple Silicon (in the runtime). */
+function localProvisioningSupported(): boolean {
+  return process.platform === "win32" || macMetal();
 }
 
 function usableAcceleratorName(
@@ -1182,6 +1197,9 @@ export class LocalModelRuntime {
       }
     }
 
+    // Apple Silicon: the GPU shares the memory and llama.cpp reaches it through Metal.
+    if (macMetal()) accelerators.push({ name: "Apple GPU (Metal)" });
+
     const config =
       this.readConfig();
     const qualification =
@@ -1202,8 +1220,7 @@ export class LocalModelRuntime {
     const gpuOffloadEnabled =
       Boolean(
         config &&
-        configuredBackend ===
-          "VULKAN_X64" &&
+        (configuredBackend === "VULKAN_X64" || configuredBackend === "METAL_ARM64") &&
         config.engine.gpuOffload ===
           true &&
         qualification &&
@@ -1340,6 +1357,7 @@ export class LocalModelRuntime {
     ) {
       return preference;
     }
+    if (macMetal() && policy.allowed.includes("METAL_ARM64")) return "METAL_ARM64";
     return this
       .hardwareProfile()
       .gpuCandidateDetected &&
@@ -1461,7 +1479,7 @@ export class LocalModelRuntime {
     configPath: string;
   }> {
     if (this.external) throw new Error("LOCAL_MODEL_ENDPOINT_EXTERNAL");
-    if (process.platform !== "win32") {
+    if (!localProvisioningSupported()) {
       throw new Error("LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED");
     }
     if (this.provisioning) {
@@ -2493,7 +2511,7 @@ export class LocalModelRuntime {
             spec.filename
           );
         if (
-          process.platform !== "win32" ||
+          !localProvisioningSupported() ||
           !fs.existsSync(
             targetModelPath
           )
@@ -2645,6 +2663,82 @@ export class LocalModelRuntime {
       throw error;
     } finally {
       this.startup = null;
+    }
+  }
+
+  // Chat answers on the local model (shared) and the vision step that stops it (exclusive).
+  // Before, the vision step of a document read in the background stopped the model in the
+  // middle of a chat answer, and a chat message started it again under the vision model.
+  private generations = 0;
+  private exclusive = false;
+  private readonly lockWaiters: Array<() => void> = [];
+
+  private wakeLockWaiters(): void {
+    for (const wake of this.lockWaiters.splice(0)) wake();
+  }
+
+  /** One chat answer on the local model: waits while the vision step holds the model. */
+  async withGeneration<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.exclusive) await new Promise<void>((resolve) => this.lockWaiters.push(resolve));
+    this.generations += 1;
+    this.lastUsedAt = Date.now();
+    try {
+      return await fn();
+    } finally {
+      this.generations -= 1;
+      this.lastUsedAt = Date.now();
+      this.wakeLockWaiters();
+    }
+  }
+
+  // The memory of the model (on the card about 10-11 GB of 12 for Bielik with 32k context) is
+  // given back when it is not used: before, a model once started stayed loaded until the app
+  // closed, and OCR on the card ran in what was left. It starts again on the next answer.
+  private lastUsedAt = Date.now();
+
+  /** Whether the model is loaded and has not answered for at least `idleMs`. */
+  idleFor(idleMs: number, now: number = Date.now()): boolean {
+    return this.child !== null && !this.startup && this.generations === 0 && !this.exclusive && now - this.lastUsedAt >= idleMs;
+  }
+
+  /** Stops a loaded model that has been idle for `idleMs` (memory for OCR, other programs). */
+  async releaseIfIdle(idleMs: number, reason: string): Promise<boolean> {
+    if (this.external || !this.idleFor(idleMs)) return false;
+    process.stderr.write(`LOCAL_MODEL_RELEASED:${reason}:idle=${Math.round((Date.now() - this.lastUsedAt) / 1000)}s\n`);
+    await this.stop();
+    return true;
+  }
+
+  /** Whether the model is in memory now (for the OCR statistics). */
+  get resident(): boolean {
+    return this.child !== null;
+  }
+
+  /**
+   * The vision step: waits for running chat answers, holds new ones back until it ends. An
+   * answer still running after `maxWaitMs` (a tool of that answer may be reading this very
+   * document) gives `fallback()` instead: no deadlock, the step is skipped.
+   */
+  async withExclusiveModel<T>(fn: () => Promise<T>, fallback: () => T, maxWaitMs = 120_000): Promise<T> {
+    while (this.exclusive) await new Promise<void>((resolve) => this.lockWaiters.push(resolve));
+    this.exclusive = true;
+    try {
+      const deadline = Date.now() + maxWaitMs;
+      while (this.generations > 0) {
+        const left = deadline - Date.now();
+        if (left <= 0) return fallback();
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, left);
+          this.lockWaiters.push(() => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
+      }
+      return await fn();
+    } finally {
+      this.exclusive = false;
+      this.wakeLockWaiters();
     }
   }
 
@@ -4117,6 +4211,37 @@ export class LocalModelRuntime {
             manifestOverride
           )
         : this.manifestPath();
+    if (macMetal()) {
+      if (!fs.existsSync(manifest)) throw new Error("LOCAL_MODEL_RELEASE_MANIFEST_MISSING");
+      if (backend !== "METAL_ARM64") throw new Error(`LOCAL_MODEL_BACKEND_NOT_ALLOWED:${backend}`);
+      await provisionLocalAiMacos({
+        manifestPath: manifest,
+        localRoot: this.rootDir,
+        modelId,
+        contextTokens,
+        backendMode,
+        onProgress: (progress) => {
+          this.provisioningProgress = { ...progress, updatedAt: new Date().toISOString() };
+        }
+      });
+      // The standalone llama.cpp server with tools (start-llama-native-agent.sh), as on Windows;
+      // the application does not need it, so a missing piece is reported, not fatal.
+      try {
+        const paddle = process.env.LEX_PADDLE_MODEL_DIR?.trim();
+        const python = process.env.LEX_OCR_PYTHON?.trim();
+        if (!paddle || !python) throw new Error("LLAMA_NATIVE_COMPONENTS_UNKNOWN");
+        writeNativeAgentMacos({
+          runtimeRoot: this.runtimeRoot,
+          localRoot: this.rootDir,
+          python,
+          node: process.execPath,
+          modelsRoot: path.resolve(paddle, "..", "..")
+        });
+      } catch (error) {
+        process.stderr.write(`LLAMA_NATIVE_AGENT_NOT_CONFIGURED:${error instanceof Error ? error.message : String(error)}\n`);
+      }
+      return;
+    }
     if (!fs.existsSync(script)) {
       throw new Error("LOCAL_MODEL_PROVISIONER_MISSING");
     }
@@ -4302,8 +4427,7 @@ export class LocalModelRuntime {
       "q8_0"
     ];
     if (
-      configBackend(config) ===
-        "VULKAN_X64" &&
+      (configBackend(config) === "VULKAN_X64" || configBackend(config) === "METAL_ARM64") &&
       config.engine.gpuOffload ===
         true
     ) {

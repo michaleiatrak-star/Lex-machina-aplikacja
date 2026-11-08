@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { fileStamp, fold, locate } from "./domain-module-map.js";
+import { isDomainSkill } from "./jurisdiction.js";
 const CODES = {
     KK: /kodeks\s+karny(?!\s+(?:skarbowy|wykonawczy))/iu,
     KW: /kodeks\s+wykrocze/iu,
@@ -147,7 +148,7 @@ const RARE_IN_MODULES = 10;
 const GENERAL_MODULES = 30;
 const GENERAL_DOMAINS = 8;
 function actRows(registry) {
-    const skills = [...registry.skills.values()].filter((skill) => /^dr-\d{2}-/.test(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
+    const skills = [...registry.skills.values()].filter((skill) => isDomainSkill(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
     const files = skills.map((skill) => path.join(skill.directory, "MAPA-AKTOW.md"));
     const key = files.map((file) => `${file}=${fileStamp(file)}`).join(",");
     const cached = cache.get(registry.root);
@@ -180,8 +181,8 @@ function actRows(registry) {
             }
             if (moduleColumn < 0 || /^:?-+/.test(cells[0] ?? ""))
                 continue;
-            const resources = [...(cells[moduleColumn] ?? "").matchAll(/`((?:dr-\d{2}-[a-z0-9-]+\/modules\/)?mod-[A-Za-z0-9._-]+?)(?:\.md)?`/g)]
-                .map((match) => (match[1].startsWith("dr-") ? `${match[1]}.md` : `${skill.name}/modules/${match[1]}.md`))
+            const resources = [...(cells[moduleColumn] ?? "").matchAll(/`((?:[a-z]{2}-\d{2}-[a-z0-9-]+\/modules\/)?mod-[A-Za-z0-9._-]+?)(?:\.md)?`/g)]
+                .map((match) => (isDomainSkill(match[1]) ? `${match[1]}.md` : `${skill.name}/modules/${match[1]}.md`))
                 .map((resource) => locate(registry, skill.name, resource))
                 .filter((resource) => resource !== null);
             if (!resources.length)
@@ -290,13 +291,13 @@ function distinctive(label) {
  * (DR-04 „KPA — sprawy administracyjne świadczeń” → DR-05 mod-KPA-current-state-COV).
  */
 function ownerOf(registry, skill, resource) {
-    const qualified = /^(dr-\d{2}-[a-z0-9-]+)\//u.exec(resource)?.[1];
+    const qualified = /^([a-z]{2}-\d{2}-[a-z0-9-]+)\//u.exec(resource)?.[1];
     if (qualified)
         return qualified;
     const file = `${path.basename(resource).replace(/\.md$/u, "")}.md`;
     if (fs.existsSync(path.join(registry.root, skill, "modules", file)))
         return skill;
-    return [...registry.skills.keys()].find((name) => name.startsWith("dr-") && fs.existsSync(path.join(registry.root, name, "modules", file))) ?? skill;
+    return [...registry.skills.keys()].find((name) => isDomainSkill(name) && fs.existsSync(path.join(registry.root, name, "modules", file))) ?? skill;
 }
 function moduleText(registry, resource) {
     try {

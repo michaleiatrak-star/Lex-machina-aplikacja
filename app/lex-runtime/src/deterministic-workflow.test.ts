@@ -14,7 +14,7 @@ const roots: string[] = [];
 
 const guideResources = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/DOMAIN-LOCK.md",
   "shared/RATE-COMPLETENESS.md",
@@ -22,7 +22,7 @@ const guideResources = [
 ];
 
 const simpleResources = [
-  "shared/NAZEWNICTWO-STRON.md",
+  "JUR:nazewnictwo-stron",
   "pisma-proste-v2/references/M1-zasady.md",
   "pisma-proste-v2/references/M2-intake.md",
   "pisma-proste-v2/references/M4-struktura.md",
@@ -40,12 +40,12 @@ const processResources = [
 
 const courtResources = [
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "analiza-sadowa-v6/references/WERYFIKACJA-DOWODOW.md"
 ];
 
 const evidenceResources = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
   "shared/MOD-STEP-TRACKER.md",
   "shared/DOMAIN-LOCK.md",
@@ -54,20 +54,20 @@ const evidenceResources = [
 
 const statuteResources = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
-  "shared/HIERARCHIA-ZRODEL.md",
+  "JUR:weryfikacja-przepisow-kanon",
+  "JUR:hierarchia-zrodel",
   "shared/SELF-CHECK-ANTY-FASADA.md"
 ];
 
 const contractResources = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-STEP-TRACKER.md"
 ];
 
 const chronologyResources = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "chronologia-sprawy-v1/references/ekstrakcja-zdarzen.md",
   "chronologia-sprawy-v1/references/sprzecznosci-dat.md",
@@ -76,13 +76,13 @@ const chronologyResources = [
 
 const caseLawResources = [
   "shared/MCP-INTEGRACJA.md",
-  "shared/SYGNATURY.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:sygnatury-repertoria",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md"
 ];
 
 const witnessResources = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
   "shared/MOD-STEP-TRACKER.md",
@@ -90,14 +90,14 @@ const witnessResources = [
 ];
 
 const clientReportResources = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "raport-klienta-v1/references/jezyk-klienta.md",
   "raport-klienta-v1/references/BLUEPRINT-SCHEMA.md"
 ];
 
 const situationReportResources = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-WIDGET-IO.md"
 ];
@@ -160,8 +160,17 @@ function fixture(): LexSkillRegistry {
     ...clientReportResources,
     ...situationReportResources
   ]) {
-    writeFile(root, resource);
+    // JUR:<key>: a module the jurisdiction manifest addresses (as prawo-polskie-v2 in the corpus).
+    writeFile(root, resource.startsWith("JUR:") ? `shared/jur-${resource.slice(4)}.md` : resource);
   }
+  const keys = [...new Set([...guideResources, ...simpleResources, ...processResources, ...courtResources, ...evidenceResources, ...statuteResources,
+    ...contractResources, ...chronologyResources, ...caseLawResources, ...witnessResources, ...clientReportResources, ...situationReportResources])]
+    .filter((resource) => resource.startsWith("JUR:"));
+  fs.mkdirSync(path.join(root, "prawo-polskie-v2"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"),
+    keys.map((key) => `| \`${key}\` | \`shared/jur-${key.slice(4)}.md\` | test |`).join("\n") + "\n"
+  );
 
   const registry = new LexSkillRegistry(root);
   expect(registry.scan()).toEqual([]);
@@ -1175,6 +1184,16 @@ describe("deterministic legal workflow", () => {
         .toBe("PASS");
       expect(fullPass.mode)
         .toBe("CONTRACT_FINAL");
+      // Headings the model adapts to the case (contract test 2026-11-08).
+      expect(
+        evaluateDeterministicWorkflowOutput(
+          plan,
+          full
+            .replace("DLA STRONY CHRONIONEJ", "DLA ZAMAWIAJĄCEGO")
+            .replace("PLAN DZIAŁANIA PRZED PODPISANIEM", "PLAN DZIAŁANIA I PRIORYTETY NEGOCJACYJNE")
+            .replace("## 10. REKOMENDACJE ZMIAN", "## 10. REKOMENDACJE ZMIAN WRAZ Z BRZMIENIEM")
+        ).result
+      ).toBe("PASS");
 
       const lite = [
         "RAPORT ANALIZY UMOWY — LITE",

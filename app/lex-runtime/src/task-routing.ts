@@ -2,6 +2,7 @@ import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand, t
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { COURT_FORMAL, COURT_POSITION } from "./document-kind.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
 // has its trigger phrases and the PRIMARY executive skill. The application uses it
@@ -133,7 +134,7 @@ export function classifyTask(routes: TaskRoute[], rawQuestion: string, delivered
   const question = provisionsForDetection(rawQuestion).replace(EMPLOYMENT_BASIS, " ");
   let best: { route: TaskRoute; matched: string[]; score: number } | null = null;
   for (const route of routes) {
-    if (route.primary === "prawo-polskie-v2") continue;
+    if (route.primary === activeJurisdictionPack()) continue;
     const matched = route.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
     if (!matched.length) continue;
     // "SMS-y i śledzenie" tells the story; "czy te SMS-y są dowodem" asks about evidence.

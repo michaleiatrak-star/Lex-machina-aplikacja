@@ -1,5 +1,9 @@
 export type AppRole = "ADMIN" | "USER";
 
+// PROFESSIONAL: cases, modes and the firm's tools. INDIVIDUAL: a private person's chat only, in the
+// automatic mode, with conversations named from the question instead of cases.
+export type AccountKind = "PROFESSIONAL" | "INDIVIDUAL";
+
 export type CaseRole =
   | "OWNER"
   | "EDITOR"
@@ -30,6 +34,7 @@ export type PublicLocalUser = {
   loginName: string;
   displayName: string;
   appRole: AppRole;
+  accountKind?: AccountKind;
   status: LocalUserStatus;
   passwordSetupPending?: boolean;
   createdAt: string;

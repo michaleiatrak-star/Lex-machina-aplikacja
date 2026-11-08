@@ -110,9 +110,9 @@ describe("text that selects modules", () => {
     };
     expect(triggeredModules([entry], { text: "Umowa o roboty budowlane, umowach stron." })).toHaveLength(0);
     expect(triggeredModules([entry], { text: "Pracodawca zmienił nazwę spółki w trakcie zatrudnienia." })).toHaveLength(1);
-    // A list of single examples after the trigger still needs one of them (shared/terminy.md).
+    // A list of single examples after the trigger still needs one of them (JUR:terminy-procesowe).
     const termin = skillModules(registry, "pisma-proste-v2", { text: "Napisz sprzeciw od nakazu zapłaty" });
-    expect(termin.map((item) => item.resource)).toContain("shared/terminy.md");
+    expect(termin.map((item) => item.resource)).toContain("JUR:terminy-procesowe");
   });
 });
 
@@ -126,6 +126,19 @@ describe("Anthropic API: the workflow's unchanged part as its own cached system 
     expect(blocks.map((block) => block.content).join("")).toBe(systemPrompt);
     expect(blocks[0]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } });
     expect(blocks[1]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral" } } });
+  });
+
+  it("AUTO: a breakpoint after the part every domain shares, then the domain's own stable part", () => {
+    const prompt = `${"S".repeat(6_000)}${"D".repeat(5_000)}\n\n# TURN`;
+    const system = anthropicSystem(model, { model: "m", systemPrompt: prompt, systemPromptSharedPrefix: 6_000, systemPromptCachePrefix: 11_000, promptCacheTtl: "1h", messages: [] });
+    const blocks = system as Array<{ content: string; providerOptions?: unknown }>;
+    expect(blocks.map((block) => block.content.length)).toEqual([6_000, 5_000, prompt.length - 11_000]);
+    expect(blocks.map((block) => block.content).join("")).toBe(prompt);
+    expect(blocks.slice(0, 2).map((block) => block.providerOptions)).toEqual(Array(2).fill({ anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } }));
+    expect(blocks[2]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral" } } });
+    // A shared part too short to cache or not before the prefix: two blocks as before.
+    expect((anthropicSystem(model, { model: "m", systemPrompt: prompt, systemPromptSharedPrefix: 100, systemPromptCachePrefix: 11_000, messages: [] }) as unknown[]).length).toBe(2);
+    expect((anthropicSystem(model, { model: "m", systemPrompt: prompt, systemPromptSharedPrefix: 11_000, systemPromptCachePrefix: 11_000, messages: [] }) as unknown[]).length).toBe(2);
   });
 
   it("one string for other providers, a short prefix or none", () => {

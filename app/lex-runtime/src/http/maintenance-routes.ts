@@ -1,5 +1,7 @@
+import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister, type FetchText } from "../courts/wokanda.js";
 import type { TranscriptionModelManager } from "../transcription.js";
 import type { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
+import { ChatTurnJournal } from "../chat-turn-journal.js";
 import type { TranscriptionAccelerationManager } from "../transcription-acceleration.js";
 import type { Express, Request, Response } from "express";
 import {
@@ -87,6 +89,8 @@ export function registerMaintenanceRoutes(
     transcriptionModel?: TranscriptionModelManager;
     ocrAcceleration?: OcrAccelerationManager;
     transcriptionAcceleration?: TranscriptionAccelerationManager;
+    // Tests: the court sites of the wokanda re-check.
+    wokandaFetch?: FetchText;
   }
 ): void {
   const {
@@ -98,6 +102,59 @@ export function registerMaintenanceRoutes(
     ocrAcceleration,
     transcriptionAcceleration
   } = dependencies;
+
+  // Times of the chat turns on this computer by path and stage (chat-turn-journal.ts): no text.
+  app.get("/api/diagnostics/chat-turns", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    res.json(new ChatTurnJournal().summary());
+  });
+
+  // Wokandy of the common courts (courts/wokanda.ts): the register with each court's status as
+  // this computer last saw it; re-checked on the administrator's request (one page per court).
+  app.get("/api/courts/wokanda", (req, res) => {
+    try {
+      authenticated(req, authService);
+      res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView() });
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.httpStatus).json({ error: error.code });
+        return;
+      }
+      throw error;
+    }
+  });
+  app.post("/api/courts/wokanda/recheck", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const names = Array.isArray(req.body?.courts) ? (req.body.courts as unknown[]).filter((name): name is string => typeof name === "string").slice(0, 400) : null;
+    try {
+      res.json({ courts: await recheckWokandaCourts(names && names.length ? names : null, dependencies.wokandaFetch) });
+    } catch (error) {
+      res.status(500).json({ error: "WOKANDA_RECHECK_FAILED", detail: error instanceof Error ? error.message.slice(0, 200) : "" });
+    }
+  });
+
+  // A court's browser verification passed by the user in the court's window (as for sn.pl): the
+  // window's cookies probed against the court's wokanda; kept for this user's checks when the
+  // portal answers. Cookies are neither returned nor logged.
+  app.post("/api/courts/wokanda/session/probe", async (req, res) => {
+    try {
+      authenticated(req, authService);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.httpStatus).json({ error: error.code });
+        return;
+      }
+      throw error;
+    }
+    const domain = typeof req.body?.domain === "string" ? req.body.domain : "";
+    const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+    const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+    try {
+      res.json(await probeWokandaSession(domain, cookie, userAgent, dependencies.wokandaFetch));
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "WOKANDA_SESSION_INVALID" });
+    }
+  });
 
   // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.
   if (ocrAcceleration) {
@@ -208,6 +265,17 @@ export function registerMaintenanceRoutes(
       } catch (error) {
         sendMaintenanceError(res, error);
       }
+    });
+    // How many people speak in recordings: 0 = estimated, 2-12 = known (a hearing: 3), more accurate.
+    app.post("/api/local-models/transcription/speakers", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      const count = Number(req.body?.count);
+      if (!Number.isInteger(count) || count < 0 || count > 12 || count === 1) {
+        res.status(400).json({ error: "TRANSCRIPTION_SPEAKERS_INVALID" });
+        return;
+      }
+      transcriptionModel.setSpeakerCount(count);
+      res.json(transcriptionModel.status());
     });
     app.post("/api/local-models/transcription/remove", (req, res) => {
       if (!requireAdmin(req, res, authService)) return;

@@ -23,7 +23,8 @@ function unitOf(text: string): string {
 function keyOf(text: string): string {
   const years = /(?:do|od)\s+lat\s+(\d{1,2})/iu.exec(text);
   const number = years ? years[1]! : (/\d+(?:[  ]\d{3})*(?:,\d+)?/u.exec(text)?.[0] ?? "");
-  return `${number.replace(/[  ]/g, "")}${unitOf(text)}`;
+  // "48 600,00 zł" in an invoice and "48 600 zł" in the answer are one value (live C09-062).
+  return `${number.replace(/[\s\u00a0\u202f]/gu, "").replace(/,0+$/u, "")}${unitOf(text)}`;
 }
 
 // Własne żądanie strony ("Wzywam do zapłaty ... w terminie 7 dni", "wnoszę o zasądzenie kwoty
@@ -111,12 +112,65 @@ export function amountMarkerSpans(lineText: string): Array<{ start: number; end:
  * Klucze wartości podanych jako fakty sprawy (wiadomości użytkownika, akta). Pytanie o normę
  * ("czy termin na sprzeciw to 14 dni?") nie jest faktem: tę wartość weryfikuje się w przepisie.
  */
-export function amountKeysIn(text: string): string[] {
+// A sum in a spreadsheet or a table without its currency ("48600", "48 600,00", "48600.00"):
+// the case's own figure. Not a year, not an identifier (at most 9 digits).
+const BARE_MONEY = /(?<![\p{L}\d,.\/-])(\d{1,3}(?:[   ]\d{3})+|\d{4,9})(?:[,.](\d{2}))?(?![\p{L}\d\/-]|[,.]\d)/gu;
+const DATE = /(?<!\d)(?:(\d{1,2})[./-](\d{1,2})[./-](\d{4})|(\d{4})-(\d{2})-(\d{2}))(?!\d)/gu;
+// Periods a statute commonly sets: a span between the case's dates equal to one of them is not
+// taken as a fact (it may be the statutory term the answer names).
+const STATUTORY_PERIOD_DAYS = new Set([3, 7, 14, 21, 30, 60, 90, 120, 180, 365]);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dateOf(match: RegExpMatchArray): number | null {
+  const [day, month, year] = match[3] ? [match[1], match[2], match[3]] : [match[6], match[5], match[4]];
+  if (Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > 31) return null;
+  const value = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The case's own values (the user's messages, the case's documents): amounts with their unit,
+ * figures of a table without it, and the days between the case's dates (and today), such as
+ * the days an invoice is overdue (live C09-062: "84 dni", "48 600 zł" from faktury.xlsx).
+ */
+export function amountKeysIn(text: string, today: Date = new Date()): string[] {
   const keys = new Set<string>();
   for (const sentence of text.split(/(?<=[.?!])\s+|\n+/u)) {
     if (/\?\s*$/u.test(sentence) && NORMATIVE_CONTEXT.test(sentence)) continue;
     AMOUNT.lastIndex = 0;
     for (const match of sentence.matchAll(AMOUNT)) keys.add(keyOf(match[0]));
+    if (!NORMATIVE_CONTEXT.test(sentence)) {
+      for (const match of sentence.replace(DATE, " ").matchAll(BARE_MONEY)) {
+        const whole = Number(match[1]!.replace(/[\s  ]/gu, ""));
+        if (whole >= 1900 && whole <= 2100 && !match[2]) continue;
+        keys.add(`${whole}${match[2] && !/^0+$/u.test(match[2]) ? `,${match[2]}` : ""}Z`);
+      }
+    }
+  }
+  const dates = [...new Set([...text.matchAll(DATE)].map(dateOf).filter((value): value is number => value !== null))].slice(0, 40);
+  dates.push(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  for (let i = 0; i < dates.length; i += 1) {
+    for (let j = i + 1; j < dates.length; j += 1) {
+      const days = Math.round(Math.abs(dates[i]! - dates[j]!) / DAY_MS);
+      if (days > 0 && !STATUTORY_PERIOD_DAYS.has(days)) keys.add(`${days}D`);
+    }
   }
   return [...keys];
+}
+
+/** Sums of two or three of the case's own money amounts ("łącznie 71 810 zł"): its own figure too. */
+export function factSumKeys(keys: Iterable<string>): string[] {
+  const values = [...new Set([...keys].filter((key) => /^\d+(?:,\d+)?Z$/u.test(key)).map((key) => Number(key.slice(0, -1).replace(",", "."))))].slice(0, 40);
+  const sums = new Set<string>();
+  const add = (value: number) => {
+    const cents = Math.round(value * 100);
+    sums.add(cents % 100 === 0 ? `${cents / 100}Z` : `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}Z`);
+  };
+  for (let i = 0; i < values.length; i += 1) {
+    for (let j = i + 1; j < values.length; j += 1) {
+      add(values[i]! + values[j]!);
+      for (let k = j + 1; k < values.length; k += 1) add(values[i]! + values[j]! + values[k]!);
+    }
+  }
+  return [...sums];
 }

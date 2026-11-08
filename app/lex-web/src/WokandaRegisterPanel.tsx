@@ -1,0 +1,137 @@
+import { useEffect, useMemo, useState } from "react";
+import { InfoTip } from "./InfoTip";
+import { WOKANDA_STATUS_LABEL } from "./CaseCourtCard.js";
+import { listWokandaCourts, recheckWokandaCourts, type WokandaCourtInfo, type WokandaStatus } from "./api.js";
+
+const GROUPS: Array<{ status: WokandaStatus; title: string; help: string }> = [
+  { status: "PORTAL", title: "Dostępne", help: "Portal sądu z wyszukiwarką po sygnaturze: aplikacja odczytuje terminy sprawy na żądanie." },
+  { status: "BROWSER", title: "Brak dostępu dla aplikacji", help: "Wokanda jest, ale otwiera ją tylko przeglądarka (weryfikacja przeglądarki, reCAPTCHA albo inny system). Aplikacja podaje jej adres." },
+  { status: "NONE", title: "Sąd nie ma wokandy na stronie", help: "Strona sądu nie wskazuje wokandy." },
+  { status: "UNREACHABLE", title: "Strona sądu nie odpowiada", help: "Brak połączenia albo błąd strony przy ostatnim sprawdzeniu." }
+];
+
+const SYSTEM_LABEL: Record<NonNullable<WokandaCourtInfo["system"]>, string> = {
+  MS_PORTAL: "portal sądów (wyszukiwarka po sygnaturze)",
+  CMS_FORM: "e-Wokanda BIP (formularz)",
+  GET_FORM: "wyszukiwarka po sygnaturze",
+  POST_FORM: "wyszukiwarka po sygnaturze",
+  DRUPAL_VIEW: "e-Wokanda okręgu (widok z filtrem sygnatury)",
+  LIST: "jedna lista bez wyszukiwarki"
+};
+
+const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** Courts of a status matching the search, by name. */
+export function wokandaGroup(courts: readonly WokandaCourtInfo[], status: WokandaStatus, query: string): WokandaCourtInfo[] {
+  const words = fold(query).split(/\s+/u).filter(Boolean);
+  return courts
+    .filter((court) => court.status === status && words.every((word) => fold(`${court.nazwa} ${court.domena}`).includes(word)))
+    .sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl"));
+}
+
+/** Settings (developer mode): every common court's wokanda, by status, re-checked on request. */
+export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
+  const [courts, setCourts] = useState<WokandaCourtInfo[]>([]);
+  const [checkedAt, setCheckedAt] = useState("");
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  const load = () =>
+    listWokandaCourts().then(
+      (result) => {
+        setCourts(result.courts);
+        setCheckedAt(result.checkedAt);
+      },
+      (failure: unknown) => setError(failure instanceof Error ? failure.message : String(failure))
+    );
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const counts = useMemo(() => Object.fromEntries(GROUPS.map((group) => [group.status, courts.filter((court) => court.status === group.status).length])), [courts]);
+
+  async function recheck(names?: string[]) {
+    setBusy(names?.length === 1 ? names[0]! : "all");
+    setError("");
+    try {
+      await recheckWokandaCourts(names);
+      await load();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <section className="chat-card-stack">
+      <article className="chat-card">
+        <p className="eyebrow">
+          Wokandy sądów powszechnych
+          <InfoTip>
+            Rejestr z wydania aplikacji (sprawdzony {checkedAt || "—"}); „Sprawdź ponownie” sprawdza z tego komputera, jedno zapytanie na sąd. Strona, która blokuje jedną
+            sieć, może odpowiadać innej.
+          </InfoTip>
+        </p>
+        <h2>
+          {courts.length} sądów: {GROUPS.map((group) => `${group.title.toLowerCase()} ${counts[group.status] ?? 0}`).join(", ")}
+        </h2>
+        <div className="case-access-admin-search">
+          <label>
+            Szukaj sądu
+            <input type="search" value={query} placeholder="Nazwa sądu lub domena" onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          {admin ? (
+            <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void recheck()}>
+              {busy === "all" ? "Sprawdzanie wszystkich sądów…" : "Sprawdź wszystkie ponownie"}
+            </button>
+          ) : null}
+        </div>
+        {error ? <div className="alert alert-error">{error}</div> : null}
+      </article>
+      {GROUPS.map((group) => {
+        const rows = wokandaGroup(courts, group.status, query);
+        return (
+          <details key={group.status} className="chat-card wokanda-group" open={group.status !== "PORTAL" && Boolean(query)}>
+            <summary>
+              <strong>
+                {group.title} ({rows.length})
+              </strong>
+              <InfoTip>{group.help}</InfoTip>
+            </summary>
+            <ul className="wokanda-courts">
+              {rows.map((court) => (
+                <li key={court.nazwa}>
+                  <span>
+                    <strong>{court.nazwa}</strong>
+                    <small>
+                      {[WOKANDA_STATUS_LABEL[court.status], court.system ? SYSTEM_LABEL[court.system] : "", court.powod, court.zrodlo === "TEN_KOMPUTER" ? `sprawdzono z tego komputera ${court.sprawdzono ? new Date(court.sprawdzono).toLocaleString("pl-PL") : ""}` : "stan z wydania"]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </span>
+                  <span className="case-court-actions">
+                    {court.url ? (
+                      <a href={court.url} target="_blank" rel="noreferrer">
+                        {court.domena}
+                      </a>
+                    ) : (
+                      <small>{court.domena}</small>
+                    )}
+                    {admin ? (
+                      <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void recheck([court.nazwa])}>
+                        {busy === court.nazwa ? "Sprawdzanie…" : "Sprawdź"}
+                      </button>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </section>
+  );
+}

@@ -9,8 +9,9 @@ export type CaseCourt = {
   nazwa: string;
   wydzial?: string;
   sygnatura?: string;
-  // AKTA: from a document of the case; PISMO: the court of a letter written in the case.
-  zrodlo: "AKTA" | "PISMO";
+  // AKTA: from a document of the case; PISMO: the court of a letter written in the case;
+  // UZYTKOWNIK: set by the user in the case (documents do not replace it).
+  zrodlo: "AKTA" | "PISMO" | "UZYTKOWNIK";
   documentId?: string;
   at: string;
 };
@@ -22,7 +23,7 @@ const SIGNATURE = /\b(?:sygn\.?\s*(?:akt)?\s*:?\s*)?((?:[IVXL]{1,6})\s+[A-Z][A-Z
 export function validCaseCourt(value: unknown): CaseCourt | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  if (typeof raw.nazwa !== "string" || !courtByName(raw.nazwa) || (raw.zrodlo !== "AKTA" && raw.zrodlo !== "PISMO") || typeof raw.at !== "string") return null;
+  if (typeof raw.nazwa !== "string" || !courtByName(raw.nazwa) || (raw.zrodlo !== "AKTA" && raw.zrodlo !== "PISMO" && raw.zrodlo !== "UZYTKOWNIK") || typeof raw.at !== "string") return null;
   return {
     nazwa: courtByName(raw.nazwa)!.nazwa,
     ...(typeof raw.wydzial === "string" && raw.wydzial.length <= 120 ? { wydzial: raw.wydzial } : {}),
@@ -85,8 +86,8 @@ export function caseCourtPrompt(court: CaseCourt): string {
   return [
     "# SĄD SPRAWY (rejestr aplikacji)",
     `${court.nazwa}${court.wydzial ? `, ${court.wydzial}` : ""}${address}${court.sygnatura ? `; sygn. akt ${court.sygnatura}` : ""}.`,
-    court.zrodlo === "AKTA"
-      ? "Źródło: dokumenty sprawy. Pismo w toczącym się postępowaniu kieruj do tego sądu i wydziału, z tą sygnaturą."
+    court.zrodlo === "AKTA" || court.zrodlo === "UZYTKOWNIK"
+      ? (court.zrodlo === "UZYTKOWNIK" ? "Źródło: wpisane przez użytkownika w sprawie. " : "Źródło: dokumenty sprawy. ") + "Pismo w toczącym się postępowaniu kieruj do tego sądu i wydziału, z tą sygnaturą."
       : "Źródło: sąd ustalony przez aplikację dla pierwszego pisma (court_for_address). Kolejne pisma w tej sprawie kieruj do niego; sygnaturę podaj dopiero z pisma sądu.",
     "Pismo wszczynające odrębne postępowanie (inny pozwany, inna podstawa właściwości): sąd ponownie przez court_for_address."
   ].join("\n");

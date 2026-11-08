@@ -20,12 +20,16 @@ import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
 import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources } from "./quick-legal-question.js";
 import { assessMatterComplexity } from "./matter-complexity.js";
-import { MANDATORY_SESSION_SKILLS, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills, threadUserText } from "./skill-selection.js";
+import { mandatorySessionSkills, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills, threadUserText } from "./skill-selection.js";
 export { latestUserTurn };
 import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./deterministic-workflow.js";
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
+// A document the case mentions but nobody uploaded (or "I will add it later") is information,
+// not a stop (shared/CP-GATE.md §3B BRAK-DOK): every checkpoint workflow, as the pleading one.
+export const MISSING_DOCUMENT_INSTRUCTION = "Brak dokumentu (wspomniany, lecz nie wgrany; „uzupełnię później”) = BRAK-DOK (shared/CP-GATE.md §3B): pracuj na materiale, który jest, oznacz ustalenia oparte na brakującym dokumencie „według informacji strony”, wypisz brakujące pozycje w raporcie kroku i zakończ krok. Nie zatrzymuj kroku z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.";
 // A correcting round returns the answer for the user, not a report on the round: a preface
 // such as "Sprawdziłam wszystkie przepisy i przeszłam przez kwalifikator karny. Poniżej pełna,
 // poprawiona odpowiedź." (live C02-011) is dropped, and the prompt asks for none.
@@ -196,8 +200,9 @@ compact = (body) => body) {
         .join("\n\n---\n\n");
 }
 // R-2..R-4 of the mandatory core, given in full to a model that chooses its skills.
+// The HARD GATE is national law (the verification canon): named by key, the active jurisdiction's module.
 const AUTO_CORE_RESOURCES = [
-    ["shared", "PRAWO-HARDGATE.md"],
+    ["prawny-router-v3", "JUR:weryfikacja-przepisow-kanon"],
     ["prawny-router-v3", "references/KROK0A-anonimizer.md"],
     ["prawny-router-v3", "references/KROK1-detekcja.md"]
 ];
@@ -221,6 +226,25 @@ export function buildCoreLegalResourcePrompt(resources, localModel) {
 // analizator-umow-v1, one AU checkpoint per turn: the shared modules its SKILL.md
 // (Moduły SYSTEMOWE) requires for that checkpoint. HYBRID-VALIDATION before any
 // output document is generated and at AU-HYBRID; the rest at their own checkpoint.
+/** The AU checkpoints of the turn as the model reads them: one, or the batch in order with its trace. */
+export function contractCheckpointPromptLines(context) {
+    const batch = context.checkpoints?.length ? context.checkpoints : [context.checkpoint];
+    if (batch.length === 1) {
+        return [
+            `Active AU checkpoint: ${batch[0]}.`,
+            `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[batch[0]]}`,
+            "Execute only this AU checkpoint in this turn.",
+            "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint."
+        ];
+    }
+    return [
+        `Active AU checkpoints, in this order: ${batch.join(", ")}.`,
+        ...batch.map((checkpoint) => `- ${checkpoint}: ${CONTRACT_CHECKPOINT_SECTIONS[checkpoint]}`),
+        "Execute these AU checkpoints in order in this turn. When a checkpoint needs the user (missing document, a question that changes the analysis), stop there: ask, and do not write the later checkpoints.",
+        "End the answer with the trace table of the checkpoints: one row per checkpoint, its ID and its mark (✅ done, — N/A with the reason, ⚠️ POMINIĘTY or ⬛ with what is missing). The runtime closes the checkpoints up to the first one not marked ✅ or N/A.",
+        "Do not write output reserved for the generation or finalization checkpoints."
+    ];
+}
 export function contractCheckpointResources(mode, checkpoint) {
     switch (checkpoint) {
         case "AU-GAP":
@@ -294,19 +318,22 @@ export class LexExecutionEngine {
             !args.orderedCaseWorkflowContext) {
             return await this.executeModelSelectedSkills(args, skillEnvelope, effectiveQuery, events, emit);
         }
-        const polishLaw = this.registry.get("prawo-polskie-v2");
+        // The chosen jurisdiction's facade and domain map (Polish law: prawo-polskie-v2, ROUTING-MAP.md).
+        const facade = activeJurisdictionPack();
+        const domainMap = jurisdictionDomainMap(this.registry.root);
+        const polishLaw = this.registry.get(facade);
         if (!polishLaw) {
-            emit("skill_read", "prawo-polskie-v2", "BLOCKED");
-            throw new LexExecutionError("prawo-polskie-v2 is required for Polish-law routing.", "prawo-polskie-v2", [...events]);
+            emit("skill_read", facade, "BLOCKED");
+            throw new LexExecutionError(`${facade} is required for the jurisdiction's routing.`, facade, [...events]);
         }
-        emit("skill_read", "prawo-polskie-v2", "OK");
-        const routingMap = this.registry.resolveResource("prawo-polskie-v2", "prawo-polskie-v2/ROUTING-MAP.md");
+        emit("skill_read", facade, "OK");
+        const routingMap = this.registry.resolveResource(facade, domainMap);
         if (!routingMap) {
-            emit("resource_read", "prawo-polskie-v2/ROUTING-MAP.md", "BLOCKED");
-            throw new LexExecutionError("The central Polish-law routing map is unavailable.", "prawo-polskie-v2/ROUTING-MAP.md", [...events]);
+            emit("resource_read", domainMap, "BLOCKED");
+            throw new LexExecutionError("The jurisdiction's central routing map is unavailable.", domainMap, [...events]);
         }
-        emit("resource_read", "prawo-polskie-v2/ROUTING-MAP.md", "OK");
-        if (!args.route.primarySkill.startsWith("dr-")) {
+        emit("resource_read", domainMap, "OK");
+        if (!isDomainSkill(args.route.primarySkill)) {
             emit("route", args.route.primarySkill, "BLOCKED", "INVALID_PRIMARY_SKILL");
             throw new LexExecutionError("A Polish-law route must select one primary DR skill.", args.route.primarySkill, [...events]);
         }
@@ -671,43 +698,48 @@ export class LexExecutionEngine {
         let contractCheckpointText = "";
         if (args.contractWorkflowContext && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
             const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
-            const { checkpoint, mode } = args.contractWorkflowContext;
-            for (const resource of contractCheckpointResources(mode, checkpoint)) {
-                if (already.has(resource))
-                    continue;
-                const file = this.registry.resolveResource(workflowPlan.executionSkill, resource);
-                let content = "";
-                try {
-                    content = file ? fs.readFileSync(file, "utf8") : "";
+            const { mode } = args.contractWorkflowContext;
+            const batch = args.contractWorkflowContext.checkpoints?.length ? args.contractWorkflowContext.checkpoints : [args.contractWorkflowContext.checkpoint];
+            for (const checkpoint of batch) {
+                for (const resource of contractCheckpointResources(mode, checkpoint)) {
+                    if (already.has(resource))
+                        continue;
+                    const file = this.registry.resolveResource(workflowPlan.executionSkill, resource);
+                    let content = "";
+                    try {
+                        content = file ? fs.readFileSync(file, "utf8") : "";
+                    }
+                    catch {
+                        content = "";
+                    }
+                    if (!content) {
+                        emit("resource_read", resource, "BLOCKED", "runtime-preload;contract-checkpoint;missing");
+                        continue;
+                    }
+                    emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
+                    contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
                 }
-                catch {
-                    content = "";
+                for (const excerpt of CONTRACT_CHECKPOINT_EXCERPTS[checkpoint] ?? []) {
+                    if (already.has(excerpt.resource))
+                        continue;
+                    const file = this.registry.resolveResource(workflowPlan.executionSkill, excerpt.resource);
+                    let body = "";
+                    try {
+                        body = file ? fs.readFileSync(file, "utf8") : "";
+                    }
+                    catch {
+                        body = "";
+                    }
+                    const content = excerpt.heading ? markdownSection(body, excerpt.heading) : body;
+                    if (!content) {
+                        emit("resource_read", excerpt.resource, "BLOCKED", `runtime-preload;contract-checkpoint;missing:${excerpt.heading ?? "file"}`);
+                        continue;
+                    }
+                    emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
+                    contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
                 }
-                if (!content) {
-                    emit("resource_read", resource, "BLOCKED", "runtime-preload;contract-checkpoint;missing");
-                    continue;
-                }
-                emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
-                contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
-            }
-            for (const excerpt of CONTRACT_CHECKPOINT_EXCERPTS[checkpoint] ?? []) {
-                if (already.has(excerpt.resource))
-                    continue;
-                const file = this.registry.resolveResource(workflowPlan.executionSkill, excerpt.resource);
-                let body = "";
-                try {
-                    body = file ? fs.readFileSync(file, "utf8") : "";
-                }
-                catch {
-                    body = "";
-                }
-                const content = excerpt.heading ? markdownSection(body, excerpt.heading) : body;
-                if (!content) {
-                    emit("resource_read", excerpt.resource, "BLOCKED", `runtime-preload;contract-checkpoint;missing:${excerpt.heading ?? "file"}`);
-                    continue;
-                }
-                emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
-                contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
+                for (const resource of contractCheckpointResources(mode, checkpoint))
+                    already.add(resource);
             }
         }
         // pisma-proste-v2 pinned by the user: the same check the AUTO router makes (several
@@ -759,7 +791,7 @@ export class LexExecutionEngine {
         // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
         if (!args.model.startsWith("local/")) {
             const domains = [...new Set([args.route.primarySkill, ...skillSelection.domainSkills])]
-                .filter((name) => /^dr-\d{2}-/.test(name))
+                .filter((name) => isDomainSkill(name))
                 .map((skill) => ({
                 skill,
                 matched: ["dziedzina wybrana dla tej sprawy"],
@@ -853,7 +885,7 @@ export class LexExecutionEngine {
             throw new LexExecutionError("Persisted contract-analysis context is required.", "G39I_CONTRACT_STATE_BINDING", [...events]);
         }
         if (args.contractWorkflowContext) {
-            emit("gate", "G39I_CONTRACT_STATE_BINDING", "OK", `mode=${args.contractWorkflowContext.mode};stage=${args.contractWorkflowContext.stage};checkpoint=${args.contractWorkflowContext.checkpoint}`);
+            emit("gate", "G39I_CONTRACT_STATE_BINDING", "OK", `mode=${args.contractWorkflowContext.mode};stage=${args.contractWorkflowContext.stage};checkpoint=${args.contractWorkflowContext.checkpoint}${(args.contractWorkflowContext.checkpoints?.length ?? 0) > 1 ? `;batch=${args.contractWorkflowContext.checkpoints.join(",")}` : ""}`);
         }
         if (args.orderedCaseWorkflowContext &&
             args.orderedCaseWorkflowContext
@@ -922,7 +954,7 @@ export class LexExecutionEngine {
                 ...(runtimePrelude.appendix
                     ? [runtimePrelude.appendix]
                     : []),
-                ...(/\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)
+                ...(/\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)
                     ? [PERSON_CASE_PROTOCOL]
                     : []),
                 args.quickLocalLegal.toolPrompt
@@ -1019,10 +1051,10 @@ export class LexExecutionEngine {
         // contracts, executive skills, core resources, mandatory path) open the prompt; the
         // domain's SKILL and the turn's own parts follow. The model reads the same text.
         const skillCompaction = (body) => compactForModel(body, undefined, new Set(args.instructionCompaction?.inactive ?? []), args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined, new Set(args.instructionCompaction?.optIn ?? []), stageTail).text;
-        const stableSkillPrompt = combineSkillPrompt(this.registry, ["prawny-router-v3", "prawo-polskie-v2", ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))], localModel, skillCompaction);
+        const stableSkillPrompt = combineSkillPrompt(this.registry, ["prawny-router-v3", activeJurisdictionPack(), ...skillSelection.additionalSkills.filter((name) => !isDomainSkill(name))], localModel, skillCompaction);
         const baseSystemPrompt = combineSkillPrompt(this.registry, [
             args.route.primarySkill,
-            ...skillSelection.additionalSkills.filter((name) => name.startsWith("dr-"))
+            ...skillSelection.additionalSkills.filter((name) => isDomainSkill(name))
         ], localModel, (body) => compactForModel(body, undefined, new Set(args.instructionCompaction?.inactive ?? []), args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined, new Set(args.instructionCompaction?.optIn ?? [])).text);
         const coreResourcePrompt = buildCoreLegalResourcePrompt(session.loadedResources, localModel);
         // Workflow state of this turn (active checkpoint): the only part that changes
@@ -1054,6 +1086,7 @@ export class LexExecutionEngine {
                         "Execute only this court-analysis checkpoint in this turn.",
                         "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
                         "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1069,6 +1102,7 @@ export class LexExecutionEngine {
                         "Execute only this chronology checkpoint in this turn.",
                         "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
                         "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1087,6 +1121,7 @@ export class LexExecutionEngine {
                         "Do not claim completion of any later checkpoint.",
                         "The runtime, not the model, owns checkpoint order, required resources, source verification, citations, provenance and commit.",
                         "Return only the semantic work product needed for the active checkpoint.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1097,12 +1132,10 @@ export class LexExecutionEngine {
                         "# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED",
                         `Mode: ${args.contractWorkflowContext.mode}.`,
                         `Stage: ${args.contractWorkflowContext.stage}.`,
-                        `Active AU checkpoint: ${args.contractWorkflowContext.checkpoint}.`,
-                        `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[args.contractWorkflowContext.checkpoint]}`,
-                        "Execute only this AU checkpoint in this turn.",
-                        "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
+                        ...contractCheckpointPromptLines(args.contractWorkflowContext),
                         "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
                         "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A.",
+                        MISSING_DOCUMENT_INSTRUCTION,
                         WAIT_FOR_USER_INSTRUCTION
                     ].join("\n")
                 ]
@@ -1194,7 +1227,7 @@ export class LexExecutionEngine {
             ].join("\n"));
         }
         if (!args.documentContext &&
-            /\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)) {
+            /\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)) {
             promptParts.push(PERSON_CASE_PROTOCOL);
         }
         if (args.placeholderKey) {
@@ -1367,13 +1400,13 @@ export class LexExecutionEngine {
             throw new LexExecutionError("Model skill selection requires the Lex corpus tools.", "MODEL_SKILL_SELECTION", [...events]);
         }
         const allowed = (name) => {
-            if (name.startsWith("dr-")) {
+            if (isDomainSkill(name)) {
                 return !envelope.domainRestrictionActive ||
                     envelope.domainAllowList.includes(name);
             }
             return !envelope.executionRestrictionActive ||
                 envelope.executionAllowList.includes(name) ||
-                MANDATORY_SESSION_SKILLS.includes(name);
+                mandatorySessionSkills().includes(name);
         };
         const native = args.nativeCorpus;
         const catalog = [...this.registry.skills.values()]
@@ -1393,7 +1426,7 @@ export class LexExecutionEngine {
         // two tool rounds less on every legal question.
         const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
         const preloaded = onPreloaded
-            ? ["prawny-router-v3", "prawo-polskie-v2"].flatMap((name) => {
+            ? ["prawny-router-v3", activeJurisdictionPack()].flatMap((name) => {
                 const skill = this.registry.get(name);
                 if (!skill || !allowed(name))
                     return [];
@@ -1415,10 +1448,10 @@ export class LexExecutionEngine {
         if (onPreloaded && preloaded.length) {
             for (const [skillName, file] of AUTO_CORE_RESOURCES) {
                 const skill = this.registry.get(skillName);
-                const absolute = skill ? path.join(skill.directory, file) : "";
-                if (!skill || !fs.existsSync(absolute))
+                const absolute = skill ? this.registry.resolveResource(skillName, file) ?? "" : "";
+                if (!skill || !absolute || !fs.existsSync(absolute))
                     continue;
-                const relative = `${path.basename(skill.directory)}/${file}`;
+                const relative = file.startsWith("JUR:") ? file : `${path.basename(skill.directory)}/${file}`;
                 onPreloaded(relative);
                 const compact = compactForModel(fs.readFileSync(absolute, "utf8"));
                 if (compact.compacted.length) {
@@ -1437,7 +1470,7 @@ export class LexExecutionEngine {
             preloaded.length
                 ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`
                 : `Sprawa lub pytanie prawne: NAJPIERW wczytaj ${native ? "Read prawny-router-v3/SKILL.md" : "read_legal_resource skill=prawny-router-v3 path=SKILL.md"} i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla).`,
-            `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === "prawo-polskie-v2") ? " i prawo-polskie-v2" : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
+            `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === activeJurisdictionPack()) ? ` i ${activeJurisdictionPack()}` : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
             `Nie wczytuj skilli i modułów, do których ani router, ani wczytane skille nie kierują dla tego pytania; nie zgaduj nazw plików (nazwy nie znasz: ${listTool}) i nie przeglądaj całych katalogów.${native ? "" : " Gdy ścieżka lub nazwa skilla jest błędna, runtime w tej samej rundzie poda jedyny pasujący plik (pole requestedPath) albo listę kandydatów (NOT_FOUND, candidates) - wybierz z niej, nie zgaduj dalej."} Nie udawaj, że przeczytałeś plik, którego nie wczytałeś.`
         ];
         const toolNames = new Set(args.tools.map((tool) => tool.function.name));
@@ -1547,7 +1580,7 @@ export class LexExecutionEngine {
             ].join("\n"));
         }
         if (!args.documentContext &&
-            /\[PII:(?:PERSON|ADDRESS):/.test(effectiveQuery)) {
+            /\[PII:(?:PERSON|FIRM|ADDRESS):/.test(effectiveQuery)) {
             promptParts.push(PERSON_CASE_PROTOCOL);
         }
         if (args.toolSystemPromptTurn) {
@@ -1559,6 +1592,8 @@ export class LexExecutionEngine {
         const promptCache = !args.model.startsWith("local/") && cachePrefix >= 4_096 && cachePrefix < systemPrompt.length
             ? {
                 systemPromptCachePrefix: cachePrefix,
+                // Every domain shares the instructions, the catalog and the router core.
+                ...(sharedPrefix.length + 2 < cachePrefix ? { systemPromptSharedPrefix: sharedPrefix.length + 2 } : {}),
                 promptCacheKey: promptCacheKeyFor("auto", systemPrompt.slice(0, cachePrefix)),
                 // The next question (often more than five minutes later) reads the shared prefix:
                 // one rewrite costs more than the dearer 1-hour write.

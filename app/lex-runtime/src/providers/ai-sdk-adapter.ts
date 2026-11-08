@@ -77,30 +77,52 @@ export function stripLocalReasoning(text: string): string {
 }
 
 const ENGLISH_WORDS =
-  /\b(?:the|and|that|this|is|are|was|i|i'm|let's|need|should|user|asking|okay|so|first|then|about|from|with|which)\b/gi;
+  /\b(?:the|and|that|this|is|are|was|were|i'm|let's|let|me|need|should|user|user's|asking|okay|so|first|then|about|from|with|which|it|if|but|be|could|might|can|there|they|these|those|what|would|seems|maybe|wait|also|into|than|not|doesn't|isn't|don't|got|of|in|on|for|an|has|have|such|under|its|their|each|will|any|all|here|no)\b/gi;
+// Function words of Polish: a Polish sentence of five words or more practically always has one.
+const POLISH_WORDS =
+  /(?<![\p{L}])(?:w|z|ze|na|się|nie|jest|do|że|oraz|lub|dla|przez|od|po|czy|jak|ale|są|być|może|ten|ta|który|która|które|tym|tego|jego|jej|ich|przy|bez|tak|już|także|gdy|jeśli|jeżeli)(?![\p{L}])/giu;
 const POLISH_LETTERS = /[ąćęłńóśźż]/i;
 
-function looksEnglish(paragraph: string): boolean {
-  const words = paragraph.split(/\s+/).filter(Boolean).length;
-  if (words < 8 || POLISH_LETTERS.test(paragraph)) return false;
-  return (paragraph.match(ENGLISH_WORDS) ?? []).length / words > 0.15;
+function words(text: string): string[] {
+  return text.split(/\s+/).filter((word) => /\p{L}/u.test(word));
 }
 
 /**
- * Untagged reasoning: leading English paragraphs before a Polish answer
- * (a Polish answer never starts that way; nothing is removed when the whole
- * text is English).
+ * A line of reasoning in English. Bielik leaked it with Polish terms inside ("the
+ * porozumienie o rozwiązaniu umowy o pracę", "5,000 zł"), so a Polish letter alone does
+ * not make a line Polish: Polish function words and the share of words with Polish
+ * letters decide (user report 2026-11-06).
+ */
+function looksEnglish(line: string): boolean {
+  const all = words(line);
+  if (all.length < 5) return false;
+  const english = (line.match(ENGLISH_WORDS) ?? []).length / all.length;
+  const polish = (line.match(POLISH_WORDS) ?? []).length / all.length;
+  const diacritics = all.filter((word) => POLISH_LETTERS.test(word)).length / all.length;
+  return english >= 0.1 && polish < 0.08 && diacritics < 0.25;
+}
+
+// What a model writes between its reasoning and the answer ("Odpowiedź na pytanie użytkownika:").
+const ANSWER_LABEL = /^\s*(?:\*\*)?(?:odpowied[źz]\s+(?:na\s+pytanie\s+u[żz]ytkownika|dla\s+u[żz]ytkownika)|answer)\s*:?\s*(?:\*\*)?\s*:?\s*/iu;
+
+/**
+ * Untagged reasoning: leading English lines before a Polish answer (a Polish answer never
+ * starts that way; nothing is removed when the whole text is English). Blank lines inside
+ * the English run go with it.
  */
 export function dropLeadingEnglishReasoning(text: string): string {
-  const paragraphs = text.split(/\n\s*\n/);
+  const lines = text.split("\n");
   let index = 0;
-  while (index < paragraphs.length - 1 && looksEnglish(paragraphs[index]!)) {
+  let english = 0;
+  while (index < lines.length) {
+    const line = lines[index]!;
+    if (looksEnglish(line)) english += 1;
+    else if (line.trim()) break;
     index += 1;
   }
-  return index > 0 &&
-    paragraphs.slice(index).some((paragraph) => POLISH_LETTERS.test(paragraph))
-    ? paragraphs.slice(index).join("\n\n").trim()
-    : text;
+  if (english === 0) return text;
+  const rest = lines.slice(index).join("\n").replace(ANSWER_LABEL, "").trim();
+  return POLISH_LETTERS.test(rest) ? rest : text;
 }
 
 /**
@@ -146,9 +168,17 @@ export function localDraftForwarder(
         }
         return;
       }
+      // Untagged English reasoning (Bielik): held back line by line until the first complete
+      // line of the Polish answer; the reasoning never reaches the live draft.
+      const lines = head.split("\n");
+      const complete = lines.slice(0, -1);
+      const first = complete.findIndex((line) => line.trim() && !looksEnglish(line));
+      if (first < 0 && head.length < 8_000) return;
+      const start = first < 0 ? 0 : first;
+      const shown = lines.slice(start).join("\n");
       decided = "TEXT";
       forwarded = true;
-      onContentDelta(pending);
+      onContentDelta(start > 0 ? shown.replace(ANSWER_LABEL, "") : shown);
       pending = "";
     },
     finish: (fullText: string) => {
@@ -2009,14 +2039,17 @@ function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean
 export function anthropicSystem(model: LanguageModel, params: ProviderStreamParams): string | SystemModelMessage[] {
   const split = params.systemPromptCachePrefix ?? 0;
   if (!isAnthropicModel(model) || split < 4_096 || split >= params.systemPrompt.length) return params.systemPrompt;
+  const cacheControl = { type: "ephemeral" as const, ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) };
+  // The part every domain shares, then the domain's own stable part (systemPromptSharedPrefix):
+  // three system breakpoints and the moving one of the conversation, Anthropic's limit of four.
+  const shared = params.systemPromptSharedPrefix ?? 0;
+  const bounds = shared >= 4_096 && shared < split ? [0, shared, split] : [0, split];
   return [
-    {
-      role: "system",
-      content: params.systemPrompt.slice(0, split),
-      providerOptions: {
-        anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) } }
-      }
-    },
+    ...bounds.slice(0, -1).map((start, index) => ({
+      role: "system" as const,
+      content: params.systemPrompt.slice(start, bounds[index + 1]),
+      providerOptions: { anthropic: { cacheControl } }
+    })),
     // A second breakpoint at the end of the system prompt: a correcting round over the same
     // prompt (tools not callable, so its messages are cached apart) reads all of it. Five
     // minutes: the case's part serves this turn; a 1-hour write costs twice the input price.
@@ -2240,47 +2273,18 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
     return true;
   }
 
-  async stream(
+  /** A chat answer on the local model, inside the lease of withGeneration. */
+  private async streamLocal(
+    localModels: LocalModelRuntime,
     params: ProviderStreamParams
-  ): Promise<ProviderStreamResult> {
-    if (
-      isAccountSessionModel(
-        this.id,
-        params.model
-      )
-    ) {
-      if (
-        !accountSessionBackendAllowed(
-          this.id
-        )
-      ) {
-        throw new Error(
-          "ACCOUNT_SESSION_PROVIDER_POLICY_UNSUPPORTED:anthropic"
-        );
-      }
-      if (!this.accountSessions) {
-        throw new Error(
-          "ACCOUNT_SESSION_RUNTIME_UNAVAILABLE"
-        );
-      }
-      return streamAccountSession(
-        this.accountSessions,
-        this.id,
-        params
-      );
-    }
-
-    if (params.model.startsWith("local/")) {
-      if (this.id !== "openai" || !this.localModels) {
-        throw new Error("LOCAL_MODEL_RUNTIME_UNAVAILABLE");
-      }
+  ): Promise<Awaited<ReturnType<typeof streamModel>>> {
       const configuredModel =
-        await this.localModels
+        await localModels
           .ensureRunning(
             params.model
           );
       const localStatus =
-        this.localModels
+        localModels
           .status();
       const contextTokens =
         localStatus
@@ -2360,18 +2364,18 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
           throw error;
         }
 
-        await this.localModels
+        await localModels
           .reconfigureContext(
             configuredModel.id,
             minimumContextTokens
           );
         const recoveredModel =
-          await this.localModels
+          await localModels
             .ensureRunning(
               configuredModel.id
             );
         const recoveredStatus =
-          this.localModels
+          localModels
             .status();
         const recoveredContextTokens =
           recoveredStatus
@@ -2397,6 +2401,44 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
           }
         );
       }
+  }
+
+  async stream(
+    params: ProviderStreamParams
+  ): Promise<ProviderStreamResult> {
+    if (
+      isAccountSessionModel(
+        this.id,
+        params.model
+      )
+    ) {
+      if (
+        !accountSessionBackendAllowed(
+          this.id
+        )
+      ) {
+        throw new Error(
+          "ACCOUNT_SESSION_PROVIDER_POLICY_UNSUPPORTED:anthropic"
+        );
+      }
+      if (!this.accountSessions) {
+        throw new Error(
+          "ACCOUNT_SESSION_RUNTIME_UNAVAILABLE"
+        );
+      }
+      return streamAccountSession(
+        this.accountSessions,
+        this.id,
+        params
+      );
+    }
+
+    if (params.model.startsWith("local/")) {
+      if (this.id !== "openai" || !this.localModels) {
+        throw new Error("LOCAL_MODEL_RUNTIME_UNAVAILABLE");
+      }
+      const localModels = this.localModels;
+      return localModels.withGeneration(() => this.streamLocal(localModels, params));
     }
 
     const apiKey = await this.credentials.getApiKey(this.id);

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isDomainSkill } from "./jurisdiction.js";
 function actLine(act) {
     const notes = [
         `${act.eli}, ${act.articleCount} art.`,
@@ -96,7 +97,7 @@ export function knowledgeMapPrompt(args) {
     }
     const acts = (args.coreLaw ?? []).filter((act) => act.articleCount > 0);
     if (acts.length) {
-        const domains = new Set(active.filter((name) => name.startsWith("dr-")).map((name) => name.slice(0, 5)));
+        const domains = new Set(active.filter((name) => isDomainSkill(name)).map((name) => name.slice(0, 5)));
         // Acts added by users have no domain: a local model always sees them.
         const relevant = args.local
             ? [

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "macos-arm64",
-  "applicationVersion": "0.1.65",
+  "applicationVersion": "0.1.70",
   "installerMode": "ONLINE_BOOTSTRAP_PKG_POSTINSTALL",
   "applicationUpdate": {
     "verification": "SHA256_REQUIRED_PKG_FROM_OFFICIAL_RELEASE",
@@ -20,6 +20,26 @@
       "delivery": "PYTHON_BUILD_STANDALONE_APP_LOCAL",
       "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.13.16%2B20261001-aarch64-apple-darwin-install_only.tar.gz",
       "sha256": "ca8aa2715d2c89a213b6fbf85f76ae0be7e8e8796f9c61f770d8154caf53bcec"
+    },
+    "llamaCpp": {
+      "version": "b10964",
+      "backend": "METAL_ARM64",
+      "bind": "127.0.0.1",
+      "delivery": "ON_DEMAND_AFTER_INSTALL",
+      "backends": [
+        {
+          "id": "METAL_ARM64",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10964/llama-b10964-bin-macos-arm64.tar.gz",
+          "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5",
+          "bytes": 11149739,
+          "archive": "tar.gz",
+          "gpuOffload": true,
+          "launch": {
+            "gpuLayers": "AUTO_MAX"
+          }
+        }
+      ],
+      "backendPolicy": "METAL_ON_APPLE_SILICON"
     }
   },
   "pythonPackages": {
@@ -33,13 +53,17 @@
     "uv": "0.12.17",
     "morfeusz2": "1.99.15",
     "faster-whisper": "1.2.1",
+    "sherpa-onnx": "2.0.1",
     "ctranslate2": "4.8.5",
     "av": "19.0.2",
     "onnxruntime": "1.31.1",
     "tokenizers": "0.23.3",
     "huggingface_hub": "2.4.0",
     "msoffcrypto-tool": "6.0.0",
-    "olefile": "0.47"
+    "olefile": "0.47",
+    "mlx": "0.32.4",
+    "mlx-metal": "0.32.4",
+    "mlx-whisper": "0.4.3"
   },
   "models": {
     "paddle": [
@@ -126,7 +150,7 @@
     }
   },
   "localAi": {
-    "delivery": "NOT_AVAILABLE_ON_MACOS_YET",
+    "delivery": "USER_INITIATED_AFTER_INSTALL",
     "installRoot": "~/.lex-machina/local-ai",
     "contextSelection": {
       "minimum": 32000,
@@ -147,11 +171,10 @@
     "backendSelection": {
       "allowed": [
         "AUTO",
-        "VULKAN_X64",
-        "CPU_X64_PORTABLE"
+        "METAL_ARM64"
       ],
       "default": "AUTO",
-      "autoPolicy": "TRY_VULKAN_WHEN_ACCELERATOR_IS_DETECTED_THEN_CPU_FALLBACK",
+      "autoPolicy": "METAL_ON_APPLE_SILICON",
       "validation": "BACKEND_IS_ACTIVE_ONLY_AFTER_LLAMA_SERVER_HEALTH_AND_TOKENIZER_CALIBRATION"
     },
     "networkRequiredForCoreInference": false,
@@ -244,7 +267,7 @@
         "uodo_official"
       ],
       "legalFederation": {
-        "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+        "connectorPackage": "prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs",
         "sources": [
           "isap",
           "eurlex",
@@ -315,7 +338,7 @@
   },
   "legalSourceFederation": {
     "transport": "MCP_STDIO_VIA_BUNDLED_NODE",
-    "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+    "connectorPackage": "prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs",
     "role": "DISCOVERY_RESEARCH_ONLY",
     "sources": [
       "isap",

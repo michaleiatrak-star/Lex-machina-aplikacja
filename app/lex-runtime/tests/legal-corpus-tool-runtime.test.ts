@@ -13,6 +13,7 @@ import {
 import {
   LexSkillRegistry
 } from "../src/registry.js";
+import { writeJurisdictionManifest } from "./jurisdiction-fixture.js";
 
 const roots: string[] = [];
 const DR =
@@ -60,6 +61,7 @@ function fixture():
     ),
     "# hard gate\n"
   );
+  writeJurisdictionManifest(root);
 
   const modules =
     path.join(
@@ -225,7 +227,7 @@ describe("G36 legal corpus runtime", () => {
           input: {
             skill: DR,
             path:
-              "shared/PRAWO-HARDGATE.md"
+              "JUR:weryfikacja-przepisow-kanon"
           }
         }
       ]);

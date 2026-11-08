@@ -20,6 +20,8 @@ function makeRegistry() {
     }
     fs.mkdirSync(path.join(root, "shared"), { recursive: true });
     fs.writeFileSync(path.join(root, "shared", "PRAWO-HARDGATE.md"), "# hard gate\n");
+    // The HARD GATE is national law named by key: the jurisdiction manifest addresses it.
+    fs.writeFileSync(path.join(root, "prawo-polskie-v2", "JURYSDYKCJA.md"), "| `JUR:weryfikacja-przepisow-kanon` | `shared/PRAWO-HARDGATE.md` | test |\n");
     const router = path.join(root, "prawny-router-v3");
     fs.mkdirSync(path.join(router, "references"), { recursive: true });
     fs.writeFileSync(path.join(router, "references", "KROK0A-anonimizer.md"), "# anon\n");

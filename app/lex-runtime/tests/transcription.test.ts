@@ -16,6 +16,8 @@ import {
   timestamp,
   transcriptionFailure,
   transcriptPages,
+  SPEAKER_MODEL,
+  TranscriptionModelManager,
   type RecordingTranscriber,
   type TranscriptionModelFile
 } from "../src/transcription.js";
@@ -222,5 +224,112 @@ describe("ten sam plik w sprawie: zapisany odczyt zamiast ponownego OCR", () => 
     expect(reads).toBe(2);
     await service.review(file, "audio/mpeg", { ...security, ocrFix: true } as never);
     expect(reads).toBe(3);
+  });
+});
+
+describe("transkrypcja: rozmówcy i znaczniki czasu", () => {
+  it("linie protokołu z osobą; bez modeli mówców jak dotąd", () => {
+    const pages = transcriptPages({
+      duration: 30,
+      speakers: 2,
+      segments: [
+        { start: 0, end: 3, text: "Otwieram rozprawę.", speaker: 1 },
+        { start: 4, end: 7, text: "Dzień dobry.", speaker: 2 },
+        { start: 9, end: 11, text: "Bez osoby." }
+      ]
+    });
+    expect(pages[0]!.text).toBe("[00:00] Osoba 1: Otwieram rozprawę.\n[00:04] Osoba 2: Dzień dobry.\n[00:09] Bez osoby.");
+  });
+
+  it("worker dostaje modele mówców tylko po ich instalacji; wynik niesie numer osoby", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-stt-speakers-"));
+    const modelDir = path.join(dir, "model");
+    const fake = (folder: string, files: readonly TranscriptionModelFile[], record: string) => {
+      fs.mkdirSync(folder, { recursive: true });
+      for (const file of files) {
+        const handle = fs.openSync(path.join(folder, file.filename), "w");
+        fs.ftruncateSync(handle, file.bytes);
+        fs.closeSync(handle);
+      }
+      fs.writeFileSync(path.join(folder, record), JSON.stringify({ files: Object.fromEntries(files.map((file) => [file.filename, file.sha256])) }));
+    };
+    const { TRANSCRIPTION_MODEL } = await import("../src/transcription.js");
+    fake(modelDir, TRANSCRIPTION_MODEL.files, "transcription.json");
+    const manager = new TranscriptionModelManager(modelDir);
+    expect(manager.speakersInstalled()).toBe(false);
+    expect(manager.status().speakers).toEqual({ installed: false, bytes: SPEAKER_MODEL.files.reduce((sum, file) => sum + file.bytes, 0), count: 0 });
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const at = process.argv.indexOf("--diarize-dir");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+fs.writeFileSync(arg("--output"), JSON.stringify({ duration: 9, speakers: at > 0 ? 2 : 0, segments: [{ start: 0, end: 2, text: at > 0 ? arg("--diarize-threshold") + "/" + arg("--speakers") : "bez", speaker: at > 0 ? 2 : undefined }] }));
+`
+    );
+    const transcriber = new LocalWhisperTranscriber(() => modelDir, {
+      python: process.execPath,
+      workerPath: worker,
+      speakersDir: () => (manager.speakersInstalled() ? manager.speakersDir : null),
+      speakerCount: () => manager.speakerCount()
+    });
+    expect(await transcriber.transcribe(new Uint8Array([1]), "audio/mp4")).toEqual({ duration: 9, segments: [{ start: 0, end: 2, text: "bez" }] });
+    fake(manager.speakersDir, SPEAKER_MODEL.files, "speakers.json");
+    expect(manager.speakersInstalled()).toBe(true);
+    expect(await transcriber.transcribe(new Uint8Array([1]), "audio/mp4")).toEqual({
+      duration: 9,
+      speakers: 2,
+      segments: [{ start: 0, end: 2, text: `${SPEAKER_MODEL.threshold}/0`, speaker: 2 }]
+    });
+    // The administrator's default (a hearing: 3), and a recording's own number over it.
+    manager.setSpeakerCount(3);
+    expect(manager.status().speakers.count).toBe(3);
+    expect((await transcriber.transcribe(new Uint8Array([1]), "audio/mp4")).segments[0]!.text).toBe(`${SPEAKER_MODEL.threshold}/3`);
+    expect((await transcriber.transcribe(new Uint8Array([1]), "audio/mp4", undefined, { speakers: 5 })).segments[0]!.text).toBe(`${SPEAKER_MODEL.threshold}/5`);
+  });
+
+  it("Apple Silicon: the MLX copy of the model is part of the installation and passed to the worker", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-stt-mlx-"));
+    const modelDir = path.join(dir, "model");
+    const fake = (folder: string, files: readonly TranscriptionModelFile[], record: string) => {
+      fs.mkdirSync(folder, { recursive: true });
+      for (const file of files) {
+        const handle = fs.openSync(path.join(folder, file.filename), "w");
+        fs.ftruncateSync(handle, file.bytes);
+        fs.closeSync(handle);
+      }
+      fs.writeFileSync(path.join(folder, record), JSON.stringify({ files: Object.fromEntries(files.map((file) => [file.filename, file.sha256])) }));
+    };
+    const { TRANSCRIPTION_MODEL, MLX_MODEL, mlxTranscriptionSupported } = await import("../src/transcription.js");
+    expect(mlxTranscriptionSupported("darwin", "arm64")).toBe(true);
+    expect(mlxTranscriptionSupported("darwin", "x64")).toBe(false);
+    expect(mlxTranscriptionSupported("win32", "x64")).toBe(false);
+    fake(modelDir, TRANSCRIPTION_MODEL.files, "transcription.json");
+    const mac = new TranscriptionModelManager(modelDir, true);
+    const windows = new TranscriptionModelManager(modelDir, false);
+    fake(mac.speakersDir, SPEAKER_MODEL.files, "speakers.json");
+    // Elsewhere complete without it; on a Mac it is still to fetch.
+    expect(windows.complete()).toBe(true);
+    expect(windows.status().gpu).toBeNull();
+    expect(mac.complete()).toBe(false);
+    expect(mac.status().gpu).toEqual({ installed: false, bytes: MLX_MODEL.files.reduce((sum, file) => sum + file.bytes, 0) });
+    fake(mac.mlxDir, MLX_MODEL.files, "mlx.json");
+    expect(mac.complete()).toBe(true);
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+fs.writeFileSync(arg("--output"), JSON.stringify({ duration: 3, segments: [{ start: 0, end: 1, text: process.argv.includes("--mlx-dir") ? arg("--mlx-dir") : "bez" }] }));
+`
+    );
+    const transcriber = new LocalWhisperTranscriber(() => modelDir, {
+      python: process.execPath,
+      workerPath: worker,
+      mlxDir: () => (mac.mlxInstalled() ? mac.mlxDir : null)
+    });
+    expect((await transcriber.transcribe(new Uint8Array([1]), "audio/mp4")).segments[0]!.text).toBe(mac.mlxDir);
   });
 });

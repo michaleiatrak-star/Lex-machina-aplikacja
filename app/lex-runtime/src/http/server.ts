@@ -15,6 +15,7 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
@@ -49,6 +50,7 @@ import {
   lexMcpPackagePath
 } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
+import { warmChatPaths } from "../chat-warmup.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import {
   EnvironmentCredentialResolver,
@@ -165,6 +167,7 @@ import {
 import {
   GuideSessionStateStore
 } from "../guide-session-state.js";
+import { configureJurisdiction } from "../jurisdiction.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 4317;
@@ -360,6 +363,9 @@ function resolveAccountSkillRoot(
   }
 }
 
+// A text model idle this long gives the card to OCR (ms).
+const LOCAL_MODEL_OCR_RELEASE_IDLE_MS = 60_000;
+
 export async function startLocalServer(options?: {
   host?: string;
   port?: number;
@@ -399,6 +405,7 @@ export async function startLocalServer(options?: {
   configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
   // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
+  configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
   const authStore =
     new LocalAuthStore({
       rootDir:
@@ -719,10 +726,26 @@ export async function startLocalServer(options?: {
     new LegalDocumentAstGenerator(
       sessionExecutor
     );
+  // OCR on the card: a text model idle for a minute gives the card back first (the next answer
+  // starts it again); during a series of documents, when it answers every few seconds, it stays.
+  const ocrCardEnvironment = () => {
+    const environment = ocrAcceleration.environment();
+    if (environment) void localModels.releaseIfIdle(LOCAL_MODEL_OCR_RELEASE_IDLE_MS, "OCR");
+    return environment;
+  };
   const caseOcrEngine = new LocalPaddleOcrEngine({
     lineCrops: () => localModels.visionOcr() !== null,
-    acceleration: () => ocrAcceleration.environment()
+    acceleration: ocrCardEnvironment,
+    textModelResident: () => localModels.resident,
+    persistent: true
   });
+  // After a series of documents or a conversation: the model's memory back after a quiet while.
+  const idleMinutes = Number(process.env.LEX_LOCAL_MODEL_IDLE_MINUTES ?? "5");
+  if (Number.isFinite(idleMinutes) && idleMinutes > 0) {
+    setInterval(() => {
+      void localModels.releaseIfIdle(idleMinutes * 60_000, "IDLE");
+    }, 60_000).unref();
+  }
   // The measurement reads without the vision model's line images, like any plain OCR.
   const benchmarkOcr = new LocalPaddleOcrEngine();
   ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);
@@ -738,8 +761,19 @@ export async function startLocalServer(options?: {
   // Transcription on an NVIDIA card: the same once-only setup, a little later than the OCR one
   // (both measurements are background work and would only wait for each other).
   const recordingTranscriber = new LocalWhisperTranscriber(() => transcriptionModel.dir, {
-    acceleration: () => transcriptionAcceleration.environment()
+    acceleration: () => transcriptionAcceleration.environment(),
+    speakersDir: () => (transcriptionModel.speakersInstalled() ? transcriptionModel.speakersDir : null),
+    speakerCount: () => transcriptionModel.speakerCount(),
+    mlxDir: () => (transcriptionModel.mlxInstalled() ? transcriptionModel.mlxDir : null)
   });
+  // Speaker models (tens of MB) for a transcription model installed before they existed: fetched
+  // once in the background, checked against their SHA-256 (the administrator chose transcription).
+  // (and on Apple Silicon the GPU copy of the model)
+  if (!process.env.VITEST && transcriptionModel.installed() && !transcriptionModel.complete()) {
+    setTimeout(() => {
+      transcriptionModel.start().catch(() => undefined);
+    }, 20_000).unref();
+  }
   transcriptionAcceleration.reader = (data, env) => recordingTranscriber.benchmark(data, "audio/opus", env);
   const autoTranscriptionAcceleration = () => {
     transcriptionAcceleration.autoSetup().catch((error: unknown) => {
@@ -757,7 +791,11 @@ export async function startLocalServer(options?: {
       privacyNamedEntities,
       24_000,
       new CompleteImageIngestor(
-        new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })
+        new LocalPaddleImageOcrEngine({
+          lineCrops: () => localModels.visionOcr() !== null,
+          acceleration: () => ocrAcceleration.environment(),
+          persistent: true
+        })
       ),
       privacyVaultStore,
       secureCaseDocumentStore,
@@ -779,7 +817,8 @@ export async function startLocalServer(options?: {
         const modelId = localModels.configuredModelId();
         if (modelId && localModels.status().state !== "READY") await localModels.ensureRunning(modelId);
       },
-      recordingTranscriber
+      recordingTranscriber,
+      (fn, fallback) => localModels.withExclusiveModel(fn, fallback)
     );
 
   const coreApp = createLexHttpApp({
@@ -1029,6 +1068,14 @@ export async function startLocalServer(options?: {
           ? address.port
           : port;
       selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
+      // Chat routing indexes built a few seconds after start (the UI's first requests first),
+      // not on the user's first question (chat-warmup.ts).
+      if (!process.env.VITEST && process.env.LEX_CHAT_WARMUP !== "off") {
+        setTimeout(() => {
+          const ms = warmChatPaths(registry);
+          process.stderr.write(`LEX_CHAT_WARMUP:${ms}ms\n`);
+        }, 3_000).unref();
+      }
 
       resolve({
         host,
@@ -1059,6 +1106,35 @@ export async function startLocalServer(options?: {
 // The parent at start (the desktop app); an orphan is re-parented, on macOS and Linux
 // to launchd/init (pid 1).
 const PARENT_AT_START = process.ppid;
+
+/** Where the runtime notes what nearly or did end it (no case text: the error and its stack). */
+export function runtimeCrashLogPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.LOCALAPPDATA
+    ? path.join(env.LOCALAPPDATA, "LexMachina", "runtime-crash.log")
+    : path.join(os.tmpdir(), "LexMachina-runtime-crash.log");
+}
+
+function noteRuntimeFault(kind: string, error: unknown): void {
+  const detail = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ""}` : String(error);
+  const line = `--- ${new Date().toISOString()} ${kind}\n${detail.slice(0, 4000)}\n`;
+  process.stderr.write(`RUNTIME_${kind}:${detail.split("\n")[0]?.slice(0, 300)}\n`);
+  try {
+    const file = runtimeCrashLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const previous = fs.existsSync(file) ? fs.readFileSync(file, "utf8").slice(-60_000) : "";
+    fs.writeFileSync(file, previous + line);
+  } catch {
+    // The note never adds a second failure.
+  }
+}
+
+export function installRuntimeCrashGuards(): void {
+  process.on("unhandledRejection", (reason) => noteRuntimeFault("UNHANDLED_REJECTION", reason));
+  process.on("uncaughtException", (error) => {
+    noteRuntimeFault("UNCAUGHT_EXCEPTION", error);
+    process.exit(70);
+  });
+}
 export function desktopParentGone(ppid = process.ppid, platform = process.platform): boolean {
   return ppid !== PARENT_AT_START || (platform !== "win32" && ppid === 1);
 }
@@ -1068,6 +1144,11 @@ if (
   path.resolve(fileURLToPath(import.meta.url)) ===
     path.resolve(process.argv[1])
 ) {
+  // One rejected promise nobody awaited (a background task, a timer) ended the whole runtime
+  // on Node 24: chat, OCR and transcription stopped at once and the app showed no server.
+  // It is logged and the runtime goes on; an uncaught exception still ends it (its state is
+  // unknown) and the desktop sidecar starts it again.
+  installRuntimeCrashGuards();
   const server = await startLocalServer();
   process.stdout.write(
     `Lex Machina runtime listening on http://${server.host}:${server.port}\n`

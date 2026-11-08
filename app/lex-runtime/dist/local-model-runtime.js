@@ -2,7 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { compareVersions } from "./update-discovery.js";
+import { provisionLocalAiMacos } from "./local-ai-provision-macos.js";
+import { writeNativeAgentMacos } from "./llama-native-macos.js";
+import { compareVersions, CURRENT_APPLICATION_VERSION } from "./update-discovery.js";
 import { installedVisionModel, installVisionModel, visionModelFromManifest } from "./ocr-vision.js";
 const PROGRESS_PREFIX = "LEX_LOCAL_AI_PROGRESS:";
 export function parseLocalAiProgressLine(line) {
@@ -134,7 +136,8 @@ function finiteInteger(value) {
 function isBackendId(value) {
     return (value ===
         "CPU_X64_PORTABLE" ||
-        value === "VULKAN_X64");
+        value === "VULKAN_X64" ||
+        value === "METAL_ARM64");
 }
 function isBackendPreference(value) {
     return (value === "AUTO" ||
@@ -153,6 +156,14 @@ function configSelectionMode(config) {
     return isBackendPreference(config.engine.selectionMode)
         ? config.engine.selectionMode
         : configBackend(config);
+}
+/** macOS on Apple Silicon: the llama.cpp Metal build. */
+function macMetal() {
+    return process.platform === "darwin" && process.arch === "arm64";
+}
+/** Installation of a local model: Windows (install-local-llm.ps1) and Apple Silicon (in the runtime). */
+function localProvisioningSupported() {
+    return process.platform === "win32" || macMetal();
 }
 function usableAcceleratorName(name) {
     return ![
@@ -630,14 +641,16 @@ export class LocalModelRuntime {
                 }
             }
         }
+        // Apple Silicon: the GPU shares the memory and llama.cpp reaches it through Metal.
+        if (macMetal())
+            accelerators.push({ name: "Apple GPU (Metal)" });
         const config = this.readConfig();
         const qualification = this.readQualification();
         const configuredBackend = configBackend(config);
         const selectionMode = configSelectionMode(config);
         const gpuCandidateDetected = accelerators.some((item) => usableAcceleratorName(item.name));
         const gpuOffloadEnabled = Boolean(config &&
-            configuredBackend ===
-                "VULKAN_X64" &&
+            (configuredBackend === "VULKAN_X64" || configuredBackend === "METAL_ARM64") &&
             config.engine.gpuOffload ===
                 true &&
             qualification &&
@@ -667,6 +680,7 @@ export class LocalModelRuntime {
             backendSelectionMode: selectionMode,
             gpuCandidateDetected,
             gpuOffloadEnabled,
+            gpuFailure: config?.engine.gpuFailure ?? null,
             detectedAt: new Date().toISOString()
         };
         this.hardwareCache = {
@@ -718,6 +732,8 @@ export class LocalModelRuntime {
         if (preference !== "AUTO") {
             return preference;
         }
+        if (macMetal() && policy.allowed.includes("METAL_ARM64"))
+            return "METAL_ARM64";
         return this
             .hardwareProfile()
             .gpuCandidateDetected &&
@@ -788,7 +804,7 @@ export class LocalModelRuntime {
     async provision(modelId, contextTokens, sourceOverride, backendPreference = "AUTO") {
         if (this.external)
             throw new Error("LOCAL_MODEL_ENDPOINT_EXTERNAL");
-        if (process.platform !== "win32") {
+        if (!localProvisioningSupported()) {
             throw new Error("LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED");
         }
         if (this.provisioning) {
@@ -1339,7 +1355,7 @@ export class LocalModelRuntime {
             const profile = this.readProfileConfig(canonical);
             if (!profile) {
                 const targetModelPath = path.join(this.rootDir, "models", spec.filename);
-                if (process.platform !== "win32" ||
+                if (!localProvisioningSupported() ||
                     !fs.existsSync(targetModelPath)) {
                     throw new Error(`LOCAL_MODEL_PROFILE_NOT_CONFIGURED:${canonical}`);
                 }
@@ -1386,6 +1402,41 @@ export class LocalModelRuntime {
             await this.startup;
             return this.publicDescriptor(spec, config);
         }
+        const gpuRetry = this.gpuRetryConfig(config);
+        if (gpuRetry) {
+            await this.stop();
+            this.activeModelId = canonical;
+            this.startup = this.launch(gpuRetry);
+            try {
+                await this.startup;
+                this.writeConfig(gpuRetry);
+                const qualification = this.readQualification();
+                if (qualification && normalizeModelId(qualification.modelId) === canonical) {
+                    this.writeQualification({ ...qualification, backend: "VULKAN_X64" });
+                }
+                return this.publicDescriptor(spec, gpuRetry);
+            }
+            catch (error) {
+                await this.stop();
+                config = {
+                    ...config,
+                    engine: {
+                        ...config.engine,
+                        gpuExecutable: gpuRetry.engine.executable,
+                        gpuFailure: {
+                            at: new Date().toISOString(),
+                            error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+                            appVersion: CURRENT_APPLICATION_VERSION
+                        },
+                        gpuRetriedVersion: CURRENT_APPLICATION_VERSION
+                    }
+                };
+                this.writeConfig(config);
+            }
+            finally {
+                this.startup = null;
+            }
+        }
         await this.stop();
         this.assertConfiguredComponents(config);
         this.activeModelId = canonical;
@@ -1400,6 +1451,81 @@ export class LocalModelRuntime {
         }
         finally {
             this.startup = null;
+        }
+    }
+    // Chat answers on the local model (shared) and the vision step that stops it (exclusive).
+    // Before, the vision step of a document read in the background stopped the model in the
+    // middle of a chat answer, and a chat message started it again under the vision model.
+    generations = 0;
+    exclusive = false;
+    lockWaiters = [];
+    wakeLockWaiters() {
+        for (const wake of this.lockWaiters.splice(0))
+            wake();
+    }
+    /** One chat answer on the local model: waits while the vision step holds the model. */
+    async withGeneration(fn) {
+        while (this.exclusive)
+            await new Promise((resolve) => this.lockWaiters.push(resolve));
+        this.generations += 1;
+        this.lastUsedAt = Date.now();
+        try {
+            return await fn();
+        }
+        finally {
+            this.generations -= 1;
+            this.lastUsedAt = Date.now();
+            this.wakeLockWaiters();
+        }
+    }
+    // The memory of the model (on the card about 10-11 GB of 12 for Bielik with 32k context) is
+    // given back when it is not used: before, a model once started stayed loaded until the app
+    // closed, and OCR on the card ran in what was left. It starts again on the next answer.
+    lastUsedAt = Date.now();
+    /** Whether the model is loaded and has not answered for at least `idleMs`. */
+    idleFor(idleMs, now = Date.now()) {
+        return this.child !== null && !this.startup && this.generations === 0 && !this.exclusive && now - this.lastUsedAt >= idleMs;
+    }
+    /** Stops a loaded model that has been idle for `idleMs` (memory for OCR, other programs). */
+    async releaseIfIdle(idleMs, reason) {
+        if (this.external || !this.idleFor(idleMs))
+            return false;
+        process.stderr.write(`LOCAL_MODEL_RELEASED:${reason}:idle=${Math.round((Date.now() - this.lastUsedAt) / 1000)}s\n`);
+        await this.stop();
+        return true;
+    }
+    /** Whether the model is in memory now (for the OCR statistics). */
+    get resident() {
+        return this.child !== null;
+    }
+    /**
+     * The vision step: waits for running chat answers, holds new ones back until it ends. An
+     * answer still running after `maxWaitMs` (a tool of that answer may be reading this very
+     * document) gives `fallback()` instead: no deadlock, the step is skipped.
+     */
+    async withExclusiveModel(fn, fallback, maxWaitMs = 120_000) {
+        while (this.exclusive)
+            await new Promise((resolve) => this.lockWaiters.push(resolve));
+        this.exclusive = true;
+        try {
+            const deadline = Date.now() + maxWaitMs;
+            while (this.generations > 0) {
+                const left = deadline - Date.now();
+                if (left <= 0)
+                    return fallback();
+                await new Promise((resolve) => {
+                    const timer = setTimeout(resolve, left);
+                    this.lockWaiters.push(() => {
+                        clearTimeout(timer);
+                        resolve();
+                    });
+                });
+            }
+            return await fn();
+        }
+        finally {
+            this.exclusive = false;
+            this.wakeLockWaiters();
         }
     }
     async stop() {
@@ -1975,7 +2101,7 @@ export class LocalModelRuntime {
         fs.renameSync(temporary, target);
         this.hardwareCache = null;
     }
-    cpuFallbackConfig(config) {
+    cpuFallbackConfig(config, error) {
         if (config.engine
             .selectionMode !==
             "AUTO" ||
@@ -2002,7 +2128,50 @@ export class LocalModelRuntime {
                 backend: "CPU_X64_PORTABLE",
                 gpuOffload: false,
                 executable: config.engine
-                    .fallbackExecutable
+                    .fallbackExecutable,
+                gpuExecutable: config.engine.executable,
+                gpuFailure: {
+                    at: new Date().toISOString(),
+                    error: (error instanceof Error ? error.message : String(error ?? "UNKNOWN")).slice(0, 300),
+                    appVersion: CURRENT_APPLICATION_VERSION
+                },
+                gpuRetriedVersion: CURRENT_APPLICATION_VERSION
+            }
+        };
+    }
+    /**
+     * AUTO on the processor with a graphics card present: the card's engine once more per
+     * application version. A start on the card that once failed (driver, card busy, an older
+     * engine) used to leave the model, and the vision OCR that shares its engine, on the processor
+     * for good, with no reason kept.
+     */
+    gpuRetryConfig(config, gpuDetected = () => this.hardwareProfile().gpuCandidateDetected) {
+        if (process.env.LEX_LOCAL_GPU_RETRY === "off")
+            return null;
+        if (config.engine.selectionMode !== "AUTO" || configBackend(config) !== "CPU_X64_PORTABLE")
+            return null;
+        if (config.engine.gpuRetriedVersion === CURRENT_APPLICATION_VERSION)
+            return null;
+        const cpuExecutable = config.engine.executable;
+        const gpuExecutable = config.engine.gpuExecutable ??
+            cpuExecutable.replace(/([\\/])CPU_X64_PORTABLE([\\/])(llama-server(?:\.exe)?)$/u, "$1VULKAN_X64$2$3");
+        if (!gpuExecutable || gpuExecutable === cpuExecutable || !fs.existsSync(gpuExecutable) || !fs.existsSync(cpuExecutable))
+            return null;
+        if (!gpuDetected())
+            return null;
+        return {
+            ...config,
+            configuredAt: new Date().toISOString(),
+            engine: {
+                ...config.engine,
+                backend: "VULKAN_X64",
+                gpuOffload: true,
+                executable: gpuExecutable,
+                fallbackBackend: "CPU_X64_PORTABLE",
+                fallbackExecutable: cpuExecutable,
+                gpuExecutable: null,
+                gpuFailure: null,
+                gpuRetriedVersion: CURRENT_APPLICATION_VERSION
             }
         };
     }
@@ -2012,7 +2181,7 @@ export class LocalModelRuntime {
             return config;
         }
         catch (error) {
-            const fallback = this.cpuFallbackConfig(config);
+            const fallback = this.cpuFallbackConfig(config, error);
             if (!fallback) {
                 throw error;
             }
@@ -2110,6 +2279,41 @@ export class LocalModelRuntime {
         const manifest = manifestOverride
             ? path.resolve(manifestOverride)
             : this.manifestPath();
+        if (macMetal()) {
+            if (!fs.existsSync(manifest))
+                throw new Error("LOCAL_MODEL_RELEASE_MANIFEST_MISSING");
+            if (backend !== "METAL_ARM64")
+                throw new Error(`LOCAL_MODEL_BACKEND_NOT_ALLOWED:${backend}`);
+            await provisionLocalAiMacos({
+                manifestPath: manifest,
+                localRoot: this.rootDir,
+                modelId,
+                contextTokens,
+                backendMode,
+                onProgress: (progress) => {
+                    this.provisioningProgress = { ...progress, updatedAt: new Date().toISOString() };
+                }
+            });
+            // The standalone llama.cpp server with tools (start-llama-native-agent.sh), as on Windows;
+            // the application does not need it, so a missing piece is reported, not fatal.
+            try {
+                const paddle = process.env.LEX_PADDLE_MODEL_DIR?.trim();
+                const python = process.env.LEX_OCR_PYTHON?.trim();
+                if (!paddle || !python)
+                    throw new Error("LLAMA_NATIVE_COMPONENTS_UNKNOWN");
+                writeNativeAgentMacos({
+                    runtimeRoot: this.runtimeRoot,
+                    localRoot: this.rootDir,
+                    python,
+                    node: process.execPath,
+                    modelsRoot: path.resolve(paddle, "..", "..")
+                });
+            }
+            catch (error) {
+                process.stderr.write(`LLAMA_NATIVE_AGENT_NOT_CONFIGURED:${error instanceof Error ? error.message : String(error)}\n`);
+            }
+            return;
+        }
         if (!fs.existsSync(script)) {
             throw new Error("LOCAL_MODEL_PROVISIONER_MISSING");
         }
@@ -2246,8 +2450,7 @@ export class LocalModelRuntime {
             "--cache-type-v",
             "q8_0"
         ];
-        if (configBackend(config) ===
-            "VULKAN_X64" &&
+        if ((configBackend(config) === "VULKAN_X64" || configBackend(config) === "METAL_ARM64") &&
             config.engine.gpuOffload ===
                 true) {
             args.push("--n-gpu-layers", "999");

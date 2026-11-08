@@ -774,6 +774,22 @@ export class MaintenanceService {
                 signatureMode
             };
         }
+        if (!discovery.modelPackIndex) {
+            return {
+                status: "UP_TO_DATE",
+                packPublished: false,
+                checkedAt: discovery.checkedAt,
+                modelId: installed.modelId,
+                ...(installedFamily
+                    ? {
+                        modelFamily: installedFamily
+                    }
+                    : {}),
+                currentSha256: installed.sha256,
+                verificationReady,
+                signatureMode
+            };
+        }
         if (!indexReady) {
             return {
                 status: "BLOCKED",

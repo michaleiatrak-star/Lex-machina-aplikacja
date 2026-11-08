@@ -76,7 +76,7 @@ describe("mandatory path model from the corpus", () => {
       profile: "PELNY",
       contextResources: new Set([
         "prawny-router-v3/SKILL.md",
-        "shared/PRAWO-HARDGATE.md",
+        "JUR:weryfikacja-przepisow-kanon",
         "prawny-router-v3/references/KROK0A-anonimizer.md",
         "prawny-router-v3/references/KROK1-detekcja.md",
         ...preloadForTurn(model, { profile: "PELNY", query: "art. 233 KK", legal: true, criminal: true, documents: false, documentsTruncated: false, documentGeneration: false, foreignJurisdiction: false })
@@ -251,10 +251,11 @@ describe("mandatory path in a session", () => {
     expect(result.mandatoryPath!.steps.some((step) => step.id === "SKILL:prawny-router-v3")).toBe(false);
     expect(result.modeDecision?.mode).toBe("PRAWNIK");
     expect(verified).toEqual(expect.arrayContaining(["art. 233 KK", "art. 234 KK", "art. 238 KK"]));
-    // PEŁNY without visible gate blocks: one correcting round, then ⛔ TRYB ZDEGRADOWANY.
+    // PEŁNY without visible gate blocks: one correcting round, then a plain warning to the user.
     expect(calls).toHaveLength(2);
     expect(String(calls[1]!.messages.at(-1)!.content)).toContain("CN-GATE");
-    expect(result.answer).toMatch(/^⛔ TRYB ZDEGRADOWANY — brak obowiązkowego kroku: .*CN-GATE-BLOK/u);
+    expect(result.answer).toMatch(/^⚠️ Uwaga: nie wszystkie kroki kontroli zostały wykonane/u);
+    expect(result.mandatoryPath!.degraded).toBe(true);
     // KROK 7 and KROK 3A by the application.
     expect(result.answer).toMatch(/Zastrzeżenie[\s\S]*nie stanowi\s+porady prawnej[\s\S]*$/iu);
     expect(result.mandatoryPath!.routingTrace).toContain("TRYB: PRAWNIK");

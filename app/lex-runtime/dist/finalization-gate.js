@@ -1,6 +1,6 @@
 import { euAct } from "./eu-law-verifier.js";
 import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, DOTTED_STATUTE, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations, withStatuteTitles } from "./legal-act-abbreviations.js";
-import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
+import { amountMarkerSpans, amountMatches, evidenceHasAmount, factSumKeys, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
@@ -731,6 +731,10 @@ export class FinalizationGate {
                 ...statuteClaimsInLine(text)
             ];
             let claims = claimsOf(index + 1, lineText);
+            // Proposed or quoted contract wording ("> 1. … w terminie 10 dni roboczych …", test przeglądu
+            // umowy 2026-11-07): the parties' own terms, no claim about the law, unless it cites a provision.
+            if (claims.length === 0 && /^\s*>/u.test(lineText))
+                return;
             for (let above = index - 1; claims.length === 0 && above >= 0; above -= 1)
                 claims = claimsOf(above + 1, lines[above]);
             // Nagłówek lub wstęp nad przepisem ("## Termin przedawnienia: 2 lata"): przepisy całej odpowiedzi;
@@ -739,7 +743,7 @@ export class FinalizationGate {
                 claims = references.filter((reference) => reference.kind === "statute").map((reference) => reference.claim);
             const lineRecords = claims.map(statuteRecord).filter((record) => Boolean(record));
             const marked = amountMarkerSpans(lineText);
-            const facts = new Set(ledger.factAmountKeys());
+            const facts = new Set([...ledger.factAmountKeys(), ...factSumKeys(ledger.factAmountKeys())]);
             for (const amount of amounts) {
                 if (facts.has(amount.key))
                     continue;

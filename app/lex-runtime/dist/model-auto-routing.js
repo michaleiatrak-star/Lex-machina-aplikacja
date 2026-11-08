@@ -1,6 +1,7 @@
 import { assessMatterComplexity } from "./matter-complexity.js";
 import { isLocalLightweightConversation } from "./execution-engine.js";
-import { MANDATORY_SESSION_SKILLS, SKILL_SELECTION_ENVELOPE_PREFIX, parseSkillSelectionEnvelope } from "./skill-selection.js";
+import { mandatorySessionSkills, SKILL_SELECTION_ENVELOPE_PREFIX, parseSkillSelectionEnvelope } from "./skill-selection.js";
+import { activeJurisdictionPack, isDomainSkill, jurisdictionDomainMap } from "./jurisdiction.js";
 const EXECUTION_SKILL_NAME_OVERRIDES = new Set([
     "przesluchanie-swiadkow-v2-min90",
     "raport-klienta-v1"
@@ -56,7 +57,7 @@ function stringArray(value) {
 }
 function allowedDomains(registry, allowList, restrictionActive) {
     const all = [...registry.skills.values()]
-        .filter((skill) => skill.name.startsWith("dr-"))
+        .filter((skill) => isDomainSkill(skill.name))
         .map((skill) => skill.name)
         .sort((a, b) => a.localeCompare(b, "pl"));
     // An explicitly empty DR selection means "model chooses the one required
@@ -74,8 +75,7 @@ function allowedExecutionSkills(registry, allowList, restrictionActive) {
         ...registry.skills.values()
     ]
         .filter((skill) => isExecutionSkill(skill) &&
-        !MANDATORY_SESSION_SKILLS
-            .includes(skill.name) &&
+        !mandatorySessionSkills().includes(skill.name) &&
         (!restrictionActive ||
             allowed.has(skill.name)))
         .sort((a, b) => a.name.localeCompare(b.name, "pl"));
@@ -236,7 +236,7 @@ export class ModelAutoRouter {
         const routingMap = localModel
             ? null
             : this.registry
-                .resolveResource("prawo-polskie-v2", "prawo-polskie-v2/ROUTING-MAP.md");
+                .resolveResource(activeJurisdictionPack(), jurisdictionDomainMap(this.registry.root));
         const mapText = routingMap
             ? await routingMapText(routingMap)
             : "";

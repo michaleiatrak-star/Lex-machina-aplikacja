@@ -6,6 +6,7 @@ import { laterTurn } from "./skill-sections.js";
 import type { LexSkillRegistry } from "./registry.js";
 import { requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { latestUserTurn, threadUserText } from "./skill-selection.js";
+import { activeJurisdictionPack } from "./jurisdiction.js";
 
 /**
  * Legal gate at the entry of a chat turn (every provider): a message with no legal
@@ -143,7 +144,7 @@ let flashCache: { file: string; mtimeMs: number; rows: FlashRoute[] } | null = n
 
 /** prawo-polskie-v2 "Routing błyskawiczny" of the registry, re-read after a skill update. */
 export function registryFlashRoutes(registry: LexSkillRegistry): FlashRoute[] {
-  const file = registry.get("prawo-polskie-v2")?.skillFile;
+  const file = registry.get(activeJurisdictionPack())?.skillFile;
   if (!file) return [];
   try {
     const mtimeMs = fs.statSync(file).mtimeMs;

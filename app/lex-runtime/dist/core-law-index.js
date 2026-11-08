@@ -7,6 +7,7 @@ import path from "node:path";
 import { LocalPdfTextExtractor, SMALL_LINE_MARK } from "./pdf-text-extractor.js";
 import { articleFootnotes, articleWording, extractPageFootnotes, stripTrailingHeadings } from "./core-law-footnotes.js";
 import { articleHeadingPattern, articleIdsFromHeading, htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
 /**
  * Why the copy of an act cannot be taken as the current wording (verification
  * from the copy is refused and the act must be checked in ELI), or null.
@@ -97,15 +98,16 @@ function labelFor(line) {
 function mapFiles(corpusRoot) {
     const files = [];
     for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-        if (!entry.isDirectory() || !entry.name.startsWith("dr-"))
+        if (!entry.isDirectory() || !isDomainSkill(entry.name))
             continue;
         const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
         if (fs.existsSync(file))
             files.push({ domain: entry.name, file });
     }
-    const routing = path.join(corpusRoot, "prawo-polskie-v2", "ROUTING-MAP.md");
+    // The chosen jurisdiction's domain map (Polish law: prawo-polskie-v2/ROUTING-MAP.md).
+    const routing = path.join(corpusRoot, ...jurisdictionDomainMap(corpusRoot).split("/"));
     if (fs.existsSync(routing)) {
-        files.push({ domain: "prawo-polskie-v2", file: routing });
+        files.push({ domain: activeJurisdictionPack(), file: routing });
     }
     return files.sort((a, b) => a.domain.localeCompare(b.domain));
 }
@@ -116,7 +118,7 @@ function mapFiles(corpusRoot) {
 function sourceRegistries(corpusRoot) {
     const files = [];
     for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-        if (!entry.isDirectory() || !entry.name.startsWith("dr-"))
+        if (!entry.isDirectory() || !isDomainSkill(entry.name))
             continue;
         const references = path.join(corpusRoot, entry.name, "references");
         let scopes;

@@ -80,7 +80,7 @@ export type DeterministicWorkflowOutputReport = {
 
 const LEGAL_GUIDE_RESOURCES = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/DOMAIN-LOCK.md",
   "shared/RATE-COMPLETENESS.md",
@@ -88,7 +88,7 @@ const LEGAL_GUIDE_RESOURCES = [
 ] as const;
 
 const SIMPLE_LETTER_RESOURCES = [
-  "shared/NAZEWNICTWO-STRON.md",
+  "JUR:nazewnictwo-stron",
   "pisma-proste-v2/references/M1-zasady.md",
   "pisma-proste-v2/references/M2-intake.md",
   "pisma-proste-v2/references/M4-struktura.md",
@@ -106,12 +106,12 @@ const PROCESS_PLEADING_RESOURCES = [
 
 const COURT_ANALYSIS_RESOURCES = [
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "analiza-sadowa-v6/references/WERYFIKACJA-DOWODOW.md"
 ] as const;
 
 const EVIDENCE_ANALYSIS_RESOURCES = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
   "shared/MOD-STEP-TRACKER.md",
   "shared/DOMAIN-LOCK.md",
@@ -120,20 +120,20 @@ const EVIDENCE_ANALYSIS_RESOURCES = [
 
 const STATUTE_ANALYSIS_RESOURCES = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
-  "shared/HIERARCHIA-ZRODEL.md",
+  "JUR:weryfikacja-przepisow-kanon",
+  "JUR:hierarchia-zrodel",
   "shared/SELF-CHECK-ANTY-FASADA.md"
 ] as const;
 
 const CONTRACT_ANALYSIS_RESOURCES = [
   "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-STEP-TRACKER.md"
 ] as const;
 
 const CHRONOLOGY_RESOURCES = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "chronologia-sprawy-v1/references/ekstrakcja-zdarzen.md",
   "chronologia-sprawy-v1/references/sprzecznosci-dat.md",
@@ -142,13 +142,13 @@ const CHRONOLOGY_RESOURCES = [
 
 const CASE_LAW_RESOURCES = [
   "shared/MCP-INTEGRACJA.md",
-  "shared/SYGNATURY.md",
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:sygnatury-repertoria",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md"
 ] as const;
 
 const WITNESS_QUESTIONING_RESOURCES = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-SKAN-DOWODOW-KOMPLETNY.md",
   "shared/MOD-STEP-TRACKER.md",
@@ -156,14 +156,14 @@ const WITNESS_QUESTIONING_RESOURCES = [
 ] as const;
 
 const CLIENT_REPORT_RESOURCES = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "raport-klienta-v1/references/jezyk-klienta.md",
   "raport-klienta-v1/references/BLUEPRINT-SCHEMA.md"
 ] as const;
 
 const SITUATION_REPORT_RESOURCES = [
-  "shared/PRAWO-HARDGATE.md",
+  "JUR:weryfikacja-przepisow-kanon",
   "shared/SELF-CHECK-ANTY-FASADA.md",
   "shared/MOD-WIDGET-IO.md"
 ] as const;
@@ -259,10 +259,13 @@ const CONTRACT_ANALYSIS_FULL_MARKERS = [
   "## 5. KLAUZULE RYZYKOWNE",
   "## 6. EKSPOZYCJA FINANSOWA",
   "## 7. ALERTY RODO",
-  "## 8. KLAUZULE KORZYSTNE DLA STRONY CHRONIONEJ",
+  // The heading's fixed start: the model names the protected party ("…DLA ZAMAWIAJĄCEGO") and
+  // adds to a heading ("PLAN DZIAŁANIA I PRIORYTETY NEGOCJACYJNE"); a whole-heading marker
+  // blocked every full report and the AU checkpoints never closed (contract test 2026-11-08).
+  "## 8. KLAUZULE KORZYSTNE",
   "## 9. BRAKUJĄCE KLAUZULE",
   "## 10. REKOMENDACJE ZMIAN",
-  "## 11. PLAN DZIAŁANIA PRZED PODPISANIEM",
+  "## 11. PLAN DZIAŁANIA",
   "## 12. OCENA OGÓLNA",
   "## 13. DISCLAIMER"
 ] as const;
