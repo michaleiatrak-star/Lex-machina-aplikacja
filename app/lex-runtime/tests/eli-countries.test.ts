@@ -30,7 +30,8 @@ describe("ELI of the civil-law countries (EUR-Lex ELI register, 2026-11-08)", ()
 
   it("every country has a source; no common-law country; Poland alone reads the text", () => {
     for (const country of ELI_COUNTRIES) {
-      expect(country.source).toMatch(/^https:\/\//u);
+      expect(country.source).toMatch(/^https?:\/\//u);
+      expect(country.text?.reading).toBeTruthy();
       expect(["IE", "UK", "CY"]).not.toContain(country.code);
     }
     expect(ELI_COUNTRIES.filter((country) => country.level === "PEŁNA").map((country) => country.code)).toEqual(["PL"]);
@@ -48,5 +49,15 @@ describe("ELI APIs of the countries (checked 2026-11-08)", () => {
     expect(ELI_COUNTRIES.find((item) => item.code === "PL")!.api!.auth).toBe("brak");
     expect(EU_ELI.kind).toBe("SPARQL");
     expect(eliCapabilityNotice("FR")).toContain("wymaga klucza");
+  });
+});
+
+describe("coverage: the EU of civil law, Turkey, Ukraine, Moldova and the Balkans outside the EU", () => {
+  it("every one of them is in the register, with its text reading status", () => {
+    const eu = ["AT", "BE", "BG", "HR", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"];
+    const others = ["TR", "UA", "MD", "RS", "ME", "MK", "BA", "XK", "AL"];
+    const codes = new Set(ELI_COUNTRIES.map((country) => country.code));
+    expect([...eu, ...others].filter((code) => !codes.has(code))).toEqual([]);
+    expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["BE", "DE", "DK", "ES", "IT", "NL"]);
   });
 });
