@@ -587,3 +587,87 @@ export function contractWorkflowSequence(
 ): ContractCheckpoint[] {
   return sequenceForMode(mode);
 }
+
+/**
+ * The checkpoints one turn runs: from the next open one through the end of the analysis
+ * (intake, routing and modules A-F in ANALYSIS mode; intake and routing in the other modes).
+ * Generation and finalization gates stay one per turn. Before (contract test 2026-11-07) a
+ * turn was given one checkpoint, the model wrote the whole analysis, the state closed one
+ * checkpoint and stayed at INTAKE: sixteen turns to finish.
+ */
+export function contractCheckpointBatch(
+  input: ContractAnalysisState
+): ContractCheckpoint[] {
+  const state = validateContractAnalysisState(input);
+  const sequence = sequenceForMode(state.mode);
+  const open = sequence.slice(state.closedCheckpoints.length);
+  const first = open[0];
+  if (!first) return [];
+  const batchable = new Set<ContractCheckpoint>([...COMMON_SEQUENCE, ...(state.mode === "ANALYSIS" ? ANALYSIS_SEQUENCE : [])]);
+  if (!batchable.has(first)) return [first];
+  const batch: ContractCheckpoint[] = [];
+  for (const checkpoint of open) {
+    if (!batchable.has(checkpoint)) break;
+    batch.push(checkpoint);
+  }
+  return batch;
+}
+
+const NOT_CLOSED_MARK = /⚠️|⬛|POMINI[ĘE]T|NIE\s+WYKONAN|nie\s+wykona(?:łem|no)|DO\s+UZUPEŁNIENIA|OCZEKUJE|BLOCKED|FAIL/iu;
+const CLOSED_MARK = /✅|\bDONE\b|\bPASS\b|wykonan[oy]|— N\/A|\bN\/A\b/iu;
+
+function checkpointsOnLine(line: string, batch: readonly ContractCheckpoint[]): ContractCheckpoint[] {
+  const found = new Set<ContractCheckpoint>();
+  const order = CONTRACT_CHECKPOINTS as readonly string[];
+  // "AU-A–AU-D", "AU-A…AU-F", "AU-A do AU-F": every checkpoint of the range.
+  for (const range of line.matchAll(/\b(AU-[A-Z0-9]+)\s*(?:–|—|-|…|\.\.\.?|do)\s*(AU-[A-Z0-9]+)\b/gu)) {
+    const from = order.indexOf(range[1]!);
+    const to = order.indexOf(range[2]!);
+    if (from >= 0 && to >= from) for (const item of order.slice(from, to + 1)) found.add(item as ContractCheckpoint);
+  }
+  for (const single of line.matchAll(/\bAU-[A-Z0-9]+\b/gu)) {
+    if (order.includes(single[0])) found.add(single[0] as ContractCheckpoint);
+  }
+  return [...found].filter((item) => batch.includes(item));
+}
+
+/**
+ * Which checkpoints of the batch the answer closes, in order: the answer's trace (a line with
+ * the checkpoint and its mark) decides; the first one marked as skipped, missing or waiting
+ * stops the run, so the next turn starts there. A line's first mark is its status ("| ✅ |
+ * AU-F0, AU-POV (rozbieżność ⬛)" closes both). Without a trace only the first checkpoint
+ * closes (the turn passed its gates; what else it covered is not shown).
+ */
+// AU-GAP and AU-POV are often left out of a trace when there was nothing to do (no gap, no
+// firm): closed when a later checkpoint of the trace is done.
+function impliedDone(checkpoint: ContractCheckpoint, status: Map<ContractCheckpoint, boolean>): boolean {
+  if (!OBJECTIVE_NA.has(checkpoint)) return false;
+  const order = CONTRACT_CHECKPOINTS as readonly ContractCheckpoint[];
+  return [...status].some(([item, done]) => done && order.indexOf(item) > order.indexOf(checkpoint));
+}
+
+export function contractCheckpointsClosedByAnswer(
+  answer: string,
+  batch: readonly ContractCheckpoint[]
+): ContractCheckpoint[] {
+  if (batch.length <= 1) return [...batch];
+  const status = new Map<ContractCheckpoint, boolean>();
+  for (const line of answer.split(/\r?\n/u)) {
+    const items = checkpointsOnLine(line, batch);
+    if (!items.length) continue;
+    const open = NOT_CLOSED_MARK.exec(line);
+    const closed = CLOSED_MARK.exec(line);
+    if (!open && !closed) continue;
+    const isClosed = Boolean(closed && (!open || closed.index < open.index));
+    // A later trace line wins over an earlier mention ("AU-POV ⬛" in the text, "✅" in the trace).
+    for (const item of items) status.set(item, isClosed);
+  }
+  if (!status.size) return batch.slice(0, 1);
+  const result: ContractCheckpoint[] = [];
+  for (const checkpoint of batch) {
+    // Not in the trace: a checkpoint the answer did not report (N/A ones are written as such).
+    if (status.get(checkpoint) === false || (!status.has(checkpoint) && checkpoint !== batch[0] && !impliedDone(checkpoint, status))) break;
+    result.push(checkpoint);
+  }
+  return result;
+}

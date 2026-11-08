@@ -32,6 +32,8 @@ export type PiiKind =
   | "VEHICLE_PLATE"
   | "BAR_NUMBER"
   | "PAYMENT_CARD"
+  // Token label of a firm only ([PII:FIRM:0001]); its entries keep the kind PERSON.
+  | "FIRM"
   | "CUSTOM";
 
 export type PiiSpan = {
@@ -283,6 +285,7 @@ const PRIORITY: Record<PiiKind, number> = {
   // A structural address wins over a name inside it ("ul. Jana Kowalskiego 5").
   ADDRESS: 65,
   PERSON: 60,
+  FIRM: 60,
   BIRTH_DATE: 54,
   VEHICLE_PLATE: 53,
   BAR_NUMBER: 53,
@@ -445,7 +448,8 @@ export class PseudonymizationVault {
           .exec(item.token);
       if (
         !match ||
-        match[1] !== item.kind ||
+        // A firm's token: FIRM since 2026-11-08, PERSON in older vaults.
+        (match[1] !== item.kind && !(match[1] === "FIRM" && item.kind === "PERSON" && item.entity?.type === "organization")) ||
         typeof item.value !==
           "string" ||
         typeof item.createdAt !==
@@ -475,18 +479,8 @@ export class PseudonymizationVault {
 
       const sequence =
         Number(match[2]);
-      const counter =
-        this.counters.get(
-          item.kind
-        ) ?? 0;
-      if (
-        sequence > counter
-      ) {
-        this.counters.set(
-          item.kind,
-          sequence
-        );
-      }
+      const label = match[1] as PiiKind;
+      if (sequence > (this.counters.get(label) ?? 0)) this.counters.set(label, sequence);
 
       this.keyToToken.set(
         key,
@@ -583,20 +577,12 @@ export class PseudonymizationVault {
       }
     }
 
-    const next =
-      (
-        this.counters.get(
-          kind
-        ) ?? 0
-      ) + 1;
-    this.counters.set(
-      kind,
-      next
-    );
-    const token =
-      `[PII:${kind}:${String(
-        next
-      ).padStart(4, "0")}]`;
+    // A firm is no person: its own label ([FIRMA], REGULY-ANONIMIZACJI), the kind stays PERSON
+    // for the matching and the vault (contract test 2026-11-07: "[PII:PERSON] for a company").
+    const label: PiiKind = kind === "PERSON" && entity?.type === "organization" ? "FIRM" : kind;
+    const next = (this.counters.get(label) ?? 0) + 1;
+    this.counters.set(label, next);
+    const token = `[PII:${label}:${String(next).padStart(4, "0")}]`;
     this.keyToToken.set(
       key,
       token

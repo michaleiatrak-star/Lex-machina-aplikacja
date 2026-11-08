@@ -273,6 +273,8 @@ export type RegistryFacts = {
   register?: string;
   registerStatus?: string;
   legalForm?: string;
+  // Town of the registered seat (KRS, dział 1).
+  seat?: string;
   extractDate?: string;
   vatStatus?: string;
   vatRegistered?: string;
@@ -333,6 +335,7 @@ export class RegistryEnrichment implements RegistryFormsProvider {
       if (text(result.rejestr)) next.register = text(result.rejestr)!;
       if (text(result.status_rejestru)) next.registerStatus = text(result.status_rejestru)!;
       if (text(result.forma_prawna)) next.legalForm = text(result.forma_prawna)!;
+      if (text(result.siedziba)) next.seat = text(result.siedziba)!;
       if (text(result.stan_z_dnia)) next.extractDate = text(result.stan_z_dnia)!;
     }
     if (source === "wl") {
@@ -466,6 +469,7 @@ export function registryFactsText(facts: RegistryFacts[]): string {
       item.krs ? `KRS ${item.krs}` : "",
       item.nip ? `NIP ${item.nip}` : "",
       item.legalForm ? `forma: ${item.legalForm.toLocaleLowerCase("pl")}` : "",
+      item.seat ? `siedziba: ${titleCase(item.seat)}` : "",
       item.registerStatus ? `KRS: ${item.registerStatus}${item.extractDate ? ` (odpis aktualny, stan z ${item.extractDate})` : ""}` : "",
       item.vatStatus ? `VAT: ${item.vatStatus}${item.vatRegistered ? ` od ${item.vatRegistered}` : ""}${item.vatStruckOff ? `, wykreślony ${item.vatStruckOff}` : ""}` : "",
       item.accounts?.length ? `rachunki na białej liście: ${item.accounts.join(", ")}` : ""
@@ -474,4 +478,58 @@ export function registryFactsText(facts: RegistryFacts[]): string {
   }
   lines.push("Rachunek podany w piśmie, którego nie ma na białej liście, wskaż wprost (płatność na rachunek spoza wykazu).");
   return lines.join("\n");
+}
+
+/** The check digit a NIP should have, or null when no digit fits (the number cannot exist). */
+function nipCheckDigit(value: string): number | null {
+  const weights = [6, 5, 7, 2, 3, 4, 5, 6, 7];
+  const sum = weights.reduce((total, weight, index) => total + weight * Number(value[index]), 0) % 11;
+  return sum === 10 ? null : sum;
+}
+
+/** A word of a name, folded for comparison ("Logistyka" = "LOGISTYKA", "Ł" = "L"). */
+function fold(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/giu, "l").toLocaleLowerCase("pl");
+}
+
+/**
+ * The document's party data checked against the register, computed by the application (not
+ * left to the model): a NIP after its label with a wrong check digit, and for each KRS number
+ * of the material whose extract was read, whether the paragraph naming it gives the register's
+ * name, seat and NIP. A mismatch means the comparycja names another firm or a wrong number:
+ * the parties must be corrected from current extracts before signature.
+ */
+export function registryConsistencyText(material: string, facts: RegistryFacts[]): string {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const match of material.matchAll(/\bNIP\s*(?:nr\.?\s*)?:?\s*((?:PL\s?)?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}|(?:PL\s?)?\d{3}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{3})(?!\d)/gu)) {
+    const nip = match[1]!.replace(/\D/gu, "");
+    if (nip.length !== 10 || seen.has(nip) || validNip(nip)) continue;
+    seen.add(nip);
+    const expected = nipCheckDigit(nip);
+    lines.push(`- NIP ${nip}: błędna cyfra kontrolna (${expected === null ? "żadna cyfra kontrolna nie pasuje" : `wyliczona ${expected}, w numerze ${nip[9]}`}) — taki NIP nie istnieje; podmiotu nie da się sprawdzić w białej liście VAT po tym numerze.`);
+  }
+  const paragraphs = material.split(/\n\s*\n|\n(?=\s*(?:a|oraz|i)\s*\n)/u);
+  for (const item of facts) {
+    if (!item.krs) continue;
+    const krsDigits = item.krs.replace(/^0+/u, "");
+    const paragraph = paragraphs.find((part) => part.replace(/\D+/gu, " ").split(" ").some((number) => number.length >= 7 && number.replace(/^0+/u, "") === krsDigits));
+    if (!paragraph) continue;
+    const folded = fold(paragraph);
+    const issues: string[] = [];
+    const name = item.name ? firmNameForms(item.name)[0]?.text : undefined;
+    if (name && !folded.includes(fold(name))) issues.push(`nazwa w KRS: „${item.name}” — dokument podaje inną nazwę`);
+    if (item.seat && !folded.includes(fold(item.seat).slice(0, Math.max(4, fold(item.seat).length - 2)))) issues.push(`siedziba w KRS: ${titleCase(item.seat)} — dokument podaje inną`);
+    const documentNips = [...paragraph.matchAll(/\bNIP\s*(?:nr\.?\s*)?:?\s*((?:PL\s?)?[\d\s-]{10,16}\d)/gu)].map((found) => found[1]!.replace(/\D/gu, "").slice(-10));
+    if (item.nip && documentNips.length && !documentNips.includes(item.nip)) issues.push(`NIP w KRS: ${item.nip} — dokument podaje ${documentNips.join(", ")}`);
+    lines.push(issues.length
+      ? `- KRS ${item.krs}: NIEZGODNE z dokumentem: ${issues.join("; ")}.`
+      : `- KRS ${item.krs}: zgodne z dokumentem (nazwa${item.seat ? ", siedziba" : ""}${item.nip && documentNips.length ? ", NIP" : ""}).`);
+  }
+  if (!lines.length) return "";
+  return [
+    "# ZGODNOŚĆ DANYCH STRON Z REJESTRAMI (aplikacja — porównanie wykonane przed analizą)",
+    "Wynik jest ustaleniem (KROK 0D / AU-POV): przy NIEZGODNE napisz wprost, który numer należy do jakiego podmiotu w rejestrze, i wskaż korektę komparycji przed podpisem. Nazwa i siedziba spółki z rejestru to dane podmiotu, nie dane osobowe: podawaj je (symbolem firmy, gdy go masz).",
+    ...lines
+  ].join("\n");
 }

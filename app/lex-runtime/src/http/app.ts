@@ -271,6 +271,7 @@ import {
   chronologyTemporalGateRequired
 } from "../chronology-date-trigger.js";
 import {
+  contractCheckpointsClosedByAnswer,
   nextContractCheckpoint,
   type ContractAnalysisState
 } from "../contract-analysis-state.js";
@@ -11502,7 +11503,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           stage:
             permit.stage,
           checkpoint:
-            permit.checkpoint
+            permit.checkpoint,
+          checkpoints:
+            permit.checkpoints
         };
         contractContext = {
           caseId:
@@ -12372,7 +12375,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         [
                           auditArtifact
                             .auditRef
-                        ]
+                        ],
+                        // Every checkpoint of the turn the answer's trace closes.
+                        contractCheckpointsClosedByAnswer(
+                          typeof result.answer === "string" ? result.answer : "",
+                          contractContext!.permit.checkpoints
+                        )
                       );
                     return await options
                       .contractWorkflowStore!

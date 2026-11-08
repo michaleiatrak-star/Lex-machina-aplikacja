@@ -81,7 +81,7 @@ export function agreementIssues(
   entityOf: (baseToken: string) => ReturnType<PseudonymizationVault["entity"]>
 ): Map<number, string> {
   const issues = new Map<number, string>();
-  const pattern = /\[((?:LMPII:D\d{2}|PII):PERSON:\d{4})(?:\|([A-Z]{2,4}))?\]/g;
+  const pattern = /\[((?:LMPII:D\d{2}|PII):(?:PERSON|FIRM):\d{4})(?:\|([A-Z]{2,4}))?\]/g;
   for (const match of text.matchAll(pattern)) {
     // Only a subject: nominative or no case written.
     if (match[2] && match[2] !== "NOM") continue;

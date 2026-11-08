@@ -243,3 +243,13 @@ describe("leaks found on the full 10 000 run", () => {
     expect(result.text).toContain(". Lis w lesie");
   });
 });
+
+describe("firm token label (contract test 2026-11-07: a company shown as [PII:PERSON])", () => {
+  it("a company gets [PII:FIRM:n] and is restored from a saved vault", async () => {
+    const vault = new PseudonymizationVault();
+    const result = await new LocalPolishPseudonymizer(vault).pseudonymize("BETA SOFTWARE spółka z ograniczoną odpowiedzialnością z siedzibą w Krakowie.");
+    expect(result.text).toMatch(/\[PII:FIRM:0001\] spółka z ograniczoną/u);
+    const restored = new PseudonymizationVault(JSON.parse(JSON.stringify(vault.snapshot())));
+    expect(restored.deanonymize("[PII:FIRM:0001|NOM]")).toBe("Beta Software");
+  });
+});
