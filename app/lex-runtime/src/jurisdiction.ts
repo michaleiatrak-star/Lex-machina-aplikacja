@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { eliCapabilityNotice } from "./eli/eli-countries.js";
 
 /**
  * Jurisdiction provider: the country whose law the application works with. Each country is a
@@ -189,10 +190,13 @@ export function jurisdictionStatus(provider: JurisdictionProvider): Jurisdiction
 /** The sentence for the model and the answer when the chosen country lacks components (degraded). */
 export function jurisdictionDegradedNotice(status: JurisdictionStatus): string | null {
   if (!status.missing.length) return null;
+  // No provider reads the country's acts: what its ELI still gives (the official address).
+  const eli = status.missing.some((item) => item.component === "weryfikacja-przepisow") ? eliCapabilityNotice(status.provider.country) : null;
   return (
     `Jurysdykcja ${status.provider.name}: aplikacja nie ma dostawcy dla: ` +
     status.missing.map((item) => COMPONENT_LABELS[item.component]).join(", ") +
-    ". Te elementy nie są wykonywane automatycznie (TRYB ZDEGRADOWANY); nie zastępuj ich prawem innego kraju."
+    ". Te elementy nie są wykonywane automatycznie (TRYB ZDEGRADOWANY); nie zastępuj ich prawem innego kraju." +
+    (eli ? ` ${eli}` : "")
   );
 }
 
