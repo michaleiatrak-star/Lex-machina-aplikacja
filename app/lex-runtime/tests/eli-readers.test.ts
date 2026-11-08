@@ -265,3 +265,33 @@ describe("readers added 2026-11-08: SK, HR, XK, SI, IS, FO, canon law", () => {
   });
 });
 
+
+describe("Georgia (Matsne) and unit matching", () => {
+  it("GE: consolidated publications with dates; მუხლი N. from p.muxlixml with its paragraphs", async () => {
+    const { matsneVersions, readMatsne } = await import("../src/eli/readers.js");
+    const html = fixture("ge-civil-code-ka.html");
+    expect(matsneVersions(html).slice(0, 2)).toEqual([{ publication: "140", date: "2026-06-25" }, { publication: "139", date: "2026-06-23" }]);
+    const reading = readMatsne(html, "https://matsne.gov.ge/ka/document/view/31702?publication=140");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.status).toMatch(/urzędowy/u);
+  });
+
+  it("\"Article 2\" is article 2 (the longer word is cut first)", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("va-cic-liberVI.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer });
+    const answer = await readNationalLaw({ url: "https://www.vatican.va/archive/cod-iuris-canonici/latin/documents/cic_liberVI_la.html", unit: "Canon 1312", country: "IT" }, fetchImpl as never);
+    expect(answer.articles.map((article) => article.unit)).toEqual(["1312"]);
+  });
+});
+
+describe("Paragraf Lex (RS, ME, BA)", () => {
+  it("Član N with its paragraphs; a removed range and the next title are not part of the article; marked unofficial", async () => {
+    const { readParagraf } = await import("../src/eli/readers.js");
+    const reading = readParagraf(fixture("rs-paragraf-zoo.html"), "x", "RS");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "10"]);
+    expect(reading.articles[1]!.text).not.toContain("Brisano");
+    expect(reading.articles[1]!.text).not.toContain("Autonomija volje");
+    expect(reading.status).toMatch(/nieurzędowy/u);
+  });
+});

@@ -4,7 +4,7 @@
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readParagraf, readMatsne, matsneVersions, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string };
 
@@ -22,6 +22,10 @@ const READERS: HostReader[] = [
   { country: "HR", hosts: /^narodne-novine\.nn\.hr$/u, read: readCroatia },
   { country: "SI", hosts: /^(?:www\.)?uradni-list\.si$/u, read: readSlovenia },
   { country: "FO", hosts: /^(?:www\.)?logir\.fo$/u, read: readFaroe },
+  // Unofficial consolidated texts (Paragraf Lex) where the official gazette cannot be read.
+  { country: "RS", hosts: /^(?:www\.)?paragraf\.rs$/u, read: (body, url) => readParagraf(body, url, "RS") },
+  { country: "ME", hosts: /^(?:www\.)?paragraf\.me$/u, read: (body, url) => readParagraf(body, url, "ME") },
+  { country: "BA", hosts: /^(?:www\.)?paragraf\.ba$/u, read: (body, url) => readParagraf(body, url, "BA") },
   // Canon law (Codex Iuris Canonici): the Holy See's site, for every chosen country (see CANON_HOSTS).
   { country: "VA", hosts: /^(?:www\.)?vatican\.va$/u, read: readCanonLaw }
 ];
@@ -52,6 +56,7 @@ const HOST_COUNTRIES: Array<[RegExp, string]> = [
   [/^static\.slov-lex\.sk$/u, "SK"],
   [/^gzk\.rks-gov\.net$/u, "XK"],
   [/^(?:www\.)?pisrs\.si$/u, "SI"],
+  [/^matsne\.gov\.ge$/u, "GE"],
   [/^(?:www\.)?althingi\.is$/u, "IS"],
   [/^raw\.githubusercontent\.com$/u, "IS"]
 ];
@@ -79,16 +84,17 @@ export type NationalLawAnswer = {
 export type NationalFetch = (url: string, init: { headers: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; headers: { get(name: string): string | null }; arrayBuffer(): Promise<ArrayBuffer> }>;
 
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE", "SK", "XK", "IS"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE", "SK", "XK", "IS", "SI", "GE"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
   const wanted = unit
-    .replace(/^(?:art\.?|artikel|article|artículo|madde|članak|člen|neni|can\.?|canon|kanon|čl\.?|§)\s*/iu, "")
+    // Longer words first: "art" would cut "Article 2" to "icle 2".
+    .replace(/^(?:article|artículo|artikel|articolo|artigo|art\.?|madde|მუხლი|članak|člen|neni|canon|kanon|can\.?|čl\.?|§)\s*/iu, "")
     .replace(/\.?\s*(?:člen|gr)\.?$|\.$/iu, "")
     .replace(/\s+/gu, " ")
     .trim()
     .toLowerCase();
-  const own = article.unit.replace(/^(?:art\.?|artikel|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
+  const own = article.unit.replace(/^(?:artikel|art\.?|§)\s*/iu, "").replace(/\s+/gu, " ").trim().toLowerCase();
   return own === wanted;
 }
 
@@ -144,6 +150,32 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     const reading = readPisrs(await get(address, "text/html"), address, card, version.name);
     const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
     return { country: "SI", url: address, status: reading.status, ...(reading.title ? { title: reading.title } : {}), ...(reading.version ? { version: reading.version } : {}), articles };
+  }
+
+  // Georgia: Matsne. The act's page (…/ka/document/view/{id}); with `date` the consolidated publication of that day or the
+  // last one before it (the sidebar lists them), else the publication in the address or the newest.
+  if (/^matsne\.gov\.ge$/u.test(host)) {
+    const id = /\/document\/view\/(\d+)/u.exec(url.pathname)?.[1];
+    const language = /^\/en\//u.test(url.pathname) ? "en" : "ka";
+    if (!id) throw new Error("NATIONAL_LAW_GE_DOCUMENT_REQUIRED");
+    const page = async (publication?: string): Promise<string> => {
+      const reply = await fetchImpl(`https://matsne.gov.ge/${language}/document/view/${id}${publication ? `?publication=${publication}` : ""}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(60_000) });
+      if (!reply.ok) throw new Error(`NATIONAL_LAW_SOURCE_${reply.status}`);
+      return new TextDecoder().decode(await reply.arrayBuffer());
+    };
+    let html = await page(url.searchParams.get("publication") ?? undefined);
+    const versions = matsneVersions(html);
+    let version = versions.find((item) => item.publication === url.searchParams.get("publication")) ?? versions[0];
+    if (request.date) {
+      const chosen = versions.filter((item) => item.date <= request.date!).sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!chosen) return { country: "GE", url: url.href, status: "Matsne: brak publikacji skonsolidowanej na ten dzień", articles: [] };
+      if (chosen.publication !== version?.publication) html = await page(chosen.publication);
+      version = chosen;
+    }
+    const address = `https://matsne.gov.ge/${language}/document/view/${id}${version ? `?publication=${version.publication}` : ""}`;
+    const reading = readMatsne(html, address, version);
+    const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
+    return { country: "GE", url: address, status: reading.status, ...(reading.version ? { version: reading.version } : {}), articles };
   }
 
   // Kosovo: Gazeta Zyrtare, the act by ActID: its text (ActDocumentDetail) and its status and amendments (ActDetail).

@@ -479,6 +479,60 @@ export function readCanonLaw(html: string, source: string): NationalReading {
 }
 
 /**
+ * Georgia, Matsne (Legislative Herald of Georgia): …/{ka|en}/document/view/{id}?publication={n}. The Georgian text
+ * is the official one (English: translation). The sidebar lists the consolidated publications with their dates;
+ * an article opens with a bold "მუხლი N." (ka) or "Article N –" (en).
+ */
+export function matsneVersions(html: string): Array<{ publication: string; date: string }> {
+  return [...html.matchAll(/href="\/(?:ka|en)\/document\/view\/\d+\?publication=(\d+)"\s*class="[^"]*list-group-item">\s*(\d{2})\/(\d{2})\/(\d{4})/gu)]
+    .map(([, publication, day, month, year]) => ({ publication: publication!, date: `${year}-${month}-${day}` }));
+}
+
+export function readMatsne(html: string, source: string, version?: { publication: string; date: string }): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, attributes, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/giu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^(?:მუხლი|Article)\s+(\d+[¹²³⁴⁵⁶⁷⁸⁹⁰]*)\s*[.–-]/u.exec(text);
+    // Georgian pages mark the heading with p.muxlixml, the English ones with bold.
+    if (head && (/class="muxlixml"/u.test(attributes!) || /<b\b/iu.test(inner!))) {
+      articles.push({ unit: head[1]!, heading: text, text, amendments: [] });
+      open = true;
+    } else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  const georgian = /\/ka\//u.test(source) || /მუხლი/u.test(html);
+  return {
+    country: "GE",
+    source,
+    articles,
+    version: version ? `publikacja skonsolidowana z ${version.date} (publication=${version.publication})` : "wersja z adresu",
+    status: georgian ? "tekst urzędowy (Matsne, wersja gruzińska)" : "tłumaczenie angielskie Matsne — wiąże tekst gruziński"
+  };
+}
+
+/**
+ * Serbia, Montenegro, Bosnia and Herzegovina: Paragraf Lex (paragraf.rs, paragraf.me, paragraf.ba), consolidated
+ * texts kept by a publisher — unofficial, for finding the article; the official gazettes need JavaScript or refuse
+ * automated clients. p.clan "Član N" opens an article; a title paragraph (…naslov…) ends it.
+ */
+export function readParagraf(html: string, source: string, country: string): NationalReading {
+  const articles: NationalArticle[] = [];
+  let open = false;
+  for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p class="([^"]*)">([\s\S]*?)<\/p>/gu)) {
+    const text = plainText(inner!).trim();
+    if (!text) continue;
+    const head = /^Član\s+(\d+[a-z]?)\.?$/u.exec(text);
+    if (cls === "clan" && head) {
+      articles.push({ unit: head[1]!, heading: text, text, amendments: [] });
+      open = true;
+    } else if (cls === "clan" || /naslov/u.test(cls!)) open = false;
+    else if (open) articles.at(-1)!.text += `\n${text}`;
+  }
+  return { country, source, articles, version: "tekst jednolity wydawcy (Paragraf Lex)", status: "tekst nieurzędowy (Paragraf Lex) — tylko do odnalezienia przepisu; brzmienie potwierdź w dzienniku urzędowym" };
+}
+
+/**
  * Sweden, Riksdagen open data (no key): data.riksdagen.se/dokument/sfs-{year}-{number}.text is the
  * consolidated text from Regeringskansliet/Lagrummet ("Ändrad: t.o.m. SFS …"). A section opens
  * with "N §" (or "N a §"); chapters ("N kap.") restart the numbering in some acts, so the unit is
