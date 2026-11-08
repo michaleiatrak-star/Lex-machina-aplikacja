@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { buildLegiIndex, legiLookup } from "../src/eli/fr-legi.js";
+import { buildLegiIndex, legiLookup, parseLegiArticle } from "../src/eli/fr-legi.js";
 import { readNationalLaw } from "../src/eli/national-law.js";
 
 const archive = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures/eli-readers/fr-legi-mini.tar.gz");
@@ -53,5 +53,15 @@ describe("France: local index of the LEGI dump", () => {
     } finally {
       delete process.env.LEX_LEGI_INDEX_DIR;
     }
+  });
+
+  it("amending acts written as participles (MODIFIE) are kept, citations are not", () => {
+    const xml = `<ARTICLE><META><META_COMMUN><ID>LEGIARTI000032041571</ID></META_COMMUN><META_SPEC><META_ARTICLE><NUM>1240</NUM><ETAT>VIGUEUR</ETAT><DATE_DEBUT>2016-10-01</DATE_DEBUT><DATE_FIN>2999-01-01</DATE_FIN></META_ARTICLE></META_SPEC></META>
+<CONTEXTE><TEXTE cid="LEGITEXT000006070721"><TITRE_TXT c_titre_court="Code civil">Code civil</TITRE_TXT></TEXTE></CONTEXTE>
+<BLOC_TEXTUEL><CONTENU><p>Tout fait quelconque de l'homme…</p></CONTENU></BLOC_TEXTUEL>
+<LIENS><LIEN sens="cible" typelien="CITATION">Loi du 29 juillet 1881 - art. 44 (VD)</LIEN><LIEN sens="cible" typelien="MODIFIE">Ordonnance n°2016-131 du 10 février 2016 - art. 2</LIEN></LIENS></ARTICLE>`;
+    const version = parseLegiArticle(xml)!;
+    expect(version.links).toEqual(["MODIFIE: Ordonnance n°2016-131 du 10 février 2016 - art. 2"]);
+    expect(version.short).toBe("Code civil");
   });
 });

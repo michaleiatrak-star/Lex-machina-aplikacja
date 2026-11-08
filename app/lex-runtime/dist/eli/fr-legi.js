@@ -12,7 +12,8 @@ import { createGunzip } from "node:zlib";
 import { plainText } from "./readers.js";
 export const LEGI_DUMP_INDEX = "https://echanges.dila.gouv.fr/OPENDATA/LEGI/";
 const tag = (xml, name) => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, "u").exec(xml)?.[1]?.trim() ?? "";
-const CHANGE_LINKS = /^(?:CREATION|MODIFICATION|ABROGATION|ABROGE|TRANSFERT|CODIFICATION|DEPLACEMENT|ANNULATION|DISJONCTION|PERIME|RATIFICATION)$/u;
+// LEGI writes the type as a participle ("MODIFIE": Ordonnance n°2016-131 at Code civil art. 1240) or a noun.
+const CHANGE_LINKS = /^(?:CREE|CREATION|MODIFIE|MODIFICATION|ABROGE|ABROGATION|TRANSFERE|TRANSFERT|CODIFIE|CODIFICATION|DEPLACE|DEPLACEMENT|ANNULE|ANNULATION|DISJOINT|DISJONCTION|PERIME|RATIFIE|RATIFICATION)$/u;
 /** One LEGIARTI file: the version of the article and the code it belongs to. */
 export function parseLegiArticle(xml) {
     const id = tag(xml, "ID");
@@ -97,6 +98,7 @@ export async function buildLegiIndex(archive, dir = defaultLegiIndexDir(), optio
     const pending = new Map();
     const meta = new Map();
     const articles = {};
+    const canonical = new Map();
     let held = 0;
     const flush = async () => {
         for (const [cid, lines] of pending)
@@ -112,13 +114,23 @@ export async function buildLegiIndex(archive, dir = defaultLegiIndexDir(), optio
             options.onProgress?.(files);
         if (!version?.cid)
             return;
-        const { cid, title, short, ...own } = version;
-        if (!meta.has(cid))
-            meta.set(cid, { title, short });
+        const { cid: cut, title, short, ...own } = version;
+        // A string cut out of the file by a regex keeps the whole file in memory (V8 sliced
+        // strings): the code's id is kept once as a copy, and every map points to that copy.
+        let cid = canonical.get(cut);
+        if (!cid) {
+            cid = cut.split("").join("");
+            canonical.set(cid, cid);
+            meta.set(cid, { title: title.split("").join(""), short: short.split("").join("") });
+        }
         const line = `${JSON.stringify(own)}\n`;
-        pending.set(cid, [...(pending.get(cid) ?? []), line]);
+        const lines = pending.get(cid);
+        if (lines)
+            lines.push(line);
+        else
+            pending.set(cid, [line]);
         held += line.length;
-        articles[own.id] = cid;
+        articles[own.id.split("").join("")] = cid;
         if (held > 32 * 1024 * 1024)
             await flush();
     });
