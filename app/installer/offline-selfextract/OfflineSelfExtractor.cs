@@ -25,12 +25,32 @@ internal static class OfflineSelfExtractor
         try
         {
             var self = Assembly.GetExecutingAssembly().Location;
-            var payloadZip = Path.Combine(workRoot, "payload.zip");
-            ExtractAndVerifyPayload(self, payloadZip);
-
             var packageRoot = Path.Combine(workRoot, "package");
-            Directory.CreateDirectory(packageRoot);
-            ZipFile.ExtractToDirectory(payloadZip, packageRoot);
+
+            // Stage 1 of 3: extraction, with its own progress bar (copy, SHA-256 check, unpacking).
+            Exception failure = null;
+            if (silent)
+            {
+                Extract(self, workRoot, packageRoot, null);
+            }
+            else
+            {
+                Application.EnableVisualStyles();
+                using (var form = new ExtractionForm())
+                {
+                    var worker = new System.Threading.Thread(() =>
+                    {
+                        try { Extract(self, workRoot, packageRoot, form.Report); }
+                        catch (Exception ex) { failure = ex; }
+                        finally { form.Finish(); }
+                    });
+                    worker.IsBackground = true;
+                    form.Shown += (sender, e) => worker.Start();
+                    Application.Run(form);
+                    worker.Join();
+                }
+                if (failure != null) throw failure;
+            }
 
             var installer = Path.Combine(packageRoot, InstallerName);
             var runtime = Path.Combine(packageRoot, RuntimeName);
@@ -77,6 +97,51 @@ internal static class OfflineSelfExtractor
         }
     }
 
+    // Shares of the extraction bar: copying the payload out of this file, checking its SHA-256, unpacking.
+    private const double CopyShare = 0.40;
+    private const double HashShare = 0.15;
+
+    private static void Extract(string self, string workRoot, string packageRoot, Action<string, double> report)
+    {
+        var payloadZip = Path.Combine(workRoot, "payload.zip");
+        ExtractAndVerifyPayload(self, payloadZip, report);
+        Directory.CreateDirectory(packageRoot);
+        Unpack(payloadZip, packageRoot, report);
+        try { File.Delete(payloadZip); } catch { }
+        if (report != null) report("Wyodrębnianie zakończone", 1.0);
+    }
+
+    private static void Unpack(string payloadZip, string packageRoot, Action<string, double> report)
+    {
+        var root = Path.GetFullPath(packageRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        using (var zip = ZipFile.OpenRead(payloadZip))
+        {
+            long total = zip.Entries.Sum(e => e.Length);
+            long done = 0;
+            var buffer = new byte[4 * 1024 * 1024];
+            foreach (var entry in zip.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+                var target = Path.GetFullPath(Path.Combine(packageRoot, entry.FullName));
+                if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("OFFLINE_WRAPPER_ENTRY_UNSAFE:" + entry.FullName);
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                using (var input = entry.Open())
+                using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    int read;
+                    while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        output.Write(buffer, 0, read);
+                        done += read;
+                        if (report != null && total > 0)
+                            report("Rozpakowywanie składników instalatora…", CopyShare + HashShare + (1 - CopyShare - HashShare) * done / total);
+                    }
+                }
+            }
+        }
+    }
+
     private static long FindFooterStart(FileStream source)
     {
         var magic = Encoding.ASCII.GetBytes(FooterMagic);
@@ -116,7 +181,7 @@ internal static class OfflineSelfExtractor
         return -1;
     }
 
-    private static void ExtractAndVerifyPayload(string selfPath, string destination)
+    private static void ExtractAndVerifyPayload(string selfPath, string destination, Action<string, double> report)
     {
         long payloadOffset;
         long payloadLength;
@@ -160,6 +225,8 @@ internal static class OfflineSelfExtractor
                         throw new EndOfStreamException("OFFLINE_WRAPPER_PAYLOAD_TRUNCATED");
                     output.Write(buffer, 0, read);
                     remaining -= read;
+                    if (report != null)
+                        report("Wyodrębnianie pakietu instalacyjnego…", CopyShare * (payloadLength - remaining) / payloadLength);
                 }
             }
         }
@@ -167,7 +234,20 @@ internal static class OfflineSelfExtractor
         byte[] actualHash;
         using (var sha = SHA256.Create())
         using (var payload = File.OpenRead(destination))
-            actualHash = sha.ComputeHash(payload);
+        {
+            var buffer = new byte[4 * 1024 * 1024];
+            long hashed = 0;
+            int read;
+            while ((read = payload.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                sha.TransformBlock(buffer, 0, read, null, 0);
+                hashed += read;
+                if (report != null)
+                    report("Sprawdzanie sumy kontrolnej SHA-256…", CopyShare + HashShare * hashed / payloadLength);
+            }
+            sha.TransformFinalBlock(new byte[0], 0, 0);
+            actualHash = sha.Hash;
+        }
 
         if (!actualHash.SequenceEqual(expectedHash))
             throw new InvalidDataException("OFFLINE_WRAPPER_PAYLOAD_HASH_MISMATCH");
@@ -209,5 +289,62 @@ internal static class OfflineSelfExtractor
         result.Append('\\', backslashes * 2);
         result.Append('"');
         return result.ToString();
+    }
+}
+
+// Stage 1 of 3 window: one bar filled by the bytes copied, checked and unpacked.
+internal sealed class ExtractionForm : Form
+{
+    private readonly Label stage = new Label();
+    private readonly Label detail = new Label();
+    private readonly ProgressBar bar = new ProgressBar();
+    private readonly Label percent = new Label();
+    private int lastValue = -1;
+    private bool finished;
+
+    public ExtractionForm()
+    {
+        Text = "Instalacja Lex Machina";
+        ClientSize = new System.Drawing.Size(540, 190);
+        StartPosition = FormStartPosition.CenterScreen;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        ControlBox = false;
+        stage.SetBounds(24, 18, 490, 26);
+        stage.Font = new System.Drawing.Font("Segoe UI", 12, System.Drawing.FontStyle.Bold);
+        stage.Text = "Etap 1 z 3: wyodrębnianie";
+        detail.SetBounds(24, 50, 490, 24);
+        detail.Font = new System.Drawing.Font("Segoe UI", 10);
+        detail.Text = "Wyodrębnianie pakietu instalacyjnego…";
+        bar.SetBounds(24, 84, 490, 22);
+        bar.Minimum = 0;
+        bar.Maximum = 1000;
+        bar.Style = ProgressBarStyle.Continuous;
+        percent.SetBounds(24, 116, 490, 22);
+        percent.Text = "0%";
+        var hint = new Label();
+        hint.SetBounds(24, 144, 490, 36);
+        hint.Text = "Następnie: etap 2 z 3 — przygotowanie, etap 3 z 3 — właściwa instalacja.";
+        Controls.AddRange(new Control[] { stage, detail, bar, percent, hint });
+        FormClosing += (sender, e) => { if (!finished) e.Cancel = true; };
+    }
+
+    public void Report(string text, double fraction)
+    {
+        var value = (int)Math.Max(0, Math.Min(1000, Math.Round(fraction * 1000)));
+        if (value == lastValue) return;
+        lastValue = value;
+        if (!IsHandleCreated) return;
+        BeginInvoke((Action)(() =>
+        {
+            detail.Text = text;
+            bar.Value = value;
+            percent.Text = (value / 10) + "%";
+        }));
+    }
+
+    public void Finish()
+    {
+        if (!IsHandleCreated) { finished = true; return; }
+        BeginInvoke((Action)(() => { finished = true; Close(); }));
     }
 }

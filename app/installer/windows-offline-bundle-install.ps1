@@ -5,7 +5,9 @@
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "bootstrap-progress.ps1")
-Set-BootstrapProgress "Sprawdzanie pełnego pakietu instalacyjnego…"
+# Shares of the stage-3 bar (percent): bundle check 0-10, unpacking 10-45, file check 45-60,
+# copying 60-88, Windows components 88-92, readiness test 92-100.
+Set-StageProgress "Sprawdzanie pełnego pakietu instalacyjnego…" 0 10 0
 
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 $bundle = (Resolve-Path -LiteralPath $BundlePath).Path
@@ -207,7 +209,22 @@ if ([int64]$receipt.bytes -ne (Get-Item -LiteralPath $bundle).Length) {
   throw "OFFLINE_BUNDLE_SIZE_MISMATCH"
 }
 
-$actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundle).Hash.ToLowerInvariant()
+# SHA-256 of the bundle read in blocks, so the bar follows the bytes checked.
+$bundleStream = [IO.File]::OpenRead($bundle)
+try {
+  $bundleSha = [Security.Cryptography.SHA256]::Create()
+  $block = New-Object byte[] (4MB)
+  $checked = 0L
+  while (($read = $bundleStream.Read($block, 0, $block.Length)) -gt 0) {
+    [void]$bundleSha.TransformBlock($block, 0, $read, $null, 0)
+    $checked += $read
+    Set-StageProgress "Sprawdzanie pełnego pakietu instalacyjnego…" 0 10 ($checked / [double]$bundleStream.Length)
+  }
+  [void]$bundleSha.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+  $actualHash = ([BitConverter]::ToString($bundleSha.Hash) -replace '-','').ToLowerInvariant()
+} finally {
+  $bundleStream.Dispose()
+}
 if ($actualHash -ne $receipt.sha256.ToLowerInvariant()) {
   throw "OFFLINE_BUNDLE_HASH_MISMATCH:expected=$($receipt.sha256) actual=$actualHash"
 }
@@ -218,13 +235,13 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 $vcFirewallRule = $null
 
 try {
-  Set-BootstrapProgress "Rozpakowywanie narzędzi z pełnego instalatora…"
+  Set-StageProgress "Rozpakowywanie narzędzi z pełnego instalatora…" 10 45 0
   Write-Host "Extracting verified offline runtime bundle"
   $extractor = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "extract-offline-zip.ps1"
   if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) {
     throw "OFFLINE_BUNDLE_EXTRACTOR_MISSING"
   }
-  & $extractor -ArchivePath $bundle -DestinationPath $stage
+  & $extractor -ArchivePath $bundle -DestinationPath $stage -ProgressText "Rozpakowywanie narzędzi z pełnego instalatora…" -ProgressFrom 10 -ProgressTo 45
 
   $lockPath = Join-Path $stage "component-lock.json"
   if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
@@ -238,10 +255,14 @@ try {
     throw "OFFLINE_BUNDLE_RUNTIME_NETWORK_POLICY_INVALID"
   }
 
-  Set-BootstrapProgress "Sprawdzanie przygotowanych plików…"
+  Set-StageProgress "Sprawdzanie przygotowanych plików…" 45 60 0
   Write-Host "Verifying component-lock before installation"
   $sha256 = [Security.Cryptography.SHA256]::Create()
-  foreach ($entry in $lock.files) {
+  $lockFiles = @($lock.files)
+  $lockIndex = 0
+  foreach ($entry in $lockFiles) {
+    $lockIndex++
+    Set-StageProgress "Sprawdzanie przygotowanych plików…" 45 60 ($lockIndex / [double]$lockFiles.Count)
     # \\?\ form: a path over 260 characters is still found and hashed.
     $path = '\\?\' + (Join-Path $stage ($entry.path -replace '/','\'))
     if (-not [IO.File]::Exists($path)) {
@@ -258,12 +279,34 @@ try {
     }
   }
 
-  Set-BootstrapProgress "Przygotowanie narzędzi aplikacji…"
+  Set-StageProgress "Instalowanie narzędzi aplikacji…" 60 88 0
   Write-Host "Installing verified private runtime into $runtime"
-  $null = robocopy.exe $stage $runtime /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
-  $robocopyCode = $LASTEXITCODE
-  if ($robocopyCode -gt 7) {
-    throw "OFFLINE_BUNDLE_COPY_FAILED:$robocopyCode"
+  # One robocopy per top-level folder (python, node, models, app…), in order of size: the bar moves with
+  # the bytes installed; robocopy keeps its retries and merge semantics.
+  $parts = @(Get-ChildItem -LiteralPath $stage -Force | ForEach-Object {
+    $bytes = if ($_.PSIsContainer) {
+      $sum = 0L
+      foreach ($file in [IO.Directory]::EnumerateFiles('\\?\' + $_.FullName, '*', [IO.SearchOption]::AllDirectories)) { $sum += ([IO.FileInfo]::new($file)).Length }
+      $sum
+    } else { $_.Length }
+    [pscustomobject]@{ Item = $_; Bytes = [double][Math]::Max(1, $bytes) }
+  })
+  $allBytes = ($parts | Measure-Object -Property Bytes -Sum).Sum
+  $installed = 0.0
+  foreach ($part in ($parts | Sort-Object Bytes -Descending)) {
+    $name = $part.Item.Name
+    Set-StageProgress ("Instalowanie narzędzi aplikacji: " + $name + "…") 60 88 ($installed / $allBytes)
+    if ($part.Item.PSIsContainer) {
+      $null = robocopy.exe $part.Item.FullName (Join-Path $runtime $name) /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
+    } else {
+      $null = robocopy.exe $stage $runtime $name /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
+    }
+    $robocopyCode = $LASTEXITCODE
+    if ($robocopyCode -gt 7) {
+      throw "OFFLINE_BUNDLE_COPY_FAILED:${robocopyCode}:$name"
+    }
+    $installed += $part.Bytes
+    Set-StageProgress ("Instalowanie narzędzi aplikacji: " + $name + "…") 60 88 ($installed / $allBytes)
   }
 
   $manifestPath = Join-Path $runtime "release-source.json"
@@ -306,7 +349,7 @@ try {
       Write-Host "Acceptance firewall: outbound blocked for bundled VC++ installer"
     }
 
-    Set-BootstrapProgress "Przygotowanie składników systemu Windows…"
+    Set-StageProgress "Instalowanie składników systemu Windows…" 88 92 0
   Write-Host "Installing verified bundled Visual C++ runtime"
     $vcExit = Install-VcRuntime $vcInstaller ([Version]$vc.version) (Join-Path $env:LOCALAPPDATA "LexMachina\logs") "OFFLINE_BUNDLE_VC_RUNTIME"
     Write-Host "Bundled Visual C++ runtime fallback exercised; exit=$vcExit"
@@ -320,7 +363,7 @@ try {
     Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
   }
 
-  Set-BootstrapProgress "Sprawdzanie gotowości aplikacji…"
+  Set-StageProgress "Sprawdzanie gotowości aplikacji…" 92 100 0
   $selfTest = Join-Path $runtime "bootstrap\windows-payload-selftest.ps1"
   if (-not (Test-Path -LiteralPath $selfTest -PathType Leaf)) {
     throw "OFFLINE_BUNDLE_SELFTEST_SCRIPT_MISSING"
