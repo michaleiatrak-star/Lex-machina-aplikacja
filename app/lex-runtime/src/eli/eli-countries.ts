@@ -256,7 +256,7 @@ export const ELI_COUNTRIES: readonly EliCountry[] = [
     template: "/eli/{jurisdiction}/{type}/{year}/{month}/{day}/{natural_identifier}/{level…}/{version}/{point in time}/{language}/{format} (wzorzec ogólny; adresy: lovdata.no/eli)",
     consolidation: "wersja-z-data",
     api: { url: "https://api.lovdata.no", kind: "REST", auth: "brak", probe: "/v1/publicData/list", checked: "405 (ścieżka do potwierdzenia)" },
-    text: { reading: "DO-ZBADANIA", note: "Lovdata: lovdata.no i api.lovdata.no odpowiadają 405 z sieci aplikacji (dane otwarte: gjeldende lover jako archiwum); do sprawdzenia z sieci użytkownika" },
+    text: { reading: "BLOKADA", note: "Lovdata (lovdata.no i api.lovdata.no, dane otwarte NLOD): z sieci aplikacji 405 „Request stopped by Varnish IPS” dla każdego żądania (2026-11-09); kopia w Internet Archive nieosiągalna; N-Lex nie obejmuje Norwegii; data.stortinget.no odpowiada (projekty i uchwalone ustawy — nie tekst obowiązujący). Czytnik po odczycie struktury Lovdata z sieci użytkownika" },
     source: REGISTER("norway"),
     level: "BRAK-SZABLONU",
     checked: "405 (strona startowa ELI)"
