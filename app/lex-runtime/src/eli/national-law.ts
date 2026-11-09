@@ -2,6 +2,8 @@
 // goes to that country's reader; only the official hosts below are fetched (no other address
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
+import { cutUsSection, readUsStateSection, usJurisdictionOfHost } from "./us-states.js";
+import { fetchWithIntermediates, HOSTS_WITHOUT_INTERMEDIATE } from "./us-tls.js";
 import { BLOCKED_JURISDICTION_CODE, isBlockedCountry, isBlockedHost } from "../blocked-jurisdictions.js";
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
@@ -77,7 +79,7 @@ const CANON_HOSTS = /^(?:www\.)?vatican\.va$/u;
 /** The country whose official source the address is, or null for a host this module does not read. */
 export function nationalLawCountry(host: string): string | null {
   const name = host.toLowerCase();
-  return HOST_COUNTRIES.find(([pattern]) => pattern.test(name))?.[1] ?? READERS.find((item) => item.hosts.test(name))?.country ?? PDF_HOSTS.find((item) => item.hosts.test(name))?.country ?? null;
+  return HOST_COUNTRIES.find(([pattern]) => pattern.test(name))?.[1] ?? READERS.find((item) => item.hosts.test(name))?.country ?? PDF_HOSTS.find((item) => item.hosts.test(name))?.country ?? (usJurisdictionOfHost(name) ? "US" : null);
 }
 
 export type NationalLawAnswer = {
@@ -438,8 +440,12 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
 
   const reader = READERS.find((item) => item.hosts.test(host));
   const pdf = PDF_HOSTS.find((item) => item.hosts.test(host));
-  if (!reader && !pdf) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
-  const ask = () => fetchImpl(reader?.address ? reader.address(url) : url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
+  // US states, DC and territories: each one's own code (us-states.ts).
+  const state = reader || pdf ? undefined : usJurisdictionOfHost(host);
+  if (!reader && !pdf && !state) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
+  // Connecticut and Illinois send no issuing CA: the public one is supplied (us-tls.ts).
+  const fetchSource: NationalFetch = HOSTS_WITHOUT_INTERMEDIATE.test(host) && fetchImpl === (fetch as unknown as NationalFetch) ? fetchWithIntermediates : fetchImpl;
+  const ask = () => fetchSource(reader?.address ? reader.address(url) : url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
   let response = await ask();
   // A busy portal (gesetze-im-internet.de and narodne-novine.nn.hr answered 503 once and 200 right after,
   // vaticanstate.va 522 through Cloudflare): one retry.
@@ -453,6 +459,11 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
 
   if (pdf || /pdf/u.test(type) || (bytes[0] === 0x25 && bytes[1] === 0x50)) {
     const reading = await readLegislationPdf(bytes);
+    if (state) {
+      if (reading.kind === "SKAN") return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: "PDF bez warstwy tekstowej", articles: [], note: reading.note };
+      const articles = cutUsSection(reading.text.split("\n"), request.unit);
+      return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: `tekst z urzędowego PDF; ${state.note}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w tekście PDF" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
+    }
     const country = pdf?.country ?? reader!.country;
     if (reading.kind === "SKAN") return { country, url: url.href, status: "PDF bez warstwy tekstowej", articles: [], note: reading.note };
     const text = reading.text;
@@ -492,6 +503,13 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     decoder = new TextDecoder("utf-8");
   }
   const body = decoder.decode(bytes);
+  if (state) {
+    // Utah: the section page loads its text from a dated file named in the page (C76-5-S203_2026050620260506.html).
+    const dated = /^le\.utah\.gov$/u.test(host) ? /C[\w-]+_\d{16}\.html/u.exec(body)?.[0] : undefined;
+    if (dated && !url.pathname.endsWith(dated)) return readNationalLaw({ ...request, url: new URL(dated, url).href }, fetchImpl);
+    const articles = readUsStateSection(body, request.unit);
+    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono na stronie" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
+  }
   const reading = reader!.read(body, url.href);
   // RwandaLII: some acts (the Constitution) have no text on the page, only the source PDF.
   if (reader!.country === "RW" && !reading.articles.length && /\/source\.pdf"/u.test(body) && !/\/source\.pdf$/u.test(url.pathname)) {
