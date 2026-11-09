@@ -2933,6 +2933,33 @@ export function refreshSkillsFromChannel(
   );
 }
 
+export type SkillAutoUpdateStateResponse = {
+  enabled: boolean;
+  running: boolean;
+  intervalHours: number;
+  lastResult: {
+    at: string;
+    outcome: "UP_TO_DATE" | "INSTALLED" | "BLOCKED" | "FAILED";
+    source: "channel" | "release";
+    channel?: SkillChannel;
+    target?: string;
+    detail?: string;
+  } | null;
+  pendingActivation: boolean;
+  nextCheckAt: string | null;
+};
+
+export function getSkillAutoUpdate(): Promise<SkillAutoUpdateStateResponse> {
+  return json<SkillAutoUpdateStateResponse>("/api/skills/auto-update");
+}
+
+export function setSkillAutoUpdate(enabled: boolean): Promise<SkillAutoUpdateStateResponse> {
+  return json<SkillAutoUpdateStateResponse>("/api/skills/auto-update", {
+    method: "PUT",
+    body: JSON.stringify({ enabled })
+  });
+}
+
 export function applySkillUpdate():
   Promise<SkillUpdateApplyResponse> {
   return json<SkillUpdateApplyResponse>(

@@ -1,3 +1,4 @@
+import { SkillAutoUpdater } from "../skill-auto-update.js";
 import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
@@ -77,7 +78,8 @@ import {
 import {
   MaintenanceService,
   commitSkillOverlayRuntimeHealth,
-  recoverSkillOverlayForStartup
+  recoverSkillOverlayForStartup,
+  skillAutoUpdateSettingsPath
 } from "../maintenance-service.js";
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
@@ -572,6 +574,8 @@ export async function startLocalServer(options?: {
     new MaintenanceService(
       updateDiscovery
     );
+  const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
+  if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off") skillAutoUpdate.start();
   const localModels =
     new LocalModelRuntime();
   const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
@@ -961,6 +965,7 @@ export async function startLocalServer(options?: {
       authService,
       localModels,
       maintenance,
+      skillAutoUpdate,
       anomalyJournal,
       transcriptionModel,
       ocrAcceleration,
@@ -1041,6 +1046,7 @@ export async function startLocalServer(options?: {
         gazetteerRecognizer.close();
         personMorphology.close();
         credentials.close();
+        skillAutoUpdate.stop();
         serverMode.close();
         supportService.close();
         unsubscribeGuideRevocation();
@@ -1101,6 +1107,7 @@ export async function startLocalServer(options?: {
               gazetteerRecognizer.close();
               personMorphology.close();
               credentials.close();
+              skillAutoUpdate.stop();
               serverMode.close();
               supportService.close();
               unsubscribeGuideRevocation();

@@ -232,7 +232,8 @@
   padding: 0;
 }
 
-.core-law-auto {
+.core-law-auto,
+.maintenance-auto-update {
   display: flex;
   align-items: center;
   gap: 6px;

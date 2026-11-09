@@ -52,7 +52,7 @@ function sendMaintenanceError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMaintenanceRoutes(app, dependencies) {
-    const { authService, localModels, maintenance, anomalyJournal, transcriptionModel, ocrAcceleration, transcriptionAcceleration } = dependencies;
+    const { authService, localModels, maintenance, skillAutoUpdate, anomalyJournal, transcriptionModel, ocrAcceleration, transcriptionAcceleration } = dependencies;
     // Times of the chat turns on this computer by path and stage (chat-turn-journal.ts): no text.
     app.get("/api/diagnostics/chat-turns", (req, res) => {
         if (!requireAdmin(req, res, authService))
@@ -645,7 +645,10 @@ export function registerMaintenanceRoutes(app, dependencies) {
             return;
         }
         try {
-            res.json(await maintenance.refreshSkillsFromChannel(channel));
+            const work = () => maintenance.refreshSkillsFromChannel(channel);
+            const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+            skillAutoUpdate?.markInstalledManually();
+            res.json(result);
         }
         catch (error) {
             sendMaintenanceError(res, error);
@@ -655,11 +658,48 @@ export function registerMaintenanceRoutes(app, dependencies) {
         if (!requireAdmin(req, res, authService))
             return;
         try {
-            res.json(await maintenance.applySkillUpdate());
+            const work = () => maintenance.applySkillUpdate();
+            const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+            skillAutoUpdate?.markInstalledManually();
+            res.json(result);
         }
         catch (error) {
             sendMaintenanceError(res, error);
         }
+    });
+    // Automatyczna aktualizacja skilli: stan, włączenie/wyłączenie, sprawdzenie teraz.
+    app.get("/api/skills/auto-update", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        if (!skillAutoUpdate) {
+            res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+            return;
+        }
+        res.json(skillAutoUpdate.state());
+    });
+    app.put("/api/skills/auto-update", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        if (!skillAutoUpdate) {
+            res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+            return;
+        }
+        const enabled = req.body?.enabled;
+        if (typeof enabled !== "boolean") {
+            res.status(400).json({ error: "SKILL_AUTO_UPDATE_ENABLED_INVALID" });
+            return;
+        }
+        res.json(skillAutoUpdate.setEnabled(enabled));
+    });
+    app.post("/api/skills/auto-update/run", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        if (!skillAutoUpdate) {
+            res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+            return;
+        }
+        await skillAutoUpdate.runOnce();
+        res.json(skillAutoUpdate.state());
     });
     app.get("/api/update/progress", (req, res) => {
         if (!requireAdmin(req, res, authService))

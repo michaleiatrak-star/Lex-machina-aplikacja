@@ -1,3 +1,4 @@
+import { SkillAutoUpdater } from "../skill-auto-update.js";
 import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
@@ -54,7 +55,7 @@ import { applicationUpdateDiscovery } from "../update-discovery.js";
 import { applyAccountSkills } from "../account-skills.js";
 import { CoreLawIndex } from "../core-law-index.js";
 import { LocalPersonMorphology } from "../privacy/person-morphology.js";
-import { MaintenanceService, commitSkillOverlayRuntimeHealth, recoverSkillOverlayForStartup } from "../maintenance-service.js";
+import { MaintenanceService, commitSkillOverlayRuntimeHealth, recoverSkillOverlayForStartup, skillAutoUpdateSettingsPath } from "../maintenance-service.js";
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
@@ -316,6 +317,9 @@ export async function startLocalServer(options) {
     const sensitiveDownloadTickets = new SensitiveDownloadTicketManager(authService);
     const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
+    const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
+    if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off")
+        skillAutoUpdate.start();
     const localModels = new LocalModelRuntime();
     const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
     const ocrAcceleration = new OcrAccelerationManager(path.join(localModels.rootDir, "ocr-acceleration"));
@@ -571,6 +575,7 @@ export async function startLocalServer(options) {
         authService,
         localModels,
         maintenance,
+        skillAutoUpdate,
         anomalyJournal,
         transcriptionModel,
         ocrAcceleration,
@@ -636,6 +641,7 @@ export async function startLocalServer(options) {
                 gazetteerRecognizer.close();
                 personMorphology.close();
                 credentials.close();
+                skillAutoUpdate.stop();
                 serverMode.close();
                 supportService.close();
                 unsubscribeGuideRevocation();
@@ -687,6 +693,7 @@ export async function startLocalServer(options) {
                         gazetteerRecognizer.close();
                         personMorphology.close();
                         credentials.close();
+                        skillAutoUpdate.stop();
                         serverMode.close();
                         supportService.close();
                         unsubscribeGuideRevocation();
