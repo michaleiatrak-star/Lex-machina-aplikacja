@@ -4,7 +4,7 @@
 // text layer is read; a scan (no text layer) is not guessed at: it becomes a candidate for OCR
 // and the RAG index, never a verified wording.
 import { LocalPdfTextExtractor } from "../pdf-text-extractor.js";
-const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", sect: "§", deg: "°", ordm: "º", ordf: "ª", ndash: "–", mdash: "—", hellip: "…", laquo: "«", raquo: "»", bdquo: "„", ldquo: "“", rdquo: "”", lsquo: "‘", rsquo: "’", middot: "·", para: "¶" };
 export function plainText(html) {
     return html
         .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/giu, "")
@@ -199,6 +199,485 @@ export function readLatvia(html, source) {
             articles.at(-1).text += `\n${paragraph}`;
     }
     return { country: "LV", source, articles, version: "wersja obowiązująca (likumi.lv)", status: "tekst urzędowy (Latvijas Vēstnesis, likumi.lv)" };
+}
+/**
+ * Turkey, Mevzuat Bilgi Sistemi: the HTML of an act (…/anasayfa/MevzuatFihristDetayIframe?MevzuatTur=1&MevzuatNo=4721&MevzuatTertip=5)
+ * carries the text in force with the amendment notes, as the PDF does. An article opens with
+ * "Madde N -" in bold; a paragraph that is all bold and is not an article or a note is a
+ * heading of a section ("B. Hukukî ilişkilerin kapsamı") and ends the article before it.
+ * "(Değişik|Ek|Mülga …: DD/MM/YYYY-KANUN/MADDE md.)" names the amending law and the date it was adopted.
+ * The provisions of the amending laws printed after the last article are not read.
+ */
+export function readTurkey(html, source) {
+    const articles = [];
+    let open = false;
+    for (const [, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/giu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^(?:Geçici\s+)?Madde\s+(\d+(?:\/[A-Z])?)\s*[-–]\s*/u.exec(text);
+        const outsideBold = inner.replace(/<b\b[^>]*>[\s\S]*?<\/b>/giu, "");
+        const allBold = /<b\b/iu.test(inner) && !plainText(outsideBold).trim();
+        if (head && !/^Geçici/u.test(text)) {
+            // After the last article the page prints provisions of the amending laws with their own
+            // numbering ("Madde 36 - Bu Kanunla değiştirilen …"): a number lower than the last one ends the act.
+            if (articles.length && parseInt(head[1], 10) < parseInt(articles.at(-1).unit, 10))
+                break;
+            articles.push({ unit: head[1], heading: `Madde ${head[1]}`, text, amendments: [] });
+            open = true;
+        }
+        else if (head) {
+            open = false;
+        }
+        else if (allBold && !/^\((?:Değişik|Ek|Mülga)/u.test(text)) {
+            open = false;
+        }
+        else if (open) {
+            articles.at(-1).text += `\n${text}`;
+        }
+    }
+    for (const article of articles) {
+        for (const match of article.text.matchAll(/\(((?:Değişik|Ek|Mülga)[^:()]*):\s*(\d{2})\/(\d{2})\/(\d{4})-(\d+)\/(\d+)\s*md\.\)/gu)) {
+            // The date is the adoption of the amending law, not its entry into force: kept in the act's name.
+            article.amendments.push({ act: `${match[1]}: ${match[4]}-${match[3]}-${match[2]}, Kanun ${match[5]} md. ${match[6]}` });
+        }
+    }
+    return { country: "TR", source, articles, version: "metin yürürlükteki (Mevzuat Bilgi Sistemi, z adnotacjami zmian)", status: "tekst Mevzuat Bilgi Sistemi (Cumhurbaşkanlığı); urzędowy jest tekst w Resmî Gazete" };
+}
+export function slovakVersions(html) {
+    return [...html.matchAll(/<tr class="effectivenessHistoryItem"[^>]*data-vyhlasene="0"[^>]*data-ucinnostod="([\d-]*)"[^>]*data-ucinnostdo="([\d-]*)"[^>]*>([\s\S]*?)<\/tr>/gu)]
+        .filter((match) => match[1])
+        .map(([, from, to, row]) => ({
+        file: /href="(\d{8}\.html)"/u.exec(row)?.[1] ?? `${from.replace(/-/gu, "")}.html`,
+        from: from,
+        ...(to ? { to } : {}),
+        amendments: [...row.matchAll(/<a href="\.\.\/[^"]+">([^<]+)<\/a>/gu)].map((match) => plainText(match[1]))
+    }));
+}
+/** The version in force on the day (YYYY-MM-DD); the newest that has started when no day is given. */
+export function slovakVersionOn(versions, day) {
+    return versions.filter((version) => version.from <= day && (!version.to || version.to >= day)).at(-1) ?? null;
+}
+export function readSlovakia(html, source, version) {
+    const starts = [...html.matchAll(/<div class="paragraf Skupina\s*" id="paragraf-([0-9a-z]+)">/gu)];
+    const articles = starts.map((match, index) => {
+        let body = html.slice(match.index, starts[index + 1]?.index ?? html.length);
+        // A heading of the next part, chapter or section belongs to what follows.
+        const heading = /<div class="(?:cast|hlava|diel|oddiel)(?:Oznacenie|Nadpis)?[\s"]/u.exec(body.slice(1));
+        if (heading)
+            body = body.slice(0, heading.index + 1);
+        return { unit: match[1], heading: `§ ${match[1]}`, text: plainText(body), amendments: version ? version.amendments.map((act) => ({ act, inForce: version.from })) : [] };
+    });
+    return { country: "SK", source, articles, version: version ? `znenie účinné od ${version.from}${version.to ? ` do ${version.to}` : ""}` : "znenie z adresu", status: "tekst Slov-Lex (Ministerstvo spravodlivosti SR, wersja statyczna portalu)" };
+}
+/**
+ * Croatia, Narodne novine (official gazette): narodne-novine.nn.hr/clanci/sluzbeni/{YYYY}_{MM}_{issue}_{id}.html is the
+ * text as published; amendments are separate acts of the gazette (no consolidated text there).
+ * "Članak N." is a p.Clanak; a bold title paragraph (class …fett) begins the next article.
+ */
+export function readCroatia(html, source) {
+    const articles = [];
+    let open = false;
+    for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*class=["']?([\w-]+)[^>]*>([\s\S]*?)<\/p>/giu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^Članak\s+(\d+[a-z]?)\.?$/u.exec(text);
+        if (head) {
+            articles.push({ unit: head[1], heading: `Članak ${head[1]}.`, text, amendments: [] });
+            open = true;
+        }
+        else if (/fett|naslov|glava|dio/iu.test(cls))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    return { country: "HR", source, articles, version: "tekst ogłoszony (Narodne novine); zmiany w osobnych aktach NN", status: "tekst urzędowy (Narodne novine, wydanie urzędowe)" };
+}
+/**
+ * Kosovo, Gazeta Zyrtare: ActDocumentDetail.aspx?ActID={id} is the act's text (lines with <br>), "Neni N" alone on a
+ * line opens an article; ActDetail.aspx?ActID={id} carries the status (repealed: "I shfuqizuar") and
+ * the amending acts ("Ndryshohet/Plotësohet nga …", "Shfuqizuar nga …").
+ */
+export function readKosovo(html, source, detail) {
+    const lines = plainText(html.replace(/\s+/gu, " ").replace(/<br\s*\/?>/giu, "\n")).split("\n").map((line) => line.trim()).filter(Boolean);
+    const articles = [];
+    let open = false;
+    for (const line of lines) {
+        const head = /^(?:Neni|Član|Article)\s+(\d+[a-z]?)$/u.exec(line);
+        if (head) {
+            articles.push({ unit: head[1], heading: line, text: line, amendments: [] });
+            open = true;
+        }
+        else if (/^(?:KAPITULLI|PJESA|POGLAVLJE|DEO|CHAPTER|PART)\b/u.test(line))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${line}`;
+    }
+    let status = "tekst aktu z Gazeta Zyrtare (bez zmian późniejszych)";
+    if (detail) {
+        const info = plainText(detail.replace(/\s+/gu, " ")).replace(/\s+/gu, " ");
+        const changes = [...info.matchAll(/(Ndryshohet\/Plotësohet nga|Shfuqizuar nga)\s+(.+?)\s+Data e publikimit:\s*(\d{2})\.(\d{2})\.(\d{4})/gu)]
+            .map((match) => ({ act: `${match[1]} ${match[2]}`, inForce: `${match[5]}-${match[4]}-${match[3]}` }));
+        for (const article of articles)
+            article.amendments = changes;
+        if (/\bI shfuqizuar\b/u.test(info))
+            status = "AKT UCHYLONY (I shfuqizuar) — tekst historyczny z Gazeta Zyrtare";
+        else if (changes.length)
+            status = "tekst pierwotny z Gazeta Zyrtare; akt zmieniany (lista zmian przy artykułach)";
+    }
+    return { country: "XK", source, articles, version: "tekst ogłoszony", status };
+}
+/**
+ * Slovenia, Uradni list RS archive (issues until 28.2.2026; later ones only in PISRS):
+ * uradni-list.si/glasilo-uradni-list-rs/vsebina/{YYYY}-01-{nr} is the text as published, "N. člen" in div.esegment_h4.
+ */
+export function readSlovenia(html, source) {
+    const articles = [];
+    let open = false;
+    for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<div class="(esegment_[\w]+)">([\s\S]*?)<\/div>/gu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^(\d+[a-z]?)\. člen$/u.exec(text);
+        if (head) {
+            articles.push({ unit: head[1], heading: text, text, amendments: [] });
+            open = true;
+        }
+        else if (/esegment_(?:h[1-3]|c\d)/u.test(cls))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    return { country: "SI", source, articles, version: "tekst ogłoszony (Uradni list RS, archiwum); tekst jednolity tylko w PISRS", status: "tekst urzędowy (Uradni list RS)" };
+}
+export function pisrsCard(json) {
+    const data = JSON.parse(json).data ?? {};
+    const order = (name) => (name === "Osnovni" ? 0 : Number(/NPB\s*(\d+)/u.exec(name)?.[1] ?? -1));
+    const versions = (data.datoteke ?? [])
+        .map((entry) => ({ name: entry.npbVerzija?.naziv ?? "", ...(entry.datoteke?.find((file) => file.tip === "HTML_DOCUMENT")?.id ? { html: entry.datoteke.find((file) => file.tip === "HTML_DOCUMENT").id } : {}) }))
+        .sort((a, b) => order(a.name) - order(b.name));
+    return { title: data.evidencniPodatki?.naslov ?? "", ...(data.evidencniPodatki?.semafor?.naziv ? { state: data.evidencniPodatki.semafor.naziv } : {}), versions };
+}
+export function readPisrs(html, source, card, version) {
+    const articles = [];
+    let open = false;
+    for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p class="([^"]*)">([\s\S]*?)<\/p>/gu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^(\d+[a-z]?)\. člen$/u.exec(text);
+        if (head && /\bclen\b/u.test(cls)) {
+            articles.push({ unit: head[1], heading: text, text, amendments: [] });
+            open = true;
+        }
+        else if (/\b(?:clen|del|poglavje|oddelek|pododdelek|naslov)\b/u.test(cls))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    const legal = version === "Osnovni" ? "tekst ogłoszony (Uradni list RS)" : "tekst jednolity nieurzędowy (NPB, PISRS) — moc prawną ma Uradni list RS";
+    return { country: "SI", source, ...(card?.title ? { title: card.title } : {}), articles, version: `${version ?? "?"}${card?.state ? `; ${card.state}` : ""}`, status: legal };
+}
+/**
+ * Iceland: the Law Collection (althingi.is/lagas) refuses automated clients; lagasafn-xml (althingi-net,
+ * built from the Althingi's own HTML, one folder per edition, e.g. 158a) carries <art nr> with <sen>,
+ * and the amending laws with their date in force in <minister-clause>. Unofficial: the wording is to be
+ * confirmed at althingi.is.
+ */
+export function readIceland(xml, source, edition) {
+    const clause = plainText(/<minister-clause>([\s\S]*?)<\/minister-clause>/u.exec(xml)?.[1]?.replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&amp;/gu, "&") ?? "");
+    const months = { janúar: "01", febrúar: "02", mars: "03", apríl: "04", maí: "05", júní: "06", júlí: "07", ágúst: "08", september: "09", október: "10", nóvember: "11", desember: "12" };
+    const amendments = [...clause.matchAll(/L\.\s*(\d+\/\d{4})\s*\(tók[iu]? gildi (\d{1,2})\.\s*([a-záéíóúýþæö]+)\s+(\d{4})\)/gu)]
+        .map((match) => ({ act: `L. ${match[1]}`, ...(months[match[3]] ? { inForce: `${match[4]}-${months[match[3]]}-${match[2].padStart(2, "0")}` } : {}) }));
+    const articles = [...xml.matchAll(/<art nr="([^"]+)"[^>]*>([\s\S]*?)<\/art>/gu)].map(([, nr, body]) => {
+        const title = plainText(/<nr-title>([\s\S]*?)<\/nr-title>/u.exec(body)?.[1] ?? `${nr}. gr.`);
+        const paragraphs = [...body.matchAll(/<paragraph\b[^>]*>([\s\S]*?)<\/paragraph>/gu)].map((match) => [...match[1].matchAll(/<sen\b[^>]*>([\s\S]*?)<\/sen>/gu)].map((sen) => plainText(sen[1])).join(" "));
+        return { unit: nr, heading: title, text: [title, ...paragraphs].join("\n"), amendments };
+    });
+    const name = plainText(/<name>([\s\S]*?)<\/name>/u.exec(xml)?.[1] ?? "");
+    return { country: "IS", source, ...(name ? { title: name } : {}), articles, version: `lagasafn ${edition ?? "?"} (wydanie zbioru ustaw Althingi)`, status: "kopia nieurzędowa (lagasafn-xml z HTML Althingi) — brzmienie potwierdź w althingi.is/lagas" };
+}
+/**
+ * Faroe Islands, Lógasavnið (logir.fo, Løgmansskrivstovan): the act's page carries the text in
+ * P.Afsnitsnummer ("§ N") and the paragraphs after it; the act's status (Gildisstøða) is printed under it.
+ */
+export function readFaroe(html, source) {
+    const articles = [];
+    let open = false;
+    for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*class=["']?([\w-]+)[^>]*>([\s\S]*?)<\/p>/giu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        if (/^Afsnitsnummer$/iu.test(cls) && /^§\s*\d+[a-z]?\.?$/u.test(text)) {
+            const unit = text.replace(/[§.\s]/gu, "");
+            articles.push({ unit, heading: text, text, amendments: [] });
+            open = true;
+        }
+        else if (/kapitel|overskrift|MsoNormal|MsoTitle/iu.test(cls))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    const title = plainText(/<h1[^>]*>([\s\S]*?)<\/h1>/u.exec(html)?.[1] ?? "");
+    // The act's own status is printed after its text ("Um rættarregluna … Gildisstøða: Í komi"); the search form above has the same word.
+    const about = plainText(html).split("Um rættarregluna").slice(1).join(" ");
+    const state = /Gildisstøða:\s*([^\n]+?)(?:\s{2,}|\n|$)/u.exec(about)?.[1]?.trim();
+    return { country: "FO", source, ...(title ? { title } : {}), articles, version: state ? `Gildisstøða: ${state}` : "tekst z Lógasavnið", status: "tekst urzędowy zbioru Lógasavnið (Løgmansskrivstovan)" };
+}
+/**
+ * Canon law, Codex Iuris Canonici 1983 (authentic Latin text on vatican.va, one page per book:
+ * …/cod-iuris-canonici/latin/documents/cic_liber{I…VII}_la.html; Liber VI in the 2021 wording of Pascite gregem Dei).
+ * "Can. N" opens a canon; a centred paragraph (PARS, TITULUS, CAPUT) is a heading and ends it.
+ */
+export function readCanonLaw(html, source) {
+    const body = html.replace(/\s+/gu, " ").replace(/<p align="center">[\s\S]*?<\/p>/giu, "\n§HEADING§\n");
+    const text = plainText(body);
+    const articles = [];
+    const marks = [...text.matchAll(/(?:^|\n|\s)Can\.\s+(\d+)\s*[—–-]\s*/gu)];
+    marks.forEach((match, index) => {
+        let piece = text.slice(match.index + match[0].length, marks[index + 1]?.index ?? text.length);
+        piece = piece.split("§HEADING§")[0].replace(/\s*\n\s*/gu, "\n").trim();
+        articles.push({ unit: match[1], heading: `Can. ${match[1]}`, text: `Can. ${match[1]} — ${piece}`, amendments: [] });
+    });
+    return { country: "VA", source, articles, version: "Codex Iuris Canonici 1983, tekst łaciński (autentyczny) z vatican.va; zmiany motu proprio: vatican.va/archive/cdc/index.htm", status: "tekst autentyczny (Stolica Apostolska, vatican.va)" };
+}
+/**
+ * Georgia, Matsne (Legislative Herald of Georgia): …/{ka|en}/document/view/{id}?publication={n}. The Georgian text
+ * is the official one (English: translation). The sidebar lists the consolidated publications with their dates;
+ * an article opens with a bold "მუხლი N." (ka) or "Article N –" (en).
+ */
+export function matsneVersions(html) {
+    return [...html.matchAll(/href="\/(?:ka|en)\/document\/view\/\d+\?publication=(\d+)"\s*class="[^"]*list-group-item">\s*(\d{2})\/(\d{2})\/(\d{4})/gu)]
+        .map(([, publication, day, month, year]) => ({ publication: publication, date: `${year}-${month}-${day}` }));
+}
+export function readMatsne(html, source, version) {
+    const articles = [];
+    let open = false;
+    for (const [, attributes, inner] of html.replace(/\s+/gu, " ").matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/giu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^(?:მუხლი|Article)\s+(\d+[¹²³⁴⁵⁶⁷⁸⁹⁰]*)\s*[.–-]/u.exec(text);
+        // Georgian pages mark the heading with p.muxlixml, the English ones with bold.
+        if (head && (/class="muxlixml"/u.test(attributes) || /<b\b/iu.test(inner))) {
+            articles.push({ unit: head[1], heading: text, text, amendments: [] });
+            open = true;
+        }
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    const georgian = /\/ka\//u.test(source) || /მუხლი/u.test(html);
+    return {
+        country: "GE",
+        source,
+        articles,
+        version: version ? `publikacja skonsolidowana z ${version.date} (publication=${version.publication})` : "wersja z adresu",
+        status: georgian ? "tekst urzędowy (Matsne, wersja gruzińska)" : "tłumaczenie angielskie Matsne — wiąże tekst gruziński"
+    };
+}
+/**
+ * Serbia, Montenegro, Bosnia and Herzegovina: Paragraf Lex (paragraf.rs, paragraf.me, paragraf.ba), consolidated
+ * texts kept by a publisher — unofficial, for finding the article; the official gazettes need JavaScript or refuse
+ * automated clients. p.clan "Član N" opens an article; a title paragraph (…naslov…) ends it.
+ */
+export function readParagraf(html, source, country) {
+    const articles = [];
+    let open = false;
+    for (const [, cls, inner] of html.replace(/\s+/gu, " ").matchAll(/<p class="([^"]*)">([\s\S]*?)<\/p>/gu)) {
+        const text = plainText(inner).trim();
+        if (!text)
+            continue;
+        const head = /^Član\s+(\d+[a-z]?)\.?$/u.exec(text);
+        if (cls === "clan" && head) {
+            articles.push({ unit: head[1], heading: text, text, amendments: [] });
+            open = true;
+        }
+        else if (cls === "clan" || /naslov/u.test(cls))
+            open = false;
+        else if (open)
+            articles.at(-1).text += `\n${text}`;
+    }
+    return { country, source, articles, version: "tekst jednolity wydawcy (Paragraf Lex)", status: "tekst nieurzędowy (Paragraf Lex) — tylko do odnalezienia przepisu; brzmienie potwierdź w dzienniku urzędowym" };
+}
+// ---- Common law (family "common-law" in the register): statutes AND judgments are sources. ----
+/**
+ * United Kingdom, legislation.gov.uk (The National Archives, open API): …/{type}/{year}/{number}/section/{n}/data.xml
+ * is the revised text of a section (…/section/{n}/{YYYY-MM-DD}/data.xml at a date). P1 = section, P2 = subsection;
+ * the F-commentaries name the amending acts with the date in force ("substituted (3.1.1995) by 1994 c. 35").
+ */
+export function readUnitedKingdom(xml, source) {
+    const commentaries = new Map();
+    for (const [, id, body] of xml.matchAll(/<Commentary id="([^"]+)" Type="F">([\s\S]*?)<\/Commentary>/gu)) {
+        const text = plainText(body).replace(/\s+/gu, " ").trim();
+        const date = /\((\d{1,2})\.(\d{1,2})\.(\d{4})\)/u.exec(text);
+        commentaries.set(id, { act: text.slice(0, 240), ...(date ? { inForce: `${date[3]}-${date[2].padStart(2, "0")}-${date[1].padStart(2, "0")}` } : {}) });
+    }
+    const articles = [...xml.matchAll(/<P1\b[^>]*id="section-([0-9A-Z]+)"[^>]*>([\s\S]*?)<\/P1>/gu)].map(([, number, body]) => {
+        const parts = [...body.matchAll(/<P2\b[^>]*>\s*<Pnumber>([\s\S]*?)<\/Pnumber>([\s\S]*?)<\/P2>/gu)].map(([, sub, text]) => `(${plainText(sub)}) ${plainText(text).replace(/\s+/gu, " ").trim()}`);
+        const text = parts.length ? parts.join("\n") : plainText(body.replace(/<Pnumber>[\s\S]*?<\/Pnumber>/u, "")).replace(/\s+/gu, " ").trim();
+        const used = [...new Set([...body.matchAll(/CommentaryRef="([^"]+)"/gu)].map((match) => match[1]))];
+        return { unit: number, heading: `section ${number}`, text: `${number}. ${text}`, amendments: used.map((id) => commentaries.get(id)).filter((item) => Boolean(item)) };
+    });
+    const title = plainText(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/u.exec(xml)?.[1] ?? "");
+    const start = /RestrictStartDate="(\d{4}-\d{2}-\d{2})"/u.exec(xml)?.[1];
+    return { country: "GB", source, ...(title ? { title } : {}), articles, version: `revised${start ? `, wersja od ${start}` : ""} (legislation.gov.uk)`, status: "tekst urzędowy zrewidowany (The National Archives, legislation.gov.uk)" };
+}
+/**
+ * Ireland, Irish Statute Book (Office of the Attorney General): …/eli/{year}/act/{number}/section/{n}/enacted/en/html
+ * (or the whole act) is the text as enacted; a section opens with "<b>N.</b>—".
+ */
+export function readIreland(html, source) {
+    const content = html.slice(Math.max(0, html.indexOf('class="act-content"'))).split(/Acts? Referred to/u)[0];
+    const text = plainText(content.replace(/<b>(\d+[A-Z]?)\.<\/b>\s*(?:&mdash;|—|-)/gu, "\n§§$1§§ "));
+    const marks = [...text.matchAll(/§§(\d+[A-Z]?)§§/gu)];
+    const articles = marks.map((match, index) => {
+        const body = text.slice(match.index + match[0].length, marks[index + 1]?.index ?? text.length).replace(/\s*\n\s*/gu, "\n").trim();
+        return { unit: match[1], heading: `section ${match[1]}`, text: `${match[1]}.—${body}`, amendments: [] };
+    });
+    return { country: "IE", source, articles, version: "tekst uchwalony (enacted); zmiany w aktach zmieniających lub w Revised Acts (Law Reform Commission)", status: "tekst urzędowy (Irish Statute Book)" };
+}
+/**
+ * Cyprus, CyLaw (Pancyprian Bar Association, consolidated, unofficial): …/nomoi/enop/non-ind/{id}/full.html,
+ * windows-1253; div.full-section with header, text "N.-(1) …" and the amending laws of that section.
+ */
+export function readCyprus(html, source) {
+    if (/open\.pl\?file=\/?(?:supreme|courtOfAppeal|apofaseis|administrative|areiospagos)/iu.test(source))
+        return readCyprusJudgment(html, source);
+    const articles = [];
+    for (const section of html.split('<div class="full-section">').slice(1)) {
+        const text = plainText(/<div class="full-section-text">([\s\S]*?)<\/div>/u.exec(section)?.[1] ?? "").trim();
+        const number = /^(\d+[Α-ΩA-Z]?)\./u.exec(text)?.[1];
+        if (!number)
+            continue;
+        const header = plainText(/<div class="full-section-header">([\s\S]*?)<\/div>/u.exec(section)?.[1] ?? "");
+        const amendments = [...section.matchAll(/<span class="toc-instrument-enum">([^<]+)<\/span>/gu)].map((match) => ({ act: plainText(match[1]) }));
+        articles.push({ unit: number, heading: header || `${number}.`, text, amendments });
+    }
+    const title = plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "");
+    return { country: "CY", source, ...(title ? { title } : {}), articles, version: "tekst jednolity CyLaw", status: "tekst nieurzędowy (CyLaw, Παγκύπριος Δικηγορικός Σύλλογος) — urzędowa jest Επίσημη Εφημερίδα" };
+}
+/**
+ * United States Code, GovInfo (U.S. Government Publishing Office): …/link/uscode/{title}/{section} redirects to the
+ * section's HTML of the current edition; h3.section-head "§N. …", p.statutory-body…, the source credit and the
+ * "Amendments" notes ("<b>2004</b>—Pub. L. 108–237 substituted …").
+ */
+export function readUsCode(html, source) {
+    const edition = /United States Code,\s*(\d{4}) Edition/u.exec(html)?.[1];
+    const articles = [];
+    for (const block of html.split('<h3 class="section-head">').slice(1)) {
+        const head = plainText(block.slice(0, block.indexOf("</h3>")));
+        const number = /^§\s*([\dA-Za-z-]+)\./u.exec(head)?.[1];
+        if (!number)
+            continue;
+        const body = [...block.matchAll(/<p class="statutory-body[^"]*">([\s\S]*?)<\/p>/gu)].map((match) => plainText(match[1]).replace(/\s+/gu, " ").trim());
+        const notes = block.slice(block.indexOf(">Amendments<") >= 0 ? block.indexOf(">Amendments<") : block.length);
+        const amendments = [...notes.matchAll(/<p class="note-body"><b>(\d{4})<\/b>\s*(?:&mdash;|—)([\s\S]*?)<\/p>/gu)].map((match) => ({ act: `${match[1]}: ${plainText(match[2]).replace(/\s+/gu, " ").slice(0, 200)}` }));
+        articles.push({ unit: number, heading: head, text: [head, ...body].join("\n"), amendments });
+    }
+    return { country: "US", source, articles, version: edition ? `United States Code, wydanie ${edition}` : "United States Code", status: "tekst urzędowy (GovInfo, U.S. Government Publishing Office); prawo stanowe osobno" };
+}
+/**
+ * Judgments (common law: precedent is a source). United Kingdom, Find Case Law (The National Archives),
+ * …/{court}/{year}/{number}/data.xml in Akoma Ntoso: numbered paragraphs, neutral citation, court and date.
+ * Each paragraph is a unit ("[12]" or "12") for quoting.
+ */
+export function readUkJudgment(xml, source) {
+    const name = /<FRBRname value="([^"]+)"/u.exec(xml)?.[1] ?? "";
+    const citation = plainText(/<(?:uk:cite|neutralCitation)>([\s\S]*?)<\/(?:uk:cite|neutralCitation)>/u.exec(xml)?.[1] ?? "");
+    const court = /<uk:court>([^<]+)<\/uk:court>/u.exec(xml)?.[1] ?? "";
+    const date = /<FRBRdate date="(\d{4}-\d{2}-\d{2})" name="judgment"/u.exec(xml)?.[1];
+    const articles = [];
+    for (const [, body] of xml.matchAll(/<paragraph\b[^>]*>([\s\S]*?)<\/paragraph>/gu)) {
+        const number = plainText(/<num[^>]*>([\s\S]*?)<\/num>/u.exec(body)?.[1] ?? "").replace(/[.\s]/gu, "");
+        const text = plainText(body.replace(/<num[^>]*>[\s\S]*?<\/num>/u, "")).replace(/\s+/gu, " ").trim();
+        // A numbered heading ("1. Introduction") shares the number with the first paragraph: kept with it.
+        if (!number || !text)
+            continue;
+        const last = articles.at(-1);
+        if (last && last.unit === number)
+            last.text += `\n${text}`;
+        else
+            articles.push({ unit: number, heading: `[${number}]`, text: `[${number}] ${text}`, amendments: [] });
+    }
+    return { country: "GB", source, title: `${name}${citation ? ` ${citation}` : ""}`, articles, version: `${court}${date ? `, ${date}` : ""}`, status: "orzeczenie, tekst urzędowy (Find Case Law, The National Archives)" };
+}
+/**
+ * United States judgments, Caselaw Access Project (Harvard Law School, public static data, cases to 2020):
+ * static.case.law/{reporter}/{volume}/cases/{page}-{nn}.json; each opinion (majority, concurrence, dissent) is a unit.
+ */
+export function readCapCase(json, source) {
+    const data = JSON.parse(json);
+    const cite = data.citations?.find((item) => item.type === "official")?.cite ?? data.citations?.[0]?.cite ?? "";
+    const articles = (data.casebody?.opinions ?? []).map((opinion, index) => ({
+        unit: `${opinion.type ?? "opinion"}${index ? `-${index + 1}` : ""}`,
+        heading: `${opinion.type ?? "opinion"}${opinion.author ? ` (${opinion.author})` : ""}`,
+        text: opinion.text ?? "",
+        amendments: []
+    }));
+    return { country: "US", source, title: `${data.name_abbreviation ?? ""}${cite ? `, ${cite}` : ""}`, articles, version: `${data.court?.name ?? ""}${data.decision_date ? `, ${data.decision_date}` : ""}`, status: "orzeczenie (Caselaw Access Project, Harvard Law School; zbiór do 2020 r.) — sprawdź późniejsze orzecznictwo" };
+}
+/**
+ * Ireland, judgments (Courts Service, judgments.courts.ie/judgments/{id}): the page names the court, the judge,
+ * the neutral citation and the dates; the text is the judgment's PDF (…/judgments/documents/{id}).
+ */
+export function irishJudgmentPage(html) {
+    const text = plainText(html.replace(/<script[\s\S]*?<\/script>/giu, "")).replace(/\s+/gu, " ");
+    const after = (label, next) => new RegExp(`${label}\\s+(.+?)\\s+${next}`, "u").exec(text)?.[1]?.trim() ?? "";
+    return {
+        title: plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "").replace(/\s*-\s*Courts Service\s*$/u, "").trim(),
+        court: after("Court Court", "Judgment by"),
+        judge: after("Judgment by", "References"),
+        citation: /Neutral citation\s+(\[\d{4}\]\s+\w+\s+\d+)/u.exec(text)?.[1] ?? "",
+        delivered: after("Date delivered", "Date published"),
+        pdf: /href="(\/judgments\/documents\/\d+)"/u.exec(html)?.[1] ?? null
+    };
+}
+/**
+ * Numbered paragraphs of a judgment read from its PDF: "1.1" on its own line or "12. Text" opens a paragraph;
+ * page numbers (a bare number without a full stop) and years ("2022. …") are not paragraph numbers.
+ */
+export function judgmentParagraphs(text) {
+    const articles = [];
+    for (const raw of text.split(/\r?\n/u)) {
+        const line = raw.trim();
+        if (!line || /^\d{1,4}$/u.test(line))
+            continue;
+        const head = /^(\d{1,3}(?:\.\d{1,3})?)\.?(?:\s+(.*))?$/u.exec(line);
+        const isHead = head && (/\./u.test(head[1]) || /^\d{1,3}\.\s/u.test(line));
+        if (isHead) {
+            articles.push({ unit: head[1], heading: `[${head[1]}]`, text: `[${head[1]}] ${head[2] ?? ""}`.trim(), amendments: [] });
+        }
+        else if (articles.length) {
+            articles.at(-1).text += ` ${line}`;
+        }
+    }
+    return articles;
+}
+/**
+ * Cyprus, judgments in CyLaw (…/cgi-bin/open.pl?file=/supreme|courtOfAppeal/…): HTML (windows-1253) with the
+ * court, case number and date at the top; paragraphs are not numbered — the reader numbers them ¶1, ¶2 … in order.
+ */
+export function readCyprusJudgment(html, source) {
+    const title = plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "").trim();
+    const paragraphs = [...html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/giu)].map((match) => plainText(match[1]).replace(/\s+/gu, " ").trim()).filter((text) => text.length > 1);
+    const court = paragraphs.find((text) => /ΔΙΚΑΣΤΗΡΙΟ|ΕΦΕΤΕΙΟ/u.test(text)) ?? "";
+    const articles = paragraphs.map((text, index) => ({ unit: `¶${index + 1}`, heading: `¶${index + 1}`, text, amendments: [] }));
+    return { country: "CY", source, title, articles, version: court, status: "orzeczenie (CyLaw, Παγκύπριος Δικηγορικός Σύλλογος; numeracja akapitów nadana przez czytnik)" };
+}
+/**
+ * Rwanda, RwandaLII (AfricanLII / Laws.Africa, Akoma Ntoso as HTML): …/akn/rw/act/{type}/{year}/{number}/eng@{date};
+ * section.akn-article with its h2 heading. The official text is the Official Gazette (PDF linked on the page).
+ */
+export function readRwandaLii(html, source) {
+    const words = { One: "1", First: "1" };
+    const articles = [...html.matchAll(/<section class="akn-article" id="art_([^"]+)"[^>]*>([\s\S]*?)<\/section>/gu)].map(([, id, body]) => {
+        const heading = plainText(/<h2>([\s\S]*?)<\/h2>/u.exec(body)?.[1] ?? `Article ${id}`).trim();
+        const text = [...body.matchAll(/<span class="akn-p"[^>]*>([\s\S]*?)<\/span>/gu)].map((match) => plainText(match[1]).trim()).filter(Boolean);
+        return { unit: words[id] ?? id, heading, text: [heading, ...text].join("\n"), amendments: [] };
+    });
+    const version = /eng@(\d{4}-\d{2}-\d{2})/u.exec(source)?.[1];
+    return { country: "RW", source, articles, version: version ? `wersja z ${version} (RwandaLII)` : "RwandaLII", status: "tekst RwandaLII (Laws.Africa) — urzędowy jest Official Gazette; przy rozbieżności wersji językowych rozstrzyga język uchwalenia (Konstytucja, art. 96)" };
 }
 /**
  * Sweden, Riksdagen open data (no key): data.riksdagen.se/dokument/sfs-{year}-{number}.text is the

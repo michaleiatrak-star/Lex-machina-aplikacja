@@ -89,17 +89,55 @@ export class OcrServePool {
             else
                 settle.resolve();
         };
-        worker.onStderr = args.onStderr;
+        // stdout and stderr are separate pipes: the result line on stdout can come before the job's last
+        // stderr lines (stats, last page). The job ends when both are in: the worker's "LEX_OCR_JOB_END <id>"
+        // on stderr, or STDERR_GRACE_MS after the result for a worker that does not write it.
+        let stderrEnded = false;
+        let result = null;
+        let grace = null;
+        const complete = () => {
+            if (!result)
+                return;
+            if (grace)
+                clearTimeout(grace);
+            grace = null;
+            const outcome = result;
+            result = null;
+            finish(outcome.error);
+        };
+        const endMarker = new RegExp(`^LEX_OCR_JOB_END ${id}$`, "mu");
+        let tail = "";
+        worker.onStderr = (text) => {
+            args.onStderr(text);
+            // The marker can be split between two chunks.
+            tail = (tail + text).slice(-512);
+            if (endMarker.test(tail)) {
+                stderrEnded = true;
+                complete();
+            }
+        };
         worker.onLine = (line) => {
             const [marker, jobId, ...rest] = line.split(" ");
             if (jobId !== id)
                 return;
             if (marker === "LEX_OCR_JOB_DONE")
-                finish();
+                result = {};
             else if (marker === "LEX_OCR_JOB_FAILED")
-                finish(Object.assign(new Error(`OCR_SERVE_JOB_FAILED:${rest.join(" ")}`), { exitCode: 1 }));
+                result = { error: Object.assign(new Error(`OCR_SERVE_JOB_FAILED:${rest.join(" ")}`), { exitCode: 1 }) };
+            else
+                return;
+            if (stderrEnded)
+                complete();
+            else
+                grace = setTimeout(complete, STDERR_GRACE_MS);
         };
-        worker.onExit = (code) => finish(Object.assign(new Error(`OCR_SERVE_WORKER_EXITED:${code ?? "error"}`), { exitCode: code }));
+        worker.onExit = (code) => {
+            if (grace)
+                clearTimeout(grace);
+            grace = null;
+            result = null;
+            finish(Object.assign(new Error(`OCR_SERVE_WORKER_EXITED:${code ?? "error"}`), { exitCode: code }));
+        };
         worker.child.stdin.write(`${JSON.stringify({ ...args.job, id })}\n`);
         return {
             done,
@@ -107,6 +145,7 @@ export class OcrServePool {
         };
     }
 }
+const STDERR_GRACE_MS = 2_000;
 /** One pool for the whole runtime: PDF pages and images share the loaded models. */
 export const ocrServePool = new OcrServePool();
 process.once("exit", () => ocrServePool.closeAll());

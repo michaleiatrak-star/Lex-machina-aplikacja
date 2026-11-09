@@ -1,3 +1,4 @@
+import { lawSourceWithCheck } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock } from "./chat-turn-journal.js";
 import { directImageNote } from "./direct-images.js";
 import { todayWarsaw } from "./warsaw-date.js";
@@ -1296,6 +1297,8 @@ export class SafeSessionExecutor {
         const federationEvents = [];
         const auxiliarySources = [];
         let snVerificationRequired = false;
+        // A law source behind a bot check asked the user to pass it (law-source-sessions.ts).
+        let lawSourceVerification;
         // Texts the source tools returned in this turn (judgments, hit lists): what the
         // answer may say a judgment is about (case-content-grounding).
         const caseSourceTexts = [];
@@ -2406,6 +2409,11 @@ export class SafeSessionExecutor {
                     : [];
                 if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
                     snVerificationRequired = true;
+                }
+                for (const result of federationResults) {
+                    const host = /LAW_SOURCE_VERIFICATION_REQUIRED:([a-z0-9.-]+)/u.exec(result.content)?.[1];
+                    if (host)
+                        lawSourceVerification ??= lawSourceWithCheck(host);
                 }
                 for (const result of federationResults) {
                     caseSourceTexts.push(result.content);
@@ -3890,7 +3898,9 @@ export class SafeSessionExecutor {
                 : {}),
             ...(snVerificationRequired
                 ? { sourceVerification: { source: "sn", url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
-                : {}),
+                : lawSourceVerification
+                    ? { sourceVerification: { source: "law", url: lawSourceVerification.url, host: lawSourceVerification.host, label: lawSourceVerification.label } }
+                    : {}),
             ...((widgetTools?.widgets().length ?? 0) + answerWidgets.length > 0
                 ? { widgets: [...(widgetTools?.widgets() ?? []), ...answerWidgets] }
                 : {}),

@@ -283,6 +283,15 @@ export function registerServerModeRoutes(app, dependencies) {
         const status = req.body?.status;
         res.json({ user: authService.setUserStatus(admin(req), String(req.params.userId), status) });
     }));
+    // Account dialog: the administrator sends the account a password reset link.
+    app.post("/api/server-mode/accounts/:userId/password-reset", handle(async (req, res) => {
+        res.json(await serverMode.adminPasswordReset(admin(req), String(req.params.userId)));
+    }));
+    // Account dialog: a one-time password the user must replace at the next login (shown once).
+    app.post("/api/server-mode/accounts/:userId/one-time-password", handle(async (req, res) => {
+        res.set("Cache-Control", "no-store");
+        res.json(await serverMode.adminOneTimePassword(admin(req), String(req.params.userId)));
+    }));
     app.get("/api/server-mode/turns", handle((req, res) => {
         admin(req);
         res.set("Cache-Control", "no-store");

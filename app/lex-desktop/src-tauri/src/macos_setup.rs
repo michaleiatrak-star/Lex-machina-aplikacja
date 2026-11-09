@@ -15,6 +15,9 @@ fn read(path: &Path) -> serde_json::Value {
     std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(serde_json::Value::Null)
 }
 pub fn needed(resource: &Path) -> bool { needed_at(resource, &root()) }
+/// Components are in place and no preparation is running (the installer's own bootstrap, a terminal
+/// repair or this app's window): the runtime may start.
+pub fn ready(resource: &Path) -> bool { !needed(resource) && !root().join(".setup-lock").exists() }
 fn needed_at(resource: &Path, components: &Path) -> bool {
     let code = resource.join("runtime");
     if !code.join("bootstrap/macos-online-bootstrap.sh").is_file() { return false; }
