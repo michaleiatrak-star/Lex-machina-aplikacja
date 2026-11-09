@@ -461,7 +461,7 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
     // Open US Law (Vaquill) snapshot of a state code: the state file read once, the section by its number.
     if (state && VAQUILL_HOST.test(host)) {
         if (!request.unit)
-            return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "podaj jednostkę (unit): numer przepisu, np. \"13A-6-2\"" };
+            return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "podaj jednostkę (unit): pełne oznaczenie z migawki (np. \"Ala. Code § 13A-6-2\", \"N.Y. PEN Law § 125.27\") albo numer" };
         const found = await readVaquillSection(fetchImpl, url.href, request.unit);
         return {
             country: "US",
@@ -470,7 +470,7 @@ export async function readNationalLaw(request, fetchImpl = fetch) {
             status: `${stateNote}${found.status && found.status !== "in_force" ? `; status przepisu: ${found.status}` : ""}`,
             ...(found.source ? { version: `strona urzędowa przepisu (do sprawdzenia aktualności): ${found.source}` } : {}),
             articles: found.articles,
-            ...(!found.articles.length ? { note: "przepisu nie ma w migawce" } : {})
+            ...(found.candidates ? { note: `numer jest w kilku kodeksach — podaj pełne oznaczenie (unit), np.: ${found.candidates.join("; ")}` } : !found.articles.length ? { note: "przepisu nie ma w migawce" } : {})
         };
     }
     // Georgia Commons: the OCGA as JSON (documented API, CC0, no key) — section, status, current_through,

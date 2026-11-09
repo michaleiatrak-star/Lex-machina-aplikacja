@@ -456,8 +456,21 @@ export class LexMcpConnectorStore {
         return jurisdictionServerIds(this.skillsRoot).filter((id) => installed.has(id));
     }
     /** Called when the jurisdiction changes: the MCP client restarts with the new country's connectors. */
+    jurisdictionListeners = [];
+    /** Called after the legal system changes in Settings (core-law RAG, caches that follow it). */
+    onJurisdictionChange(listener) {
+        this.jurisdictionListeners.push(listener);
+    }
     jurisdictionChanged() {
         this.revisionValue += 1;
+        for (const listener of this.jurisdictionListeners) {
+            try {
+                listener();
+            }
+            catch {
+                // A listener's failure must not undo the change already saved.
+            }
+        }
     }
     // Serwery, które klient MCP aplikacji faktycznie uruchamia.
     readyServers() {
