@@ -577,6 +577,7 @@ export function readIreland(html: string, source: string): NationalReading {
  * windows-1253; div.full-section with header, text "N.-(1) …" and the amending laws of that section.
  */
 export function readCyprus(html: string, source: string): NationalReading {
+  if (/open\.pl\?file=\/?(?:supreme|courtOfAppeal|apofaseis|administrative|areiospagos)/iu.test(source)) return readCyprusJudgment(html, source);
   const articles: NationalArticle[] = [];
   for (const section of html.split('<div class="full-section">').slice(1)) {
     const text = plainText(/<div class="full-section-text">([\s\S]*?)<\/div>/u.exec(section)?.[1] ?? "").trim();
@@ -653,6 +654,70 @@ export function readCapCase(json: string, source: string): NationalReading {
     amendments: []
   }));
   return { country: "US", source, title: `${data.name_abbreviation ?? ""}${cite ? `, ${cite}` : ""}`, articles, version: `${data.court?.name ?? ""}${data.decision_date ? `, ${data.decision_date}` : ""}`, status: "orzeczenie (Caselaw Access Project, Harvard Law School; zbiór do 2020 r.) — sprawdź późniejsze orzecznictwo" };
+}
+
+/**
+ * Ireland, judgments (Courts Service, judgments.courts.ie/judgments/{id}): the page names the court, the judge,
+ * the neutral citation and the dates; the text is the judgment's PDF (…/judgments/documents/{id}).
+ */
+export function irishJudgmentPage(html: string): { title: string; court: string; judge: string; citation: string; delivered: string; pdf: string | null } {
+  const text = plainText(html.replace(/<script[\s\S]*?<\/script>/giu, "")).replace(/\s+/gu, " ");
+  const after = (label: string, next: string): string => new RegExp(`${label}\\s+(.+?)\\s+${next}`, "u").exec(text)?.[1]?.trim() ?? "";
+  return {
+    title: plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "").replace(/\s*-\s*Courts Service\s*$/u, "").trim(),
+    court: after("Court Court", "Judgment by"),
+    judge: after("Judgment by", "References"),
+    citation: /Neutral citation\s+(\[\d{4}\]\s+\w+\s+\d+)/u.exec(text)?.[1] ?? "",
+    delivered: after("Date delivered", "Date published"),
+    pdf: /href="(\/judgments\/documents\/\d+)"/u.exec(html)?.[1] ?? null
+  };
+}
+
+/**
+ * Numbered paragraphs of a judgment read from its PDF: "1.1" on its own line or "12. Text" opens a paragraph;
+ * page numbers (a bare number without a full stop) and years ("2022. …") are not paragraph numbers.
+ */
+export function judgmentParagraphs(text: string): NationalArticle[] {
+  const articles: NationalArticle[] = [];
+  for (const raw of text.split(/\r?\n/u)) {
+    const line = raw.trim();
+    if (!line || /^\d{1,4}$/u.test(line)) continue;
+    const head = /^(\d{1,3}(?:\.\d{1,3})?)\.?(?:\s+(.*))?$/u.exec(line);
+    const isHead = head && (/\./u.test(head[1]!) || /^\d{1,3}\.\s/u.test(line));
+    if (isHead) {
+      articles.push({ unit: head![1]!, heading: `[${head![1]}]`, text: `[${head![1]}] ${head![2] ?? ""}`.trim(), amendments: [] });
+    } else if (articles.length) {
+      articles.at(-1)!.text += ` ${line}`;
+    }
+  }
+  return articles;
+}
+
+/**
+ * Cyprus, judgments in CyLaw (…/cgi-bin/open.pl?file=/supreme|courtOfAppeal/…): HTML (windows-1253) with the
+ * court, case number and date at the top; paragraphs are not numbered — the reader numbers them ¶1, ¶2 … in order.
+ */
+export function readCyprusJudgment(html: string, source: string): NationalReading {
+  const title = plainText(/<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "").trim();
+  const paragraphs = [...html.replace(/\s+/gu, " ").matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/giu)].map((match) => plainText(match[1]!).replace(/\s+/gu, " ").trim()).filter((text) => text.length > 1);
+  const court = paragraphs.find((text) => /ΔΙΚΑΣΤΗΡΙΟ|ΕΦΕΤΕΙΟ/u.test(text)) ?? "";
+  const articles = paragraphs.map((text, index): NationalArticle => ({ unit: `¶${index + 1}`, heading: `¶${index + 1}`, text, amendments: [] }));
+  return { country: "CY", source, title, articles, version: court, status: "orzeczenie (CyLaw, Παγκύπριος Δικηγορικός Σύλλογος; numeracja akapitów nadana przez czytnik)" };
+}
+
+/**
+ * Rwanda, RwandaLII (AfricanLII / Laws.Africa, Akoma Ntoso as HTML): …/akn/rw/act/{type}/{year}/{number}/eng@{date};
+ * section.akn-article with its h2 heading. The official text is the Official Gazette (PDF linked on the page).
+ */
+export function readRwandaLii(html: string, source: string): NationalReading {
+  const words: Record<string, string> = { One: "1", First: "1" };
+  const articles = [...html.matchAll(/<section class="akn-article" id="art_([^"]+)"[^>]*>([\s\S]*?)<\/section>/gu)].map(([, id, body]): NationalArticle => {
+    const heading = plainText(/<h2>([\s\S]*?)<\/h2>/u.exec(body!)?.[1] ?? `Article ${id}`).trim();
+    const text = [...body!.matchAll(/<span class="akn-p"[^>]*>([\s\S]*?)<\/span>/gu)].map((match) => plainText(match[1]!).trim()).filter(Boolean);
+    return { unit: words[id!] ?? id!, heading, text: [heading, ...text].join("\n"), amendments: [] };
+  });
+  const version = /eng@(\d{4}-\d{2}-\d{2})/u.exec(source)?.[1];
+  return { country: "RW", source, articles, version: version ? `wersja z ${version} (RwandaLII)` : "RwandaLII", status: "tekst RwandaLII (Laws.Africa) — urzędowy jest Official Gazette; przy rozbieżności wersji językowych rozstrzyga język uchwalenia (Konstytucja, art. 96)" };
 }
 
 /**

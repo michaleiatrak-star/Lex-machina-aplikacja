@@ -330,6 +330,53 @@ describe("common law and mixed systems: statutes and judgments", () => {
     expect(answer.status).toMatch(/nieurzędowy/u);
   });
 
+  it("IE judgments: page metadata and PDF link; numbered paragraphs, page numbers skipped", async () => {
+    const { irishJudgmentPage, judgmentParagraphs } = await import("../src/eli/readers.js");
+    expect(irishJudgmentPage(fixture("ie-judgment-page.html"))).toEqual({
+      title: "Portmarnock Real Estate Developments Limited -v- An Coimisiún Pleanála",
+      court: "High Court",
+      judge: "Stack J.",
+      citation: "[2026] IEHC 720",
+      delivered: "28 Oct 2026",
+      pdf: "/judgments/documents/78216"
+    });
+    const paragraphs = judgmentParagraphs(fixture("ie-judgment-2026-iehc-720.txt"));
+    expect(paragraphs.slice(0, 3).map((paragraph) => paragraph.unit)).toEqual(["1", "1.1", "1.2"]);
+    expect(paragraphs[2]!.text).toContain("The purpose of the RZLT is to incentivise");
+  });
+
+  it("CY judgments: CyLaw open.pl goes to the judgment reader; court from the header, ¶ numbering marked as the reader's", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", "cy-judgment-260-2026.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) });
+    const answer = await readNationalLaw({ url: "https://www.cylaw.org/cgi-bin/open.pl?file=/courtOfAppeal/2026/202611-260-26PoinEf.html", unit: "¶2", country: "CY" }, fetchImpl as never);
+    expect(answer.articles.map((article) => article.text)).toEqual(["(Ποινική Έφεση Αρ.: 260/2026)"]);
+    expect(answer.status).toMatch(/numeracja akapitów nadana przez czytnik/u);
+  });
+
+  it("RW: RwandaLII Akoma Ntoso articles (One = 1) with the dated version", async () => {
+    const { readRwandaLii } = await import("../src/eli/readers.js");
+    const reading = readRwandaLii(fixture("rw-law-2008-19.html"), "https://rwandalii.org/akn/rw/act/law/2008/19/eng@2009-04-27");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[1]!.text).toMatch(/^Article 2 – Title of the national Anthem/u);
+    expect(reading.version).toBe("wersja z 2009-04-27 (RwandaLII)");
+    expect(reading.status).toMatch(/art\. 96/u);
+  });
+
+  it("RW: a page without the text (the Constitution) is read from its source.pdf", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const asked: string[] = [];
+    const page = new TextEncoder().encode('<html><a href="/akn/rw/act/law/2003/nn/eng@2015-12-24/source.pdf">PDF</a></html>');
+    const fetchImpl = async (address: string) => {
+      asked.push(String(address));
+      return asked.length === 1
+        ? { ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => page.buffer }
+        : { ok: false, status: 404, headers: { get: () => "" }, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    await expect(readNationalLaw({ url: "https://rwandalii.org/akn/rw/act/law/2003/nn/eng@2015-12-24", unit: "Article 96", country: "RW" }, fetchImpl as never)).rejects.toThrow();
+    expect(asked[1]).toBe("https://rwandalii.org/akn/rw/act/law/2003/nn/eng@2015-12-24/source.pdf");
+  });
+
   it("US Code: section with the edition and the amendment notes", async () => {
     const { readUsCode } = await import("../src/eli/readers.js");
     const reading = readUsCode(fixture("us-15-usc-1.html"), "x");

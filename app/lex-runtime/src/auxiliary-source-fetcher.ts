@@ -1,3 +1,4 @@
+import { isBlockedHost } from "./blocked-jurisdictions.js";
 import {
   createHash
 } from "node:crypto";
@@ -109,6 +110,7 @@ export class AuxiliarySourceFetchError
     readonly code:
       | "AUX_SOURCE_URL_INVALID"
       | "AUX_SOURCE_HOST_FORBIDDEN"
+      | "AUX_SOURCE_JURISDICTION_BLOCKED"
       | "AUX_SOURCE_DNS_FAILED"
       | "AUX_SOURCE_DNS_PRIVATE"
       | "AUX_SOURCE_REDIRECT_LIMIT"
@@ -343,6 +345,12 @@ export function parseAuxiliarySourceUrl(
     throw new AuxiliarySourceFetchError(
       "Auxiliary source requires credential-free public HTTPS on port 443 and a DNS hostname.",
       "AUX_SOURCE_HOST_FORBIDDEN"
+    );
+  }
+  if (isBlockedHost(url.hostname)) {
+    throw new AuxiliarySourceFetchError(
+      "Jurisdiction is outside Lex Machina (technical block).",
+      "AUX_SOURCE_JURISDICTION_BLOCKED"
     );
   }
 

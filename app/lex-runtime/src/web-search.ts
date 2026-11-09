@@ -1,3 +1,4 @@
+import { isBlockedUrl } from "./blocked-jurisdictions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import {
   classifyKnownLegalSourceUrl,
@@ -40,6 +41,7 @@ export class WebSearchError extends Error {
     readonly code:
       | "WEB_SEARCH_QUERY_INVALID"
       | "WEB_SEARCH_CASE_DATA_FORBIDDEN"
+      | "WEB_SEARCH_JURISDICTION_BLOCKED"
       | "WEB_SEARCH_DISABLED"
       | "WEB_SEARCH_NO_RESULTS",
     detail?: string
@@ -79,6 +81,12 @@ export function assertPublicWebSearchQuery(
     throw new WebSearchError(
       "WEB_SEARCH_CASE_DATA_FORBIDDEN"
     );
+  }
+  // site: on a jurisdiction outside the system (technical block).
+  for (const match of query.matchAll(/\bsite:(\S+)/giu)) {
+    if (isBlockedUrl(`https://${match[1]!.replace(/^https?:\/\//iu, "")}`)) {
+      throw new WebSearchError("WEB_SEARCH_JURISDICTION_BLOCKED");
+    }
   }
   return query;
 }
@@ -215,7 +223,7 @@ export class PublicWebSearch implements WebSearchProvider {
     ) {
       try {
         const hits =
-          await this.searchBrave(query, maxResults, braveKey);
+          withoutBlocked(await this.searchBrave(query, maxResults, braveKey));
         if (hits.length > 0) {
           return { provider: "brave", hits };
         }
@@ -236,7 +244,7 @@ export class PublicWebSearch implements WebSearchProvider {
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
           const hits =
-            await this.searchDuckDuckGo(query, maxResults);
+            withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
           if (hits.length > 0) {
             return { provider: "duckduckgo", hits };
           }
@@ -408,4 +416,9 @@ export function classifyWebSearchHits(
               : "Lead, not a source: verify every signature, Dz.U. reference and date it shows at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing; read the page with fetch_auxiliary_legal_source when the snippet is not enough. It can never be the sole legal basis."
     };
   });
+}
+
+/** Hits from jurisdictions outside the system never reach the model (technical block). */
+function withoutBlocked(hits: WebSearchHit[]): WebSearchHit[] {
+  return hits.filter((hit) => !isBlockedUrl(hit.url));
 }

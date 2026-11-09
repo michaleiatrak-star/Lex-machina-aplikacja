@@ -2,9 +2,10 @@
 // goes to that country's reader; only the official hosts below are fetched (no other address
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
+import { BLOCKED_JURISDICTION_CODE, isBlockedCountry, isBlockedHost } from "../blocked-jurisdictions.js";
 import { boeArticle, boeVersionOn } from "./es-boe.js";
 import { legiLookup } from "./fr-legi.js";
-import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readParagraf, readUnitedKingdom, readIreland, readCyprus, readUsCode, readUkJudgment, readCapCase, readMatsne, matsneVersions, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
+import { readAustria, readBelgium, readCzech, readLatvia, readTurkey, readCroatia, readParagraf, readRwandaLii, irishJudgmentPage, judgmentParagraphs, readUnitedKingdom, readIreland, readCyprus, readUsCode, readUkJudgment, readCapCase, readMatsne, matsneVersions, readSlovenia, readPisrs, pisrsCard, readFaroe, readCanonLaw, readSlovakia, slovakVersions, slovakVersionOn, readKosovo, readIceland, readEstonia, readFinland, readLuxembourg, readMonaco, readSweden, readDenmark, readGermany, readItaly, readLegislationPdf, readNetherlands, readSwitzerland, type NationalArticle, type NationalReading } from "./readers.js";
 
 type HostReader = { country: string; hosts: RegExp; read: (body: string, url: string) => NationalReading; accept?: string; address?: (url: URL) => string };
 
@@ -27,6 +28,7 @@ const READERS: HostReader[] = [
   { country: "GB", hosts: /^caselaw\.nationalarchives\.gov\.uk$/u, read: readUkJudgment, accept: "application/xml", address: (url) => (/\/data\.xml$/u.test(url.pathname) ? url.href : `${url.origin}${url.pathname.replace(/\/$/u, "")}/data.xml`) },
   { country: "IE", hosts: /^(?:www\.)?irishstatutebook\.ie$/u, read: readIreland },
   { country: "CY", hosts: /^(?:www\.)?cylaw\.org$/u, read: readCyprus },
+  { country: "RW", hosts: /^(?:www\.)?rwandalii\.org$/u, read: readRwandaLii },
   { country: "US", hosts: /^(?:www\.)?govinfo\.gov$/u, read: readUsCode },
   { country: "US", hosts: /^static\.case\.law$/u, read: readCapCase, accept: "application/json" },
   // Unofficial consolidated texts (Paragraf Lex) where the official gazette cannot be read.
@@ -64,6 +66,7 @@ const HOST_COUNTRIES: Array<[RegExp, string]> = [
   [/^gzk\.rks-gov\.net$/u, "XK"],
   [/^(?:www\.)?pisrs\.si$/u, "SI"],
   [/^matsne\.gov\.ge$/u, "GE"],
+  [/^judgments\.courts\.ie$/u, "IE"],
   [/^(?:www\.)?althingi\.is$/u, "IS"],
   [/^raw\.githubusercontent\.com$/u, "IS"]
 ];
@@ -91,7 +94,7 @@ export type NationalLawAnswer = {
 export type NationalFetch = (url: string, init: { headers: Record<string, string>; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; headers: { get(name: string): string | null }; arrayBuffer(): Promise<ArrayBuffer> }>;
 
 /** The hosts this reader fetches, for the tool's description and the policy. */
-export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE", "SK", "XK", "IS", "SI", "GE"];
+export const NATIONAL_LAW_HOSTS = [...READERS.map((item) => item.country), ...PDF_HOSTS.map((item) => item.country), "ES", "AT", "SE", "LU", "CZ", "FI", "FR", "EE", "SK", "XK", "IS", "SI", "GE", "IE"];
 
 function unitMatches(article: NationalArticle, unit: string): boolean {
   const wanted = unit
@@ -115,6 +118,7 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && /legilux|dre\.pt/u.test(url.hostname))) throw new Error("NATIONAL_LAW_URL_INVALID");
   const host = url.hostname.toLowerCase();
+  if (isBlockedHost(host) || isBlockedCountry(request.country)) throw new Error(BLOCKED_JURISDICTION_CODE);
   const sourceCountry = nationalLawCountry(host);
   if (!sourceCountry) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
   // Only the chosen legal system's sources: the other countries are off (user, 2026-11-08).
@@ -184,6 +188,26 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     const reading = readMatsne(html, address, version);
     const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
     return { country: "GE", url: address, status: reading.status, ...(reading.version ? { version: reading.version } : {}), articles };
+  }
+
+  // Ireland, judgments: the page (court, judge, neutral citation, date) and the judgment's PDF, numbered paragraphs.
+  if (/^judgments\.courts\.ie$/u.test(host)) {
+    const id = /\/judgments\/(\d+)/u.exec(url.pathname)?.[1];
+    if (!id) throw new Error("NATIONAL_LAW_IE_JUDGMENT_REQUIRED");
+    const page = await fetchImpl(`https://judgments.courts.ie/judgments/${id}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(60_000) });
+    if (!page.ok) throw new Error(`NATIONAL_LAW_SOURCE_${page.status}`);
+    const meta = irishJudgmentPage(new TextDecoder().decode(await page.arrayBuffer()));
+    if (!meta.pdf) return { country: "IE", url: url.href, status: "Courts Service: brak PDF orzeczenia", title: meta.title, articles: [] };
+    const pdfUrl = `https://judgments.courts.ie${meta.pdf}`;
+    const document = await fetchImpl(pdfUrl, { headers: { accept: "application/pdf" }, signal: AbortSignal.timeout(60_000) });
+    if (!document.ok) throw new Error(`NATIONAL_LAW_SOURCE_${document.status}`);
+    const reading = await readLegislationPdf(new Uint8Array(await document.arrayBuffer()));
+    const title = `${meta.title}${meta.citation ? ` ${meta.citation}` : ""}`;
+    const version = [meta.court, meta.judge, meta.delivered].filter(Boolean).join(", ");
+    if (reading.kind === "SKAN") return { country: "IE", url: pdfUrl, status: "orzeczenie: PDF bez warstwy tekstowej", title, version, articles: [], note: reading.note };
+    const all = judgmentParagraphs(reading.text);
+    const articles = request.unit ? all.filter((article) => unitMatches(article, request.unit!)) : all.slice(0, 20);
+    return { country: "IE", url: pdfUrl, status: "orzeczenie, tekst urzędowy (Courts Service of Ireland)", title, version, articles };
   }
 
   // Kosovo: Gazeta Zyrtare, the act by ActID: its text (ActDocumentDetail) and its status and amendments (ActDetail).
@@ -467,7 +491,12 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   } catch {
     decoder = new TextDecoder("utf-8");
   }
-  const reading = reader!.read(decoder.decode(bytes), url.href);
+  const body = decoder.decode(bytes);
+  const reading = reader!.read(body, url.href);
+  // RwandaLII: some acts (the Constitution) have no text on the page, only the source PDF.
+  if (reader!.country === "RW" && !reading.articles.length && /\/source\.pdf"/u.test(body) && !/\/source\.pdf$/u.test(url.pathname)) {
+    return readNationalLaw({ ...request, url: `${url.origin}${url.pathname.replace(/\/$/u, "")}/source.pdf` }, fetchImpl);
+  }
   const articles = request.unit ? reading.articles.filter((article) => unitMatches(article, request.unit!)) : reading.articles.slice(0, 20);
   return {
     country: reading.country,
