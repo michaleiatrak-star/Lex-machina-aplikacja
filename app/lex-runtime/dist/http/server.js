@@ -1,3 +1,4 @@
+import { firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
 import { SkillAutoUpdater } from "../skill-auto-update.js";
 import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
@@ -60,6 +61,7 @@ import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
+import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -248,6 +250,7 @@ export async function startLocalServer(options) {
     configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
     // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
     configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
+    configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
     configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
     const authStore = new LocalAuthStore({
         rootDir: caseFileStore.rootDir
@@ -395,7 +398,7 @@ export async function startLocalServer(options) {
     const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), 
     // sn.pl with the session the user verified in the app's sn.pl window,
     // as the SN connector of the case-law search does.
-    new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
+    new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true, context?.offline === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     // OCR on the card: a text model idle for a minute gives the card back first (the next answer
     // starts it again); during a series of documents, when it answers every few seconds, it stays.
@@ -494,6 +497,12 @@ export async function startLocalServer(options) {
         contractWorkflowStore: workspaceStore,
         orderedCaseWorkflowStore: workspaceStore,
         caseMemoryStore: workspaceStore,
+        // Firm know-how: only the picked files and folders and the firm's default folders.
+        firmKnowledgeScope: async ({ caseId, caseDataKey, keyVersion, selection }) => {
+            const index = await workspaceStore.readIndex({ caseId, caseDataKey, keyVersion });
+            const uploads = await secureCaseUploadStore.listUploads({ caseId, caseDataKey, keyVersion });
+            return firmKnowledgeDocumentIds(firmKnowledgeItems(index, selection), uploads);
+        },
         documentGenerationState,
         caseFileStore,
         secureCaseUploadStore,

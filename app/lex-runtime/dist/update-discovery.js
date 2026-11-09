@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.72";
+export const CURRENT_APPLICATION_VERSION = "0.1.73";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
@@ -78,9 +78,13 @@ function chooseAssets(release, repository) {
         : [];
     // macOS: the online .pkg of the same release (the Windows .exe never applies).
     const installer = process.platform === "darwin"
-        ? assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name))
+        ? assets.find((asset) => /lex.?machina.*macos.*online.*\.pkg$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name) && !/offline/i.test(asset.name))
+        // Windows: the online installer only. The offline package (1.5 GB, a self-extracting
+        // wrapper) also ends in "Setup.exe" and came first in the release's asset list: the update
+        // took it and failed with APPLICATION_UPDATE_VERSION_MISMATCH (2026-11-09, 0.1.73).
         : assets.find((asset) => /lexmachina.*windows.*online.*installer.*\.exe$/i.test(asset.name)) ??
-            assets.find((asset) => /lex.?machina.*setup.*\.exe$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*online.*setup.*\.exe$/i.test(asset.name)) ??
             assets.find((asset) => /lex.?machina.*\.exe$/i.test(asset.name) &&
                 !/offline/i.test(asset.name));
     const skillsBundle = assets.find((asset) => /lex.?machina.*skills.*\.zip$/i.test(asset.name));

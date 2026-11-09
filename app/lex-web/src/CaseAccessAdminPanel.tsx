@@ -126,6 +126,34 @@ export function quickCaseOptions(cases: CaseAccessOverviewItem[], query: string,
   return chosen ? [chosen, ...options] : options;
 }
 
+export type BulkAccessAction = { kind: "grant"; role: GrantableRole; canReidentify: boolean } | { kind: "revoke" };
+
+/**
+ * Bulk change of case access (user request 2026-11-09): which of the selected cases the change
+ * applies to, and which are skipped and why. Only a case's owner holds its key, so a case the
+ * administrator does not own is skipped; the owner's own access is never changed.
+ */
+export function bulkAccessPlan(
+  cases: CaseAccessOverviewItem[],
+  selected: ReadonlySet<string>,
+  userId: string,
+  action: BulkAccessAction
+): { apply: string[]; skipped: Array<{ caseId: string; reason: string }> } {
+  const apply: string[] = [];
+  const skipped: Array<{ caseId: string; reason: string }> = [];
+  for (const item of cases) {
+    if (!selected.has(item.caseId)) continue;
+    const member = item.members.find((entry) => entry.userId === userId);
+    if (!item.canManage) skipped.push({ caseId: item.caseId, reason: "nie jesteś właścicielem" });
+    else if (member?.role === "OWNER") skipped.push({ caseId: item.caseId, reason: "osoba jest właścicielem" });
+    else if (action.kind === "revoke" && !member) skipped.push({ caseId: item.caseId, reason: "bez dostępu" });
+    else if (action.kind === "grant" && member && member.role === action.role && member.canReidentify === action.canReidentify) {
+      skipped.push({ caseId: item.caseId, reason: "bez zmian" });
+    } else apply.push(item.caseId);
+  }
+  return { apply, skipped };
+}
+
 function PencilIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -178,6 +206,14 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   const [renaming, setRenaming] = useState<{ caseId: string; name: string } | null>(null);
   // Rozwinięte karty spraw (zwinięta karta to jeden wiersz z nazwą i składem).
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // Bulk change: the ticked cases and what to do with one person's access in all of them.
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<{ userId: string; kind: "grant" | "revoke"; role: GrantableRole; canReidentify: boolean }>({
+    userId: "",
+    kind: "grant",
+    role: "VIEWER",
+    canReidentify: false
+  });
 
   const reload = useCallback(async () => {
     const [overview, accounts] = await Promise.all([getCaseAccessOverview(), listAdminUsers()]);
@@ -242,6 +278,24 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       >
         <summary>
           <span className="case-access-admin-title">
+            <input
+              type="checkbox"
+              className="case-access-bulk-check"
+              aria-label={`Zaznacz sprawę „${name}” do zmiany zbiorczej`}
+              title={item.canManage ? "Zaznacz do zmiany zbiorczej" : "Zmienia właściciel sprawy."}
+              disabled={!item.canManage || Boolean(busy)}
+              checked={bulkSelected.has(item.caseId)}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                const on = event.target.checked;
+                setBulkSelected((current) => {
+                  const next = new Set(current);
+                  if (on) next.add(item.caseId);
+                  else next.delete(item.caseId);
+                  return next;
+                });
+              }}
+            />
             <strong>{name}</strong>
             {item.archivedAt ? <span className="security-pill">archiwum</span> : null}
           </span>
@@ -631,6 +685,117 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         >
           {busy === "quick" ? "Przypisywanie…" : "Przypisz"}
         </button>
+      </fieldset>
+      <fieldset className="case-access-admin-bulk">
+        <legend>
+          Zmiana zbiorcza
+          <InfoTip>
+            Zaznacz sprawy na liście poniżej (albo wszystkie widoczne po wyszukiwaniu i filtrach), wybierz osobę i działanie. Zmiana
+            dotyczy tylko spraw, których jesteś właścicielem; właściciel sprawy zachowuje swoją rolę.
+          </InfoTip>
+        </legend>
+        <div className="case-access-admin-bulk-row">
+          <span className="case-access-admin-bulk-count">Zaznaczone sprawy: {bulkSelected.size}</span>
+          <button
+            type="button"
+            className="chat-secondary-action"
+            disabled={Boolean(busy)}
+            onClick={() => {
+              const list = userFilter ? [...visible.member, ...visible.other] : shown;
+              setBulkSelected(new Set(list.filter((item) => item.canManage).map((item) => item.caseId)));
+            }}
+          >
+            Zaznacz wszystkie widoczne
+          </button>
+          <button type="button" className="chat-secondary-action" disabled={Boolean(busy) || bulkSelected.size === 0} onClick={() => setBulkSelected(new Set())}>
+            Odznacz
+          </button>
+        </div>
+        <div className="case-access-admin-bulk-row">
+          <select
+            value={bulk.userId}
+            aria-label="Osoba (zmiana zbiorcza)"
+            disabled={Boolean(busy)}
+            onChange={(event) => setBulk({ ...bulk, userId: event.target.value })}
+          >
+            <option value="">Osoba…</option>
+            {users
+              .filter((user) => user.userId !== currentUserId)
+              .map((user) => (
+                <option key={user.userId} value={user.userId}>
+                  {user.displayName} ({user.loginName})
+                </option>
+              ))}
+          </select>
+          <select
+            value={bulk.kind === "revoke" ? "revoke" : bulk.role}
+            aria-label="Działanie (zmiana zbiorcza)"
+            disabled={Boolean(busy)}
+            onChange={(event) =>
+              setBulk(
+                event.target.value === "revoke"
+                  ? { ...bulk, kind: "revoke" }
+                  : { ...bulk, kind: "grant", role: event.target.value as GrantableRole }
+              )
+            }
+          >
+            {GRANTABLE.map((role) => (
+              <option key={role} value={role}>
+                Nadaj lub zmień rolę: {ROLE_LABELS[role]}
+              </option>
+            ))}
+            <option value="revoke">Odbierz dostęp</option>
+          </select>
+          {bulk.kind === "grant" ? (
+            <label className="case-reidentify-toggle">
+              <input
+                type="checkbox"
+                checked={bulk.canReidentify}
+                disabled={Boolean(busy)}
+                onChange={(event) => setBulk({ ...bulk, canReidentify: event.target.checked })}
+              />
+              deanonimizacja
+            </label>
+          ) : null}
+          <button
+            type="button"
+            className="primary-button"
+            disabled={Boolean(busy) || !bulk.userId || bulkSelected.size === 0}
+            onClick={() => {
+              const action: BulkAccessAction =
+                bulk.kind === "revoke" ? { kind: "revoke" } : { kind: "grant", role: bulk.role, canReidentify: bulk.canReidentify };
+              const plan = bulkAccessPlan(cases, bulkSelected, bulk.userId, action);
+              const person = users.find((user) => user.userId === bulk.userId)?.displayName ?? "osoby";
+              if (
+                bulk.kind === "revoke" &&
+                plan.apply.length > 0 &&
+                !window.confirm(`Odebrać dostęp ${person} w ${plan.apply.length} sprawach?`)
+              ) {
+                return;
+              }
+              const failed: string[] = [];
+              void run(
+                "bulk",
+                async () => {
+                  for (const caseId of plan.apply) {
+                    try {
+                      if (action.kind === "revoke") await revokeCaseAccess(caseId, bulk.userId);
+                      else await grantCaseAccess(caseId, { userId: bulk.userId, role: action.role, canReidentify: action.canReidentify });
+                    } catch (failure) {
+                      const name = cases.find((item) => item.caseId === caseId)?.displayName || caseId;
+                      failed.push(`${name}: ${errorText(failure)}`);
+                    }
+                  }
+                  if (failed.length) throw new Error(`Nie udało się w ${failed.length} sprawach — ${failed.slice(0, 5).join("; ")}`);
+                  setBulkSelected(new Set());
+                },
+                `Zmieniono w ${plan.apply.length} sprawach${plan.skipped.length ? `; pominięto ${plan.skipped.length} (${[...new Set(plan.skipped.map((item) => item.reason))].join(", ")})` : ""}.`
+              );
+            }}
+          >
+            {busy === "bulk" ? "Zmieniam…" : `Zastosuj do ${bulkSelected.size} spraw`}
+          </button>
+        </div>
       </fieldset>
       <label>
         Użytkownik

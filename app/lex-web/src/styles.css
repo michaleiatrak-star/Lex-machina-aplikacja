@@ -2762,3 +2762,77 @@ textarea:focus {
   display: grid;
   gap: 12px;
 }
+
+/* The info icon keeps its circle in any container (it was squeezed beside uppercase
+   eyebrows and in flex rows) and is not styled by the label's text rules. */
+.info-tip {
+  flex: none;
+}
+
+.info-tip-button {
+  flex: none;
+  min-width: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Account settings window: above the password bar, buttons in the app's style, plain field text. */
+.privacy-preview-overlay[role="dialog"] {
+  z-index: 70;
+}
+
+.user-account-dialog {
+  max-height: none;
+}
+
+.user-account-dialog legend {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.user-account-dialog input,
+.user-account-dialog select {
+  font-weight: 400;
+}
+
+.user-account-dialog .user-account-save {
+  justify-self: start;
+  min-height: 40px;
+}
+
+.user-account-dialog .admin-user-actions > button {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* Case participants: the add row wraps instead of cutting the user field; controls of a member fit. */
+.case-collaboration-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.case-collaboration-add > label:first-child {
+  flex: 1 1 260px;
+}
+
+.case-collaboration-add > label:nth-child(2) {
+  flex: 0 1 180px;
+}
+
+.case-collaboration-add select {
+  width: 100%;
+  min-height: 42px;
+  font-weight: 400;
+}
+
+.case-collaborator-controls select {
+  width: auto;
+  min-width: 150px;
+  min-height: 40px;
+}
+
+.case-collaborator-controls > button {
+  min-height: 38px;
+  padding: 0 14px;
+}

@@ -1,3 +1,4 @@
+import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
 import { encryptedKind, passwordFromHeader, type DocumentDecryptor } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
@@ -628,6 +629,9 @@ export type LexHttpAppOptions = {
     | "getContractAnalysisState"
     | "saveContractAnalysisState"
   >;
+  // Firm know-how in a conversation: the documents of the picked files and folders and of the
+  // firm's default folders (firm-knowledge-scope.ts); absent = the firm library is not searched.
+  firmKnowledgeScope?: (args: { caseId: string; caseDataKey: Buffer; keyVersion: number; selection: FirmKnowledgeSelection }) => Promise<Set<string>>;
   // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
   caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
   // Tests: the court sites of the wokanda check (courts/wokanda.ts).
@@ -1456,6 +1460,8 @@ type SessionKnowledgeRequest = {
   includeCase: boolean;
   includeFirm: boolean;
   limit: number;
+  // Firm know-how: the files and folders picked in the conversation (firm-knowledge-scope.ts).
+  firmSelection: FirmKnowledgeSelection;
 };
 
 function parseSessionKnowledgeRequest(
@@ -1465,7 +1471,8 @@ function parseSessionKnowledgeRequest(
     return {
       includeCase: false,
       includeFirm: false,
-      limit: 8
+      limit: 8,
+      firmSelection: { folderIds: [], itemIds: [] }
     };
   }
   if (
@@ -1498,7 +1505,9 @@ function parseSessionKnowledgeRequest(
           record.limit
         );
 
+  const firmSelection = parseFirmKnowledgeSelection(record.firmSelection);
   if (
+    !firmSelection ||
     (
       caseId !== undefined &&
       !/^case_[a-f0-9]{32}$/
@@ -1523,7 +1532,8 @@ function parseSessionKnowledgeRequest(
       : {}),
     includeCase,
     includeFirm,
-    limit
+    limit,
+    firmSelection
   };
 }
 
@@ -10413,6 +10423,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             sourceScope:
               | "CASE_KNOWLEDGE"
               | "FIRM_KNOWLEDGE";
+            documentIds?: ReadonlySet<string>;
           }> = [];
 
         if (
@@ -10441,12 +10452,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               403
             );
           }
-          knowledgeSources.push({
-            caseId:
-              firm.caseId,
-            sourceScope:
-              "FIRM_KNOWLEDGE"
-          });
+          // Only the picked files and folders and the firm's default folders, never the whole library.
+          const firmView = options.caseAccessService.openCase(context, firm.caseId);
+          const firmDocuments = options.firmKnowledgeScope
+            ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) =>
+                await options.firmKnowledgeScope!({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion, selection: knowledge.firmSelection })
+              )
+            : new Set<string>();
+          request.onStep?.("PREPARE", `know-how kancelarii: ${firmDocuments.size} dokumentów z wybranych i domyślnych folderów`);
+          if (firmDocuments.size > 0) {
+            knowledgeSources.push({
+              caseId:
+                firm.caseId,
+              sourceScope:
+                "FIRM_KNOWLEDGE",
+              documentIds: firmDocuments
+            });
+          }
         }
 
         const ranked:
@@ -10496,7 +10518,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         request.query,
                       limit:
                         knowledge.limit,
-                      reviewedOnly: !localModel
+                      reviewedOnly: !localModel,
+                      ...(source.documentIds ? { documentIds: source.documentIds } : {})
                     })
               );
           ranked.push(

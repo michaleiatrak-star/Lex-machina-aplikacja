@@ -1417,3 +1417,44 @@
   align-items: center;
   gap: 12px;
 }
+
+/* "Od razu do kolejki": the checkbox beside its label, the info icon right after it
+   (a generic card label rule stacked them, so the icon looked like the model line's second one). */
+.workspace-header-actions .workspace-auto-queue-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+}
+
+.workspace-header-actions .workspace-auto-queue {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.workspace-header-actions .workspace-local-ai-group {
+  min-height: 38px;
+}
+
+.workspace-local-ai-state {
+  color: var(--lm-t2);
+}
+
+/* Firm know-how folder: "domyślnie w rozmowie" under the folder name, across the row. */
+.workspace-folder-row .workspace-folder-chat-default {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px 24px;
+  color: var(--lm-t2);
+  font-size: 11.5px;
+  font-weight: 500;
+}

@@ -1563,6 +1563,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/core-law/settings" => method == "PUT",
         // Model zapasowy routingu dziedzin (Ustawienia; lex-web api.ts).
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
+        // Tryb offline modelu lokalnego (bez źródeł zewnętrznych).
+        "/api/settings/local-offline" => matches!(method, "GET" | "PUT"),
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         "/api/settings/legal-sources/legi" => method == "GET",
@@ -2258,6 +2260,8 @@ mod tests {
         assert!(route_allowed("GET", "/api/settings/domain-fallback"));
         assert!(route_allowed("PUT", "/api/settings/domain-fallback"));
         assert!(!route_allowed("DELETE", "/api/settings/domain-fallback"));
+        assert!(route_allowed("PUT", "/api/settings/local-offline"));
+        assert!(!route_allowed("POST", "/api/settings/local-offline"));
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));

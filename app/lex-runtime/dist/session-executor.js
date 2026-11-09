@@ -99,6 +99,7 @@ import { peselCheckText } from "./privacy/pesel-check.js";
 import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } from "./quote-source-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
+import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
 import { STATUTE_JUDGE_BATCH, claimsWithWording, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
@@ -970,7 +971,7 @@ export class SafeSessionExecutor {
         ].join("\n\n");
         const protectedText = (await pseudonymizer.pseudonymize(transcript)).text;
         const ledger = new VerificationLedger();
-        if (request.threadEvidence?.provisions.length && this.actFreshness) {
+        if (request.threadEvidence?.provisions.length && this.actFreshness && !offlineTurn(request.model)) {
             for (const record of (await revalidateThreadEvidence(request.threadEvidence, this.actFreshness)).reused)
                 ledger.add(record);
         }
@@ -1238,6 +1239,12 @@ export class SafeSessionExecutor {
         // Evidence memory: provisions verified in earlier messages are reused only
         // when ELI still has the same consolidated text and no amendment after it.
         let evidencePrompt = null;
+        // Tryb offline modelu lokalnego (local-offline-mode.ts): no external source in this turn.
+        const offline = offlineTurn(request.model);
+        if (offline) {
+            step("PREPARE", "tryb offline: źródła zewnętrzne wyłączone, przepisy z lokalnej kopii ELI");
+            audit.record("gate", "LOCAL_OFFLINE_MODE", "OK", { model: request.model });
+        }
         const memory = request.threadEvidence;
         // Signatures of the case's materials named in earlier turns: still from the case, here too.
         for (const signature of memory?.caseReferences ?? [])
@@ -1246,9 +1253,10 @@ export class SafeSessionExecutor {
             // A conversational turn reads no provisions: no ELI round trip for them.
             !request.conversationalOnly &&
             (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)) {
-            const reuse = this.actFreshness
+            // Offline: no ELI round trip — the provisions go back to the local copy.
+            const reuse = this.actFreshness && !offline
                 ? await revalidateThreadEvidence(memory, this.actFreshness)
-                : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: "ELI_CHECK_UNAVAILABLE" })) };
+                : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: offline ? "OFFLINE_MODE" : "ELI_CHECK_UNAVAILABLE" })) };
             for (const record of reuse.reused)
                 ledger.add(record);
             evidencePrompt = threadEvidencePrompt(memory, reuse);
@@ -1260,7 +1268,8 @@ export class SafeSessionExecutor {
         }
         // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
         const verificationTools = this.verificationToolFactory?.(ledger, {
-            localModel: request.model.startsWith("local/")
+            localModel: request.model.startsWith("local/"),
+            offline
         });
         // Open issues of the case (references left unverified earlier): to verification first,
         // without waiting for the model to cite them again.
@@ -1292,7 +1301,8 @@ export class SafeSessionExecutor {
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
         // Local models get the sources too (a smaller tool set and the short map of sources).
-        const federationTools = this.legalFederationTools;
+        // Offline: no federation (MCP connectors, SAOS, courts' portals, web search, page reads).
+        const federationTools = offline ? undefined : this.legalFederationTools;
         const localFederation = request.model.startsWith("local/");
         // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
         const federationEvents = [];
@@ -1445,7 +1455,7 @@ export class SafeSessionExecutor {
             this.providers.nativeCorpusAccess(request.provider, request.model);
         // The court of a party's address (a letter's addressee): the alias restored from the case's
         // local vaults (the chat's own key and the documents' D01.. keys), never shown to the model.
-        const courtTools = request.conversationalOnly
+        const courtTools = request.conversationalOnly || offline
             ? undefined
             : new CourtToolRuntime((token) => {
                 const match = /^\[(?:LMPII:D(\d{2})|PII):([A-Z_]+):(\d{4})\]$/u.exec(token);
@@ -3656,7 +3666,7 @@ export class SafeSessionExecutor {
         });
         // KROK 4: provisions verified in their current wording, checked again on the
         // event date from the question (separate ledger: answer markers stay as they are).
-        const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
+        const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf && !offline
             ? eventDates(pathFacts.query, todayWarsaw())
             : [];
         const eventDateCheck = dates.length
@@ -3678,13 +3688,15 @@ export class SafeSessionExecutor {
         // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
         const freeText = !request.documentAstOutput && !reportBlueprint;
         // Kontrola treści przepisów: a thesis the provision does not carry keeps the source link, not ✅.
-        const closingText = demoteContradictedMarkers(processedDocumentCitations.text, ledger
+        const demotedText = demoteContradictedMarkers(processedDocumentCitations.text, ledger
             .all()
             .filter((record) => statuteWarnings.has(record.claim))
             .flatMap((record) => {
             const marker = expectedVerificationMarker(record);
             return marker ? [{ warning: statuteWarnings.get(record.claim), marker }] : [];
         }));
+        // Offline: the answer says what it rests on (the local copy, no ELI check), before the disclaimer.
+        const closingText = offline && freeText && legalAnswer(demotedText) ? `${demotedText.trimEnd()}\n\n_${OFFLINE_ANSWER_NOTE}_` : demotedText;
         const disclaimerTexts = 
         // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
         (legalAnswer(closingText) || Boolean(modelDisclaimer.disclaimer)) && freeText ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;

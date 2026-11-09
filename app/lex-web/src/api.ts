@@ -3280,6 +3280,8 @@ export function executeSession(input: {
     includeCase?: boolean;
     includeFirm?: boolean;
     limit?: number;
+    // Firm know-how: the files and folders picked for this conversation.
+    firmSelection?: { folderIds: string[]; itemIds: string[] };
   };
 }, executionId?: string): Promise<SessionExecutionResponse> {
   return json<SessionExecutionResponse>("/api/sessions/execute", {
@@ -4168,6 +4170,14 @@ export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean 
 }
 
 export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
+
+export function getLocalOffline(): Promise<{ enabled: boolean; forced: boolean }> {
+  return json("/api/settings/local-offline");
+}
+
+export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }> {
+  return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
 
 export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {
   return json("/api/settings/domain-fallback");

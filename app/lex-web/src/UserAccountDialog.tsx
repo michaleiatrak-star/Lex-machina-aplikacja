@@ -114,7 +114,7 @@ export function UserAccountDialog({
         <fieldset disabled={busy}>
           <legend>Dane</legend>
           <label>
-            Nazwa użytkownika
+            Imię i nazwisko
             <input value={displayName} maxLength={160} onChange={(event) => setDisplayName(event.target.value)} />
           </label>
           <label>
@@ -123,6 +123,7 @@ export function UserAccountDialog({
           </label>
           <button
             type="button"
+            className="primary-button user-account-save"
             disabled={!profileChanged || !displayName.trim()}
             onClick={() => void run(() => setAdminUserProfile(user.userId, { displayName: displayName.trim(), email: email.trim() }), "Dane konta zapisane.")}
           >
@@ -172,6 +173,7 @@ export function UserAccountDialog({
               <div className="admin-user-actions">
                 <button
                   type="button"
+                  className="chat-secondary-action"
                   onClick={() => {
                     if (!window.confirm(`Ustawić hasło jednorazowe dla @${user.loginName}? Obecne hasło przestanie działać.`)) return;
                     void run(async () => {
@@ -184,6 +186,7 @@ export function UserAccountDialog({
                 </button>
                 <button
                   type="button"
+                  className="chat-secondary-action"
                   onClick={() => void run(async () => {
                     const sent = await sendAdminPasswordReset(user.userId);
                     onChanged(`Link resetu hasła wysłany na ${sent.sentTo}.`);
@@ -219,6 +222,7 @@ export function UserAccountDialog({
             <div className="admin-user-actions">
               <button
                 type="button"
+                className="chat-secondary-action"
                 onClick={() => void run(
                   () => setAdminUserStatus(user.userId, user.status === "ACTIVE" ? "DISABLED" : "ACTIVE"),
                   user.status === "ACTIVE" ? "Konto zablokowane, a jego sesje unieważnione." : "Konto odblokowane."

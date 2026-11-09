@@ -1736,6 +1736,33 @@ export function registerWorkspaceRoutes(
     }
   });
 
+  // Firm know-how: the folder ticked in every conversation (the firm's choice, write access).
+  app.patch("/api/cases/:caseId/workspace/folders/:folderId/chat-default", async (req, res) => {
+    try {
+      const actor = actorFor(req);
+      const caseId = caseIdFrom(req);
+      const folderId = String(req.params.folderId ?? "");
+      if (!FOLDER_ID.test(folderId)) throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+      if (typeof req.body?.chatDefault !== "boolean") throw new Error("WORKSPACE_FOLDER_CHAT_DEFAULT_INVALID");
+      const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+      const folder = await dependencies.caseAccessService.withCaseDataKey(
+        actor,
+        caseId,
+        "WRITE",
+        (caseDataKey) => dependencies.workspace.setFolderChatDefault({
+          caseId,
+          caseDataKey,
+          keyVersion: caseView.keyVersion,
+          folderId,
+          chatDefault: req.body.chatDefault as boolean
+        })
+      );
+      res.json({ folder });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.delete("/api/cases/:caseId/workspace/folders/:folderId", async (req, res) => {
     try {
       const actor = actorFor(req);

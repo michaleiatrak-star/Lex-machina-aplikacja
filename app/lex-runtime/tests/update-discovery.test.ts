@@ -177,8 +177,14 @@ describe("GitHub release update discovery", () => {
         html_url: `https://github.com/${repo}/releases/tag/v99.0.0`,
         draft: false,
         prerelease: true,
+        // The order of release 0.1.72: offline packages first (the update took the offline
+        // Setup.exe and failed with APPLICATION_UPDATE_VERSION_MISMATCH).
         assets: [
+          asset("Lex-Machina-99.0.0-macOS-arm64-Offline.pkg", "d"),
+          asset("Lex-Machina-99.0.0-Mac-arm64-Offline.pkg", "f"),
+          asset("Lex-Machina-99.0.0-Offline-x64-Installer.exe", "g"),
           asset("Lex-Machina-99.0.0-macOS-arm64-Online.pkg", "a"),
+          asset("Lex-Machina-99.0.0-Offline-x64-Setup.exe", "e"),
           asset("Lex-Machina-99.0.0-Online-x64-Setup.exe", "b"),
           asset("SHA256SUMS.txt", "c")
         ]

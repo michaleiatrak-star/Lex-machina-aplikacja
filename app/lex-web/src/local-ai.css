@@ -256,3 +256,29 @@
   align-items: center;
   gap: 8px;
 }
+
+.local-offline {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.24);
+  border-radius: 12px;
+}
+
+.local-offline-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.local-offline-toggle > span {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.local-offline-toggle small,
+.local-offline > small {
+  color: var(--lm-t2);
+}

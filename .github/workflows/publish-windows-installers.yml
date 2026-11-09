@@ -222,7 +222,9 @@ jobs:
               echo "RELEASE_OFFLINE_HASH_MISMATCH expected=$expected_offline actual=$actual_offline" >&2
               exit 1
             fi
-            offline_name="Lex-Machina-${version}-Offline-x64-Setup.exe"
+            # Not "...Setup.exe": the update of installed 0.1.71/0.1.72 picks the first asset named
+            # lex machina ... setup .exe, and took the offline package (APPLICATION_UPDATE_VERSION_MISMATCH).
+            offline_name="Lex-Machina-${version}-Offline-x64-Installer.exe"
             cp "$offline_exe" "$out/$offline_name"
             cp "$offline_receipt" "$out/SHA256-OFFLINE.txt"
             summed+=("$offline_name")
@@ -246,8 +248,11 @@ jobs:
               echo "RELEASE_MACOS_OFFLINE_HASH_MISMATCH:$mac_offline_name" >&2
               exit 1
             fi
-            cp "$mac_offline_pkg" "$out/$mac_offline_name"
-            summed+=("$mac_offline_name")
+            # Published without "macOS" in the name: installed apps pick the first "...macos....pkg"
+            # for an update and would take this 1.1 GB package instead of the online one.
+            mac_offline_out="Lex-Machina-${version}-Mac-arm64-Offline.pkg"
+            cp "$mac_offline_pkg" "$out/$mac_offline_out"
+            summed+=("$mac_offline_out")
           fi
 
           (
@@ -277,11 +282,14 @@ jobs:
           cat > release-assets/RELEASE-NOTES.md <<'EOF'
           ## Lex Machina installers
 
-          This release contains two accepted Windows installers and the macOS online package:
+          This release contains the Windows online and offline installers and the macOS (Apple silicon) online and offline packages:
 
           - **Online** — small core installer; downloads and verifies missing runtime components during installation.
           - **Offline** — standalone installer with the complete core runtime bundle for a network-blocked installation.
           - **macOS (Apple silicon) online** — `.pkg`; downloads and verifies the runtime components during installation (internet required, about 2 GB).
+          - **macOS (Apple silicon) offline** — `Mac-arm64-Offline.pkg`; all runtime components inside, for an installation without network.
+
+          The in-app update always uses the online installer of the platform.
 
           ### macOS: first opening of the package
 
@@ -295,16 +303,13 @@ jobs:
 
           Skill and application update channels are fail-closed. In-app application update installation remains disabled until a production Authenticode trust root and signing certificate are configured. This does not prevent manual installation of these installers.
 
-          ### Release status
-
-          This release is marked **pre-release** until production Authenticode signing and repository branch-protection administration are completed.
-
           Verify installer hashes with `SHA256SUMS.txt` before manual distribution.
           EOF
           if [[ "$OFFLINE" != "true" ]]; then
             sed -i \
-              -e 's/^This release contains two accepted Windows installers and the macOS online package:$/This release contains the accepted Windows online installer and the macOS online package (no offline installer in this release):/' \
+              -e 's/^This release contains the Windows online and offline installers and the macOS (Apple silicon) online and offline packages:$/This release contains the Windows online installer and the macOS online package (no offline installers in this release):/' \
               -e '/^- \*\*Offline\*\*/d' \
+              -e '/^- \*\*macOS (Apple silicon) offline\*\*/d' \
               -e 's/not\*\* bundled into either installer/not** bundled into the installers/' \
               release-assets/RELEASE-NOTES.md
           fi
