@@ -17,7 +17,7 @@ type Row = { code: string; section: string; history: string; lob: string; active
 type Archive = { url: string; stamp: string; entries: Map<string, Entry>; rows?: Map<string, Row> };
 
 const UA = "LexMachina/0.1 (legal research)";
-let cached: Archive | undefined;
+const archives = new Map<string, Archive>();
 
 async function range(fetchImpl: NationalFetch, url: string, spec: string): Promise<{ bytes: Uint8Array; total: number; stamp: string }> {
   const reply = await fetchImpl(url, { headers: { range: `bytes=${spec}`, "user-agent": UA }, signal: AbortSignal.timeout(120_000) });
@@ -33,7 +33,8 @@ const u64 = (view: DataView, at: number) => Number(view.getBigUint64(at, true));
 /** The zip's central directory (zip64: the archive is over 4 GB of entries). */
 async function directory(fetchImpl: NationalFetch, url: string): Promise<Archive> {
   const tail = await range(fetchImpl, url, "-70000");
-  if (cached && cached.url === url && cached.stamp === tail.stamp) return cached;
+  const known = archives.get(url);
+  if (known && known.stamp === tail.stamp) return known;
   const view = new DataView(tail.bytes.buffer, tail.bytes.byteOffset, tail.bytes.byteLength);
   let locator = -1;
   for (let at = tail.bytes.length - 20; at >= 0; at -= 1) if (u32(view, at) === 0x07064b50) { locator = at; break; }
@@ -78,8 +79,9 @@ async function directory(fetchImpl: NationalFetch, url: string): Promise<Archive
     entries.set(name, { offset, compressed });
     at += 46 + nameLength + extraLength + commentLength;
   }
-  cached = { url, stamp: tail.stamp, entries };
-  return cached;
+  const archive: Archive = { url, stamp: tail.stamp, entries };
+  archives.set(url, archive);
+  return archive;
 }
 
 async function entry(fetchImpl: NationalFetch, archive: Archive, name: string): Promise<Uint8Array> {
@@ -132,4 +134,23 @@ export async function readCaliforniaSection(fetchImpl: NationalFetch, url: strin
     version,
     articles: [{ unit: `${row.code} ${row.section}`, heading: `${row.code} § ${row.section}`, text: `${row.code} § ${row.section}\n${text}`, amendments: row.history ? [{ act: row.history }] : [] }]
   };
+}
+
+/**
+ * New Jersey: the Legislature's download of the statutes (pub.njleg.state.nj.us/statutes/STATUTES-TEXT.zip,
+ * one STATUTES.TXT, "updated through P.L. …"). The Folio viewer at lis.njleg.state.nj.us builds its pages
+ * with scripts; the file is read once per session (byte ranges, the text entry only) and kept in memory.
+ */
+export const NJ_STATUTES_HOST = /^pub\.njleg\.state\.nj\.us$/u;
+const njText = new Map<string, { stamp: string; lines: string[]; through: string }>();
+
+export async function newJerseyLines(fetchImpl: NationalFetch, url: string): Promise<{ lines: string[]; through: string }> {
+  const archive = await directory(fetchImpl, url);
+  const known = njText.get(url);
+  if (known && known.stamp === archive.stamp) return known;
+  const text = new TextDecoder("latin1").decode(await entry(fetchImpl, archive, "STATUTES.TXT"));
+  const through = /UPDATED THROUGH\s+([^\r\n)]+)/u.exec(text.slice(0, 400))?.[1]?.trim() ?? "";
+  const value = { stamp: archive.stamp, lines: text.split(/\r?\n/u), through };
+  njText.set(url, value);
+  return value;
 }

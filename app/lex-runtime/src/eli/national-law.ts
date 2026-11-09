@@ -2,7 +2,7 @@
 // goes to that country's reader; only the official hosts below are fetched (no other address
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
-import { CA_PUBINFO_HOST, readCaliforniaSection } from "./us-ca-pubinfo.js";
+import { CA_PUBINFO_HOST, NJ_STATUTES_HOST, newJerseyLines, readCaliforniaSection } from "./us-ca-pubinfo.js";
 import { cutUsSection, readUsStateSection, usJurisdictionOfHost } from "./us-states.js";
 import { fetchWithIntermediates, HOSTS_WITHOUT_INTERMEDIATE } from "./us-tls.js";
 import { BLOCKED_JURISDICTION_CODE, isBlockedCountry, isBlockedHost } from "../blocked-jurisdictions.js";
@@ -448,6 +448,11 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     if (!request.unit) return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, articles: [], note: "podaj jednostkę (unit): skrót kodeksu i numer, np. \"PEN 187\"" };
     const reading = await readCaliforniaSection(fetchImpl, url.href, request.unit);
     return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, version: reading.version, articles: reading.articles, ...(!reading.articles.length ? { note: "przepisu nie ma w bazie (sprawdź skrót kodeksu i numer)" } : {}) };
+  }
+  if (state && NJ_STATUTES_HOST.test(host)) {
+    const { lines, through } = await newJerseyLines(fetchImpl, url.href);
+    const articles = cutUsSection(lines, request.unit);
+    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, version: `plik Legislatury NJ, stan: ${through || "nieodczytany"}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w pliku" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. \"2C:11-3\"" } : {}) };
   }
   // Connecticut and Illinois send no issuing CA: the public one is supplied (us-tls.ts).
   const fetchSource: NationalFetch = HOSTS_WITHOUT_INTERMEDIATE.test(host) && fetchImpl === (fetch as unknown as NationalFetch) ? fetchWithIntermediates : fetchImpl;

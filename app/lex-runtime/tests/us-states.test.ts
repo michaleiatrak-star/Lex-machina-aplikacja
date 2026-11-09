@@ -132,3 +132,20 @@ describe("California: Legislative Counsel bulk database (pubinfo) by byte ranges
     expect(rows.get("PEN 187")).toMatchObject({ lob: "LAW_SECTION_TBL_69792.lob", active: true, history: expect.stringMatching(/^Amended by Stats\. 2023, Ch\. 260/u) });
   });
 });
+
+describe("New Jersey statutes file and Puerto Rico consolidated laws (line text)", () => {
+  it("NJ STATUTES.TXT: index line, then the section with its tab layout", () => {
+    // Lines as in STATUTES-TEXT.zip ("UPDATED THROUGH P.L.2026, c.50"), read 2026-11-09.
+    const lines = ["2C:11-3  Murder.", "\t2C:11-3.\tMurder.", "", "\ta.\tExcept as provided in N.J.S.2C:11-4, criminal homicide constitutes murder when:", "\t(1)\tThe actor purposely causes death or serious bodily injury resulting in death; or", "2C:11-4  Manslaughter.", "\t2C:11-4.\tManslaughter."];
+    const [article] = cutUsSection(lines, "2C:11-3");
+    expect(article!.text).toMatch(/^2C:11-3\. Murder\.\na\. Except as provided/u);
+    expect(article!.text).not.toContain("Manslaughter");
+  });
+
+  it("PR: Artículo N with its L.P.R.A. citation, up to the next Artículo", () => {
+    const lines = ["Artículo 93. — Grados de asesinato. (33 L.P.R.A. § 5142)", "Constituye asesinato en primer grado:", "(a) Todo asesinato perpetrado por medio de veneno, acecho o tortura, o con premeditación.", "Artículo 94. — Asesinato atenuado. (33 L.P.R.A. § 5143)"];
+    const [article] = cutUsSection(lines, "Artículo 93");
+    expect(article!.text).toMatch(/^Artículo 93\. — Grados de asesinato\./u);
+    expect(article!.text).not.toContain("Artículo 94");
+  });
+});
