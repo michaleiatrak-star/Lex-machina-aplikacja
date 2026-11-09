@@ -150,7 +150,8 @@ export function skillOfferedInJurisdiction(name: string, facades: ReadonlySet<st
  * The method that follows from the legal family. Civil law (default): the act and its unit are the source, case law
  * persuades. Common law: statute AND precedent; the reasoning goes through the binding judgments (ratio decidendi,
  * court hierarchy, distinguishing); a provision without the judgments that read it is half the answer. Mixed systems:
- * per field, as the register says.
+ * per field, as the register says. Nordic: the country's own act (no civil code), preparatory works and doctrine read
+ * from the source, supreme-court practice as guidance without stare decisis.
  */
 export function familyMethod(entry: ReturnType<typeof eliCountry>): string {
   if (!entry) return "";
@@ -162,6 +163,16 @@ export function familyMethod(entry: ReturnType<typeof eliCountry>): string {
       "(3) czy stan faktyczny da się odróżnić (distinguishing); (4) orzeczenia innych jurysdykcji common law tylko jako perswazyjne. " +
       "Bramki metody (zakres normy, oś czasu, wykładnia) stosuj do ustawy i do ratio orzeczenia. Odpowiedź bez sprawdzonego orzecznictwa oznacz jako niepełną." +
       (entry.code === "US" ? " USA: prawo federalne i stanowe są odrębne — ustal stan, którego prawo stosujesz, zanim powołasz przepis lub orzeczenie." : "") +
+      caseLaw
+    );
+  }
+  if (entry.family === "nordyckie") {
+    return (
+      " RODZINA PRAWA: NORDYCKA — metoda: shared/RODZINA-PRAWA-NORDYCKIE.md (NR-1…NR-6, wczytaj przed pierwszym powołaniem). " +
+      "(1) Ustal państwo i jego status (UE albo EOG/EFTA) — ustawa jednego państwa nordyckiego nie jest prawem drugiego, także przy ustawach wspólnych Norden; czytaj wersję państwa sprawy. " +
+      "(2) Nie ma kodeksu cywilnego: znajdź właściwą ustawę dla osi sporu. " +
+      "(3) Prace przygotowawcze i nauka są źródłami wykładni — powołuj je tylko po odczycie z urzędowego źródła w tej turze. " +
+      "(4) Orzeczenia sądu najwyższego mają wagę wskazówki dla stosowania prawa, bez formalnego stare decisis: pisz „linia sądu najwyższego wskazuje”, nie „wiąże”." +
       caseLaw
     );
   }

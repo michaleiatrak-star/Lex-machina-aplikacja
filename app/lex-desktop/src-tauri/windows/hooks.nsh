@@ -5,6 +5,10 @@
   File "/oname=lex-get-install-state.ps1" "${LEX_HOOK_FILE_DIR}\..\..\..\installer\get-install-state.ps1"
   File "/oname=lex-target-release-source.json" "${LEX_HOOK_FILE_DIR}\..\..\..\installer\windows-release-source.json"
 
+  ; Offline installer, three stages each with its own bar: 1 extraction (wrapper window), 2 preparation
+  ; (this installer's bar: the application files), 3 the actual installation (runtime window).
+  IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" 0 +2
+    DetailPrint "Etap 2 z 3: przygotowanie — kopiowanie plików aplikacji (pasek postępu poniżej)"
   DetailPrint "Lex Machina: rozpoznawanie stanu istniejącej instalacji..."
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\lex-get-install-state.ps1" -RuntimeRoot "$INSTDIR\runtime" -TargetManifestPath "$PLUGINSDIR\lex-target-release-source.json" -OutputPath "$PLUGINSDIR\lex-install-state.json" -ProductName "Lex Machina" -DiscoverRegisteredInstall -FailOnInstallRootMismatch -FailOnDowngrade'
   Pop $0
@@ -67,7 +71,7 @@
   IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" lex_offline_bundle lex_online_bootstrap
 
 lex_offline_bundle:
-  DetailPrint "Lex Machina: przygotowanie narzędzi z pełnego instalatora..."
+  DetailPrint "Etap 3 z 3: właściwa instalacja — postęp w osobnym oknie Instalacja Lex Machina"
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-offline-bundle-install.ps1" -RuntimeRoot "$INSTDIR\runtime" -BundlePath "$EXEDIR\LexMachina-Offline-Runtime.zip"'
   Pop $0
   Pop $1

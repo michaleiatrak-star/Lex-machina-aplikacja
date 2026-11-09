@@ -176,6 +176,10 @@ function localAppDataRoot(): string {
   return path.resolve(os.homedir(), ".lex-machina");
 }
 
+export function skillAutoUpdateSettingsPath(): string {
+  return path.join(localAppDataRoot(), "skills", "auto-update.json");
+}
+
 export function installedSkillOverlayRoot(): string {
   return path.join(localAppDataRoot(), "skills", "current");
 }
@@ -913,7 +917,7 @@ export class MaintenanceService {
       extractSkillChannelDirectory
   ) {}
 
-  private installedChannel(): SkillChannelInstalled | null {
+  installedChannel(): SkillChannelInstalled | null {
     const marker = readSkillHealthMarker(installedSkillOverlayRoot()) as
       | (Record<string, unknown> & SkillHealthMarker)
       | null;

@@ -1,3 +1,4 @@
+import type { SkillAutoUpdater } from "../skill-auto-update.js";
 import { probeLawSourceSession } from "../eli/law-source-sessions.js";
 import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister, type FetchText } from "../courts/wokanda.js";
 import type { TranscriptionModelManager } from "../transcription.js";
@@ -86,6 +87,8 @@ export function registerMaintenanceRoutes(
     authService: AuthService;
     localModels: LocalModelRuntime;
     maintenance: MaintenanceService;
+    // Automatyczna aktualizacja skilli; ręczne zmiany nakładki idą przez jej kolejkę.
+    skillAutoUpdate?: SkillAutoUpdater;
     anomalyJournal?: AnomalyJournal;
     transcriptionModel?: TranscriptionModelManager;
     ocrAcceleration?: OcrAccelerationManager;
@@ -98,6 +101,7 @@ export function registerMaintenanceRoutes(
     authService,
     localModels,
     maintenance,
+    skillAutoUpdate,
     anomalyJournal,
     transcriptionModel,
     ocrAcceleration,
@@ -770,7 +774,10 @@ export function registerMaintenanceRoutes(
         return;
       }
       try {
-        res.json(await maintenance.refreshSkillsFromChannel(channel));
+        const work = () => maintenance.refreshSkillsFromChannel(channel);
+        const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+        skillAutoUpdate?.markInstalledManually();
+        res.json(result);
       } catch (error) {
         sendMaintenanceError(res, error);
       }
@@ -782,12 +789,49 @@ export function registerMaintenanceRoutes(
     async (req, res) => {
       if (!requireAdmin(req, res, authService)) return;
       try {
-        res.json(await maintenance.applySkillUpdate());
+        const work = () => maintenance.applySkillUpdate();
+        const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+        skillAutoUpdate?.markInstalledManually();
+        res.json(result);
       } catch (error) {
         sendMaintenanceError(res, error);
       }
     }
   );
+
+  // Automatyczna aktualizacja skilli: stan, włączenie/wyłączenie, sprawdzenie teraz.
+  app.get("/api/skills/auto-update", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    res.json(skillAutoUpdate.state());
+  });
+
+  app.put("/api/skills/auto-update", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== "boolean") {
+      res.status(400).json({ error: "SKILL_AUTO_UPDATE_ENABLED_INVALID" });
+      return;
+    }
+    res.json(skillAutoUpdate.setEnabled(enabled));
+  });
+
+  app.post("/api/skills/auto-update/run", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    await skillAutoUpdate.runOnce();
+    res.json(skillAutoUpdate.state());
+  });
 
   app.get("/api/update/progress", (req, res) => {
     if (!requireAdmin(req, res, authService)) return;

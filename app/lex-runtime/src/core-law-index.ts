@@ -27,7 +27,7 @@ import {
   htmlArticleAnchors,
   pdfArticleAnchors
 } from "./source-anchor.js";
-import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill, listJurisdictions } from "./jurisdiction.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -288,17 +288,44 @@ function labelFor(line: string): string | null {
   return null;
 }
 
+/**
+ * Which jurisdictions' acts the index keeps current. On a desktop: only the chosen one (its domain
+ * skills and routing map; another country's acts are not downloaded). In server mode the whole corpus,
+ * every jurisdiction's package, since accounts may work under different legal systems.
+ */
+export type CoreLawScope = "active" | "all";
+let scopeOf: () => CoreLawScope = () => "active";
+export function setCoreLawScope(scope: () => CoreLawScope): void {
+  scopeOf = scope;
+}
+export function coreLawScope(): CoreLawScope {
+  return scopeOf();
+}
+
+// A domain skill the index covers: the chosen jurisdiction's, or in server mode any jurisdiction's.
+function coveredDomainSkill(corpusRoot: string, name: string): boolean {
+  // A country without a package (Settings) has no domain skills: Polish acts are not updated for it.
+  if (scopeOf() === "active") return Boolean(activeJurisdictionPack()) && isDomainSkill(name);
+  const prefixes = new Set(["dr", ...listJurisdictions(corpusRoot).map((provider) => provider.domainPrefix).filter(Boolean)]);
+  return [...prefixes].some((prefix) => new RegExp(`^${prefix}-\\d{2}-`, "u").test(name));
+}
+
 function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
   const files: Array<{ domain: string; file: string }> = [];
   for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !isDomainSkill(entry.name)) continue;
+    if (!entry.isDirectory() || !coveredDomainSkill(corpusRoot, entry.name)) continue;
     const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
     if (fs.existsSync(file)) files.push({ domain: entry.name, file });
   }
-  // The chosen jurisdiction's domain map (Polish law: prawo-polskie-v2/ROUTING-MAP.md).
-  const routing = path.join(corpusRoot, ...jurisdictionDomainMap(corpusRoot).split("/"));
-  if (fs.existsSync(routing)) {
-    files.push({ domain: activeJurisdictionPack(), file: routing });
+  // The jurisdictions' routing maps (Polish law: prawo-polskie-v2/ROUTING-MAP.md): the chosen one,
+  // or in server mode every package's.
+  const routings = scopeOf() === "all"
+    ? listJurisdictions(corpusRoot).map((provider) => ({ domain: provider.pack, map: provider.domains || `${provider.pack}/ROUTING-MAP.md` }))
+    : [{ domain: activeJurisdictionPack(), map: jurisdictionDomainMap(corpusRoot) }];
+  for (const { domain, map } of routings) {
+    if (!domain || !map) continue;
+    const routing = path.join(corpusRoot, ...map.split("/"));
+    if (fs.existsSync(routing) && !files.some((item) => item.file === routing)) files.push({ domain, file: routing });
   }
   return files.sort((a, b) => a.domain.localeCompare(b.domain));
 }
@@ -310,7 +337,7 @@ function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
 function sourceRegistries(corpusRoot: string): Array<{ domain: string; file: string }> {
   const files: Array<{ domain: string; file: string }> = [];
   for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !isDomainSkill(entry.name)) continue;
+    if (!entry.isDirectory() || !coveredDomainSkill(corpusRoot, entry.name)) continue;
     const references = path.join(corpusRoot, entry.name, "references");
     let scopes: fs.Dirent[];
     try {
@@ -821,7 +848,8 @@ export class CoreLawIndex {
 
   // Size and mtime of every act map and source registry: a skill update changes it.
   private static mapsSignatureOf(corpusRoot: string): string {
-    return [...mapFiles(corpusRoot), ...sourceRegistries(corpusRoot)]
+    // The scope and the chosen jurisdiction are part of it: switching either re-reads the act list.
+    return [`scope:${scopeOf()}:${scopeOf() === "active" ? activeJurisdictionPack() : "*"}`, ...[...mapFiles(corpusRoot), ...sourceRegistries(corpusRoot)]
       .map(({ file }) => {
         try {
           const stat = fs.statSync(file);
@@ -829,7 +857,7 @@ export class CoreLawIndex {
         } catch {
           return `${file}:-`;
         }
-      })
+      })]
       .join("|");
   }
 
@@ -1292,6 +1320,8 @@ export class CoreLawIndex {
   }
 
   status(): CoreLawStatus {
+    // The act list follows the chosen jurisdiction (and server mode) without waiting for a refresh.
+    this.reloadMapsIfChanged();
     const acts = this.summaries().map((act): CoreLawActStatus => {
       const due =
         act.consolidated &&

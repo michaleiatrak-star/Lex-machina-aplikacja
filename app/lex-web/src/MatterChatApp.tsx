@@ -2353,6 +2353,29 @@ export default function MatterChatApp({
     };
   }, []);
 
+  // Another legal system chosen in Settings: the national package and its domain skills change at
+  // once — the catalog and routes are read again (replaced, not merged: the previous jurisdiction's
+  // skills leave the list) and a manual selection keeps only skills the new catalog offers.
+  useEffect(() => {
+    const reload = (): void => {
+      void Promise.all([getSkills(), getRoutes()])
+        .then(([payload, routeList]) => {
+          const catalog = mergeSkillCatalog(
+            FALLBACK_EXECUTION_SKILLS,
+            Array.isArray(payload.skills) ? payload.skills : [],
+            routeList.primarySkills.map((name) => ({ name, category: "domain" as const }))
+          );
+          setSkills(catalog);
+          setRoutes(routeList.primarySkills);
+          const offered = new Set(catalog.map((item) => item.name));
+          setManualSkills((current) => (current === null ? null : current.filter((name) => offered.has(name))));
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener("lex:jurisdiction-changed", reload);
+    return () => window.removeEventListener("lex:jurisdiction-changed", reload);
+  }, []);
+
   useEffect(() => {
     if (routes.length === 0) {
       return;

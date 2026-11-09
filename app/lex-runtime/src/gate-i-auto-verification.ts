@@ -510,7 +510,10 @@ function marker(
 export function applyAutomaticVerificationMarkers(
   text: string,
   ledger: VerificationLedger,
-  requestedAsOf?: string
+  requestedAsOf?: string,
+  // Record claim -> the mark to show instead of ✅: the provision was read, but its wording
+  // does not say what the answer claims (kontrola treści przepisów, session-executor).
+  contentWarnings?: ReadonlyMap<string, string>
 ): {
   text: string;
   inserted: number;
@@ -609,7 +612,7 @@ export function applyAutomaticVerificationMarkers(
           // Dwa przepisy z tej samej strony aktu dają ten sam znacznik.
           const missingMarkers =
             [...new Set(records
-              .map(marker))]
+              .map((record) => contentWarnings?.get(record.claim) ?? marker(record)))]
               .filter(
                 (
                   value

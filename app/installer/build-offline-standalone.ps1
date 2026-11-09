@@ -58,6 +58,7 @@ try {
     /reference:System.IO.Compression.dll `
     /reference:System.IO.Compression.FileSystem.dll `
     /reference:System.Windows.Forms.dll `
+    /reference:System.Drawing.dll `
     $source
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stub -PathType Leaf)) {
     throw "OFFLINE_STANDALONE_STUB_COMPILE_FAILED:$LASTEXITCODE"

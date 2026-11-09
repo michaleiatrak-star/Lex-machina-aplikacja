@@ -1,3 +1,5 @@
+import { SkillAutoUpdater } from "../skill-auto-update.js";
+import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
@@ -53,7 +55,7 @@ import { applicationUpdateDiscovery } from "../update-discovery.js";
 import { applyAccountSkills } from "../account-skills.js";
 import { CoreLawIndex } from "../core-law-index.js";
 import { LocalPersonMorphology } from "../privacy/person-morphology.js";
-import { MaintenanceService, commitSkillOverlayRuntimeHealth, recoverSkillOverlayForStartup } from "../maintenance-service.js";
+import { MaintenanceService, commitSkillOverlayRuntimeHealth, recoverSkillOverlayForStartup, skillAutoUpdateSettingsPath } from "../maintenance-service.js";
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
@@ -172,6 +174,17 @@ export function bundledRuntimeRoot() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     const repositoryRoot = path.resolve(here, "../../../..");
     return path.resolve(path.join(repositoryRoot, "Wersja rozwojowa rozpakowana"));
+}
+/**
+ * The corpus whose MCP connector package is used: the account's or channel's skills first, then the
+ * installer's own corpus (desktop: LEX_BUNDLED_SKILLS_PATH, runtime\\corpus), then the repository's.
+ * Skills updated from a channel without mcp-servers (the stable folder of 07.10.2026 predates them)
+ * keep the connectors this way instead of "Brak pakietu … lex-mcp.mjs".
+ */
+export function connectorCorpusRoot(runtimeRoot, baseRuntimeRoot) {
+    const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+    return [runtimeRoot, baseRuntimeRoot, ...(bundled ? [path.resolve(bundled)] : []), bundledRuntimeRoot()]
+        .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
 }
 export function resolveRuntimeRoot() {
     const explicitlyConfigured = process.env
@@ -304,6 +317,9 @@ export async function startLocalServer(options) {
     const sensitiveDownloadTickets = new SensitiveDownloadTicketManager(authService);
     const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
+    const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
+    if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off")
+        skillAutoUpdate.start();
     const localModels = new LocalModelRuntime();
     const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
     const ocrAcceleration = new OcrAccelerationManager(path.join(localModels.rootDir, "ocr-acceleration"));
@@ -313,6 +329,8 @@ export async function startLocalServer(options) {
     const serverModeDir = path.join(caseFileStore.rootDir, "server");
     const serverMode = new ServerModeService(new ServerModeStore(serverModeDir), new ServerSecretBox({ keyPath: path.join(serverModeDir, "secret.key"), envKey: process.env.LEX_SERVER_SECRET_KEY }), authService, { forceEnv: process.env.LEX_SERVER_MODE_FORCE });
     // Server mode: the admin's global API keys for every account.
+    // RAG of the acts (core law): the chosen jurisdiction on a desktop, every jurisdiction in server mode.
+    setCoreLawScope(() => (serverMode.isEnabled() ? "all" : "active"));
     const environmentCredentials = new EnvironmentCredentialResolver();
     const credentials = new ServerModeCredentialResolver(new MemoryOverlayCredentialResolver(environmentCredentials), environmentCredentials, serverMode);
     const accountSessions = new AccountSessionManager();
@@ -339,11 +357,7 @@ export async function startLocalServer(options) {
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
     const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true }));
     // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
-    const mcpConnectors = new LexMcpConnectorStore([
-        runtimeRoot,
-        baseRuntimeRoot,
-        bundledRuntimeRoot()
-    ].find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot);
+    const mcpConnectors = new LexMcpConnectorStore(connectorCorpusRoot(runtimeRoot, baseRuntimeRoot));
     const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
     const legalFederationTools = new LegalFederationToolRuntime(undefined, undefined, mcpConnectors);
     // Morfeusz2/SGJP person-name morphology in the payload Python.
@@ -363,6 +377,12 @@ export async function startLocalServer(options) {
             });
             // Daily ELI check while the application runs, not only at start.
             coreLawIndex.startSchedule();
+            // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
+            // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
+            mcpConnectors.onJurisdictionChange(() => {
+                coreLawIndex.reloadMapsIfChanged();
+                void coreLawIndex.refresh().catch(() => undefined);
+            });
         }
     }
     catch (error) {
@@ -555,6 +575,7 @@ export async function startLocalServer(options) {
         authService,
         localModels,
         maintenance,
+        skillAutoUpdate,
         anomalyJournal,
         transcriptionModel,
         ocrAcceleration,
@@ -620,6 +641,7 @@ export async function startLocalServer(options) {
                 gazetteerRecognizer.close();
                 personMorphology.close();
                 credentials.close();
+                skillAutoUpdate.stop();
                 serverMode.close();
                 supportService.close();
                 unsubscribeGuideRevocation();
@@ -671,6 +693,7 @@ export async function startLocalServer(options) {
                         gazetteerRecognizer.close();
                         personMorphology.close();
                         credentials.close();
+                        skillAutoUpdate.stop();
                         serverMode.close();
                         supportService.close();
                         unsubscribeGuideRevocation();

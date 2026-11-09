@@ -16,6 +16,9 @@ function localAppDataRoot() {
         return path.resolve(base, "LexMachina");
     return path.resolve(os.homedir(), ".lex-machina");
 }
+export function skillAutoUpdateSettingsPath() {
+    return path.join(localAppDataRoot(), "skills", "auto-update.json");
+}
 export function installedSkillOverlayRoot() {
     return path.join(localAppDataRoot(), "skills", "current");
 }

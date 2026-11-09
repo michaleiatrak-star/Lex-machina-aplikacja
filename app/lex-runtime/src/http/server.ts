@@ -1,3 +1,5 @@
+import { SkillAutoUpdater } from "../skill-auto-update.js";
+import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
@@ -76,7 +78,8 @@ import {
 import {
   MaintenanceService,
   commitSkillOverlayRuntimeHealth,
-  recoverSkillOverlayForStartup
+  recoverSkillOverlayForStartup,
+  skillAutoUpdateSettingsPath
 } from "../maintenance-service.js";
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
@@ -297,6 +300,18 @@ export function bundledRuntimeRoot(): string {
       "Wersja rozwojowa rozpakowana"
     )
   );
+}
+
+/**
+ * The corpus whose MCP connector package is used: the account's or channel's skills first, then the
+ * installer's own corpus (desktop: LEX_BUNDLED_SKILLS_PATH, runtime\\corpus), then the repository's.
+ * Skills updated from a channel without mcp-servers (the stable folder of 07.10.2026 predates them)
+ * keep the connectors this way instead of "Brak pakietu … lex-mcp.mjs".
+ */
+export function connectorCorpusRoot(runtimeRoot: string, baseRuntimeRoot: string): string {
+  const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+  return [runtimeRoot, baseRuntimeRoot, ...(bundled ? [path.resolve(bundled)] : []), bundledRuntimeRoot()]
+    .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
 }
 
 export function resolveRuntimeRoot(): string {
@@ -559,6 +574,8 @@ export async function startLocalServer(options?: {
     new MaintenanceService(
       updateDiscovery
     );
+  const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
+  if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off") skillAutoUpdate.start();
   const localModels =
     new LocalModelRuntime();
   const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
@@ -575,6 +592,8 @@ export async function startLocalServer(options?: {
     { forceEnv: process.env.LEX_SERVER_MODE_FORCE }
   );
   // Server mode: the admin's global API keys for every account.
+  // RAG of the acts (core law): the chosen jurisdiction on a desktop, every jurisdiction in server mode.
+  setCoreLawScope(() => (serverMode.isEnabled() ? "all" : "active"));
   const environmentCredentials =
     new EnvironmentCredentialResolver();
   const credentials =
@@ -635,16 +654,7 @@ export async function startLocalServer(options?: {
   // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
   const mcpConnectors =
     new LexMcpConnectorStore(
-      [
-        runtimeRoot,
-        baseRuntimeRoot,
-        bundledRuntimeRoot()
-      ].find(
-        (root) =>
-          fs.existsSync(
-            lexMcpPackagePath(root)
-          )
-      ) ?? runtimeRoot
+      connectorCorpusRoot(runtimeRoot, baseRuntimeRoot)
     );
   const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
   const legalFederationTools =
@@ -682,6 +692,12 @@ export async function startLocalServer(options?: {
         });
       // Daily ELI check while the application runs, not only at start.
       coreLawIndex.startSchedule();
+      // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
+      // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
+      mcpConnectors.onJurisdictionChange(() => {
+        coreLawIndex.reloadMapsIfChanged();
+        void coreLawIndex.refresh().catch(() => undefined);
+      });
     }
   } catch (error) {
     process.stderr.write(
@@ -949,6 +965,7 @@ export async function startLocalServer(options?: {
       authService,
       localModels,
       maintenance,
+      skillAutoUpdate,
       anomalyJournal,
       transcriptionModel,
       ocrAcceleration,
@@ -1029,6 +1046,7 @@ export async function startLocalServer(options?: {
         gazetteerRecognizer.close();
         personMorphology.close();
         credentials.close();
+        skillAutoUpdate.stop();
         serverMode.close();
         supportService.close();
         unsubscribeGuideRevocation();
@@ -1089,6 +1107,7 @@ export async function startLocalServer(options?: {
               gazetteerRecognizer.close();
               personMorphology.close();
               credentials.close();
+              skillAutoUpdate.stop();
               serverMode.close();
               supportService.close();
               unsubscribeGuideRevocation();

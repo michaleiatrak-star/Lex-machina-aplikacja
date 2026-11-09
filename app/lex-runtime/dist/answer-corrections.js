@@ -68,10 +68,10 @@ export function answerCorrection(round, findings, before, after) {
 }
 export function validAnswerCorrections(value) {
     return (Array.isArray(value) &&
-        value.length <= 4 &&
+        value.length <= 5 &&
         value.every((item) => item &&
             typeof item === "object" &&
-            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER" || item.round === "ACT_NAME" || item.round === "QUOTE_SOURCE") &&
+            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER" || item.round === "ACT_NAME" || item.round === "QUOTE_SOURCE" || item.round === "STATUTE_CONTENT") &&
             Array.isArray(item.findings) &&
             item.findings.length <= MAX_FINDINGS &&
             item.findings.every((finding) => typeof finding === "string" && finding.length <= 500) &&

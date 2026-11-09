@@ -8,7 +8,7 @@ import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
-import { FinalizationGate, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences } from "./finalization-gate.js";
+import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
@@ -99,6 +99,7 @@ import { peselCheckText } from "./privacy/pesel-check.js";
 import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } from "./quote-source-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
+import { STATUTE_JUDGE_BATCH, claimsWithWording, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
@@ -1808,9 +1809,9 @@ export class SafeSessionExecutor {
         // Sections the skill's author marked as executed by the application go to the
         // model as a one-line reference (skill-sections.ts); the audit names them.
         // KROK 7 is the application's only where it appends the canonical text after the
-        // gates (free-text answer of a non-local model, not a report or a pipeline document).
-        const appendsDisclaimer = !request.model.startsWith("local/") &&
-            !request.documentAstOutput &&
+        // gates (free-text answer of any model, a local one included — Bielik left it out when
+        // asked to write it itself; not a report or a pipeline document).
+        const appendsDisclaimer = !request.documentAstOutput &&
             !request.processWorkflowContext &&
             !/^raport-/u.test(request.primarySkill);
         const inactiveComponents = new Set([
@@ -2884,7 +2885,8 @@ export class SafeSessionExecutor {
             };
             const judge = async (answer) => {
                 const documents = citedDocuments(answer, caseSourceTexts);
-                if (!documents.length || request.model.startsWith("local/"))
+                // A local model judges too (2026-11-09: without it Bielik's claims passed on the lexical check only).
+                if (!documents.length)
                     return null;
                 try {
                     const verdict = await this.providers.stream(request.provider, {
@@ -3031,7 +3033,7 @@ export class SafeSessionExecutor {
         // KROK 7: the model's closing disclaimer is the fixed text of shared/DISCLAIMER.md.
         // It is cut off before the gates and put back after them (the canonical text, or
         // the model's own when the application adds none).
-        const modelDisclaimer = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/")
+        const modelDisclaimer = legalTurn && !request.documentAstOutput
             ? splitTrailingDisclaimer(modelOutput)
             : { body: modelOutput, disclaimer: null };
         if (modelDisclaimer.disclaimer)
@@ -3041,25 +3043,104 @@ export class SafeSessionExecutor {
         const astLines = request.documentAstOutput ? astTextLines(modelOutput) : null;
         if (astLines)
             modelOutput = astLines.text;
-        const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
-        const automaticVerificationPlan = planAutomaticLegalVerification(
-        // A document AST is one line of JSON: the act of a provision is read from its line, so
-        // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
-        // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
-        request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text, ledger, requestedHistoricalAsOf);
+        let releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+        let automaticVerificationPlan = planAutomaticLegalVerification("", ledger, requestedHistoricalAsOf);
         let automaticVerificationExecuted = 0;
-        if (automaticVerificationPlan.calls.length > 0 &&
-            verificationTools) {
-            const results = await verificationTools.runTools(automaticVerificationPlan.calls);
-            automaticVerificationExecuted =
-                results.length;
+        const verifyDraft = async () => {
+            releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+            automaticVerificationPlan =
+                planAutomaticLegalVerification(
+                // A document AST is one line of JSON: the act of a provision is read from its line, so
+                // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+                // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
+                request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text, ledger, requestedHistoricalAsOf);
+            if (automaticVerificationPlan.calls.length > 0 &&
+                verificationTools) {
+                const results = await verificationTools.runTools(automaticVerificationPlan.calls);
+                automaticVerificationExecuted +=
+                    results.length;
+            }
+        };
+        await verifyDraft();
+        // Kontrola treści przepisów: the application verified a provision (ELI/RAG) — does its wording
+        // say what the answer claims? The same model judges (a local one too); every verdict quotes the
+        // wording and the quote is checked. A claim the provision does not carry: one correcting round
+        // (the corrected text is verified anew); still wrong: the mark says so instead of ✅.
+        const statuteWarnings = new Map();
+        if (legalTurn && !request.documentAstOutput && !astLines && verificationTools && !waitsForUser(modelOutput)) {
+            const alreadyJudged = claimsWithWording(caseSourceTexts);
+            const statuteQuestion = judgedQuestion(protectedQuery);
+            const judgeStatutes = async (answer) => {
+                const items = statuteItems(answer, ledger.all(), alreadyJudged);
+                const problems = [];
+                for (let start = 0; start < items.length; start += STATUTE_JUDGE_BATCH) {
+                    const batch = items.slice(start, start + STATUTE_JUDGE_BATCH).map((item) => item.document);
+                    try {
+                        const verdict = await this.providers.stream(request.provider, {
+                            model: request.model,
+                            systemPrompt: JUDGE_SYSTEM,
+                            messages: [{ role: "user", content: semanticJudgePrompt(statuteQuestion, batch) }],
+                            accountContinuity: "none",
+                            reasoning: "none"
+                        });
+                        problems.push(...statuteProblems(parseSemanticVerdicts(verdict.fullText, batch)));
+                    }
+                    catch {
+                        // no verdict: the provision keeps its ✅ for existence and wording
+                    }
+                }
+                return { items, problems };
+            };
+            const first = await judgeStatutes(releasedDraft.text);
+            let remaining = first;
+            if (first.problems.length) {
+                step("MODEL", `kontrola treści przepisów: ${first.problems.map((item) => item.signature).join(", ")}`);
+                const before = modelOutput;
+                let corrected = "";
+                try {
+                    corrected = (await this.providers.stream(request.provider, {
+                        model: request.model,
+                        ...correctingRound(modelOutput, statuteCorrectionPrompt(first.problems)),
+                        accountContinuity: "none",
+                        reasoning: "none"
+                    })).fullText.trim();
+                }
+                catch {
+                    corrected = "";
+                }
+                if (corrected && !emptyDeferral(corrected)) {
+                    const correctedParts = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected));
+                    modelOutput = correctedParts.body;
+                    await verifyDraft();
+                    const second = await judgeStatutes(releasedDraft.text);
+                    if (second.problems.length < first.problems.length) {
+                        corrections.push(answerCorrection("STATUTE_CONTENT", first.problems.map((item) => `${item.signature}: ${item.claim} — ${item.reason}`), before, modelOutput));
+                        remaining = second;
+                    }
+                    else {
+                        modelOutput = before;
+                        await verifyDraft();
+                    }
+                }
+            }
+            for (const problem of remaining.problems) {
+                const item = remaining.items.find((candidate) => candidate.document.signature === problem.signature);
+                if (item)
+                    statuteWarnings.set(item.record.claim, statuteContentWarning(problem));
+            }
+            audit.record("gate", "STATUTE_CONTENT_CHECK", remaining.problems.length ? "DEGRADED" : "OK", {
+                judged: first.items.length,
+                problems: first.problems.map((item) => `${item.signature}:${item.claim}`),
+                corrected: remaining !== first,
+                remaining: remaining.problems.map((item) => `${item.signature}:${item.claim}`)
+            });
         }
         // Model-written ✅ markers are claims, not verification: only the ledger
         // marker is shown, so a rewritten link or date cannot block the answer.
         const ledgerBackedOutput = stripUnbackedVerificationMarkers(
         // The KROK 3A trace is the application's (mandatoryPath.routingTrace), not the answer's.
         withoutModelRoutingTrace(releasedDraft.text), ledger);
-        const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf);
+        const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf, statuteWarnings);
         audit.record("gate", "G39I_AUTO_POST_DRAFT_VERIFICATION", automaticVerificationPlan.calls.length > 0 &&
             !verificationTools
             ? "BLOCKED"
@@ -3596,14 +3677,22 @@ export class SafeSessionExecutor {
         const mode = request.modeDecision?.mode ?? request.mode;
         // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
         const freeText = !request.documentAstOutput && !reportBlueprint;
+        // Kontrola treści przepisów: a thesis the provision does not carry keeps the source link, not ✅.
+        const closingText = demoteContradictedMarkers(processedDocumentCitations.text, ledger
+            .all()
+            .filter((record) => statuteWarnings.has(record.claim))
+            .flatMap((record) => {
+            const marker = expectedVerificationMarker(record);
+            return marker ? [{ warning: statuteWarnings.get(record.claim), marker }] : [];
+        }));
         const disclaimerTexts = 
         // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
-        (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+        (legalAnswer(closingText) || Boolean(modelDisclaimer.disclaimer)) && freeText ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
         const disclaimed = disclaimerTexts
-            ? (({ text, appended }) => ({ text: withOneClosingDisclaimer(text), appended }))(withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration }))
+            ? (({ text, appended }) => ({ text: withOneClosingDisclaimer(text), appended }))(withDisclaimer(closingText, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration }))
             : modelDisclaimer.disclaimer
-                ? { text: `${processedDocumentCitations.text.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
-                : { text: processedDocumentCitations.text, appended: false };
+                ? { text: `${closingText.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
+                : { text: closingText, appended: false };
         const disclaimerBy = modelDisclaimer.disclaimer ? "MODEL" : disclaimed.appended ? "APLIKACJA" : "MODEL";
         if (disclaimed.appended)
             audit.record("gate", "DISCLAIMER_LAST", "OK", { by: disclaimerBy, mode, canonical: true });

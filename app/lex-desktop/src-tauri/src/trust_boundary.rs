@@ -1500,6 +1500,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
         }
         "/api/skills/channel/status" => method == "GET",
         "/api/skills/channel/refresh" => method == "POST",
+        // Automatyczna aktualizacja skilli: stan, włączenie, sprawdzenie teraz (administrator).
+        "/api/skills/auto-update" => method == "GET" || method == "PUT",
+        "/api/skills/auto-update/run" => method == "POST",
         // Wokandy of the common courts: re-checked from this computer (administrator).
         "/api/courts/wokanda/recheck" => method == "POST",
         // A court's browser verification passed by the user in the court's window (as for sn.pl).
@@ -1785,6 +1788,7 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
                 | "/api/local-models/repair"
                 | "/api/local-models/update/apply"
                 | "/api/skills/channel/refresh"
+                | "/api/skills/auto-update/run"
         )
     {
         return Duration::from_secs(
@@ -2456,6 +2460,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/skills/channel/refresh"));
         assert!(!route_allowed("POST", "/api/skills/channel/status"));
         assert!(!route_allowed("GET", "/api/skills/channel/refresh"));
+        assert!(route_allowed("GET", "/api/skills/auto-update"));
+        assert!(route_allowed("PUT", "/api/skills/auto-update"));
+        assert!(!route_allowed("DELETE", "/api/skills/auto-update"));
+        assert!(route_allowed("POST", "/api/skills/auto-update/run"));
+        assert!(!route_allowed("GET", "/api/skills/auto-update/run"));
     }
 
     #[test]

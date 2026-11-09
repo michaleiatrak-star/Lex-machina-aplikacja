@@ -8,13 +8,16 @@ import {
 import {
   ApiError,
   downloadApplicationUpdate,
+  getSkillAutoUpdate,
   getSkillChannelStatus,
   getUpdateStatus,
   installStagedApplicationUpdate,
   isDesktopShell,
   refreshSkillsFromChannel,
+  setSkillAutoUpdate,
   type ApplicationUpdateDownloadResponse,
   type AuthenticatedUser,
+  type SkillAutoUpdateStateResponse,
   type SkillChannel,
   type SkillChannelStatusResponse,
   type UpdateStatusResponse
@@ -39,6 +42,21 @@ const CHANNEL_LABEL: Record<SkillChannel, string> = {
 
 function shortDate(value: string | null | undefined): string {
   return value ? new Date(value).toLocaleString("pl-PL") : "—";
+}
+
+function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse["lastResult"]>): string {
+  const source = result.source === "channel" && result.channel ? `kanał ${CHANNEL_LABEL[result.channel]}` : "wydanie skilli";
+  const target = result.target ? (result.source === "channel" ? ` (commit ${result.target.slice(0, 7)})` : ` ${result.target}`) : "";
+  switch (result.outcome) {
+    case "INSTALLED":
+      return `zainstalowano: ${source}${target}.`;
+    case "UP_TO_DATE":
+      return `aktualne (${source}).`;
+    case "BLOCKED":
+      return `nowsze skille są, ale wydanie nie ma kompletu do weryfikacji (${result.detail ?? "brak"}); bez instalacji.`;
+    default:
+      return `nie udało się (${source}: ${result.detail ?? "błąd"}).`;
+  }
 }
 
 function channelUnavailableText(reason: string | undefined): string {
@@ -201,6 +219,8 @@ export function MaintenancePanel({
     useRef(false);
   const [skillStatus, setSkillStatus] =
     useState<SkillChannelStatusResponse | null>(null);
+  const [autoUpdate, setAutoUpdate] =
+    useState<SkillAutoUpdateStateResponse | null>(null);
   const [staged, setStaged] =
     useState<ApplicationUpdateDownloadResponse | null>(null);
   const [busy, setBusy] = useState<
@@ -264,6 +284,10 @@ export function MaintenancePanel({
             : Promise.resolve(null)
         ]);
       setAppStatus(application);
+      if (user.appRole === "ADMIN") {
+        // Starszy runtime bez automatu (404): sekcja bez przełącznika.
+        setAutoUpdate(await getSkillAutoUpdate().catch(() => null));
+      }
       const installedChannel = skills?.installed?.channel;
       if (!channelChosen.current && installedChannel && installedChannel !== selected) {
         setChannel(installedChannel);
@@ -373,6 +397,15 @@ export function MaintenancePanel({
       setError(friendlyError(problem));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function toggleAutoUpdate(enabled: boolean): Promise<void> {
+    setError("");
+    try {
+      setAutoUpdate(await setSkillAutoUpdate(enabled));
+    } catch (problem) {
+      setError(friendlyError(problem));
     }
   }
 
@@ -583,6 +616,33 @@ export function MaintenancePanel({
                 <option value="development">Wersja rozwojowa</option>
               </select>
             </label>
+          ) : null}
+
+          {user.appRole === "ADMIN" && autoUpdate ? (
+            <label className="maintenance-auto-update">
+              <input
+                type="checkbox"
+                checked={autoUpdate.enabled}
+                disabled={Boolean(busy)}
+                onChange={(event) => void toggleAutoUpdate(event.target.checked)}
+              />
+              Aktualizuj skille automatycznie
+              <InfoTip>
+                Co {autoUpdate.intervalHours} godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).
+              </InfoTip>
+            </label>
+          ) : null}
+
+          {autoUpdate?.pendingActivation ? (
+            <small className="maintenance-trust-warning">
+              Nowe skille są pobrane i sprawdzone. Uruchom ponownie program, aby zaczęły działać.
+            </small>
+          ) : null}
+
+          {autoUpdate?.lastResult ? (
+            <small>
+              Ostatnie automatyczne sprawdzenie: {shortDate(autoUpdate.lastResult.at)} — {autoUpdateOutcomeText(autoUpdate.lastResult)}
+            </small>
           ) : null}
 
           {skillStatus?.latest ? (

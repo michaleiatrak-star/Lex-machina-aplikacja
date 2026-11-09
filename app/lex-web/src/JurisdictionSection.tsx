@@ -47,6 +47,8 @@ export function JurisdictionSection() {
     try {
       setSettings(await setLegalSystem(country));
       setError("");
+      // The chat reads its skills again: the new country's package and domain skills, the others off.
+      window.dispatchEvent(new CustomEvent("lex:jurisdiction-changed", { detail: { country } }));
     } catch (failure) {
       const code = failure instanceof ApiError ? failure.code : String(failure);
       setError(ERRORS[code] ?? code);
@@ -65,8 +67,10 @@ export function JurisdictionSection() {
           <strong>
             System prawny
             <InfoTip>
-              Prawo kraju, z którym pracuje aplikacja. Używane są tylko skille dziedzinowe, konektory i źródła przepisów
-              wybranego kraju; pozostałe kraje są wyłączone. Pakiet ze skillami dziedzinowymi ma dziś tylko Polska.
+              Prawo kraju, z którym pracuje aplikacja. Zmiana działa od razu: skill prawa krajowego, skille dziedzinowe,
+              konektory i źródła przepisów przełączają się na wybrany kraj, a pozostałe kraje są wyłączone. Lokalna baza
+              aktów (RAG) aktualizuje się tylko dla wybranej jurysdykcji; w trybie serwerowym — dla wszystkich.
+              Pakiet ze skillami dziedzinowymi ma dziś tylko Polska.
             </InfoTip>
           </strong>
         </div>
