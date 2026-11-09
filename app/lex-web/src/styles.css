@@ -2707,7 +2707,8 @@ textarea:focus {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--lm-t1);
+  /* Body text: --lm-t1 is the text on accent backgrounds (white), invisible on the row's surface. */
+  color: var(--lm-t2);
   font-weight: 600;
   text-align: left;
   text-decoration: underline;
