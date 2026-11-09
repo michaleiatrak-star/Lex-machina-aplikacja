@@ -716,7 +716,25 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 app.manage(Arc::new(macos_setup::SetupState::default()));
-                if macos_setup::needed(&resource_dir) { return Ok(()); }
+                if macos_setup::needed(&resource_dir) {
+                    // The .pkg opens the app before the components exist; they may then be prepared
+                    // outside this window (a headless bootstrap, a terminal). A second "open" only
+                    // brings this instance forward, so it starts the runtime itself once they are ready.
+                    let bridge = Arc::clone(&setup_bridge);
+                    let resources = resource_dir.clone();
+                    std::thread::spawn(move || {
+                        while !macos_setup::ready(&resources) {
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                        }
+                        let started = bridge
+                            .start(&resources)
+                            .and_then(|_| bridge.ensure_managed_identity().map(|_| ()));
+                        if let Err(error) = started {
+                            bridge.record_start_error(error);
+                        }
+                    });
+                    return Ok(());
+                }
             }
             // A runtime that does not start (macOS: components missing for this user,
             // a failed bootstrap) is reported on the sign-in screen with its log, not
