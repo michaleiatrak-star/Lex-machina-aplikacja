@@ -2,9 +2,10 @@
 // goes to that country's reader; only the official hosts below are fetched (no other address
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
+import { readVaquillSection, VAQUILL_HOST } from "./us-vaquill.js";
 import { CA_PUBINFO_HOST, NJ_STATUTES_HOST, newJerseyLines, readCaliforniaSection } from "./us-ca-pubinfo.js";
 import { clearLawSourceSession, isChallengePage, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders, lawSourceWithCheck } from "./law-source-sessions.js";
-import { cutUsSection, readUsStateSection, usJurisdictionOfHost } from "./us-states.js";
+import { cutUsSection, readUsStateSection, usJurisdictionOfHost, usSourceOfUrl } from "./us-states.js";
 import { fetchWithIntermediates, HOSTS_WITHOUT_INTERMEDIATE } from "./us-tls.js";
 import { BLOCKED_JURISDICTION_CODE, isBlockedCountry, isBlockedHost } from "../blocked-jurisdictions.js";
 import { boeArticle, boeVersionOn } from "./es-boe.js";
@@ -443,17 +444,56 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   const reader = READERS.find((item) => item.hosts.test(host));
   const pdf = PDF_HOSTS.find((item) => item.hosts.test(host));
   // US states, DC and territories: each one's own code (us-states.ts).
-  const state = reader || pdf ? undefined : usJurisdictionOfHost(host);
+  const stateHit = reader || pdf ? undefined : usSourceOfUrl(url);
+  const state = stateHit?.jurisdiction;
+  const stateNote = stateHit?.note ?? "";
+  // Open US Law (Vaquill) snapshot of a state code: the state file read once, the section by its number.
+  if (state && VAQUILL_HOST.test(host)) {
+    if (!request.unit) return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "podaj jednostkę (unit): pełne oznaczenie z migawki (np. \"Ala. Code § 13A-6-2\", \"N.Y. PEN Law § 125.27\") albo numer" };
+    const found = await readVaquillSection(fetchImpl, url.href, request.unit);
+    return {
+      country: "US",
+      url: url.href,
+      title: `${state.codeName} (${state.name})`,
+      status: `${stateNote}${found.status && found.status !== "in_force" ? `; status przepisu: ${found.status}` : ""}`,
+      ...(found.source ? { version: `strona urzędowa przepisu (do sprawdzenia aktualności): ${found.source}` } : {}),
+      articles: found.articles,
+      ...(found.candidates ? { note: `numer jest w kilku kodeksach — podaj pełne oznaczenie (unit), np.: ${found.candidates.join("; ")}` } : !found.articles.length ? { note: "przepisu nie ma w migawce" } : {})
+    };
+  }
+  // Georgia Commons: the OCGA as JSON (documented API, CC0, no key) — section, status, current_through,
+  // the official volume it was taken from.
+  if (state && /^(?:api\.)?georgiacommons\.org$/u.test(host)) {
+    const citation = request.unit?.replace(/^(?:O\.C\.G\.A\.|OCGA)?\s*§*\s*/iu, "").trim() || /\/code\/([\w.-]+)/u.exec(url.pathname)?.[1] || /code:([\w.-]+)/u.exec(url.pathname)?.[1];
+    if (!citation) return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "podaj jednostkę (unit), np. \"16-5-1\"" };
+    const api = `https://api.georgiacommons.org/api/documents/code:${encodeURIComponent(citation)}`;
+    const meta = await fetchImpl(api, { headers: { accept: "application/json", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
+    if (meta.status === 404) return { country: "US", url: api, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "przepisu nie ma w zbiorze" };
+    if (!meta.ok) throw new Error(`NATIONAL_LAW_SOURCE_${meta.status}`);
+    const record = JSON.parse(new TextDecoder().decode(await meta.arrayBuffer())) as { citation?: string; catchline?: string; status?: string; current_through?: string; source_link?: string; history?: string };
+    const body = await fetchImpl(`${api}/text`, { headers: { accept: "text/plain", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
+    if (!body.ok) throw new Error(`NATIONAL_LAW_SOURCE_${body.status}`);
+    const text = new TextDecoder().decode(await body.arrayBuffer()).trim();
+    const heading = `§ ${record.citation ?? citation}. ${record.catchline ?? ""}`.trim();
+    return {
+      country: "US",
+      url: `https://georgiacommons.org/code/${citation}`,
+      title: `${state.codeName} (${state.name})`,
+      status: `${stateNote}${record.status && record.status !== "active" ? `; status przepisu: ${record.status}` : ""}`,
+      version: [record.current_through, record.source_link ? `tom urzędowy: ${record.source_link}` : ""].filter(Boolean).join("; "),
+      articles: [{ unit: record.citation ?? citation, heading, text: `${heading}\n${text}`.slice(0, 20_000), amendments: record.history ? [{ act: record.history }] : [] }]
+    };
+  }
   if (!reader && !pdf && !state) throw new Error("NATIONAL_LAW_HOST_NOT_SUPPORTED");
   if (state && CA_PUBINFO_HOST.test(host)) {
-    if (!request.unit) return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, articles: [], note: "podaj jednostkę (unit): skrót kodeksu i numer, np. \"PEN 187\"" };
+    if (!request.unit) return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles: [], note: "podaj jednostkę (unit): skrót kodeksu i numer, np. \"PEN 187\"" };
     const reading = await readCaliforniaSection(fetchImpl, url.href, request.unit);
-    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, version: reading.version, articles: reading.articles, ...(!reading.articles.length ? { note: "przepisu nie ma w bazie (sprawdź skrót kodeksu i numer)" } : {}) };
+    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, version: reading.version, articles: reading.articles, ...(!reading.articles.length ? { note: "przepisu nie ma w bazie (sprawdź skrót kodeksu i numer)" } : {}) };
   }
   if (state && NJ_STATUTES_HOST.test(host)) {
     const { lines, through } = await newJerseyLines(fetchImpl, url.href);
     const articles = cutUsSection(lines, request.unit);
-    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, version: `plik Legislatury NJ, stan: ${through || "nieodczytany"}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w pliku" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. \"2C:11-3\"" } : {}) };
+    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, version: `plik Legislatury NJ, stan: ${through || "nieodczytany"}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w pliku" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. \"2C:11-3\"" } : {}) };
   }
   // Connecticut and Illinois send no issuing CA: the public one is supplied (us-tls.ts).
   const fetchSource: NationalFetch = HOSTS_WITHOUT_INTERMEDIATE.test(host) && fetchImpl === (fetch as unknown as NationalFetch) ? fetchWithIntermediates : fetchImpl;
@@ -487,7 +527,7 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     if (state) {
       if (reading.kind === "SKAN") return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: "PDF bez warstwy tekstowej", articles: [], note: reading.note };
       const articles = cutUsSection(reading.text.split("\n"), request.unit);
-      return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: `tekst z urzędowego PDF; ${state.note}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w tekście PDF" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
+      return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: `tekst z urzędowego PDF; ${stateNote}`, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono w tekście PDF" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
     }
     const country = pdf?.country ?? reader!.country;
     if (reading.kind === "SKAN") return { country, url: url.href, status: "PDF bez warstwy tekstowej", articles: [], note: reading.note };
@@ -533,7 +573,7 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
     const dated = /^le\.utah\.gov$/u.test(host) ? /C[\w-]+_\d{16}\.html/u.exec(body)?.[0] : undefined;
     if (dated && !url.pathname.endsWith(dated)) return readNationalLaw({ ...request, url: new URL(dated, url).href }, fetchImpl);
     const articles = readUsStateSection(body, request.unit);
-    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: state.note, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono na stronie" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
+    return { country: "US", url: url.href, title: `${state.codeName} (${state.name})`, status: stateNote, articles, ...(request.unit && !articles.length ? { note: "przepisu nie znaleziono na stronie" } : {}), ...(!request.unit ? { note: "podaj jednostkę (unit), np. numer paragrafu" } : {}) };
   }
   const reading = reader!.read(body, url.href);
   // RwandaLII: some acts (the Constitution) have no text on the page, only the source PDF.

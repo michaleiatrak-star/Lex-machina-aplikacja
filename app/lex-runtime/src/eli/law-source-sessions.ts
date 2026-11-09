@@ -17,7 +17,10 @@ export type VerifiedLawSource = {
 
 export const LAW_SOURCES_WITH_CHECK: readonly VerifiedLawSource[] = [
   { host: "www.nysenate.gov", code: "US-NY", url: "https://www.nysenate.gov/legislation/laws/CONSOLIDATED", label: "Senat stanu Nowy Jork (Consolidated Laws)" },
-  { host: "nmonesource.com", code: "US-NM", url: "https://nmonesource.com/nmos/nmsa/en/nav_date.do", label: "NMOneSource (New Mexico Statutes Annotated)" }
+  { host: "nmonesource.com", code: "US-NM", url: "https://nmonesource.com/nmos/nmsa/en/nav_date.do", label: "NMOneSource (New Mexico Statutes Annotated)" },
+  { host: "leginfo.legislature.ca.gov", code: "US-CA", url: "https://leginfo.legislature.ca.gov/faces/codes.xhtml", label: "California Legislative Information (kodeksy Kalifornii)" },
+  { host: "www.oscn.net", code: "US-OK", url: "https://www.oscn.net/applications/oscn/index.asp?ftdb=STOKST", label: "OSCN (Oklahoma Statutes)" },
+  { host: "www.capitol.hawaii.gov", code: "US-HI", url: "https://www.capitol.hawaii.gov/docs/HRS.htm", label: "Hawaii State Legislature (Hawaii Revised Statutes)" }
 ];
 
 export const LAW_SOURCE_VERIFICATION_REQUIRED = "LAW_SOURCE_VERIFICATION_REQUIRED";

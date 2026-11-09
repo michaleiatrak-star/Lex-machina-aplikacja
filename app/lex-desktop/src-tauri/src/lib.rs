@@ -425,7 +425,13 @@ async fn wokanda_verification_close(app: tauri::AppHandle) -> Result<(), String>
 // in the source's own window; the application reads only that host's cookies. Closed list of hosts,
 // kept in step with lex-runtime/src/eli/law-source-sessions.ts; the window stays on that host.
 const LAW_SOURCE_VERIFICATION_LABEL: &str = "law-source-verification";
-const LAW_SOURCE_HOSTS: &[&str] = &["www.nysenate.gov", "nmonesource.com"];
+const LAW_SOURCE_HOSTS: &[&str] = &[
+    "www.nysenate.gov",
+    "nmonesource.com",
+    "leginfo.legislature.ca.gov",
+    "www.oscn.net",
+    "www.capitol.hawaii.gov",
+];
 
 fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
     let url = raw
@@ -942,6 +948,9 @@ mod tests {
     fn law_source_verification_only_for_listed_sources() {
         assert!(law_source_url("https://www.nysenate.gov/legislation/laws/PEN/125.27").is_ok());
         assert!(law_source_url("https://nmonesource.com/nmos/nmsa/en/nav_date.do").is_ok());
+        assert!(law_source_url("https://leginfo.legislature.ca.gov/faces/codes.xhtml").is_ok());
+        assert!(law_source_url("https://www.oscn.net/applications/oscn/index.asp").is_ok());
+        assert!(law_source_url("https://www.capitol.hawaii.gov/docs/HRS.htm").is_ok());
         assert!(law_source_url("http://www.nysenate.gov/").is_err());
         assert!(law_source_url("https://evil.example/").is_err());
         assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());

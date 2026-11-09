@@ -1,3 +1,4 @@
+import { probeLawSourceSession } from "../eli/law-source-sessions.js";
 import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister } from "../courts/wokanda.js";
 import { ChatTurnJournal } from "../chat-turn-journal.js";
 import { AuthError } from "../auth/service.js";
@@ -106,6 +107,29 @@ export function registerMaintenanceRoutes(app, dependencies) {
         }
         catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : "WOKANDA_SESSION_INVALID" });
+        }
+    });
+    // A law source behind a bot check (law-source-sessions.ts): the check passed by the user in the
+    // source's window of the application; its cookies probed against the source and kept when it answers.
+    app.post("/api/law-sources/session/probe", async (req, res) => {
+        try {
+            authenticated(req, authService);
+        }
+        catch (error) {
+            if (error instanceof AuthError) {
+                res.status(error.httpStatus).json({ error: error.code });
+                return;
+            }
+            throw error;
+        }
+        const host = typeof req.body?.host === "string" ? req.body.host : "";
+        const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+        const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+        try {
+            res.json(await probeLawSourceSession(host, cookie, userAgent));
+        }
+        catch (error) {
+            res.status(400).json({ error: error instanceof Error ? error.message : "LAW_SOURCE_SESSION_INVALID" });
         }
     });
     // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.

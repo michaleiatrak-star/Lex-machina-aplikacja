@@ -41,8 +41,10 @@ function publicUser(user) {
         displayName: user.displayName,
         appRole: user.appRole,
         accountKind: user.accountKind ?? "PROFESSIONAL",
+        ...(user.email ? { email: user.email } : {}),
         status: user.status,
         passwordSetupPending: user.passwordSetupPending === true,
+        ...(user.passwordChangeRequired ? { passwordChangeRequired: true } : {}),
         createdAt: user.createdAt,
         ...(user.lastLoginAt
             ? {
@@ -443,6 +445,78 @@ export class LocalAuthService {
         if ((target.accountKind ?? "PROFESSIONAL") === accountKind)
             return publicUser(target);
         this.store.setAccountKind(userId, accountKind, new Date(this.clock.now()).toISOString());
+        return publicUser(this.store.getUserById(userId));
+    }
+    /** The administrator edits an account's name and contact e-mail (own account included). */
+    setProfile(actor, userId, profile) {
+        if (actor.user.appRole !== "ADMIN")
+            throw new AuthError("AUTHORIZATION_DENIED", 403);
+        if (!/^user_[a-f0-9]{32}$/.test(userId))
+            throw new AuthError("INVALID_USER_REQUEST", 400);
+        const target = this.store.getUserById(userId);
+        if (!target)
+            throw new AuthError("USER_NOT_FOUND", 404);
+        let displayName = target.displayName;
+        if (profile.displayName !== undefined) {
+            try {
+                displayName = validateDisplayName(String(profile.displayName));
+            }
+            catch {
+                throw new AuthError("INVALID_USER_REQUEST", 400);
+            }
+        }
+        let email = target.email ?? null;
+        if (profile.email !== undefined) {
+            const value = String(profile.email ?? "").trim().toLowerCase();
+            if (value && (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value)))
+                throw new AuthError("INVALID_USER_REQUEST", 400);
+            email = value || null;
+        }
+        const now = new Date(this.clock.now()).toISOString();
+        this.store.setProfile(userId, { displayName, email }, now);
+        this.store.recordSecurityEvent({
+            eventId: "event_" + randomBytes(16).toString("hex"),
+            userId: actor.user.userId,
+            eventType: "account_profile_changed",
+            occurredAt: now,
+            result: "PASS",
+            metadata: { targetUserId: userId, displayNameChanged: displayName !== target.displayName, emailChanged: email !== (target.email ?? null) }
+        });
+        return publicUser(this.store.getUserById(userId));
+    }
+    /**
+     * The administrator changes another account's role (independent of the account kind: a private
+     * person's installation has one INDIVIDUAL administrator). One active administrator always remains; the account's sessions end, so the new rights apply at
+     * the next login. Own role is not changed (another administrator does it).
+     */
+    setAppRole(actor, userId, appRole) {
+        if (actor.user.appRole !== "ADMIN")
+            throw new AuthError("AUTHORIZATION_DENIED", 403);
+        if (!/^user_[a-f0-9]{32}$/.test(userId) || !["ADMIN", "USER"].includes(appRole))
+            throw new AuthError("INVALID_USER_REQUEST", 400);
+        if (userId === actor.user.userId)
+            throw new AuthError("SELF_ADMIN_MUTATION_DENIED", 409);
+        const target = this.store.getUserById(userId);
+        if (!target)
+            throw new AuthError("USER_NOT_FOUND", 404);
+        if (target.appRole === appRole)
+            return publicUser(target);
+        if (appRole === "ADMIN" && target.status !== "ACTIVE")
+            throw new AuthError("USER_STATUS_CONFLICT", 409);
+        if (appRole === "USER" && !this.store.listUsers().some((user) => user.userId !== userId && user.appRole === "ADMIN" && user.status === "ACTIVE")) {
+            throw new AuthError("LAST_ADMIN_REQUIRED", 409);
+        }
+        const now = new Date(this.clock.now()).toISOString();
+        this.store.setAppRoleAndIncrementEpoch(userId, appRole, now);
+        this.sessions.revokeUser(userId, "USER_REVOKED");
+        this.store.recordSecurityEvent({
+            eventId: "event_" + randomBytes(16).toString("hex"),
+            userId: actor.user.userId,
+            eventType: "account_role_changed",
+            occurredAt: now,
+            result: "PASS",
+            metadata: { targetUserId: userId, appRole }
+        });
         return publicUser(this.store.getUserById(userId));
     }
     setUserStatus(actor, userId, status) {
@@ -1330,6 +1404,27 @@ export class LocalAuthService {
             passwordKey.fill(0);
             salt.fill(0);
         }
+    }
+    /**
+     * One-time password from the administrator (server mode, UMK from the escrow): the account's
+     * sessions end and, at the next login, nothing but the password change is allowed.
+     */
+    async setOneTimePasswordWithUserMasterKey(actor, userId, oneTimePassword, userMasterKey) {
+        if (actor.user.appRole !== "ADMIN")
+            throw new AuthError("AUTHORIZATION_DENIED", 403);
+        if (userId === actor.user.userId)
+            throw new AuthError("SELF_ADMIN_MUTATION_DENIED", 409);
+        await this.resetPasswordWithUserMasterKey(userId, oneTimePassword, userMasterKey);
+        const now = new Date(this.clock.now()).toISOString();
+        this.store.requirePasswordChange(userId, now);
+        this.store.recordSecurityEvent({
+            eventId: "event_" + randomBytes(16).toString("hex"),
+            userId: actor.user.userId,
+            eventType: "one_time_password_set",
+            occurredAt: now,
+            result: "PASS",
+            metadata: { targetUserId: userId }
+        });
     }
     revokeUserSessions(userId) {
         this.sessions

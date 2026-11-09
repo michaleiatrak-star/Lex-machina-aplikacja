@@ -25,6 +25,10 @@ describe("US states, DC and territories: registry", () => {
         expect(item.hosts, item.code).toBeDefined();
         expect(item.sample, item.code).toBeDefined();
         expect(item.hosts!.test(new URL(item.sample!.url).hostname), item.code).toBe(true);
+      } else if (item.reading === "OTWARTE" || item.reading === "ARCHIWUM") {
+        const source = item.sources?.find((entry) => entry.kind === item.reading);
+        expect(source?.sample, item.code).toBeDefined();
+        expect(source!.hosts.test(new URL(source!.sample!.url).hostname), item.code).toBe(true);
       } else if (item.reading === "WERYFIKACJA") {
         expect(item.hosts, item.code).toBeDefined();
         expect(item.note, item.code).toMatch(/weryfikacj/u);
@@ -150,5 +154,42 @@ describe("New Jersey statutes file and Puerto Rico consolidated laws (line text)
     const [article] = cutUsSection(lines, "Artículo 93");
     expect(article!.text).toMatch(/^Artículo 93\. — Grados de asesinato\./u);
     expect(article!.text).not.toContain("Artículo 94");
+  });
+});
+
+describe("open and archive copies (LexisNexis is a competitor, never a source)", () => {
+  it("one host, several states: the path decides; an archive is marked as not the law in force", async () => {
+    const { usSourceOfUrl } = await import("../src/eli/us-states.js");
+    const tn = usSourceOfUrl(new URL("https://unicourt.github.io/cic-code-tn/transforms/tn/octn/r72/gov.tn.tca.title.39.html"));
+    expect(tn?.jurisdiction.code).toBe("US-TN");
+    expect(tn?.note).toMatch(/^ARCHIWUM, nie prawo obowiązujące \(Release 72, 2020\)/u);
+    expect(usSourceOfUrl(new URL("https://unicourt.github.io/cic-code-ms/x.html"))?.jurisdiction.code).toBe("US-MS");
+    expect(usSourceOfUrl(new URL("https://unicourt.github.io/other/x.html"))).toBeUndefined();
+    expect(usSourceOfUrl(new URL("https://georgiacommons.org/code/16-5-1"))?.source?.kind).toBe("OTWARTE");
+    expect(US_JURISDICTIONS.filter((item) => item.reading === "LEXIS").map((item) => item.code)).toEqual(["US-VI"]);
+  });
+
+  it("Georgia Commons: section JSON and text, current_through and the official volume", async () => {
+    const json = JSON.stringify({ citation: "16-5-1", catchline: "Murder; malice murder; felony murder; murder in the second degree.", status: "active", current_through: "Including Acts of the 2025 Regular Session of the General Assembly", source_link: "https://www.legis.ga.gov/api/document/docs/default-source/joint-features-document-library/t16-ch1-6-(v14)-2019-pdf.pdf#page=412" });
+    const text = "(a) A person commits the offense of murder when he unlawfully and with malice aforethought, either express or implied, causes the death of another human being.";
+    const fetchImpl = async (address: string) => {
+      const body = new TextEncoder().encode(address.endsWith("/text") ? text : json);
+      return { ok: true, status: 200, headers: { get: () => "application/json" }, arrayBuffer: async () => body.buffer };
+    };
+    const answer = await readNationalLaw({ url: "https://georgiacommons.org/code/16-5-1", unit: "16-5-1", country: "US" }, fetchImpl as never);
+    expect(answer.articles[0]!.text).toMatch(/^§ 16-5-1\. Murder; malice murder/u);
+    expect(answer.version).toMatch(/2025 Regular Session.*; tom urzędowy: https:\/\/www\.legis\.ga\.gov/u);
+  });
+});
+
+describe("Open US Law (Vaquill) snapshot: Alabama, Indiana, South Dakota", () => {
+  it("section by number from the ZSTD Parquet file; the official page and the snapshot date in the answer", async () => {
+    // Two rows in the schema of us_al_statutes.parquet (v2026.09.1), written for the test.
+    const body = fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", "us-vaquill-al-sample.parquet"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "application/octet-stream" }, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) });
+    const answer = await readNationalLaw({ url: "https://oss-data-us.vaquill.ai/v2026.09.1/us_al_statutes.parquet", unit: "Ala. Code § 13A-6-2", country: "US" }, fetchImpl as never);
+    expect(answer.articles[0]!.text).toMatch(/^Ala\. Code § 13A-6-2 — Section 13A-6-2 Murder\n\(a\) A person commits the crime of murder/u);
+    expect(answer.status).toMatch(/migawka v2026\.09\.1 z 30\.09\.2026/u);
+    expect(answer.version).toMatch(/alison\.legislature\.state\.al\.us/u);
   });
 });
