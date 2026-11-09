@@ -4066,3 +4066,51 @@ mark.restored {
   color: var(--lm-t2);
   font-size: 11.5px;
 }
+
+/* Settings → Uprawnienia do spraw: bulk change. */
+.case-access-admin-bulk {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 12px;
+}
+
+.case-access-admin-bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-access-admin-bulk-row select {
+  width: auto;
+  flex: 1 1 220px;
+  max-width: 340px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 10px;
+  background: var(--lm-s1);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.case-access-admin-bulk-count {
+  color: var(--lm-t2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.case-access-bulk-check {
+  flex: none;
+  margin-right: 8px;
+}
+
+.case-access-admin-bulk-row > button {
+  min-height: 38px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
