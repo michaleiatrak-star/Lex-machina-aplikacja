@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { cutUsSection, readUsStateSection, US_JURISDICTIONS, usJurisdiction, usJurisdictionOfHost, usSectionToken } from "../src/eli/us-states.js";
 import { nationalLawCountry, readNationalLaw } from "../src/eli/national-law.js";
 import { HOSTS_WITHOUT_INTERMEDIATE } from "../src/eli/us-tls.js";
+import { californiaUnit, parseLawSections } from "../src/eli/us-ca-pubinfo.js";
 
 // Official state code pages read on 2026-11-09 (tests/fixtures/eli-readers/us-*).
 const page = (name: string): string => fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", name), "utf8");
@@ -20,7 +21,7 @@ describe("US states, DC and territories: registry", () => {
 
   it("every reader has its hosts and a sample that answered; the rest say why there is none", () => {
     for (const item of US_JURISDICTIONS) {
-      if (item.reading === "HTML" || item.reading === "PDF") {
+      if (item.reading === "HTML" || item.reading === "PDF" || item.reading === "ZBIORCZE") {
         expect(item.hosts, item.code).toBeDefined();
         expect(item.sample, item.code).toBeDefined();
         expect(item.hosts!.test(new URL(item.sample!.url).hostname), item.code).toBe(true);
@@ -28,14 +29,14 @@ describe("US states, DC and territories: registry", () => {
         expect(item.note.length, item.code).toBeGreaterThan(20);
       }
     }
-    expect(US_JURISDICTIONS.filter((item) => item.reading === "HTML" || item.reading === "PDF").length).toBeGreaterThanOrEqual(40);
+    expect(US_JURISDICTIONS.filter((item) => item.reading === "HTML" || item.reading === "PDF" || item.reading === "ZBIORCZE").length).toBeGreaterThanOrEqual(42);
   });
 
   it("state hosts belong to the US legal system; lookup by code", () => {
     expect(nationalLawCountry("www.revisor.mn.gov")).toBe("US");
     expect(usJurisdictionOfHost("tcss.legis.texas.gov")?.code).toBe("US-TX");
     expect(usJurisdiction("ny")?.reading).toBe("BLOKADA");
-    expect(usJurisdiction("US-CA")?.note).toMatch(/Cloudflare/u);
+    expect(usJurisdiction("US-CA")?.reading).toBe("ZBIORCZE");
     expect(HOSTS_WITHOUT_INTERMEDIATE.test("www.cga.ct.gov")).toBe(true);
     expect(HOSTS_WITHOUT_INTERMEDIATE.test("www.ilga.gov")).toBe(true);
     expect(HOSTS_WITHOUT_INTERMEDIATE.test("www.revisor.mn.gov")).toBe(false);
@@ -113,5 +114,21 @@ describe("US state section reader (one reader, the number decides)", () => {
     expect(answer.articles[0]!.text).toContain("Murder in the first degree.");
     const none = await readNationalLaw({ url: "https://app.leg.wa.gov/RCW/default.aspx?cite=9A.32.030", country: "US" }, fetchImpl as never);
     expect(none.note).toMatch(/podaj jednostkę/u);
+  });
+});
+
+describe("California: Legislative Counsel bulk database (pubinfo) by byte ranges", () => {
+  it("unit: code abbreviation or name, and the section", () => {
+    expect(californiaUnit("PEN 187")).toEqual({ code: "PEN", section: "187" });
+    expect(californiaUnit("Penal Code § 187")).toEqual({ code: "PEN", section: "187" });
+    expect(californiaUnit("Civil Code 1714")).toEqual({ code: "CIV", section: "1714" });
+    expect(californiaUnit("XYZ 1")).toBeNull();
+  });
+
+  it("LAW_SECTION_TBL rows: the active row gives the text file and the history", () => {
+    // Row as in pubinfo_2025.zip (read 2026-11-09).
+    const row = "`PEN187.202326014`\t`PEN`\t`187.`\t`2023`\t`260`\t`14`\t2024-01-01 00:00:00\t`id_ce651269`\tNULL\t`8.`\t`1.`\t`1.`\tNULL\t`Amended by Stats. 2023, Ch. 260, Sec. 14.   (SB 345)   Effective January 1, 2024.`\tLAW_SECTION_TBL_69792.lob\t`Y`\t`LEG_ESI`\t2026-09-26 01:01:15";
+    const rows = parseLawSections(row);
+    expect(rows.get("PEN 187")).toMatchObject({ lob: "LAW_SECTION_TBL_69792.lob", active: true, history: expect.stringMatching(/^Amended by Stats\. 2023, Ch\. 260/u) });
   });
 });
