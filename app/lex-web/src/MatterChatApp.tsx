@@ -8757,6 +8757,8 @@ export default function MatterChatApp({
               ) : (
                 <div className="chat-settings-section-stack">
                   <article className="chat-card developer-mode-card">
+                    <p className="eyebrow">Widok odpowiedzi</p>
+                    <h2>Informacje techniczne</h2>
                     <label className="developer-mode-toggle">
                       <input
                         type="checkbox"

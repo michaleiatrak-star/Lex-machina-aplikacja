@@ -191,6 +191,7 @@ function ParticipantRow({
 
           <button
             type="button"
+            className="chat-secondary-action"
             disabled={busy}
             onClick={() => {
               void save();
@@ -475,7 +476,7 @@ export function CaseCollaborationPanel({
           </h3>
         </div>
         <span className="security-pill">
-          OWNER MANAGES ACL
+          Dostępem zarządza właściciel
         </span>
       </div>
 

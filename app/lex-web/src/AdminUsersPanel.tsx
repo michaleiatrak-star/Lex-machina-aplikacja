@@ -160,7 +160,8 @@ export function AdminUsersPanel({
         </p>
       </div>
 
-      <div className="admin-user-create">
+      <fieldset className="admin-user-create">
+        <legend>Nowe konto</legend>
         <label>
           Login
           <input
@@ -175,7 +176,7 @@ export function AdminUsersPanel({
           />
         </label>
         <label>
-          Nazwa użytkownika
+          Imię i nazwisko
           <input
             value={displayName}
             maxLength={160}
@@ -214,6 +215,7 @@ export function AdminUsersPanel({
         </label>
         <button
           type="button"
+          className="primary-button"
           disabled={
             busy ||
             !loginName.trim() ||
@@ -226,7 +228,12 @@ export function AdminUsersPanel({
         >
           Dodaj użytkownika
         </button>
-      </div>
+        <small className="admin-user-create-help">
+          {!loginName.trim() || !displayName.trim() || !password
+            ? "Uzupełnij login, nazwę i hasło początkowe. Hasło przekaż osobie — po zalogowaniu ustawi własne."
+            : "Hasło przekaż osobie — po zalogowaniu ustawi własne."}
+        </small>
+      </fieldset>
 
       {error && (
         <div className="alert alert-error">
