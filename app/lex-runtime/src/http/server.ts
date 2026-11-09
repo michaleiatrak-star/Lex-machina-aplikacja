@@ -1,3 +1,4 @@
+import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
@@ -587,6 +588,8 @@ export async function startLocalServer(options?: {
     { forceEnv: process.env.LEX_SERVER_MODE_FORCE }
   );
   // Server mode: the admin's global API keys for every account.
+  // RAG of the acts (core law): the chosen jurisdiction on a desktop, every jurisdiction in server mode.
+  setCoreLawScope(() => (serverMode.isEnabled() ? "all" : "active"));
   const environmentCredentials =
     new EnvironmentCredentialResolver();
   const credentials =
@@ -685,6 +688,12 @@ export async function startLocalServer(options?: {
         });
       // Daily ELI check while the application runs, not only at start.
       coreLawIndex.startSchedule();
+      // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
+      // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
+      mcpConnectors.onJurisdictionChange(() => {
+        coreLawIndex.reloadMapsIfChanged();
+        void coreLawIndex.refresh().catch(() => undefined);
+      });
     }
   } catch (error) {
     process.stderr.write(
