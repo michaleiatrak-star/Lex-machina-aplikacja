@@ -1146,7 +1146,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: SourceVerification;
   widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
@@ -4974,6 +4974,13 @@ export function listWokandaCourts(): Promise<{ checkedAt: string; courts: Wokand
 
 export function recheckWokandaCourts(courts?: string[]): Promise<{ courts: WokandaCourtInfo[] }> {
   return json("/api/courts/wokanda/recheck", { method: "POST", body: JSON.stringify(courts ? { courts } : {}) });
+}
+
+/** A source the user has to verify in its window: sn.pl, or an official law source behind a bot check. */
+export type SourceVerification = { source: "sn"; url: string } | { source: "law"; url: string; host: string; label: string };
+
+export function probeLawSourceSession(host: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
+  return json("/api/law-sources/session/probe", { method: "POST", body: JSON.stringify({ host, cookie, userAgent }) });
 }
 
 export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {

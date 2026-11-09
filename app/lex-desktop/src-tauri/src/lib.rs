@@ -421,6 +421,76 @@ async fn wokanda_verification_close(app: tauri::AppHandle) -> Result<(), String>
     Ok(())
 }
 
+// Official law sources behind a bot check (as sn.pl and the courts' wokanda): the user passes the check
+// in the source's own window; the application reads only that host's cookies. Closed list of hosts,
+// kept in step with lex-runtime/src/eli/law-source-sessions.ts; the window stays on that host.
+const LAW_SOURCE_VERIFICATION_LABEL: &str = "law-source-verification";
+const LAW_SOURCE_HOSTS: &[&str] = &["www.nysenate.gov", "nmonesource.com"];
+
+fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|_| "LAW_SOURCE_URL_INVALID".to_string())?;
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let known = LAW_SOURCE_HOSTS
+        .iter()
+        .find(|item| host == **item || host == format!("www.{item}") || format!("www.{host}") == **item)
+        .copied();
+    match known {
+        Some(item) if url.scheme() == "https" => Ok((url, item)),
+        _ => Err("LAW_SOURCE_URL_INVALID".to_string()),
+    }
+}
+
+fn law_source_same_site(next: &tauri::Url, item: &str) -> bool {
+    let host = next.host_str().unwrap_or_default().to_ascii_lowercase();
+    let bare = item.strip_prefix("www.").unwrap_or(item);
+    next.scheme() == "https" && (host == bare || host.ends_with(&format!(".{bare}")))
+}
+
+#[tauri::command]
+async fn law_source_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let (target, item) = law_source_url(&url)?;
+    if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        LAW_SOURCE_VERIFICATION_LABEL,
+        tauri::WebviewUrl::External(target),
+    )
+    .title("Weryfikacja zrodla prawa - przejdz weryfikacje, pytanie ponowi sie samo")
+    .inner_size(1000.0, 760.0)
+    // The check's own pages load from other hosts inside the page; top-level navigation stays on the source.
+    .on_navigation(move |next| law_source_same_site(next, item))
+    .build()
+    .map_err(|error| format!("LAW_SOURCE_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    Ok(())
+}
+
+// Cookies of the source's window for that source, as a Cookie header (the window stays open).
+#[tauri::command]
+async fn law_source_verification_cookies(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    let (target, _) = law_source_url(&url)?;
+    let window = app
+        .get_webview_window(LAW_SOURCE_VERIFICATION_LABEL)
+        .ok_or_else(|| "LAW_SOURCE_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let cookies = window
+        .cookies_for_url(target)
+        .map_err(|_| "LAW_SOURCE_VERIFICATION_COOKIES_FAILED".to_string())?;
+    Ok(cookie_header(
+        cookies.iter().map(|cookie| (cookie.name(), cookie.value())),
+    ))
+}
+
+#[tauri::command]
+async fn law_source_verification_close(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn open_workspace_file(token: String) -> Result<(), String> {
     let target = authorized_workspace_open_path(&token)?;
@@ -687,6 +757,9 @@ pub fn run() {
                 wokanda_verification_open,
                 wokanda_verification_cookies,
                 wokanda_verification_close,
+                law_source_verification_open,
+                law_source_verification_cookies,
+                law_source_verification_close,
                 runtime_start_status,
                 runtime_repair,
                 component_setup_status,
@@ -765,6 +838,8 @@ mod tests {
     use super::{
         cookie_header,
         court_host,
+        law_source_same_site,
+        law_source_url,
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
@@ -861,6 +936,18 @@ mod tests {
         assert!(!is_allowed_external_url("http://example.com"));
         assert!(!is_allowed_external_url("file:///C:/secret.txt"));
         assert!(!is_allowed_external_url("https://example.com\r\nX-Test: 1"));
+    }
+
+    #[test]
+    fn law_source_verification_only_for_listed_sources() {
+        assert!(law_source_url("https://www.nysenate.gov/legislation/laws/PEN/125.27").is_ok());
+        assert!(law_source_url("https://nmonesource.com/nmos/nmsa/en/nav_date.do").is_ok());
+        assert!(law_source_url("http://www.nysenate.gov/").is_err());
+        assert!(law_source_url("https://evil.example/").is_err());
+        assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());
+        let (_, item) = law_source_url("https://www.nysenate.gov/").unwrap();
+        assert!(law_source_same_site(&"https://www.nysenate.gov/legislation".parse().unwrap(), item));
+        assert!(!law_source_same_site(&"https://example.com/".parse().unwrap(), item));
     }
 
     #[test]

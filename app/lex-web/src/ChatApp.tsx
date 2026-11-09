@@ -28,7 +28,8 @@ import {
   type EvidenceItem,
   type ModelDescriptor,
   type ProviderId,
-  type SessionExecutionResponse
+  type SessionExecutionResponse,
+  type SourceVerification
 } from "./api.js";
 import {
   DOCUMENT_FILE_ACCEPT,
@@ -47,6 +48,7 @@ import {
 import { MarkdownContent } from "./MarkdownContent.js";
 import { SourceLinkedText } from "./SourceLinkedText.js";
 import { SnVerification } from "./SnVerification.js";
+import { LawSourceVerification } from "./LawSourceVerification.js";
 import "./chat.css";
 
 type TabId = "chat" | "files" | "skills" | "case" | "settings";
@@ -57,7 +59,7 @@ type ChatMessage = {
   evidence?: EvidenceItem[];
   meta?: string;
   // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik w oknie sn.pl).
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: SourceVerification;
 };
 
 const PROVIDERS: Array<{
@@ -856,7 +858,19 @@ export default function ChatApp({
                       {message.meta}
                     </small>
                   ) : null}
-                  {message.sourceVerification ? (
+                  {message.sourceVerification?.source === "law" ? (
+                    <LawSourceVerification
+                      verification={message.sourceVerification}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages
+                          .slice(0, index)
+                          .reverse()
+                          .find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeQuery(question);
+                      }}
+                    />
+                  ) : message.sourceVerification ? (
                     <SnVerification
                       verification={{ url: message.sourceVerification.url }}
                       onVerified={() => {

@@ -1,3 +1,4 @@
+import { lawSourceWithCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock, type ChatTurnRecord } from "./chat-turn-journal.js";
 import type { LlmImage } from "./providers/types.js";
 import { directImageNote, type DirectImage } from "./direct-images.js";
@@ -1170,7 +1171,7 @@ export type SessionExecutionResponse = {
   auxiliarySources?:
     PublicAuxiliarySourceItem[];
   // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik).
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: { source: "sn"; url: string } | { source: "law"; url: string; host: string; label: string };
   // Widgety pokazane narzędziem show_widget (czat renderuje je w izolowanej ramce).
   widgets?: WidgetSpec[];
   audit: {
@@ -2242,6 +2243,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       PublicAuxiliarySourceItem[] =
       [];
     let snVerificationRequired = false;
+    // A law source behind a bot check asked the user to pass it (law-source-sessions.ts).
+    let lawSourceVerification: VerifiedLawSource | undefined;
     // Texts the source tools returned in this turn (judgments, hit lists): what the
     // answer may say a judgment is about (case-content-grounding).
     const caseSourceTexts: string[] = [];
@@ -3510,6 +3513,10 @@ export class SafeSessionExecutor implements SessionExecutor {
 
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
+        }
+        for (const result of federationResults) {
+          const host = /LAW_SOURCE_VERIFICATION_REQUIRED:([a-z0-9.-]+)/u.exec(result.content)?.[1];
+          if (host) lawSourceVerification ??= lawSourceWithCheck(host);
         }
         for (const result of federationResults) {
           caseSourceTexts.push(result.content);
@@ -5512,7 +5519,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       ...(snVerificationRequired
         ? { sourceVerification: { source: "sn" as const, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
-        : {}),
+        : lawSourceVerification
+          ? { sourceVerification: { source: "law" as const, url: lawSourceVerification.url, host: lawSourceVerification.host, label: lawSourceVerification.label } }
+          : {}),
       ...((widgetTools?.widgets().length ?? 0) + answerWidgets.length > 0
         ? { widgets: [...(widgetTools?.widgets() ?? []), ...answerWidgets] }
         : {}),

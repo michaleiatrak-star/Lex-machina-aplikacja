@@ -235,6 +235,7 @@ import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
+import { LawSourceVerification } from "./LawSourceVerification.js";
 import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 import {
@@ -6379,7 +6380,16 @@ export default function MatterChatApp({
                       onLongDocument={canWriteCase(selectedCase) ? (longDocumentId) => void fileFromLongDocument(message, longDocumentId) : undefined}
                     />
                   ) : null}
-                  {message.sourceVerification ? (
+                  {message.sourceVerification?.source === "law" ? (
+                    <LawSourceVerification
+                      verification={message.sourceVerification}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeMessage(question);
+                      }}
+                    />
+                  ) : message.sourceVerification ? (
                     <SnVerification
                       verification={{ url: message.sourceVerification.url }}
                       onVerified={() => {

@@ -3,6 +3,7 @@
 // leaves the app through this path). The answer is the article(s) asked for, with the source's
 // own status (official / without legal force / unofficial) and the amending acts it names.
 import { CA_PUBINFO_HOST, NJ_STATUTES_HOST, newJerseyLines, readCaliforniaSection } from "./us-ca-pubinfo.js";
+import { clearLawSourceSession, isChallengePage, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders, lawSourceWithCheck } from "./law-source-sessions.js";
 import { cutUsSection, readUsStateSection, usJurisdictionOfHost } from "./us-states.js";
 import { fetchWithIntermediates, HOSTS_WITHOUT_INTERMEDIATE } from "./us-tls.js";
 import { BLOCKED_JURISDICTION_CODE, isBlockedCountry, isBlockedHost } from "../blocked-jurisdictions.js";
@@ -456,8 +457,21 @@ export async function readNationalLaw(request: NationalLawRequest, fetchImpl: Na
   }
   // Connecticut and Illinois send no issuing CA: the public one is supplied (us-tls.ts).
   const fetchSource: NationalFetch = HOSTS_WITHOUT_INTERMEDIATE.test(host) && fetchImpl === (fetch as unknown as NationalFetch) ? fetchWithIntermediates : fetchImpl;
-  const ask = () => fetchSource(reader?.address ? reader.address(url) : url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)" }, signal: AbortSignal.timeout(60_000) });
+  // A source behind a bot check (NY Senate, NMOneSource): the session the user opened in the app's window
+  // of that source, as for sn.pl and the courts' wokanda (law-source-sessions.ts).
+  const checked = lawSourceWithCheck(host);
+  const session = checked ? lawSourceSessionHeaders(host) : null;
+  const ask = () => fetchSource(reader?.address ? reader.address(url) : url.href, { headers: { accept: reader?.accept ?? "text/html, application/xml, application/pdf;q=0.9", "user-agent": "LexMachina/0.1 (legal research)", ...(session ?? {}) }, signal: AbortSignal.timeout(60_000) });
   let response = await ask();
+  if (checked && (!response.ok || /html/u.test(response.headers.get("content-type") ?? ""))) {
+    const body = await response.arrayBuffer();
+    if (isChallengePage(response.status, new TextDecoder().decode(new Uint8Array(body).subarray(0, 20_000)))) {
+      clearLawSourceSession(host);
+      throw new Error(`${LAW_SOURCE_VERIFICATION_REQUIRED}:${checked.host}`);
+    }
+    const read = response;
+    response = { ok: read.ok, status: read.status, headers: read.headers, arrayBuffer: async () => body };
+  }
   // A busy portal (gesetze-im-internet.de and narodne-novine.nn.hr answered 503 once and 200 right after,
   // vaticanstate.va 522 through Cloudflare): one retry.
   if ([429, 502, 503, 504, 522].includes(response.status)) {

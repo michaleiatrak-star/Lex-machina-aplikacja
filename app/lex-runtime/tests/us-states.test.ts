@@ -25,6 +25,9 @@ describe("US states, DC and territories: registry", () => {
         expect(item.hosts, item.code).toBeDefined();
         expect(item.sample, item.code).toBeDefined();
         expect(item.hosts!.test(new URL(item.sample!.url).hostname), item.code).toBe(true);
+      } else if (item.reading === "WERYFIKACJA") {
+        expect(item.hosts, item.code).toBeDefined();
+        expect(item.note, item.code).toMatch(/weryfikacj/u);
       } else {
         expect(item.note.length, item.code).toBeGreaterThan(20);
       }
@@ -35,7 +38,7 @@ describe("US states, DC and territories: registry", () => {
   it("state hosts belong to the US legal system; lookup by code", () => {
     expect(nationalLawCountry("www.revisor.mn.gov")).toBe("US");
     expect(usJurisdictionOfHost("tcss.legis.texas.gov")?.code).toBe("US-TX");
-    expect(usJurisdiction("ny")?.reading).toBe("BLOKADA");
+    expect(usJurisdiction("ny")?.reading).toBe("WERYFIKACJA");
     expect(usJurisdiction("US-CA")?.reading).toBe("ZBIORCZE");
     expect(HOSTS_WITHOUT_INTERMEDIATE.test("www.cga.ct.gov")).toBe(true);
     expect(HOSTS_WITHOUT_INTERMEDIATE.test("www.ilga.gov")).toBe(true);

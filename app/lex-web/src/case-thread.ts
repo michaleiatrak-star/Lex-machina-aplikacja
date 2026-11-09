@@ -42,7 +42,7 @@ export type CaseChatMessage = {
   answerDocument?: { sessionId: string };
   widgets?: ChatWidget[];
   // Ramka weryfikacji sn.pl (tylko bieżąca odpowiedź; nie jest zapisywana w wątku).
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: import("./api.js").SourceVerification;
   // The same text for a lawyer when developer mode is off (an error without its codes; not stored).
   plainContent?: string;
 };

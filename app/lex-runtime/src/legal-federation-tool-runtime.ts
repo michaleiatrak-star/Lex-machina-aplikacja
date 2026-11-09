@@ -1408,7 +1408,9 @@ export class LegalFederationToolRuntime {
               error:
                 message,
               instruction:
-                jurisdictionBlocked
+                /LAW_SOURCE_VERIFICATION_REQUIRED/.test(message)
+                  ? "Oficjalne źródło jest za weryfikacją przeglądarki (antybot), której aplikacja sama nie przechodzi. Aplikacja pokazuje użytkownikowi okno tego źródła; po przejściu weryfikacji pytanie zostanie ponowione. Nie podawaj brzmienia przepisu z pamięci ani z innej strony jako urzędowego."
+                  : jurisdictionBlocked
                   ? "Prawo i źródła Federacji Rosyjskiej są poza systemem Lex Machina (blokada techniczna): nie pobieraj, nie wyszukuj i nie cytuj ich. Powiedz użytkownikowi wprost, że ta jurysdykcja nie jest obsługiwana."
                   : dataForbidden
                   ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
