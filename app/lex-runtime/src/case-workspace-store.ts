@@ -50,6 +50,9 @@ export type WorkspaceFolder = {
   parentId: string | null;
   name: string;
   createdAt: string;
+  // Firm know-how: the folder is ticked in every conversation (the firm's choice); without it
+  // a folder is used only when picked in the conversation.
+  chatDefault?: boolean;
 };
 
 export type WorkspaceDocumentCitation = {
@@ -885,6 +888,30 @@ export class EncryptedCaseWorkspaceStore {
     index.folders.push(folder);
     await this.write(index, args.caseDataKey, args.keyVersion);
     return folder;
+  }
+
+  async setFolderChatDefault(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    folderId: string;
+    chatDefault: boolean;
+  }): Promise<WorkspaceFolder> {
+    if (!FOLDER_ID.test(args.folderId)) {
+      throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+    }
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const folder = index.folders.find((item) => item.folderId === args.folderId);
+    if (!folder) throw new Error("WORKSPACE_FOLDER_NOT_FOUND");
+    if (args.chatDefault) folder.chatDefault = true;
+    else delete folder.chatDefault;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return folder;
+  }
+
+  /** The index as stored (folders, item locations), without reconciling items. */
+  async readIndex(args: { caseId: string; caseDataKey: Buffer; keyVersion: number }): Promise<CaseWorkspaceIndex> {
+    return await this.read(args.caseId, args.caseDataKey, args.keyVersion);
   }
 
   async deleteFolder(args: {

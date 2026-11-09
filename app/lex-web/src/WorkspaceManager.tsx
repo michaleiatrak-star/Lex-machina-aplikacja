@@ -36,6 +36,7 @@ import {
 import {
   createWorkspaceFolder,
   deleteWorkspaceFolder,
+  setWorkspaceFolderChatDefault,
   deleteWorkspaceItem,
   getWorkspace,
   moveWorkspaceItem,
@@ -1372,6 +1373,25 @@ export function WorkspaceManager({
               >
                 📁 {folder.name}
               </button>
+              {workspace?.caseKind === "FIRM_KNOWLEDGE" ? (
+                <label
+                  className="workspace-folder-chat-default"
+                  title="Folder zaznaczony w każdej rozmowie: model korzysta z jego plików bez wybierania. Pozostałe foldery tylko po wybraniu w rozmowie."
+                >
+                  <input
+                    type="checkbox"
+                    checked={folder.chatDefault === true}
+                    disabled={!canWrite || busy}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      void run(async () => {
+                        await setWorkspaceFolderChatDefault(caseId, folder.folderId, next);
+                      });
+                    }}
+                  />
+                  domyślnie w rozmowie
+                </label>
+              ) : null}
               {canWrite ? (
                 <button
                   type="button"

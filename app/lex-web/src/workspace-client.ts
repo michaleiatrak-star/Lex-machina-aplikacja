@@ -14,6 +14,8 @@ export type WorkspaceFolder = {
   parentId: string | null;
   name: string;
   createdAt: string;
+  // Firm know-how: ticked in every conversation (the firm's choice).
+  chatDefault?: boolean;
 };
 
 export type WorkspaceItem = {
@@ -147,6 +149,17 @@ export function createWorkspaceFolder(
   return workspaceJson(`/api/cases/${caseId}/workspace/folders`, {
     method: "POST",
     body: JSON.stringify({ name, parentId })
+  });
+}
+
+export function setWorkspaceFolderChatDefault(
+  caseId: string,
+  folderId: string,
+  chatDefault: boolean
+): Promise<{ folder: WorkspaceFolder }> {
+  return workspaceJson(`/api/cases/${caseId}/workspace/folders/${folderId}/chat-default`, {
+    method: "PATCH",
+    body: JSON.stringify({ chatDefault })
   });
 }
 

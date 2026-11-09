@@ -17,6 +17,7 @@ import {
 } from "./use-floating-panel.js";
 import "./local-ai.css";
 import { InfoTip } from "./InfoTip";
+import { LocalOfflineSection } from "./LocalOfflineSection.js";
 
 type LocalModel = {
   provider: "local";
@@ -1778,6 +1779,8 @@ export function LocalAiSetupPanel({
             )}
           </>
         ) : null}
+
+        <LocalOfflineSection admin={user.appRole === "ADMIN"} />
 
         {data ? <VisionOcrSection admin={user.appRole === "ADMIN"} /> : null}
 

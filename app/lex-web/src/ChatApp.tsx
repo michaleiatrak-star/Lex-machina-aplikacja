@@ -1,3 +1,4 @@
+import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -681,7 +682,7 @@ export default function ChatApp({
     <div className="chat-app-shell">
       <aside className="chat-sidebar">
         <div className="chat-brand">
-          <span className="chat-brand-mark">LM</span>
+          <img className="chat-brand-mark" src={LEX_MACHINA_BRAND_ICON} alt="" aria-hidden="true" />
           <div>
             <strong>Lex Machina</strong>
             <small>chat prawny · local-first</small>

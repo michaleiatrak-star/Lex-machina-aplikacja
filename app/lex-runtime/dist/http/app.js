@@ -1,3 +1,4 @@
+import { parseFirmKnowledgeSelection } from "../firm-knowledge-scope.js";
 import { encryptedKind, passwordFromHeader } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
@@ -742,7 +743,8 @@ function parseSessionKnowledgeRequest(value) {
         return {
             includeCase: false,
             includeFirm: false,
-            limit: 8
+            limit: 8,
+            firmSelection: { folderIds: [], itemIds: [] }
         };
     }
     if (!value ||
@@ -763,9 +765,11 @@ function parseSessionKnowledgeRequest(value) {
         undefined
         ? 8
         : Number(record.limit);
-    if ((caseId !== undefined &&
-        !/^case_[a-f0-9]{32}$/
-            .test(caseId)) ||
+    const firmSelection = parseFirmKnowledgeSelection(record.firmSelection);
+    if (!firmSelection ||
+        (caseId !== undefined &&
+            !/^case_[a-f0-9]{32}$/
+                .test(caseId)) ||
         (includeCase &&
             !caseId) ||
         !Number.isInteger(limit) ||
@@ -779,7 +783,8 @@ function parseSessionKnowledgeRequest(value) {
             : {}),
         includeCase,
         includeFirm,
-        limit
+        limit,
+        firmSelection
     };
 }
 async function assertDocumentWorkflowFinalizationAllowed(options, args) {
@@ -6657,10 +6662,19 @@ export function createLexHttpApp(options) {
                     if (!firm) {
                         throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
                     }
-                    knowledgeSources.push({
-                        caseId: firm.caseId,
-                        sourceScope: "FIRM_KNOWLEDGE"
-                    });
+                    // Only the picked files and folders and the firm's default folders, never the whole library.
+                    const firmView = options.caseAccessService.openCase(context, firm.caseId);
+                    const firmDocuments = options.firmKnowledgeScope
+                        ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) => await options.firmKnowledgeScope({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion, selection: knowledge.firmSelection }))
+                        : new Set();
+                    request.onStep?.("PREPARE", `know-how kancelarii: ${firmDocuments.size} dokumentów z wybranych i domyślnych folderów`);
+                    if (firmDocuments.size > 0) {
+                        knowledgeSources.push({
+                            caseId: firm.caseId,
+                            sourceScope: "FIRM_KNOWLEDGE",
+                            documentIds: firmDocuments
+                        });
+                    }
                 }
                 const ranked = [];
                 for (const source of knowledgeSources) {
@@ -6677,7 +6691,8 @@ export function createLexHttpApp(options) {
                             .keyVersion,
                         query: request.query,
                         limit: knowledge.limit,
-                        reviewedOnly: !localModel
+                        reviewedOnly: !localModel,
+                        ...(source.documentIds ? { documentIds: source.documentIds } : {})
                     }));
                     ranked.push(...hits.map((hit) => ({
                         ...hit,

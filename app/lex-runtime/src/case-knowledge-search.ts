@@ -150,6 +150,8 @@ export class LocalCaseKnowledgeSearch {
     limit?: number;
     // For a model outside the computer: documents the user has not reviewed are left out.
     reviewedOnly?: boolean;
+    // Only these documents (firm know-how: the chosen files and folders, the firm's default folders).
+    documentIds?: ReadonlySet<string>;
   }): Promise<
     CaseKnowledgeHit[]
   > {
@@ -196,10 +198,10 @@ export class LocalCaseKnowledgeSearch {
     }
 
     const documentIds =
-      await this.documents
+      (await this.documents
         .listDocumentIds(
           args.caseId
-        );
+        )).filter((documentId) => !args.documentIds || args.documentIds.has(documentId));
     if (
       documentIds.length >
         this.maxDocuments

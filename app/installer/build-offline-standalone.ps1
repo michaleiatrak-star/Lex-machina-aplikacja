@@ -50,6 +50,22 @@ try {
     Copy-Item -LiteralPath $lock -Destination (Join-Path $stage "component-lock-offline.json")
   }
 
+  # Version resource of the wrapper (ProductVersion = the release): without it Windows showed
+  # 0.0.0.0 and an update that took this file failed with APPLICATION_UPDATE_VERSION_MISMATCH.
+  $releaseSource = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "windows-release-source.json") | ConvertFrom-Json
+  $appVersion = [string]$releaseSource.applicationVersion
+  if ($appVersion -notmatch '^\d+\.\d+\.\d+$') { throw "OFFLINE_STANDALONE_VERSION_INVALID:$appVersion" }
+  $assemblyInfo = Join-Path $env:RUNNER_TEMP ("LexMachinaOfflineVersion-" + [Guid]::NewGuid().ToString("N") + ".cs")
+  Set-Content -LiteralPath $assemblyInfo -Encoding UTF8 -Value @(
+    "using System.Reflection;",
+    "[assembly: AssemblyTitle(""Lex Machina"")]",
+    "[assembly: AssemblyProduct(""Lex Machina"")]",
+    "[assembly: AssemblyDescription(""Lex Machina offline installer"")]",
+    "[assembly: AssemblyVersion(""$appVersion.0"")]",
+    "[assembly: AssemblyFileVersion(""$appVersion.0"")]",
+    "[assembly: AssemblyInformationalVersion(""$appVersion"")]"
+  )
+
   & $compiler /nologo /target:winexe /optimize+ /platform:x64 `
     "/out:$stub" `
     "/win32icon:$icon" `
@@ -59,7 +75,8 @@ try {
     /reference:System.IO.Compression.FileSystem.dll `
     /reference:System.Windows.Forms.dll `
     /reference:System.Drawing.dll `
-    $source
+    $source `
+    $assemblyInfo
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stub -PathType Leaf)) {
     throw "OFFLINE_STANDALONE_STUB_COMPILE_FAILED:$LASTEXITCODE"
   }

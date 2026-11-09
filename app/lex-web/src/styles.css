@@ -2762,3 +2762,16 @@ textarea:focus {
   display: grid;
   gap: 12px;
 }
+
+/* The info icon keeps its circle in any container (it was squeezed beside uppercase
+   eyebrows and in flex rows) and is not styled by the label's text rules. */
+.info-tip {
+  flex: none;
+}
+
+.info-tip-button {
+  flex: none;
+  min-width: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}

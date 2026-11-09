@@ -1,5 +1,6 @@
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
+import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -484,6 +485,23 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         }
         setDomainFallbackChoice(choice);
         res.json({ choice: domainFallbackChoice() });
+    });
+    // Tryb offline modelu lokalnego (Ustawienia, domyślnie wyłączony): bez źródeł zewnętrznych.
+    app.get("/api/settings/local-offline", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json({ enabled: localOfflineMode(), forced: process.env.LEX_LOCAL_OFFLINE === "on" || process.env.LEX_LOCAL_OFFLINE === "off" });
+    });
+    app.put("/api/settings/local-offline", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const enabled = req.body?.enabled;
+        if (typeof enabled !== "boolean") {
+            res.status(400).json({ error: "LOCAL_OFFLINE_INVALID" });
+            return;
+        }
+        setLocalOfflineMode(enabled);
+        res.json({ enabled: localOfflineMode() });
     });
     // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.
     app.get("/api/case-law/library", (req, res) => {

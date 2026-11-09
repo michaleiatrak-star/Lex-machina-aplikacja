@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "macos-arm64",
-  "applicationVersion": "0.1.72",
+  "applicationVersion": "0.1.73",
   "installerMode": "APP_MANAGED_COMPONENT_PREPARATION",
   "applicationUpdate": {
     "verification": "SHA256_REQUIRED_PKG_FROM_OFFICIAL_RELEASE",

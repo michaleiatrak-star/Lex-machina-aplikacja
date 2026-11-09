@@ -1,3 +1,4 @@
+import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { InfoTip } from "./InfoTip";
 import {
   useState
@@ -131,8 +132,12 @@ export function RecoveryAuthPanel({
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <div className="brand-mark auth-brand">
-          LM
+        <div className="auth-brand-lockup">
+          <img className="auth-brand-icon" src={LEX_MACHINA_BRAND_ICON} alt="" aria-hidden="true" />
+          <div>
+            <strong>Lex Machina</strong>
+            <span>Lokalny warsztat prawny</span>
+          </div>
         </div>
         <p className="eyebrow">
           Odzyskiwanie lokalnego konta

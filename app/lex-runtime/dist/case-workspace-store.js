@@ -556,6 +556,25 @@ export class EncryptedCaseWorkspaceStore {
         await this.write(index, args.caseDataKey, args.keyVersion);
         return folder;
     }
+    async setFolderChatDefault(args) {
+        if (!FOLDER_ID.test(args.folderId)) {
+            throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+        }
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        const folder = index.folders.find((item) => item.folderId === args.folderId);
+        if (!folder)
+            throw new Error("WORKSPACE_FOLDER_NOT_FOUND");
+        if (args.chatDefault)
+            folder.chatDefault = true;
+        else
+            delete folder.chatDefault;
+        await this.write(index, args.caseDataKey, args.keyVersion);
+        return folder;
+    }
+    /** The index as stored (folders, item locations), without reconciling items. */
+    async readIndex(args) {
+        return await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    }
     async deleteFolder(args) {
         if (!FOLDER_ID.test(args.folderId)) {
             throw new Error("WORKSPACE_FOLDER_ID_INVALID");

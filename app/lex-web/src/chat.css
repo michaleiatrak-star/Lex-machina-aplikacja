@@ -36,14 +36,13 @@
 }
 
 .chat-brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex: none;
   width: 42px;
   height: 42px;
-  border: 1px solid rgb(var(--lm-o1-rgb) / 0.22);
-  border-radius: 13px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  border-radius: 11px;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 }
 
 .chat-brand strong,
@@ -2049,6 +2048,25 @@
   white-space: nowrap;
 }
 
+/* Model bar: the provider select fits its short names, the model select gets the room
+   ("Brak zainstalowanego modelu" was cut); buttons stay on one line. */
+.chat-model-dock-controls select {
+  flex: 1 1 200px;
+  max-width: 340px;
+  padding: 0 10px;
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.chat-model-dock-controls select:first-child {
+  flex: 0 1 190px;
+}
+
+.chat-model-dock-controls button {
+  flex: none;
+  white-space: nowrap;
+}
+
 .chat-model-dock-message {
   grid-column: 1 / -1;
   margin: 0 2px;
@@ -3891,4 +3909,160 @@ mark.restored {
   display: grid;
   gap: 4px;
   font-size: 12px;
+}
+
+/* Wiedza w sesji: each option one row — what it does, or why it is unavailable. */
+.session-knowledge {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.session-knowledge-option {
+  font-weight: 400;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 12px;
+  background: var(--lm-s1);
+  cursor: pointer;
+}
+
+.session-knowledge-option input {
+  margin-top: 3px;
+}
+
+.session-knowledge-option > span {
+  display: grid;
+  gap: 3px;
+}
+
+.session-knowledge-option small {
+  font-weight: 400;
+  color: var(--lm-t2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.session-knowledge-option:has(input:disabled) {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* A card label holding a checkbox or radio: the box beside its text, not above it
+   (the card label rule stacks a field's caption over its input). */
+.chat-card label:has(> input[type="checkbox"]),
+.chat-card label:has(> input[type="radio"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.chat-card label:has(> input[type="checkbox"]) > input,
+.chat-card label:has(> input[type="radio"]) > input {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* Case filters: each select as wide as its longest option ("Ostatnio zmieniane" was cut);
+   the row wraps instead of squeezing the fields into each other. */
+.chat-case-switcher {
+  flex-wrap: wrap;
+}
+
+.chat-case-filter {
+  flex: 0 0 auto;
+}
+
+.chat-case-filter select {
+  width: auto;
+  max-width: none;
+}
+
+/* Users: the add form and the case access search in the app's field style (the inputs
+   had no height, border or padding; the labels did not line up with the select). */
+.admin-user-create {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 10px 12px;
+  margin: 14px 0;
+}
+
+.admin-user-create label,
+.case-access-admin-search label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  color: var(--lm-t8);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-user-create input,
+.admin-user-create select,
+.case-access-admin-search input,
+.case-access-admin-search select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 10px;
+  background: var(--lm-s1);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.admin-user-create > button {
+  min-height: 42px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.case-access-admin-search {
+  align-items: end;
+}
+
+/* Firm know-how picker in "Co model dostaje w rozmowie". */
+.firm-picker {
+  margin: 0 0 0 26px;
+  font-size: 12.5px;
+}
+
+.firm-picker > summary {
+  cursor: pointer;
+  color: var(--lm-t2);
+  font-weight: 600;
+}
+
+.firm-picker-list {
+  display: grid;
+  gap: 2px;
+  max-height: 280px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.firm-picker-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 3px 0;
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.firm-picker-list label small,
+.firm-picker-note {
+  color: var(--lm-t2);
+  font-size: 11.5px;
 }

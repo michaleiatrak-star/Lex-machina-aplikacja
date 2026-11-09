@@ -58,6 +58,11 @@ import {
 
 const TOOL_NAME = "verify_legal_reference";
 
+const OFFLINE_NOTE =
+  "Tryb offline: źródła zewnętrzne wyłączone. Przepis, którego nie potwierdza lokalna kopia ELI, oznacz ⚠️ [NIEWERYFIKOWANE]; orzeczenia tylko z biblioteki na dysku (search_case_law_library), inne jako do sprawdzenia.";
+const OFFLINE_VERIFICATION_APPENDIX =
+  "TRYB OFFLINE (ustawienie administratora): aplikacja nie łączy się ze źródłami zewnętrznymi. verify_legal_reference sprawdza przepis wyłącznie w lokalnej kopii ELI (data kopii w wyniku); search_case_law_library przeszukuje orzeczenia zapisane na dysku. Nie powołuj orzeczeń ani interpretacji spoza biblioteki jako zweryfikowanych i nie podawaj brzmienia przepisu, którego kopia nie zawiera.";
+
 /** Wynik z lokalnej kopii ELI, gdy samo ELI nie odpowiada: data kopii i wyraźna informacja. */
 function withEliOutageNotice(
   payload: Record<string, unknown>,
@@ -779,7 +784,10 @@ export class LegalVerificationToolRuntime {
       | ((act: LegalActDescriptor) => void)
       | null = null,
     // Model lokalny (Bielik, Mistral): lokalna kopia ELI (RAG) pierwsza.
-    private readonly localModel = false
+    private readonly localModel = false,
+    // Tryb offline modelu lokalnego: tylko lokalna kopia ELI i biblioteka orzeczeń na dysku;
+    // żadnego zapytania do ELI, EUR-Lex, SN, SAOS, CBOSA ani EUREKA.
+    private readonly offline = false
   ) {
     this.broker = new ToolBroker(
       new ToolPolicy({
@@ -1342,6 +1350,7 @@ export class LegalVerificationToolRuntime {
   }
 
   schemas(): NormalizedToolSchema[] {
+    if (this.offline) return [TOOL_SCHEMA, CASE_LIBRARY_TOOL_SCHEMA];
     return [
       TOOL_SCHEMA,
       INTERPRETATION_TOOL_SCHEMA,
@@ -1354,7 +1363,11 @@ export class LegalVerificationToolRuntime {
   }
 
   systemPromptAppendix(): string {
-    return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
+    return this.offline ? `${LEGAL_VERIFICATION_SYSTEM_APPENDIX}\n\n${OFFLINE_VERIFICATION_APPENDIX}` : LEGAL_VERIFICATION_SYSTEM_APPENDIX;
+  }
+
+  isOffline(): boolean {
+    return this.offline;
   }
 
   private async verifyEu(toolCallId: string, claim: string, act: NonNullable<ReturnType<typeof euAct>>): Promise<string> {
@@ -1758,6 +1771,11 @@ export class LegalVerificationToolRuntime {
     const results: NormalizedToolResult[] = [];
 
     for (const call of calls) {
+      if (this.offline && call.name !== CASE_LIBRARY_TOOL_NAME && call.name !== TOOL_NAME) {
+        this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: call.name, capability: "network", decision: "DENY", reason: "OFFLINE_MODE" });
+        results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "OUT_OF_SCOPE", error: "OFFLINE_MODE", note: OFFLINE_NOTE }) });
+        continue;
+      }
       if (call.name === CASE_LIBRARY_TOOL_NAME) {
         results.push({ tool_use_id: call.id, content: searchCaseLawLibrary(call.input) });
         continue;
@@ -2074,6 +2092,17 @@ export class LegalVerificationToolRuntime {
 
       // EU law (RODO, AI Act, a regulation or directive by number or CELEX): the article from
       // Cellar/EUR-Lex, in its consolidated version applicable today, the act's in-force status.
+      // Tryb offline: wyłącznie lokalna kopia ELI, bez sprawdzenia w ELI i bez pobierania aktu.
+      if (this.offline) {
+        const local = this.coreLaw ? this.verifyWithCoreLaw(call, actInput, asOf, undefined) : { denied: "CORE_LAW_UNAVAILABLE", content: "" };
+        if (!local.denied) {
+          results.push({ tool_use_id: call.id, content: local.content });
+        } else {
+          this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: TOOL_NAME, capability: "read", decision: "DENY", reason: `OFFLINE_MODE:${local.denied}` });
+          results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "DENIED", error: "OFFLINE_MODE", localCopy: local.denied, note: OFFLINE_NOTE }) });
+        }
+        continue;
+      }
       const eu = euAct(actInput || (typeof call.input.claim === "string" ? call.input.claim : ""));
       if (eu && typeof call.input.claim === "string" && !asOf) {
         results.push({ tool_use_id: call.id, content: await this.verifyEu(call.id, call.input.claim, eu) });
@@ -2356,7 +2385,7 @@ export class LegalVerificationToolRuntime {
 
 export type LegalVerificationToolFactory = (
   ledger: VerificationLedger,
-  context?: { localModel: boolean }
+  context?: { localModel: boolean; offline?: boolean }
 ) => LegalVerificationToolRuntime;
 
 /** JSON with sorted keys: the same input written in another key order is the same call. */

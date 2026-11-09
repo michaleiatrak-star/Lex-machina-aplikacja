@@ -1,3 +1,5 @@
+import { FirmKnowledgePicker, type FirmKnowledgeSelection } from "./FirmKnowledgePicker.js";
+import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { CaseCourtCard } from "./CaseCourtCard.js";
 import { WokandaRegisterPanel } from "./WokandaRegisterPanel.js";
 import {
@@ -1890,10 +1892,14 @@ export default function MatterChatApp({
   const [documentFit, setDocumentFit] = useState<DocumentFitResponse | null>(null);
   // What reached the model with the last message.
   const [lastDelivery, setLastDelivery] = useState<{ documents: DocumentDelivery[]; names: Record<string, string> } | null>(null);
-  const [includeCaseKnowledge, setIncludeCaseKnowledge] = useState(false);
-  const [includeFirmKnowledge, setIncludeFirmKnowledge] = useState(false);
-  // Photos go to image-capable models as evidence; pages with text only on request.
-  const [imagesWithText, setImagesWithText] = useState(false);
+  // Wiedza w sesji: all on by default (user request 2026-11-09); an option that is unavailable
+  // (no case, an archived case, no firm library) shows unticked and is not sent.
+  const [includeCaseKnowledge, setIncludeCaseKnowledge] = useState(true);
+  const [includeFirmKnowledge, setIncludeFirmKnowledge] = useState(true);
+  // Photos go to image-capable models as evidence; pages with text too (personal data masked).
+  const [imagesWithText, setImagesWithText] = useState(true);
+  // Firm know-how picked for this conversation (FirmKnowledgePicker); the firm's default folders count anyway.
+  const [firmSelection, setFirmSelection] = useState<FirmKnowledgeSelection>({ folderIds: [], itemIds: [] });
   // Scans and photos the user chose to send to the model as they are (no OCR, no masking).
   const [directImages, setDirectImages] = useState<DirectImageItem[]>([]);
   // Added files wait for a per-file decision; nothing starts OCR on its own.
@@ -2606,7 +2612,8 @@ export default function MatterChatApp({
     setFirmTemplateIds([]);
     setLastDelivery(null);
     setPickerNotice("");
-    setIncludeCaseKnowledge(false);
+    setIncludeCaseKnowledge(true);
+    setFirmSelection({ folderIds: [], itemIds: [] });
     setCaseScheduleError("");
     setScheduleTitle("");
     setScheduleStartsAt("");
@@ -4501,8 +4508,9 @@ export default function MatterChatApp({
           : {}),
         knowledge: {
           caseId,
-          includeCase: includeCaseKnowledge,
-          includeFirm: includeFirmKnowledge,
+          includeCase: includeCaseKnowledge && Boolean(selectedCase) && !selectedCase?.archivedAt,
+          includeFirm: includeFirmKnowledge && Boolean(firmKnowledgeWorkspace),
+          firmSelection,
           limit: 8
         }
       }, executionId).finally(
@@ -5151,7 +5159,7 @@ export default function MatterChatApp({
       ) : null}
       <aside className="chat-sidebar">
         <div className="chat-brand">
-          <span className="chat-brand-mark">LM</span>
+          <img className="chat-brand-mark" src={LEX_MACHINA_BRAND_ICON} alt="" aria-hidden="true" />
           <div>
             <strong>Lex Machina</strong>
             {individual ? (
@@ -7752,37 +7760,63 @@ export default function MatterChatApp({
 
             <article className="chat-card">
               <p className="eyebrow">Wiedza w sesji</p>
-              <div className="chat-check-row">
-                <label>
+              <h2>Co model dostaje w rozmowie</h2>
+              <div className="session-knowledge">
+                <label className="session-knowledge-option">
                   <input
                     type="checkbox"
-                    checked={includeCaseKnowledge}
+                    checked={includeCaseKnowledge && Boolean(selectedCase) && !selectedCase?.archivedAt}
                     disabled={!selectedCase || Boolean(selectedCase.archivedAt)}
                     onChange={(event) => setIncludeCaseKnowledge(event.target.checked)}
                   />
-                  Przeszukuj dokumenty bieżącej sprawy
-                  <InfoTip>
-                    Fragmenty pasujące do pytania trafiają do kontekstu. Model w chmurze może też sam czytać całe akta
-                    sprawy (tekst spseudonimizowany).
-                  </InfoTip>
+                  <span>
+                    <strong>Dokumenty tej sprawy</strong>
+                    <small>
+                      {!selectedCase
+                        ? "Niedostępne: wybierz sprawę."
+                        : selectedCase.archivedAt
+                          ? "Niedostępne: sprawa jest zarchiwizowana."
+                          : "Fragmenty akt pasujące do pytania trafiają do kontekstu. Model w chmurze może też sam czytać całe akta (tekst po pseudonimizacji)."}
+                    </small>
+                  </span>
                 </label>
-                <label>
+                <label className="session-knowledge-option">
                   <input
                     type="checkbox"
-                    checked={includeFirmKnowledge}
+                    checked={includeFirmKnowledge && Boolean(firmKnowledgeWorkspace)}
                     disabled={!firmKnowledgeWorkspace}
                     onChange={(event) => setIncludeFirmKnowledge(event.target.checked)}
                   />
-                  Przeszukuj know-how kancelarii
+                  <span>
+                    <strong>Know-how kancelarii</strong>
+                    <small>
+                      {firmKnowledgeWorkspace
+                        ? "Tylko pliki i foldery wybrane poniżej oraz foldery, które kancelaria oznaczyła jako domyślne w rozmowie — nie cała baza."
+                        : "Niedostępne: kancelaria nie ma jeszcze bazy know-how — dodaj materiały w module Wzory i wiedza."}
+                    </small>
+                  </span>
                 </label>
-                <label>
+                {firmKnowledgeWorkspace && includeFirmKnowledge ? (
+                  <FirmKnowledgePicker
+                    firmCaseId={firmKnowledgeWorkspace.caseId}
+                    selection={firmSelection}
+                    onChange={setFirmSelection}
+                    disabled={false}
+                  />
+                ) : null}
+                <label className="session-knowledge-option">
                   <input
                     type="checkbox"
                     checked={imagesWithText}
                     onChange={(event) => setImagesWithText(event.target.checked)}
                   />
-                  Wysyłaj też obrazy stron z tekstem (dane osobowe zamaskowane)
-                  <InfoTip>Zdjęcia bez tekstu modele w chmurze dostają zawsze jako obraz; modele lokalne czytają tylko tekst.</InfoTip>
+                  <span>
+                    <strong>Obrazy stron z tekstem</strong>
+                    <small>
+                      Model w chmurze dostaje też obraz strony (dane osobowe zamaskowane) — pomaga przy tabelach, pieczęciach i odręcznych
+                      dopiskach. Zdjęcia bez tekstu idą jako obraz zawsze; modele lokalne czytają tylko tekst.
+                    </small>
+                  </span>
                 </label>
               </div>
             </article>
