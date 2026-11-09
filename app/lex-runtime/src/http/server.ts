@@ -299,6 +299,18 @@ export function bundledRuntimeRoot(): string {
   );
 }
 
+/**
+ * The corpus whose MCP connector package is used: the account's or channel's skills first, then the
+ * installer's own corpus (desktop: LEX_BUNDLED_SKILLS_PATH, runtime\\corpus), then the repository's.
+ * Skills updated from a channel without mcp-servers (the stable folder of 07.10.2026 predates them)
+ * keep the connectors this way instead of "Brak pakietu … lex-mcp.mjs".
+ */
+export function connectorCorpusRoot(runtimeRoot: string, baseRuntimeRoot: string): string {
+  const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+  return [runtimeRoot, baseRuntimeRoot, ...(bundled ? [path.resolve(bundled)] : []), bundledRuntimeRoot()]
+    .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
+}
+
 export function resolveRuntimeRoot(): string {
   const explicitlyConfigured =
     process.env
@@ -635,16 +647,7 @@ export async function startLocalServer(options?: {
   // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
   const mcpConnectors =
     new LexMcpConnectorStore(
-      [
-        runtimeRoot,
-        baseRuntimeRoot,
-        bundledRuntimeRoot()
-      ].find(
-        (root) =>
-          fs.existsSync(
-            lexMcpPackagePath(root)
-          )
-      ) ?? runtimeRoot
+      connectorCorpusRoot(runtimeRoot, baseRuntimeRoot)
     );
   const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
   const legalFederationTools =
