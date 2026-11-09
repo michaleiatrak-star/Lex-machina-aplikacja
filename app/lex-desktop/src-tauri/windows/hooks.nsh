@@ -67,7 +67,7 @@
   IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" lex_offline_bundle lex_online_bootstrap
 
 lex_offline_bundle:
-  DetailPrint "Lex Machina: weryfikacja i instalacja lokalnego pakietu offline..."
+  DetailPrint "Lex Machina: przygotowanie narzędzi z pełnego instalatora..."
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-offline-bundle-install.ps1" -RuntimeRoot "$INSTDIR\runtime" -BundlePath "$EXEDIR\LexMachina-Offline-Runtime.zip"'
   Pop $0
   Pop $1
@@ -81,7 +81,7 @@ lex_offline_bundle:
   Goto lex_runtime_selftest
 
 lex_online_bootstrap:
-  DetailPrint "Lex Machina: sprawdzanie i pobieranie brakujących składników runtime..."
+  DetailPrint "Lex Machina: sprawdzanie i pobieranie potrzebnych narzędzi..."
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-online-bootstrap.ps1" -RuntimeRoot "$INSTDIR\runtime"'
   Pop $0
   Pop $1
@@ -94,7 +94,7 @@ lex_online_bootstrap:
   ${EndIf}
 
 lex_runtime_selftest:
-  DetailPrint "Lex Machina: końcowa weryfikacja prywatnego runtime..."
+  DetailPrint "Lex Machina: sprawdzanie gotowości aplikacji..."
   nsExec::ExecToStack '"$INSTDIR\runtime\lex-runtime-sidecar.exe" --self-test'
   Pop $0
   Pop $1

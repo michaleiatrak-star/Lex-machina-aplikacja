@@ -17,8 +17,12 @@ export type AuthenticatedUser = {
   appRole: "ADMIN" | "USER";
   // INDIVIDUAL: a private person's chat only (automatic mode, conversations instead of cases).
   accountKind?: AccountKind;
+  // Contact e-mail set in the account dialog (server mode: the login is the e-mail).
+  email?: string;
   status: "ACTIVE" | "DISABLED";
   passwordSetupPending?: boolean;
+  // One-time password from the administrator: the user must set their own before anything else.
+  passwordChangeRequired?: boolean;
   createdAt: string;
   lastLoginAt?: string;
 };
@@ -1072,7 +1076,7 @@ export type DocumentCoverageEntry = {
   status: "FULL" | "PARTIAL";
 };
 
-export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME"; findings: string[]; removed: string[] };
+export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE"; findings: string[]; removed: string[] };
 
 export type SessionExecutionResponse = {
   sessionId: string;
@@ -1706,6 +1710,38 @@ export function setAccountKind(
   return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/account-kind`, {
     method: "PATCH",
     body: JSON.stringify({ accountKind })
+  });
+}
+
+// Account dialog: display name and contact e-mail (administrator).
+export function setAdminUserProfile(
+  userId: string,
+  profile: { displayName?: string; email?: string }
+): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/profile`, {
+    method: "PATCH",
+    body: JSON.stringify(profile)
+  });
+}
+
+// Server mode: a one-time password for the account (shown once); the user must replace it at login.
+export function setAdminOneTimePassword(userId: string): Promise<{ oneTimePassword: string }> {
+  return json<{ oneTimePassword: string }>(`/api/server-mode/accounts/${encodeURIComponent(userId)}/one-time-password`, { method: "POST" });
+}
+
+// Server mode: a password reset link sent by the administrator to the account's e-mail.
+export function sendAdminPasswordReset(userId: string): Promise<{ sentTo: string }> {
+  return json<{ sentTo: string }>(`/api/server-mode/accounts/${encodeURIComponent(userId)}/password-reset`, { method: "POST" });
+}
+
+// Role of another account (administrator only); the account's sessions end.
+export function setAdminUserRole(
+  userId: string,
+  appRole: AuthenticatedUser["appRole"]
+): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>(`/api/admin/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ appRole })
   });
 }
 
@@ -2905,6 +2941,11 @@ export function applySkillUpdate():
   );
 }
 
+export type ApplicationDownloadProgress = { phase: "idle" | "downloading" | "checking" | "ready" | "failed"; received: number; total?: number };
+export function getApplicationDownloadProgress(): Promise<ApplicationDownloadProgress> {
+  return json<ApplicationDownloadProgress>("/api/update/progress");
+}
+
 export function downloadApplicationUpdate():
   Promise<ApplicationUpdateDownloadResponse> {
   return json<ApplicationUpdateDownloadResponse>(
@@ -2939,6 +2980,7 @@ export async function repairDesktopRuntime(): Promise<void> {
   const invoke = tauriInvoke();
   if (!invoke) throw new ApiError("TAURI_INVOKE_UNAVAILABLE", 503);
   await invoke("runtime_repair");
+  window.location.reload();
 }
 
 export async function installStagedApplicationUpdate(
@@ -4118,7 +4160,13 @@ export type JurisdictionOption = {
   missing: string[];
 };
 
-export type JurisdictionSettings = { active: string; jurisdictions: JurisdictionOption[] };
+export type LegalSystemOption = { code: string; name: string;
+  // Legal family (category in Settings): civil law, Nordic, mixed or common law.
+  family?: "kontynentalne" | "nordyckie" | "mieszane" | "common-law";
+  familyLabel?: string;
+  familyNote?: string; reading: string; note: string; portal: string; pack: string | null };
+
+export type JurisdictionSettings = { active: string; country: string; countries: LegalSystemOption[]; jurisdictions: JurisdictionOption[] };
 
 export function getJurisdiction(): Promise<JurisdictionSettings> {
   return json("/api/settings/jurisdiction");
@@ -4126,6 +4174,24 @@ export function getJurisdiction(): Promise<JurisdictionSettings> {
 
 export function setJurisdiction(pack: string): Promise<JurisdictionSettings> {
   return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ pack }) });
+}
+
+/** The legal system the application applies: one country, the others off. */
+export function setLegalSystem(country: string): Promise<JurisdictionSettings> {
+  return json("/api/settings/jurisdiction", { method: "PUT", body: JSON.stringify({ country }) });
+}
+
+export type LegiIndexStatus = {
+  built: { built: string; codes: number; versions: number; archive: string } | null;
+  build: { state: "BUILDING" | "FAILED"; files: number; error?: string; started: string } | null;
+};
+
+export function getLegiIndex(): Promise<LegiIndexStatus> {
+  return json("/api/settings/legal-sources/legi");
+}
+
+export function buildLegiIndex(): Promise<LegiIndexStatus> {
+  return json("/api/settings/legal-sources/legi/build", { method: "POST", body: "{}" });
 }
 
 export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {

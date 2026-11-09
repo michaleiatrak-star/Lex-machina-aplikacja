@@ -1,9 +1,11 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$RuntimeRoot,
   [Parameter(Mandatory=$true)][string]$BundlePath
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "bootstrap-progress.ps1")
+Set-BootstrapProgress "Sprawdzanie pełnego pakietu instalacyjnego…"
 
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 $bundle = (Resolve-Path -LiteralPath $BundlePath).Path
@@ -210,11 +212,13 @@ if ($actualHash -ne $receipt.sha256.ToLowerInvariant()) {
   throw "OFFLINE_BUNDLE_HASH_MISMATCH:expected=$($receipt.sha256) actual=$actualHash"
 }
 
-$stage = Join-Path $env:TEMP ("LexMachinaOfflineRuntime-" + [Guid]::NewGuid().ToString("N"))
+# Short stage name: every character counts against MAX_PATH for the deep Python packages inside.
+$stage = Join-Path $env:TEMP ("LMO-" + [Guid]::NewGuid().ToString("N").Substring(0, 12))
 New-Item -ItemType Directory -Path $stage | Out-Null
 $vcFirewallRule = $null
 
 try {
+  Set-BootstrapProgress "Rozpakowywanie narzędzi z pełnego instalatora…"
   Write-Host "Extracting verified offline runtime bundle"
   $extractor = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "extract-offline-zip.ps1"
   if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) {
@@ -234,18 +238,27 @@ try {
     throw "OFFLINE_BUNDLE_RUNTIME_NETWORK_POLICY_INVALID"
   }
 
+  Set-BootstrapProgress "Sprawdzanie przygotowanych plików…"
   Write-Host "Verifying component-lock before installation"
+  $sha256 = [Security.Cryptography.SHA256]::Create()
   foreach ($entry in $lock.files) {
-    $path = Join-Path $stage ($entry.path -replace '/','\')
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    # \\?\ form: a path over 260 characters is still found and hashed.
+    $path = '\\?\' + (Join-Path $stage ($entry.path -replace '/','\'))
+    if (-not [IO.File]::Exists($path)) {
       throw "OFFLINE_BUNDLE_LOCK_FILE_MISSING:$($entry.path)"
     }
-    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+    $file = [IO.File]::OpenRead($path)
+    try {
+      $hash = ([BitConverter]::ToString($sha256.ComputeHash($file)) -replace '-','').ToLowerInvariant()
+    } finally {
+      $file.Dispose()
+    }
     if ($hash -ne $entry.sha256) {
       throw "OFFLINE_BUNDLE_LOCK_HASH_MISMATCH:$($entry.path)"
     }
   }
 
+  Set-BootstrapProgress "Przygotowanie narzędzi aplikacji…"
   Write-Host "Installing verified private runtime into $runtime"
   $null = robocopy.exe $stage $runtime /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
   $robocopyCode = $LASTEXITCODE
@@ -293,7 +306,8 @@ try {
       Write-Host "Acceptance firewall: outbound blocked for bundled VC++ installer"
     }
 
-    Write-Host "Installing verified bundled Visual C++ runtime"
+    Set-BootstrapProgress "Przygotowanie składników systemu Windows…"
+  Write-Host "Installing verified bundled Visual C++ runtime"
     $vcExit = Install-VcRuntime $vcInstaller ([Version]$vc.version) (Join-Path $env:LOCALAPPDATA "LexMachina\logs") "OFFLINE_BUNDLE_VC_RUNTIME"
     Write-Host "Bundled Visual C++ runtime fallback exercised; exit=$vcExit"
   }
@@ -306,6 +320,7 @@ try {
     Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
   }
 
+  Set-BootstrapProgress "Sprawdzanie gotowości aplikacji…"
   $selfTest = Join-Path $runtime "bootstrap\windows-payload-selftest.ps1"
   if (-not (Test-Path -LiteralPath $selfTest -PathType Leaf)) {
     throw "OFFLINE_BUNDLE_SELFTEST_SCRIPT_MISSING"
@@ -403,4 +418,8 @@ try {
     Remove-NetFirewallRule -DisplayName $vcFirewallRule -ErrorAction SilentlyContinue
   }
   Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  # Remove-Item in Windows PowerShell 5.1 stops at paths over 260 characters; rd with \\?\ does not.
+  if (Test-Path -LiteralPath $stage) {
+    cmd.exe /d /c "rd /s /q `"\\?\$stage`"" | Out-Null
+  }
 }

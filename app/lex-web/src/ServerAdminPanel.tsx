@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UserAccountDialog } from "./UserAccountDialog.js";
 import {
   ApiError,
   assignServerPlan,
@@ -77,7 +78,9 @@ type PlanDraft = { planId: string | null; name: string; limit: string; providers
 const EMPTY_PLAN: PlanDraft = { planId: null, name: "", limit: "", providers: ["openai", "anthropic", "xai", "google"], external: "" };
 
 /** Administrator: włączenie trybu serwerowego, SMTP, klucze API, limit globalny, plany, konta i podgląd tur na żywo. */
-export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: boolean) => void }) {
+export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onModeChanged?: (enabled: boolean) => void; currentUserId?: string }) {
+  // Account dialog opened by clicking the account's login.
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [plans, setPlans] = useState<ServerPlan[]>([]);
   const [accounts, setAccounts] = useState<ServerAccount[]>([]);
@@ -537,7 +540,9 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
           {accounts.map((account) => (
             <article key={account.userId} className="admin-user-row">
               <div>
-                <strong>{account.loginName}</strong>
+                <button type="button" className="admin-user-name" title="Ustawienia konta" onClick={() => setOpenUserId(account.userId)}>
+                  {account.loginName}
+                </button>
                 <span>
                   {account.appRole} · {account.status === "ACTIVE" ? "aktywne" : "wyłączone"} ·{" "}
                   {account.emailVerified ? "e-mail potwierdzony" : "konto lokalne"} · plan: {account.appRole === "ADMIN" ? "bez ograniczeń planu" : account.planName ?? "brak"} · w tym miesiącu:{" "}
@@ -579,6 +584,23 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
             </article>
           ))}
         </div>
+        {(() => {
+          const open = accounts.find((account) => account.userId === openUserId);
+          return open ? (
+            <UserAccountDialog
+              user={open}
+              currentUserId={currentUserId}
+              serverMode={settings?.serverMode === true}
+              onClose={() => setOpenUserId(null)}
+              onChanged={(text, removed) => {
+                setError("");
+                setMessage(text);
+                if (removed) setOpenUserId(null);
+                void refresh();
+              }}
+            />
+          ) : null;
+        })()}
       </div>
 
       {settings.serverMode && (

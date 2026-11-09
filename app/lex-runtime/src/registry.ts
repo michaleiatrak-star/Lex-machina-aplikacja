@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { activeJurisdictionPack, registerJurisdictionCorpus } from "./jurisdiction.js";
+import { activeCountry, activeJurisdictionPack, registerJurisdictionCorpus, skillOfferedInJurisdiction } from "./jurisdiction.js";
 
 export type SkillFrontmatter = {
   name?: string;
@@ -86,7 +86,21 @@ function assertInside(root: string, target: string): string {
 
 export class LexSkillRegistry {
   readonly root: string;
-  readonly skills = new Map<string, LexSkillRecord>();
+  // Every skill of the corpus; `skills` is what the chosen legal system offers (jurisdiction.ts).
+  private readonly allSkills = new Map<string, LexSkillRecord>();
+  // Jurisdiction packages (a JURYSDYKCJA.md beside SKILL.md: prawo-polskie-v2, later prawo-<kraj>).
+  private readonly facades = new Set<string>();
+  private offeredCache: { key: string; skills: Map<string, LexSkillRecord> } | null = null;
+  private scans = 0;
+
+  /** The skills the chosen legal system offers: another country's package and domain skills are left out. */
+  get skills(): Map<string, LexSkillRecord> {
+    const key = `${this.scans}|${activeJurisdictionPack()}|${activeCountry()}`;
+    if (this.offeredCache?.key === key) return this.offeredCache.skills;
+    const offered = new Map([...this.allSkills].filter(([name]) => skillOfferedInJurisdiction(name, this.facades, this.root)));
+    this.offeredCache = { key, skills: offered };
+    return offered;
+  }
 
   constructor(root: string) {
     this.root = path.resolve(root);
@@ -94,7 +108,9 @@ export class LexSkillRegistry {
 
   scan(): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    this.skills.clear();
+    this.allSkills.clear();
+    this.facades.clear();
+    this.scans += 1;
     registerJurisdictionCorpus(this.root);
 
     for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
@@ -118,7 +134,7 @@ export class LexSkillRegistry {
           continue;
         }
 
-        if (this.skills.has(name)) {
+        if (this.allSkills.has(name)) {
           issues.push({
             code: "DUPLICATE_SKILL_NAME",
             skill: name,
@@ -128,7 +144,8 @@ export class LexSkillRegistry {
           continue;
         }
 
-        this.skills.set(name, {
+        if (isFile(path.join(directory, "JURYSDYKCJA.md"))) this.facades.add(name);
+        this.allSkills.set(name, {
           name,
           directory,
           skillFile,

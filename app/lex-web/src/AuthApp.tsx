@@ -9,6 +9,7 @@ import {
   type ReactNode
 } from "react";
 import App from "./App.js";
+import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import type {
   SettingsRequest
 } from "./MatterChatApp.js";
@@ -976,6 +977,24 @@ export default function AuthenticatedApp() {
             </div>
           )}
 
+          {auth?.user.passwordChangeRequired === true && (
+            // One-time password from the administrator: only the password change until it is done
+            // (the server refuses everything else with PASSWORD_CHANGE_REQUIRED).
+            <main className="password-change-required">
+              <AccountSecurityPanel
+                user={auth.user}
+                onAuthUpdated={(value) => {
+                  setAuth(value);
+                  setLastUser(value.user);
+                  setNow(Date.now());
+                }}
+              />
+              <button type="button" className="chat-secondary-action" onClick={() => { void logout(); }}>
+                Wyloguj
+              </button>
+            </main>
+          )}
+          {auth?.user.passwordChangeRequired !== true && (
           <App
             key={
               retained.key
@@ -1016,6 +1035,7 @@ export default function AuthenticatedApp() {
               }
             }}
           />
+          )}
         </AuthenticatedShell>
         </div>
       )}

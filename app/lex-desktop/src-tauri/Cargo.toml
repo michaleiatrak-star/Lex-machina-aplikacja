@@ -1,6 +1,6 @@
 [package]
 name = "lex-machina-desktop"
-version = "0.1.70"
+version = "0.1.71"
 description = "Lex Machina secure desktop shell"
 authors = ["Lex Machina"]
 license-file = "../../../LICENSE"
@@ -22,12 +22,12 @@ name = "lex-runtime-sidecar"
 path = "src/runtime_sidecar.rs"
 
 [build-dependencies]
-tauri-build = "=2.6.3"
+tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
 getrandom = "0.4"
 serde_json = "1.0"
-tauri = "=2.11.5"
+tauri = { version = "=2.11.5", features = [] }
 sha2 = "=0.10.9"
 base64 = "=0.22.1"
 ed25519-dalek = "=2.1.1"

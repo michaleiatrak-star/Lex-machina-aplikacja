@@ -2,13 +2,11 @@ import {
   useEffect,
   useState
 } from "react";
+import { UserAccountDialog } from "./UserAccountDialog.js";
 import {
   ApiError,
   createAdminUser,
-  deleteAdminUser,
   listAdminUsers,
-  setAdminUserStatus,
-  setAccountKind,
   type AccountKind,
   type AuthenticatedUser
 } from "./api.js";
@@ -51,6 +49,9 @@ function errorMessage(
   ) {
     return "Nie można wyłączyć ani usunąć własnego konta administracyjnego.";
   }
+  if (failure.code === "LAST_ADMIN_REQUIRED") {
+    return "Musi zostać co najmniej jeden aktywny administrator.";
+  }
   return failure.code;
 }
 
@@ -64,10 +65,14 @@ function accountKindLabel(kind: AccountKind | undefined): string {
 }
 
 export function AdminUsersPanel({
-  currentUserId
+  currentUserId,
+  serverMode = false
 }: {
   currentUserId: string;
+  serverMode?: boolean;
 }) {
+  // Account dialog opened by clicking the user's name.
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
   const [users, setUsers] =
     useState<AuthenticatedUser[]>([]);
   const [loginName, setLoginName] =
@@ -85,6 +90,8 @@ export function AdminUsersPanel({
     useState("");
   const [message, setMessage] =
     useState("");
+
+  const openUser = users.find((user) => user.userId === openUserId) ?? null;
 
   async function refresh():
     Promise<void> {
@@ -137,87 +144,9 @@ export function AdminUsersPanel({
     }
   }
 
-  async function changeKind(
-    user: AuthenticatedUser,
-    kind: AccountKind
-  ): Promise<void> {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      await setAccountKind(user.userId, kind);
-      await refresh();
-      setMessage(
-        user.userId === currentUserId
-          ? "Typ konta zmieniony. Widok zmieni się po ponownym zalogowaniu."
-          : "Typ konta zmieniony. Użytkownik zobaczy zmianę po ponownym zalogowaniu."
-      );
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setBusy(false);
-    }
-  }
 
-  async function changeStatus(
-    user: AuthenticatedUser
-  ): Promise<void> {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      const status =
-        user.status === "ACTIVE"
-          ? "DISABLED"
-          : "ACTIVE";
-      await setAdminUserStatus(
-        user.userId,
-        status
-      );
-      await refresh();
-      setMessage(
-        status === "DISABLED"
-          ? "Konto zostało dezaktywowane, a jego aktywne sesje unieważnione."
-          : "Konto zostało ponownie aktywowane."
-      );
-    } catch (failure) {
-      setError(
-        errorMessage(failure)
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
 
-  async function removeUser(
-    user: AuthenticatedUser
-  ): Promise<void> {
-    if (
-      !window.confirm(
-        `Trwale usunąć konto @${user.loginName}? Operacja jest możliwa tylko dla dezaktywowanego konta bez powiązań ze sprawami.`
-      )
-    ) {
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      await deleteAdminUser(
-        user.userId
-      );
-      await refresh();
-      setMessage(
-        "Konto zostało trwale usunięte."
-      );
-    } catch (failure) {
-      setError(
-        errorMessage(failure)
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
+
 
   return (
     <section className="admin-users-panel">
@@ -317,65 +246,38 @@ export function AdminUsersPanel({
             className="admin-user-row"
           >
             <div>
-              <strong>
+              <button
+                type="button"
+                className="admin-user-name"
+                title="Ustawienia konta: dane, typ, uprawnienia, hasło, blokada, usunięcie"
+                onClick={() => setOpenUserId(user.userId)}
+              >
                 {user.displayName}
-              </strong>
+              </button>
               <span>
-                @{user.loginName} · {user.appRole} · {user.status} · {accountKindLabel(user.accountKind)}
+                @{user.loginName}{user.email ? ` · ${user.email}` : ""} · {user.appRole === "ADMIN" ? "administrator" : "użytkownik"} · {accountKindLabel(user.accountKind)} · {user.status === "ACTIVE" ? "aktywne" : "zablokowane"}
               </span>
             </div>
-            <label className="admin-user-kind">
-              Typ konta
-              <select
-                value={user.accountKind ?? "PROFESSIONAL"}
-                disabled={busy}
-                onChange={(event) => void changeKind(user, event.target.value as AccountKind)}
-              >
-                {ACCOUNT_KINDS.map(([kind, label]) => (
-                  <option key={kind} value={kind}>{label}</option>
-                ))}
-              </select>
-            </label>
-            {user.userId !==
-              currentUserId &&
-              user.appRole ===
-                "USER" && (
-                <div className="admin-user-actions">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      void changeStatus(
-                        user
-                      );
-                    }}
-                  >
-                    {user.status ===
-                    "ACTIVE"
-                      ? "Dezaktywuj"
-                      : "Aktywuj"}
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-button"
-                    disabled={
-                      busy ||
-                      user.status !==
-                        "DISABLED"
-                    }
-                    onClick={() => {
-                      void removeUser(
-                        user
-                      );
-                    }}
-                  >
-                    Usuń
-                  </button>
-                </div>
-              )}
+            <button type="button" className="chat-secondary-action" onClick={() => setOpenUserId(user.userId)}>
+              Ustawienia konta
+            </button>
           </article>
         ))}
       </div>
+      {openUser && (
+        <UserAccountDialog
+          user={openUser}
+          currentUserId={currentUserId}
+          serverMode={serverMode}
+          onClose={() => setOpenUserId(null)}
+          onChanged={(text, removed) => {
+            setError("");
+            setMessage(text);
+            if (removed) setOpenUserId(null);
+            void refresh().catch((failure) => setError(errorMessage(failure)));
+          }}
+        />
+      )}
     </section>
   );
 }

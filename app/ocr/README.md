@@ -14,6 +14,42 @@ python -m pip install -r app/ocr/requirements.txt
 
 The first PaddleOCR initialization may download model weights. After the models are present in the local cache, document OCR runs locally. For an offline workstation, pre-warm the models before disconnecting network access.
 
+## Apple Silicon execution
+
+The acceleration measurement keeps the same PP-OCRv6 models, 220 DPI PDF rendering,
+detector parameters, and Polish second reading. On macOS, detection and the
+small Latin recognizer use ONNX Runtime CPU, the main line recognizer uses
+CoreML **MLProgram**, and page orientation stays in Paddle. The detector uses
+up to eight CPU threads, bounded by the CPU count and `LEX_OCR_THREADS` when set.
+Its ONNX memory arena and memory patterns are disabled so variable page sizes do
+not retain several GB of intermediate buffers. This changes allocation, not
+image resolution, weights, or numerical precision. The legacy CoreML NeuralNetwork detector
+allocated tens of GB on the M4 benchmark and must not be used for this path.
+
+The ONNX detector retains PaddleX's preprocessing and postprocessing. Numerical
+differences can slightly change detected line boundaries, so the app still
+checks text consistency before enabling the faster backend. In the M4 test,
+the observed differences fixed a missing space and a duplicated dash; synthetic
+Polish amounts, dates and account numbers remained identical to the Paddle output.
+Detector inputs above 6 million pixels use the original Paddle runner at full
+resolution to bound memory growth on large photographs; subsequent smaller pages
+can still use ONNX. This does not resize or discard document content.
+
+One CoreML worker runs at a time to bound memory use. A changed CoreML engine
+revision invalidates the old performance decision and schedules a fresh automatic
+measurement using the already installed models. DirectML on Windows is unchanged.
+Model initialization or inference failure retains the original Paddle fallback.
+
+The `mkldnn` statistic reports compiled oneDNN support as well as the requested
+setting; the macOS arm64 Paddle build reports `MKLDNN_NOT_COMPILED` rather than
+claiming that oneDNN is active.
+
+Backend regression tests (no model downloads), from the application root:
+
+```bash
+python3 -m unittest discover -s app/ocr -p 'test_onnx_accel.py'
+```
+
 ## Supported inputs
 
 - PDF;

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { eliCapabilityNotice } from "./eli/eli-countries.js";
+import { eliCapabilityNotice, eliCountry } from "./eli/eli-countries.js";
 /**
  * Jurisdiction provider: the country whose law the application works with. Each country is a
  * package of the corpus with JURYSDYKCJA.md — the content keys (JUR:<key>) and the block
@@ -44,34 +44,88 @@ let settingsFile = null;
 export function configureJurisdiction(dir) {
     settingsFile = dir ? path.join(dir, "jurisdiction.json") : null;
 }
-/** The chosen package: LEX_JURISDICTION_PACK (deployment), then Settings, then Polish law. */
+function savedSettings() {
+    if (!settingsFile)
+        return {};
+    try {
+        return JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+    }
+    catch {
+        return {};
+    }
+}
+function saveSettings(value) {
+    if (!settingsFile)
+        throw new Error("JURISDICTION_NOT_CONFIGURED");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    const temporary = `${settingsFile}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify(value), "utf8");
+    fs.renameSync(temporary, settingsFile);
+}
+/**
+ * The chosen package: LEX_JURISDICTION_PACK (deployment), then Settings, then Polish law.
+ * An empty string: the chosen country has no package (no facade, no domain skills of its own):
+ * no other country's package stands in for it (user, 2026-11-08: "inne wtedy wyłączasz").
+ */
 export function activeJurisdictionPack() {
     const configured = process.env.LEX_JURISDICTION_PACK?.trim();
     if (configured)
         return configured;
-    if (settingsFile) {
-        try {
-            const value = JSON.parse(fs.readFileSync(settingsFile, "utf8")).pack;
-            if (typeof value === "string" && /^[a-z0-9-]+$/u.test(value))
-                return value;
-        }
-        catch {
-            // No choice saved: the default.
-        }
-    }
+    const value = savedSettings().pack;
+    if (value === "")
+        return "";
+    if (typeof value === "string" && /^[a-z0-9-]+$/u.test(value))
+        return value;
     return DEFAULT_JURISDICTION_PACK;
 }
+/** The country whose legal system the application applies (ISO code; Settings; Polish law by default). */
+export function activeCountry() {
+    const configured = process.env.LEX_JURISDICTION_COUNTRY?.trim().toUpperCase();
+    if (configured && /^[A-Z]{2}$/u.test(configured))
+        return configured;
+    const saved = savedSettings().country;
+    if (typeof saved === "string" && /^[A-Z]{2}$/u.test(saved))
+        return saved;
+    return "PL";
+}
 export function setActiveJurisdictionPack(root, pack) {
-    if (!settingsFile)
-        throw new Error("JURISDICTION_NOT_CONFIGURED");
     const provider = readJurisdictionProvider(root, pack);
     if (!provider)
         throw new Error("JURISDICTION_UNKNOWN");
-    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-    const temporary = `${settingsFile}.${process.pid}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify({ pack }), "utf8");
-    fs.renameSync(temporary, settingsFile);
+    saveSettings({ pack, country: provider.country });
     return provider;
+}
+/** The legal system of a country: its package when the corpus has one, otherwise none (no domain skills). */
+export function setActiveCountry(root, country) {
+    if (!/^[A-Z]{2}$/u.test(country))
+        throw new Error("JURISDICTION_UNKNOWN");
+    const provider = listJurisdictions(root).find((item) => item.country === country) ?? null;
+    saveSettings({ pack: provider?.pack ?? "", country });
+    return provider;
+}
+/**
+ * A skill the chosen legal system offers: another country's facade package and domain skills
+ * ("dr-02-…" are Polish law) are not offered; a country without a package has none of them.
+ */
+export function skillOfferedInJurisdiction(name, facades, root = corpusRoot) {
+    const pack = activeJurisdictionPack();
+    if (facades.has(name))
+        return name === pack;
+    if (/^[a-z]{2}-\d{2}-/u.test(name))
+        return Boolean(pack) && name.startsWith(`${domainSkillPrefix(root)}-`);
+    return true;
+}
+/** The sentence for the model when the chosen country is not Poland: its law only, the rest off. */
+export function foreignLegalSystemNotice(country) {
+    if (country === "PL")
+        return null;
+    const entry = eliCountry(country);
+    const name = entry?.name ?? country;
+    return (`System prawny wybrany w ustawieniach: ${name}. Stosuj wyłącznie prawo tego kraju (i prawo UE, jeśli kraj jest członkiem UE). ` +
+        "Prawo polskie, polskie skille dziedzinowe (dr-*), polskie konektory, korpus polskich ustaw i weryfikacja w ELI/ISAP są wyłączone: nie powołuj polskich przepisów. " +
+        "Skille metod (router, shared, analiza umów, pisma) stosuj jako metodę, a ich polskie przykłady i parametry JUR zastąp prawem wybranego kraju. " +
+        `Brzmienie przepisów ustalaj narzędziem read_national_legislation ze źródła urzędowego (${entry?.portal ?? "portal urzędowy kraju"}; ${entry?.text?.note ? entry.text.note.slice(0, 220) : "odczyt do ustalenia"}). ` +
+        "Przepis, którego nie odczytano, oznacz jako niezweryfikowany; nie podawaj brzmienia z pamięci.");
 }
 function manifestFields(text) {
     const fields = new Map();
@@ -173,7 +227,7 @@ export function jurisdictionConnectorPackage(root) {
 }
 /** The routing map of the chosen jurisdiction's domain skills (field `dziedziny`), corpus-relative. */
 export function jurisdictionDomainMap(root) {
-    return activeJurisdiction(root)?.domains || `${activeJurisdictionPack()}/ROUTING-MAP.md`;
+    return activeJurisdiction(root)?.domains || (activeJurisdictionPack() ? `${activeJurisdictionPack()}/ROUTING-MAP.md` : "");
 }
 // The corpus the registry scanned last: the domain prefix of the chosen jurisdiction is read there.
 let corpusRoot = null;

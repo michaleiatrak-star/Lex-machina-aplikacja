@@ -272,6 +272,23 @@ function loopbackOriginGuard(req, res, next) {
 // local model asking for a provision that does not exist held every step of the workflow,
 // with a "powtórz etap" notice on each answer (Bielik, user report 2026-11-06).
 const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_law_library|verify_case_law)\b/u;
+// An analysis checkpoint of a contract (AU-F0…AU-F) stands when the answer stopped only on
+// citations it marked ⚠️ [NIEWERYFIKOWANE] or on a verified wording whose check is older than
+// the freshness limit: the analysis is a draft, the open verifications go to the next turn
+// (contract test 2026-11-08: 17 marked citations held every checkpoint and "Kontynuuj" redid
+// the whole analysis). The finalization gates (AU-HYBRID…AU-DISC) and the .docx still need PASS.
+const CONTRACT_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION", "TEMPORAL_FRESHNESS"]);
+const CONTRACT_FINAL_CHECKPOINTS = new Set(["AU-HYBRID", "AU-STRIP", "AU-POST", "AU-DISC", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED"]);
+export function contractDraftStepDone(result, checkpoints) {
+    if (result.finalization !== "DEGRADED")
+        return false;
+    if (!checkpoints.length || checkpoints.some((checkpoint) => CONTRACT_FINAL_CHECKPOINTS.has(checkpoint)))
+        return false;
+    const checks = result.gateI?.checks ?? [];
+    if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id)))
+        return false;
+    return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
+}
 export function blockedAuditSteps(result) {
     return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
         .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
@@ -7741,16 +7758,17 @@ export function createLexHttpApp(options) {
                 let state = contractContext.state;
                 if (result.status ===
                     "DRAFT_PRESENTABLE" &&
-                    result.finalization ===
-                        "PASS" &&
-                    result.audit.result ===
-                        "PASS" &&
                     result.audit.closed ===
                         true &&
                     result.workflow?.id ===
                         "CONTRACT_ANALYSIS_V1" &&
-                    result.workflow.result ===
+                    ((result.finalization ===
                         "PASS" &&
+                        result.audit.result ===
+                            "PASS" &&
+                        result.workflow.result ===
+                            "PASS") ||
+                        contractDraftStepDone(result, contractContext.permit.checkpoints)) &&
                     // A checkpoint that asked the user stays open until the reply.
                     result.waitingForUser !== true &&
                     // A step refused during the turn: the audit of the checkpoint cannot be closed

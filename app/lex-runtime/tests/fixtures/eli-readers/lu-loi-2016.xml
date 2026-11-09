@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+<act contains="originalVersion" name=""><meta>
+	<identification source="#2016A1820A">
+		<FRBRWork>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2016-05-23" name="document"/>
+			<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+			<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+		</FRBRWork>
+		<FRBRExpression>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2016-05-23" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+			<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+		</FRBRExpression>
+		<FRBRManifestation>
+			<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr/xml"/>
+			<FRBRuri value=""/>
+			<FRBRdate date="2016-05-23" name="document"/>
+			<FRBRauthor as="#author" href=""/>
+		</FRBRManifestation>
+             <scl:JOLUXWork>
+                 <scl:JOLUXComplexWork>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2</scl:jolux>
+                 </scl:JOLUXComplexWork>
+                 <scl:JOLUXLegalResource>
+                     <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo</scl:jolux>
+                     <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2</scl:jolux>
+                     <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux>
+                     <scl:jolux scl:name="dateDocument">2016-05-23</scl:jolux>
+                     <scl:jolux scl:name="publicationDate">2016-06-01</scl:jolux>
+                     <scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/proj/PL/20150295</scl:jolux>
+                     <scl:jolux scl:name="historicalLegalId">2016A1820A</scl:jolux>
+                     <scl:jolux scl:name="dateApplicability">2016-06-05</scl:jolux>
+                     <scl:jolux scl:name="dateEntryInForce">2016-06-04</scl:jolux>
+                     <scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2016/96</scl:jolux>
+                     
+                     
+                     <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/737</scl:jolux>
+                     <scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/493</scl:jolux>
+                     <scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/jo</scl:jolux>
+                     <scl:jolux scl:name="personInCharge">Muriel Glaesener 88522</scl:jolux>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                     <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                 </scl:JOLUXLegalResource>
+             </scl:JOLUXWork>
+             <scl:JOLUXExpression>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo</scl:jolux>
+                 <scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="title">Loi du 23 mai 2016 sur la reconnaissance du mariage au Grand-Duché de Luxembourg et modifiant le Code civil.</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="titleShort">Reconnaissance du mariage au Grand-Duché de Luxembourg</scl:jolux>
+             </scl:JOLUXExpression>
+             <scl:JOLUXManifestation>
+                 <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr/xml</scl:jolux>
+                 <scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/2016/05/23/n2/jo/fr</scl:jolux>
+                 <scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2016/96/fr/pdf</scl:jolux>
+                 <scl:jolux scl:name="memorialPage">1820</scl:jolux>
+                 <scl:jolux scl:name="memorialSequence">A</scl:jolux>
+                 <scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                 <scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+                 <scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+                 <scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+                 <scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+                 <scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-2016-05-23-n2-jo-fr-xml.xml</scl:jolux>
+                 
+             </scl:JOLUXManifestation>
+	</identification>
+</meta>
+     <preface>
+	<longTitle>
+			<p>Loi du 23 mai 2016 sur la reconnaissance du mariage au Grand-Duché de Luxembourg et modifiant le Code civil.</p>
+	</longTitle>
+</preface>
+     <preamble>
+          <container name="preamble">
+               <p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+               <p>Notre Conseil d'Etat entendu;</p>
+               <p>De l'assentiment de la Chambre des Députés;</p>
+          </container>
+          <container name="considerando"><p>Vu la décision de la Chambre des Députés du 19 avril 2016 et celle du Conseil d'Etat du 3 mai 2016 portant qu'il n'y a pas lieu à second vote;</p>
+     </container><formula name=""><p>Avons ordonné et ordonnons:</p></formula></preamble>
+     <body>
+          
+          <article id="art_1er">
+               <num>Art. 1<sup>er</sup>.</num>
+               <paragraph>
+                    <num>(1)</num>
+                    <alinea><content><p>Le mariage entre deux personnes de même sexe, valablement célébré à l'étranger avant le 1<sup>er</sup> janvier 2015, est reconnu au Grand-Duché de Luxembourg lorsque chacun des conjoints remplit soit les conditions de fond exigées par la loi applicable à son statut personnel sous respect de l'ordre public international, soit lorsque les deux conjoints satisfont aux conditions de fond de la loi luxembourgeoise.</p></content></alinea>
+               </paragraph>
+               <paragraph>
+                    <num>(2)</num>
+                    <alinea><content><p>Les adoptions valablement prononcées à l'étranger entre un enfant et des personnes mariées de même sexe avant le 1<sup>er</sup> janvier 2015, sont reconnues au Grand-Duché de Luxembourg.</p></content></alinea>
+               </paragraph>
+          </article>
+          <article id="art_2">
+               <num>Art. 2.</num>
+               <alinea><content><p>Le Code civil est complété comme suit:</p>
+               <p>Au Livre 1<sup>er</sup>. - Des personnes, Titre V. - Du mariage, Chapitre II. - Des formalités relatives à la célébration du mariage, il est ajouté après l'article 170, un nouvel article 170-1 libellé comme suit:<mod><quotedText><embeddedStructure>
+                         <article id="art_170-1">
+                              <num>Art. 170-1.</num>
+                              <alinea><content><p>Le mariage contracté en pays étranger, entre étrangers, est valable au Grand-Duché de Luxembourg s'il a été célébré dans les formes usitées dans le pays, et si les deux conjoints remplissent soit les conditions de fond exigées par la loi applicable à leur statut personnel sous réserve du respect de l'ordre public international ou si les deux conjoints satisfont aux conditions de fond de la loi luxembourgeoise.</p></content></alinea>
+                         </article>
+                    </embeddedStructure></quotedText></mod></p>
+          </content></alinea></article>
+          <clause><content><p>Mandons et ordonnons que la présente loi soit insérée au Mémorial pour être exécutée et observée par tous ceux que la chose concerne.</p></content></clause>
+     </body>
+     
+          <conclusions><p><signature><shortTitle>Le Ministre de la Justice,</shortTitle><person refersTo="">Félix Braz</person></signature></p><p><signature><docDate date="2999-01-01">Palais de Luxembourg, le 23 mai 2016.</docDate><person refersTo="">Henri</person></signature></p></conclusions>
+     
+     <components><component><interstitial><p>Doc. parl. 6908; sess. ord. 2015-2016.</p></interstitial></component></components>
+</act></akomaNtoso>

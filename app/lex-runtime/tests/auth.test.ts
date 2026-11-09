@@ -433,3 +433,49 @@ describe("account kind (PROFESSIONAL / INDIVIDUAL)", () => {
     service.close();
   });
 });
+
+describe("account role (ADMIN / USER)", () => {
+  it("another administrator changes the role; sessions end; one active administrator remains; not own role", async () => {
+    const root = tempRoot();
+    const { store, service } = serviceAt(root);
+    const admin = await service.bootstrap({ loginName: "ewa", displayName: "Ewa", password: "Ewa ma bezpieczne dlugie haslo 2026" });
+    const ewa = service.authenticateAuthorization(`Bearer ${admin.sessionToken}`);
+    const jan = await service.createUser(ewa, { loginName: "jan", displayName: "Jan", password: "Jan ma bezpieczne dlugie haslo 2026", accountKind: "INDIVIDUAL" });
+    const janLogin = await service.login({ loginName: "jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    const janUser = service.authenticateAuthorization(`Bearer ${janLogin.sessionToken}`);
+    expect(() => service.setAppRole(janUser, admin.user.userId, "USER")).toThrow("AUTHORIZATION_DENIED");
+    expect(() => service.setAppRole(ewa, admin.user.userId, "USER")).toThrow("SELF_ADMIN_MUTATION_DENIED");
+
+    // Promotion: the kind does not matter; the old session ends, the new login carries ADMIN.
+    expect(service.setAppRole(ewa, jan.userId, "ADMIN").appRole).toBe("ADMIN");
+    expect(() => service.authenticateAuthorization(`Bearer ${janLogin.sessionToken}`)).toThrow();
+    const janAgain = await service.login({ loginName: "jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    const janAdmin = service.authenticateAuthorization(`Bearer ${janAgain.sessionToken}`);
+    expect(janAdmin.user.appRole).toBe("ADMIN");
+
+    // Jan demotes Ewa (another administrator remains), then cannot be demoted himself as the last one.
+    expect(service.setAppRole(janAdmin, admin.user.userId, "USER").appRole).toBe("USER");
+    const ewaAgain = await service.login({ loginName: "ewa", password: "Ewa ma bezpieczne dlugie haslo 2026" });
+    const ewaUser = service.authenticateAuthorization(`Bearer ${ewaAgain.sessionToken}`);
+    expect(() => service.setAppRole(ewaUser, jan.userId, "USER")).toThrow("AUTHORIZATION_DENIED");
+    expect(store.listUsers().filter((user) => user.appRole === "ADMIN").map((user) => user.loginName)).toEqual(["jan"]);
+
+    // A disabled account is not promoted.
+    service.setUserStatus(janAdmin, admin.user.userId, "DISABLED");
+    expect(() => service.setAppRole(janAdmin, admin.user.userId, "ADMIN")).toThrow("USER_STATUS_CONFLICT");
+    service.close();
+  });
+
+  it("the last active administrator cannot be demoted by another (disabled) path", async () => {
+    const root = tempRoot();
+    const { service } = serviceAt(root);
+    const admin = await service.bootstrap({ loginName: "ewa", displayName: "Ewa", password: "Ewa ma bezpieczne dlugie haslo 2026" });
+    const ewa = service.authenticateAuthorization(`Bearer ${admin.sessionToken}`);
+    const jan = await service.createUser(ewa, { loginName: "jan", displayName: "Jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    service.setAppRole(ewa, jan.userId, "ADMIN");
+    // Two administrators: Ewa demotes Jan; now Ewa is the only one and nobody else can demote her.
+    expect(service.setAppRole(ewa, jan.userId, "USER").appRole).toBe("USER");
+    expect(() => service.setAppRole(ewa, admin.user.userId, "USER")).toThrow("SELF_ADMIN_MUTATION_DENIED");
+    service.close();
+  });
+});

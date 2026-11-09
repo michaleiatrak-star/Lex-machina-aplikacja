@@ -11,7 +11,7 @@ import {
 import {
   StdioClientTransport
 } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { activeJurisdiction, DEFAULT_JURISDICTION_PACK, jurisdictionConnectorPackage } from "./jurisdiction.js";
+import { activeJurisdiction, activeJurisdictionPack, DEFAULT_JURISDICTION_PACK, jurisdictionConnectorPackage } from "./jurisdiction.js";
 
 export const LEX_MCP_SERVER_IDS = [
   "isap",
@@ -126,6 +126,8 @@ export function lexMcpPackagePath(
 
 /** Servers shown and run for the chosen jurisdiction (field `konektory-serwery`); all when it names none. */
 export function jurisdictionServerIds(skillsRoot: string): LexMcpServerId[] {
+  // A country without a package has no connectors: the Polish ones are not run for it.
+  if (!activeJurisdictionPack()) return [];
   const named = activeJurisdiction(skillsRoot)?.connectorServers;
   return named?.length ? LEX_MCP_SERVER_IDS.filter((id) => named.includes(id)) : [...LEX_MCP_SERVER_IDS];
 }

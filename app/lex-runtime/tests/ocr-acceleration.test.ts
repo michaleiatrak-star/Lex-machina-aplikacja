@@ -8,6 +8,7 @@ import {
   compareReadings,
   judgeBenchmark,
   OCR_ACCEL_MODELS,
+  OCR_COREML_ENGINE_REVISION,
   OcrAccelerationManager,
   ocrAccelProvider,
   type OcrAccelEnvironment
@@ -80,7 +81,28 @@ describe("OCR na karcie graficznej: instalacja i pomiar", () => {
     expect(calls[0]).toBeNull();
     expect(calls[1]!.env).toMatchObject({ LEX_OCR_ACCEL: "coreml", LEX_OCR_ONNX_DIR: path.join(dir, "accel", "models") });
     expect(manager.status()).toMatchObject({ installed: true, active: true, state: "IDLE", benchmark: { accepted: true, cpuSeconds: 60, accelSeconds: 20 } });
-    expect(manager.environment()!.maxWorkers).toBe(3);
+    expect(manager.environment()!.maxWorkers).toBe(1);
+    expect(manager.status().benchmark?.engineRevision).toBe(OCR_COREML_ENGINE_REVISION);
+
+    // Neither an old acceptance nor an old rejection describes the new backend.
+    const recordPath = path.join(dir, "accel", "ocr-acceleration.json");
+    for (const accepted of [true, false]) {
+      const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+      delete record.benchmark.engineRevision;
+      record.benchmark.accepted = accepted;
+      fs.writeFileSync(recordPath, JSON.stringify(record));
+      fs.writeFileSync(path.join(dir, "accel", "auto.json"), JSON.stringify({
+        failedAt: new Date().toISOString(), error: "OCR_ACCEL_OLD_BACKEND_FAILED"
+      }));
+      expect(manager.environment()).toBeNull();
+      const before = calls.length;
+      expect(await manager.autoSetup()).toBe("DONE");
+      expect(calls.length).toBe(before + 2);
+      expect(manager.status()).toMatchObject({ active: true, benchmark: { engineRevision: OCR_COREML_ENGINE_REVISION } });
+    }
+    const measuredCalls = calls.length;
+    expect(await manager.autoSetup()).toBe("SKIPPED");
+    expect(calls.length).toBe(measuredCalls);
 
     accelSeconds = 58;
     await manager.measure();

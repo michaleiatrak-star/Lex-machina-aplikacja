@@ -62,6 +62,7 @@ export default function App({
         server:
           user.appRole === "ADMIN" && !isDesktopShell() ? (
             <ServerAdminPanel
+              currentUserId={user.userId}
               {...(onServerModeChanged
                 ? { onModeChanged: onServerModeChanged }
                 : {})}
@@ -84,6 +85,7 @@ export default function App({
                 currentUserId={
                   user.userId
                 }
+                serverMode={serverMode}
               />
               <CaseAccessAdminPanel
                 currentUserId={

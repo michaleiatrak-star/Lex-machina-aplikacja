@@ -142,7 +142,8 @@ export function updateHandoffOutcome(
   store: Store | null,
   attempt: UpdateStatusResponse["lastAttempt"],
   current: string = APP_VERSION,
-  now: Date = new Date()
+  now: Date = new Date(),
+  macos: boolean = typeof navigator !== "undefined" && /Mac OS X|Macintosh/i.test(navigator.userAgent)
 ): { kind: "INSTALLED" | "FAILED"; version: string; message: string } | null {
   let handoff: { version?: unknown; at?: unknown } | null = null;
   try {
@@ -166,6 +167,10 @@ export function updateHandoffOutcome(
   // Still within the runner's first seconds (e.g. this start is the runner's own restart).
   if (now.getTime() - Date.parse(handoff.at) < HANDOFF_SILENT_MS) return null;
   write(store, HANDOFF, null);
+  if (macos) return {
+    kind: "FAILED", version,
+    message: `Nadal działa poprzednia wersja Lex Machina. Aktualizacja do wersji ${version} nie została dokończona. Jeśli instalator jest otwarty, przejdź jego kroki, a potem otwórz aplikację ponownie.`
+  };
   return {
     kind: "FAILED",
     version,

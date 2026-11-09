@@ -1,8 +1,9 @@
 """OCR on the graphics card of any vendor: the PaddleOCR models converted to ONNX run in ONNX
 Runtime with DirectML (Windows: NVIDIA, AMD, Intel, any DirectX 12 card) or CoreML (macOS:
-Apple GPU and Neural Engine). Only the network runs there: PaddleX keeps every step before and
-after it (resizing, normalization, the text boxes, the reading of the characters), so the
-text is the one the CPU path gives.
+Apple GPU and Neural Engine). PaddleX keeps the steps around the networks (resizing,
+normalization, text boxes and decoding). The app measures speed and text consistency before
+enabling acceleration. On macOS the detector and small Latin recognizer use ONNX CPU;
+only the main recognizer uses CoreML.
 
 LEX_OCR_ACCEL: auto (default: the card when the models and a provider are there), off,
 dml, coreml, cpu (ONNX on the processor, for checks). LEX_OCR_ONNX_DIR: the converted models
@@ -20,6 +21,11 @@ PROVIDERS = {
     "cpu": "CPUExecutionProvider",
 }
 
+# At the measured 4.7 MP detector input the complete worker peaked around 9 GiB.
+# Large photographs can exceed that substantially. Retain full-resolution
+# Paddle detection for those inputs rather than resizing or risking a swap storm.
+APPLE_ONNX_DETECTION_MAX_PIXELS = 6_000_000
+
 
 class OrtRunner:
     """The predictor's runner: the same call (x = list of input arrays, a list of outputs back)."""
@@ -32,6 +38,11 @@ class OrtRunner:
 
     def __call__(self, x):
         if self.session is not None:
+            if sys.platform == "darwin" and self.name == "PP-OCRv6_medium_det" and x:
+                shape = getattr(x[0], "shape", ())
+                if len(shape) == 4 and shape[0] * shape[2] * shape[3] > APPLE_ONNX_DETECTION_MAX_PIXELS:
+                    # Per-input fallback: smaller pages later still use ONNX.
+                    return self.fallback(x=x)
             try:
                 return self.session.run(None, dict(zip(self.inputs, x)))
             except Exception as error:  # noqa: BLE001
@@ -71,12 +82,47 @@ def session_for(path, provider):
     if provider not in available:
         raise RuntimeError("provider %s not available (%s)" % (provider, ",".join(available)))
     options = ort.SessionOptions()
+    if sys.platform == "darwin":
+        # The detector benefits from the Apple CPU's parallel ONNX kernels.
+        # Keep the other sessions small and respect the worker's thread limit.
+        raw_threads = os.environ.get("LEX_OCR_THREADS", "").strip()
+        cpu_count = os.cpu_count() or 1
+        limit = int(raw_threads) if raw_threads.isdigit() and int(raw_threads) > 0 else cpu_count
+        detector = path.stem == "PP-OCRv6_medium_det"
+        options.intra_op_num_threads = min(8, limit, cpu_count) if detector else 1
+        if detector:
+            # Dynamic page sizes made the arena retain several GB of reusable
+            # intermediate buffers. The allocator choice changes no tensor data.
+            options.enable_cpu_mem_arena = False
+            options.enable_mem_pattern = False
+        options.inter_op_num_threads = 1
+        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        options.add_session_config_entry("session.inter_op.allow_spinning", "0")
     if provider == PROVIDERS["dml"]:
         # DirectML runs one request at a time and without memory pattern optimization.
         options.enable_mem_pattern = False
         options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    providers = [provider] if provider == PROVIDERS["cpu"] else [provider, PROVIDERS["cpu"]]
+    if provider == PROVIDERS["coreml"]:
+        # The legacy NeuralNetwork converter retained tens of GB of detector
+        # intermediates on M4. Use MLProgram for recognition; model selection
+        # below deliberately keeps detection off CoreML.
+        providers = [(provider, {"ModelFormat": "MLProgram", "MLComputeUnits": "ALL"}), PROVIDERS["cpu"]]
+    else:
+        providers = [provider] if provider == PROVIDERS["cpu"] else [provider, PROVIDERS["cpu"]]
     return ort.InferenceSession(str(path), sess_options=options, providers=providers)
+
+
+def model_provider(name, provider):
+    if provider != PROVIDERS["coreml"]:
+        return provider
+    # The detector's ONNX CPU kernels are much faster than Paddle's macOS CPU
+    # kernels, without the legacy CoreML detector's large intermediates. Keep
+    # the same weights and PaddleX preprocessing, thresholds and postprocessing.
+    if name == "PP-OCRv6_medium_rec":
+        return provider
+    if name in ("PP-OCRv6_medium_det", "latin_PP-OCRv5_mobile_rec"):
+        return PROVIDERS["cpu"]
+    return None
 
 
 def predictors(ocr):
@@ -110,16 +156,19 @@ def accelerate(ocr, onnx_dir=None):
         return None
     try:
         swaps = []
+        accelerated = 0
         for name, predictor in predictors(ocr):
+            selected = model_provider(name, provider)
             model = root / ("%s.onnx" % name)
-            if not name or not model.is_file() or not hasattr(predictor, "runner"):
+            if not selected or not name or not model.is_file() or not hasattr(predictor, "runner"):
                 continue
-            swaps.append((predictor, OrtRunner(session_for(model, provider), predictor.runner, name)))
-        if not swaps:
+            swaps.append((predictor, OrtRunner(session_for(model, selected), predictor.runner, name)))
+            accelerated += int(selected == provider)
+        if not accelerated:
             return None
         for predictor, runner in swaps:
             predictor.runner = runner
-        print("LEX_OCR_ACCEL %s %d" % (provider, len(swaps)), file=sys.stderr, flush=True)
+        print("LEX_OCR_ACCEL %s %d" % (provider, accelerated), file=sys.stderr, flush=True)
         return provider
     except Exception as error:  # noqa: BLE001
         print("LEX_OCR_ACCEL_FAILED:%s:%s" % (type(error).__name__, str(error)[:200]), file=sys.stderr, flush=True)

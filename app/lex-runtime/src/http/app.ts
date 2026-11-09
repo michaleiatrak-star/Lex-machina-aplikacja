@@ -779,6 +779,25 @@ export type LexHttpAppOptions = {
 // with a "powtórz etap" notice on each answer (Bielik, user report 2026-11-06).
 const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_law_library|verify_case_law)\b/u;
 
+// An analysis checkpoint of a contract (AU-F0…AU-F) stands when the answer stopped only on
+// citations it marked ⚠️ [NIEWERYFIKOWANE] or on a verified wording whose check is older than
+// the freshness limit: the analysis is a draft, the open verifications go to the next turn
+// (contract test 2026-11-08: 17 marked citations held every checkpoint and "Kontynuuj" redid
+// the whole analysis). The finalization gates (AU-HYBRID…AU-DISC) and the .docx still need PASS.
+const CONTRACT_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION", "TEMPORAL_FRESHNESS"]);
+const CONTRACT_FINAL_CHECKPOINTS = new Set(["AU-HYBRID", "AU-STRIP", "AU-POST", "AU-DISC", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED"]);
+
+export function contractDraftStepDone(
+  result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }> },
+  checkpoints: readonly string[]
+): boolean {
+  if (result.finalization !== "DEGRADED") return false;
+  if (!checkpoints.length || checkpoints.some((checkpoint) => CONTRACT_FINAL_CHECKPOINTS.has(checkpoint))) return false;
+  const checks = result.gateI?.checks ?? [];
+  if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id))) return false;
+  return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
+}
+
 export function blockedAuditSteps(result: SessionExecutionResponse): string[] {
   return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
     .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
@@ -2770,6 +2789,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               );
           res.locals.lexAuth =
             context;
+          // One-time password from the administrator: only the password change (and leaving) until it is done.
+          if (
+            context.user.passwordChangeRequired === true &&
+            !/^\/auth\/(?:me|password|logout|lock|activity)$/u.test(req.path)
+          ) {
+            res.status(403).json({ error: "PASSWORD_CHANGE_REQUIRED" });
+            return;
+          }
 
           trackSessionActivity(
             options.authService!,
@@ -3431,6 +3458,48 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
       try {
         const user = options.authService.setAccountKind(responseAuthContext(res), String(req.params.userId ?? "").trim(), accountKind);
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
+  // Account dialog: name and contact e-mail.
+  app.patch(
+    "/api/admin/users/:userId/profile",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      try {
+        const user = options.authService.setProfile(responseAuthContext(res), String(req.params.userId ?? "").trim(), {
+          ...(req.body?.displayName !== undefined ? { displayName: req.body.displayName } : {}),
+          ...(req.body?.email !== undefined ? { email: req.body.email } : {})
+        });
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
+  // Role (ADMIN / USER), set by another administrator; the account's sessions end.
+  app.patch(
+    "/api/admin/users/:userId/role",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      const appRole = req.body?.appRole === "ADMIN" || req.body?.appRole === "USER" ? req.body.appRole : null;
+      if (!appRole) {
+        res.status(400).json({ error: "INVALID_USER_REQUEST" });
+        return;
+      }
+      try {
+        const user = options.authService.setAppRole(responseAuthContext(res), String(req.params.userId ?? "").trim(), appRole);
         res.json({ user });
       } catch (error) {
         if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
@@ -12289,16 +12358,21 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (
           result.status ===
             "DRAFT_PRESENTABLE" &&
-          result.finalization ===
-            "PASS" &&
-          result.audit.result ===
-            "PASS" &&
           result.audit.closed ===
             true &&
           result.workflow?.id ===
             "CONTRACT_ANALYSIS_V1" &&
-          result.workflow.result ===
-            "PASS" &&
+          (
+            (
+              result.finalization ===
+                "PASS" &&
+              result.audit.result ===
+                "PASS" &&
+              result.workflow.result ===
+                "PASS"
+            ) ||
+            contractDraftStepDone(result, contractContext.permit.checkpoints)
+          ) &&
           // A checkpoint that asked the user stays open until the reply.
           result.waitingForUser !== true &&
           // A step refused during the turn: the audit of the checkpoint cannot be closed

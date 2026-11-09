@@ -1,8 +1,9 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$RuntimeRoot
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "bootstrap-progress.ps1")
 
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 $manifestPath = Join-Path $runtime "release-source.json"
@@ -214,12 +215,19 @@ function Get-VerifiedDownload(
   [string]$Destination,
   [string]$Label
 ) {
+  $friendlyName = switch ($Label) {
+    "node-runtime" { "narzędzia aplikacji" }
+    "visual-cpp-runtime" { "składniki systemu Windows" }
+    "python-embeddable-runtime" { "narzędzia analizy dokumentów" }
+    default { "składniki analizy dokumentów" }
+  }
   if ($ExpectedSha256 -notmatch '^[a-fA-F0-9]{64}$') {
     throw "BOOTSTRAP_HASH_INVALID:$Label"
   }
   if (Test-Path -LiteralPath $Destination -PathType Leaf) {
     $cached = (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash.ToLowerInvariant()
     if ($cached -eq $ExpectedSha256.ToLowerInvariant()) {
+      Set-BootstrapProgress "Gotowe pliki są już na komputerze. Przygotowanie: $friendlyName…"
       Write-Host "Using verified cache for $Label"
       return
     }
@@ -231,23 +239,71 @@ function Get-VerifiedDownload(
   $actual = ""
   $failure = ""
   for ($attempt = 1; $attempt -le 4; $attempt++) {
-    Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
     Write-Host "Downloading $Label (attempt $attempt/4)"
     try {
-      Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+      Set-BootstrapProgress "Pobieranie: $friendlyName…"
+      $request = [Net.HttpWebRequest]::Create($Url)
+      $offset = 0L
+      if (Test-Path -LiteralPath $partial -PathType Leaf) { $offset = (Get-Item -LiteralPath $partial).Length }
+      if ($offset -gt 0) { $request.AddRange($offset) }
+      $request.Timeout = 60000
+      $request.ReadWriteTimeout = 60000
+      $response = $null; $inputStream = $null; $outputStream = $null
+      try {
+        $response = $request.GetResponse()
+        $append = $false
+        if ([int]$response.StatusCode -eq 206) {
+          $range = [string]$response.Headers["Content-Range"]
+          if ($range -notmatch '^bytes (\d+)-(\d+)/(\d+)$' -or [long]$Matches[1] -ne $offset) {
+            Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+            throw "BOOTSTRAP_DOWNLOAD_RANGE_INVALID"
+          }
+          $append = $true
+        } else { $offset = 0L }
+        $inputStream = $response.GetResponseStream()
+        $mode = if ($append) { [IO.FileMode]::Append } else { [IO.FileMode]::Create }
+        $outputStream = [IO.File]::Open($partial, $mode, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $buffer = New-Object byte[] 131072
+        $received = $offset
+        $total = if ($response.ContentLength -ge 0) { $offset + $response.ContentLength } else { 0L }
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        while (($count = $inputStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+          $outputStream.Write($buffer, 0, $count)
+          $received += $count
+          if ($clock.ElapsedMilliseconds -ge 250) {
+            Set-BootstrapProgress "Pobieranie: $friendlyName…" $received $total
+            $clock.Restart()
+          }
+        }
+        Set-BootstrapProgress "Sprawdzanie pobranych plików: $friendlyName…"
+      } finally {
+        if ($outputStream) { $outputStream.Dispose() }
+        if ($inputStream) { $inputStream.Dispose() }
+        if ($response) { $response.Dispose() }
+      }
       $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $partial).Hash.ToLowerInvariant()
       if ($actual -eq $ExpectedSha256.ToLowerInvariant()) {
         Move-Item -LiteralPath $partial -Destination $Destination -Force
         return
       }
       $failure = "actual=$actual"
+      Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
     } catch {
       $failure = $_.Exception.Message
+      # An old partial file can be longer than the current remote asset.
+      $errorResponse = $_.Exception.Response
+      if (-not $errorResponse -and $_.Exception.InnerException) { $errorResponse = $_.Exception.InnerException.Response }
+      if ($errorResponse) {
+        if ([int]$errorResponse.StatusCode -eq 416) {
+          Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+        }
+        $errorResponse.Dispose()
+      }
     }
     Write-Host "Download of $Label failed ($failure)"
-    if ($attempt -lt 4) { Start-Sleep -Seconds (3 * $attempt) }
+    if ($attempt -lt 4) { Set-BootstrapProgress "Połączenie przerwane. Ponawianie pobierania…"; Start-Sleep -Seconds (3 * $attempt) }
   }
-  Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+  # Keep interrupted transfers for the next attempt; corrupt files were removed above.
   if ($actual) {
     throw "BOOTSTRAP_HASH_MISMATCH:$Label expected=$ExpectedSha256 actual=$actual"
   }
@@ -312,18 +368,20 @@ function Invoke-RedirectedNativeProcess(
 }
 
 Write-Host "[1/6] Private Node"
+Set-BootstrapProgress "Sprawdzanie narzędzi aplikacji…"
 $nodeDir = Join-Path $runtime "node"
 $nodeExe = Join-Path $nodeDir "node.exe"
 $nodeExpected = "v$($manifest.runtime.node.version)"
 if (-not (Test-CommandVersion $nodeExe @("--version") $nodeExpected)) {
-  Remove-Item $nodeDir -Recurse -Force -ErrorAction SilentlyContinue
   $nodeZip = Join-Path $cache "node-$($manifest.runtime.node.version)-win-x64.zip"
   Get-VerifiedDownload $manifest.runtime.node.url $manifest.runtime.node.sha256 $nodeZip "node-runtime"
   $extract = Join-Path $cache "node-extract-$($manifest.runtime.node.version)"
   Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+  Set-BootstrapProgress "Przygotowanie pobranych narzędzi aplikacji…"
   Expand-Archive -LiteralPath $nodeZip -DestinationPath $extract -Force
   $source = Get-ChildItem $extract -Directory | Select-Object -First 1
   if (-not $source) { throw "BOOTSTRAP_NODE_ARCHIVE_LAYOUT_INVALID" }
+  Remove-Item $nodeDir -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
   Copy-Item (Join-Path $source.FullName "*") $nodeDir -Recurse -Force
 }
@@ -332,6 +390,7 @@ if (-not (Test-CommandVersion $nodeExe @("--version") $nodeExpected)) {
 }
 
 Write-Host "[2/6] System prerequisites"
+Set-BootstrapProgress "Przygotowanie składników systemu Windows…"
 $vc = $manifest.systemPrerequisites.visualCppRuntime
 $vcPresent = Get-VcRuntimeVersion
 $vcInstalled = [bool]($vcPresent -and $vcPresent -ge [Version]$vc.version)
@@ -353,6 +412,7 @@ if (-not $vcInstalled) {
 }
 
 Write-Host "[3/6] Private Python"
+Set-BootstrapProgress "Sprawdzanie narzędzi analizy dokumentów…"
 $pythonDir = Join-Path $runtime "python"
 $pythonExe = Join-Path $pythonDir "python.exe"
 $pythonExpected = "Python $($manifest.runtime.python.version)"
@@ -361,7 +421,6 @@ if (-not $pythonDelivery) {
   throw "BOOTSTRAP_PYTHON_DELIVERY_MISSING"
 }
 if (-not (Test-CommandVersion $pythonExe @("--version") $pythonExpected)) {
-  Remove-Item $pythonDir -Recurse -Force -ErrorAction SilentlyContinue
 
   # The registered CPython full installer cannot safely provide an app-private
   # runtime when the same Python version is already registered on the machine.
@@ -379,9 +438,17 @@ if (-not (Test-CommandVersion $pythonExe @("--version") $pythonExpected)) {
   }
   $pythonZip = Join-Path $cache "python-$($manifest.runtime.python.version)-embeddable-amd64.zip"
   Get-VerifiedDownload $embedded.url $embedded.sha256 $pythonZip "python-embeddable-runtime"
-
+  Set-BootstrapProgress "Przygotowanie pobranych narzędzi analizy dokumentów…"
+  $pythonStage = Join-Path $cache "python-extract-$($manifest.runtime.python.version)"
+  Remove-Item $pythonStage -Recurse -Force -ErrorAction SilentlyContinue
+  Expand-Archive -LiteralPath $pythonZip -DestinationPath $pythonStage -Force
+  if (-not (Test-Path -LiteralPath (Join-Path $pythonStage "python.exe") -PathType Leaf)) {
+    throw "BOOTSTRAP_PYTHON_ARCHIVE_LAYOUT_INVALID"
+  }
+  Remove-Item $pythonDir -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force -Path $pythonDir | Out-Null
-  Expand-Archive -LiteralPath $pythonZip -DestinationPath $pythonDir -Force
+  Copy-Item (Join-Path $pythonStage "*") $pythonDir -Recurse -Force
+  Remove-Item $pythonStage -Recurse -Force -ErrorAction SilentlyContinue
 
   $pth = Get-ChildItem -LiteralPath $pythonDir -Filter "python*._pth" -File |
     Select-Object -First 1
@@ -490,6 +557,7 @@ if ($pipVersionProcess.ExitCode -ne 0 -or $null -eq $pipActual -or
 }
 
 Write-Host "[4/6] Pinned Python/ML packages"
+Set-BootstrapProgress "Przygotowanie analizy dokumentów…"
 $packageVerifier = Join-Path $bootstrapRoot "verify-python-package-set.py"
 if (-not (Test-Path -LiteralPath $packageVerifier -PathType Leaf)) {
   throw "BOOTSTRAP_PYTHON_PACKAGE_VERIFIER_MISSING"
@@ -555,6 +623,7 @@ $freezeLines | Sort-Object |
   Out-File -FilePath (Join-Path $runtime "python-dependency-tree.txt") -Encoding utf8
 
 Write-Host "[5/6] OCR/NER models"
+Set-BootstrapProgress "Przygotowanie rozpoznawania tekstu…"
 $modelRoot = Join-Path $runtime "models"
 $paddleOfficial = Join-Path $modelRoot "paddle\official_models"
 $stanzaPl = Join-Path $modelRoot "stanza\pl"
@@ -565,18 +634,19 @@ $requiredPaddle = @(
   "PP-OCRv6_medium_det",
   "PP-OCRv6_medium_rec"
 )
-# Optional (OCR reads without it): its absence runs the prefetch again, never fails it.
+# Optional OCR model: its absence must not trigger another download.
 $optionalPaddle = @("latin_PP-OCRv5_mobile_rec")
-$modelsReady = (Test-Path -LiteralPath $stanzaPl -PathType Container)
+$stanzaReady = Test-Path -LiteralPath (Join-Path $modelRoot "stanza\resources.json") -PathType Leaf
+foreach ($kind in @("tokenize", "ner", "pretrain")) {
+  $files = @(Get-ChildItem -LiteralPath (Join-Path $stanzaPl $kind) -Filter "*.pt" -File -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 0 })
+  if ($files.Count -eq 0) { $stanzaReady = $false }
+}
+$modelsReady = $stanzaReady
 # A model counts only with its weights: an earlier install cut short during the
 # download leaves directories that exist but are empty or partial.
-foreach ($name in ($requiredPaddle + $optionalPaddle)) {
+foreach ($name in $requiredPaddle) {
   $modelDir = Join-Path $paddleOfficial $name
-  foreach ($file in @("inference.pdiparams", "inference.yml")) {
-    if (-not (Test-Path -LiteralPath (Join-Path $modelDir $file) -PathType Leaf)) {
-      $modelsReady = $false
-    }
-  }
+  if (-not (Test-CompletePaddleModel $modelDir)) { $modelsReady = $false }
 }
 if (-not $modelsReady) {
   New-Item -ItemType Directory -Force -Path $modelRoot | Out-Null
@@ -584,12 +654,7 @@ if (-not $modelsReady) {
   # ones so the prefetch fetches them again (complete ones are kept).
   foreach ($name in ($requiredPaddle + $optionalPaddle)) {
     $modelDir = Join-Path $paddleOfficial $name
-    if (
-      (Test-Path -LiteralPath $modelDir -PathType Container) -and -not (
-        (Test-Path -LiteralPath (Join-Path $modelDir "inference.pdiparams") -PathType Leaf) -and
-        (Test-Path -LiteralPath (Join-Path $modelDir "inference.yml") -PathType Leaf)
-      )
-    ) {
+    if ((Test-Path -LiteralPath $modelDir -PathType Container) -and -not (Test-CompletePaddleModel $modelDir)) {
       Remove-Item -LiteralPath $modelDir -Recurse -Force -ErrorAction SilentlyContinue
     }
   }
@@ -607,10 +672,15 @@ if (-not $modelsReady) {
     throw "BOOTSTRAP_MODEL_PREFETCH_SCRIPT_MISSING"
   }
 
+  $previousSkipStanza = $env:LEX_PREFETCH_SKIP_STANZA
+  $previousSkipOptional = $env:LEX_PREFETCH_SKIP_OPTIONAL
+  $env:LEX_PREFETCH_SKIP_STANZA = if ($stanzaReady) { "1" } else { "0" }
+  $env:LEX_PREFETCH_SKIP_OPTIONAL = "1"
   $previousModelSource = $env:PADDLE_PDX_MODEL_SOURCE
   $prefetchSucceeded = $false
   try {
     foreach ($source in $modelSources) {
+      Set-BootstrapProgress "Pobieranie brakujących narzędzi rozpoznawania tekstu…"
       $env:PADDLE_PDX_MODEL_SOURCE = $source
       Write-Host "Model prefetch attempt via official source: $source"
 
@@ -650,11 +720,15 @@ if (-not $modelsReady) {
       Write-Warning "Model prefetch source failed: $source exit=$prefetchExit"
       foreach ($name in $requiredPaddle) {
         $candidate = Join-Path $paddleOfficial $name
-        Remove-Item -LiteralPath $candidate -Recurse -Force -ErrorAction SilentlyContinue
+        if (-not (Test-CompletePaddleModel $candidate)) {
+          Remove-Item -LiteralPath $candidate -Recurse -Force -ErrorAction SilentlyContinue
+        }
       }
       Start-Sleep -Seconds 2
     }
   } finally {
+    $env:LEX_PREFETCH_SKIP_STANZA = $previousSkipStanza
+    $env:LEX_PREFETCH_SKIP_OPTIONAL = $previousSkipOptional
     if ($null -eq $previousModelSource) {
       Remove-Item Env:PADDLE_PDX_MODEL_SOURCE -ErrorAction SilentlyContinue
     } else {
@@ -668,6 +742,7 @@ if (-not $modelsReady) {
 }
 
 Write-Host "[6/6] Integrity lock and offline acceptance"
+Set-BootstrapProgress "Sprawdzanie gotowości aplikacji…"
 # A system Visual C++ runtime that could not be upgraded: the required one goes
 # next to every executable of the runtime before the integrity lock is made.
 if ($script:VcAppLocalDir) {

@@ -3,7 +3,7 @@
 // answer, so "which claims did you remove?" is answered from this record, not reconstructed.
 
 export type AnswerCorrection = {
-  round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME";
+  round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE";
   findings: string[];
   removed: string[];
 };
@@ -88,7 +88,7 @@ export function validAnswerCorrections(value: unknown): value is AnswerCorrectio
       (item) =>
         item &&
         typeof item === "object" &&
-        (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER" || item.round === "ACT_NAME") &&
+        (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER" || item.round === "ACT_NAME" || item.round === "QUOTE_SOURCE") &&
         Array.isArray(item.findings) &&
         item.findings.length <= MAX_FINDINGS &&
         item.findings.every((finding: unknown) => typeof finding === "string" && finding.length <= 500) &&

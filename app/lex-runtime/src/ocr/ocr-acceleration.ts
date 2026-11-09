@@ -44,6 +44,10 @@ export const OCR_ACCEL_MIN_GAIN = 0.85;
 export const OCR_ACCEL_MIN_SAME_LINES = 0.95;
 // Worker processes sharing one card.
 export const OCR_ACCEL_MAX_WORKERS = 3;
+// A CoreML worker also keeps the ONNX CPU detector and the Paddle fallback.
+// Avoid multiplying memory and competing for the same GPU on long documents.
+export const OCR_COREML_MAX_WORKERS = 1;
+export const OCR_COREML_ENGINE_REVISION = "onnx-cpu-detection-mlprogram-recognition-v3";
 const BENCHMARK_PAGES = [1, 2, 3, 4];
 
 export function ocrAccelProvider(platform: string = process.platform, arch: string = process.arch): OcrAccelProvider | null {
@@ -64,6 +68,7 @@ export type OcrAccelBenchmark = {
   measuredAt: string;
   // The app version that measured (information only; the measurement is not repeated).
   appVersion?: string;
+  engineRevision?: string;
 };
 
 /** Line by line, whitespace ignored (the card may set a space differently, never a letter). */
@@ -206,15 +211,20 @@ export class OcrAccelerationManager {
         LEX_OCR_ONNX_DIR: this.modelDir,
         ...(this.provider === "dml" ? { LEX_OCR_ORT_DIR: this.runtimeDir } : {})
       },
-      maxWorkers: OCR_ACCEL_MAX_WORKERS
+      maxWorkers: this.provider === "coreml" ? OCR_COREML_MAX_WORKERS : OCR_ACCEL_MAX_WORKERS
     };
+  }
+
+  private currentBenchmark(benchmark: OcrAccelBenchmark | undefined): boolean {
+    return benchmark?.provider === this.provider &&
+      (this.provider !== "coreml" || benchmark.engineRevision === OCR_COREML_ENGINE_REVISION);
   }
 
   /** The worker environment while the card is on (installed and measured faster here). */
   environment(): OcrAccelEnvironment | null {
     if (!this.installed()) return null;
     const benchmark = this.record()?.benchmark;
-    return benchmark?.accepted && benchmark.provider === this.provider ? this.environmentFor() : null;
+    return benchmark?.accepted && this.currentBenchmark(benchmark) ? this.environmentFor() : null;
   }
 
   status(): OcrAccelStatus {
@@ -308,7 +318,11 @@ export class OcrAccelerationManager {
       if (documentWork.foregroundStarts !== before) throw new Error("OCR_ACCEL_MEASURE_INTERRUPTED");
       return judgeBenchmark({ provider: this.provider!, cpu, accel });
     });
-    this.writeRecord({ ...(this.record() ?? {}), benchmark: { ...benchmark, appVersion: CURRENT_APPLICATION_VERSION } });
+    this.writeRecord({ ...(this.record() ?? {}), benchmark: {
+      ...benchmark,
+      appVersion: CURRENT_APPLICATION_VERSION,
+      ...(this.provider === "coreml" ? { engineRevision: OCR_COREML_ENGINE_REVISION } : {})
+    } });
   }
 
   get autoEnabled(): boolean {
@@ -330,21 +344,24 @@ export class OcrAccelerationManager {
     const benchmark = this.installed() ? this.record()?.benchmark : undefined;
     // Once measured, the choice stays: no further measurement (the "Zmierz ponownie" button
     // remains for an administrator after a new card).
-    if (benchmark && benchmark.provider === this.provider) return "SKIPPED";
-    let last: { failedAt?: string; error?: string } = {};
+    if (this.currentBenchmark(benchmark)) return "SKIPPED";
+    let last: { failedAt?: string; error?: string; engineRevision?: string } = {};
     try {
       last = JSON.parse(fs.readFileSync(this.autoPath, "utf8")) as typeof last;
     } catch {
       last = {};
     }
-    if (last.failedAt) {
+    if (last.failedAt && (this.provider !== "coreml" || last.engineRevision === OCR_COREML_ENGINE_REVISION)) {
       const wait = last.error?.startsWith("OCR_ACCEL_MEASURE_INTERRUPTED") ? 60 * 60_000 : 24 * 60 * 60_000;
       if (now.getTime() - Date.parse(last.failedAt) < wait) return "SKIPPED";
     }
     await (this.installed() ? this.measure() : this.start(fetchImpl));
     if (this.job.state === "FAILED") {
       fs.mkdirSync(this.dir, { recursive: true });
-      fs.writeFileSync(this.autoPath, JSON.stringify({ failedAt: now.toISOString(), error: this.job.error ?? "" }));
+      fs.writeFileSync(this.autoPath, JSON.stringify({
+        failedAt: now.toISOString(), error: this.job.error ?? "",
+        ...(this.provider === "coreml" ? { engineRevision: OCR_COREML_ENGINE_REVISION } : {})
+      }));
       return "FAILED";
     }
     fs.rmSync(this.autoPath, { force: true });

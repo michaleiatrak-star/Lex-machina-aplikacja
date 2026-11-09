@@ -23,7 +23,11 @@ import {
   CaseAccessError,
   type LocalCaseAccessService
 } from "../case-access.js";
-import { activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveJurisdictionPack } from "../jurisdiction.js";
+import { buildLegiIndex, defaultLegiIndexDir, latestLegiDump } from "../eli/fr-legi.js";
+import { promises as legiFs } from "node:fs";
+import legiPath from "node:path";
+import { activeCountry, activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveCountry, setActiveJurisdictionPack } from "../jurisdiction.js";
+import { ELI_COUNTRIES, LEGAL_FAMILY_LABELS } from "../eli/eli-countries.js";
 
 function requireAdmin(
   req: Request,
@@ -457,9 +461,26 @@ export function registerMcpConnectorRoutes(
   const jurisdictionView = () => {
     const root = connectors.corpusRoot;
     const active = activeJurisdictionPack();
+    const providers = listJurisdictions(root);
     return {
       active,
-      jurisdictions: listJurisdictions(root).map((provider) => {
+      // The legal system the application applies: one country, the others off (jurisdiction.ts).
+      country: activeCountry(),
+      countries: [...ELI_COUNTRIES]
+        .map((entry) => ({
+          code: entry.code,
+          name: entry.name,
+          // Legal family (category in Settings): the method follows from it (jurisdiction.ts familyMethod).
+          family: entry.family,
+          familyLabel: LEGAL_FAMILY_LABELS[entry.family],
+          ...(entry.familyNote ? { familyNote: entry.familyNote } : {}),
+          reading: entry.text?.reading ?? "DO-ZBADANIA",
+          note: entry.text?.note ?? "",
+          portal: entry.portal,
+          pack: providers.find((provider) => provider.country === entry.code)?.pack ?? null
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pl")),
+      jurisdictions: providers.map((provider) => {
         const status = jurisdictionStatus(provider);
         return {
           pack: provider.pack,
@@ -480,17 +501,51 @@ export function registerMcpConnectorRoutes(
   app.put("/api/settings/jurisdiction", (req, res) => {
     if (!requireAdmin(req, res, authService)) return;
     const pack = req.body?.pack;
-    if (typeof pack !== "string" || !listJurisdictions(connectors.corpusRoot).some((provider) => provider.pack === pack)) {
+    const country = typeof req.body?.country === "string" ? req.body.country.trim().toUpperCase() : null;
+    const knownPack = typeof pack === "string" && listJurisdictions(connectors.corpusRoot).some((provider) => provider.pack === pack);
+    if (!knownPack && !(country && ELI_COUNTRIES.some((entry) => entry.code === country))) {
       res.status(400).json({ error: "JURISDICTION_UNKNOWN" });
       return;
     }
-    if (process.env.LEX_JURISDICTION_PACK?.trim()) {
+    if (process.env.LEX_JURISDICTION_PACK?.trim() || process.env.LEX_JURISDICTION_COUNTRY?.trim()) {
       res.status(409).json({ error: "JURISDICTION_FIXED_BY_DEPLOYMENT" });
       return;
     }
-    setActiveJurisdictionPack(connectors.corpusRoot, pack);
+    if (country) setActiveCountry(connectors.corpusRoot, country);
+    else setActiveJurisdictionPack(connectors.corpusRoot, pack as string);
     connectors.jurisdictionChanged();
     res.json(jurisdictionView());
+  });
+
+  // French codes without a key: the local index of DILA's LEGI dump (about 1.2 GB download,
+  // built in the background once; read by read_national_legislation for legifrance.gouv.fr).
+  let legiBuild: { state: "BUILDING" | "FAILED"; files: number; error?: string; started: string } | null = null;
+  const legiView = async () => {
+    const built = await legiFs.readFile(legiPath.join(defaultLegiIndexDir(), "built.json"), "utf8").then((text) => JSON.parse(text) as Record<string, unknown>).catch(() => null);
+    return { built, build: legiBuild };
+  };
+  app.get("/api/settings/legal-sources/legi", async (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json(await legiView());
+  });
+  app.post("/api/settings/legal-sources/legi/build", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (legiBuild?.state === "BUILDING") {
+      res.status(409).json({ error: "LEGI_BUILD_RUNNING" });
+      return;
+    }
+    const build: NonNullable<typeof legiBuild> = { state: "BUILDING", files: 0, started: new Date().toISOString() };
+    legiBuild = build;
+    void latestLegiDump()
+      .then((archive) => buildLegiIndex(archive, defaultLegiIndexDir(), { onProgress: (files) => (build.files = files) }))
+      .then(() => {
+        legiBuild = null;
+      })
+      .catch((failure: unknown) => {
+        build.state = "FAILED";
+        build.error = failure instanceof Error ? failure.message : String(failure);
+      });
+    res.status(202).json(await legiView());
   });
 
   // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony): gdy reguły nie

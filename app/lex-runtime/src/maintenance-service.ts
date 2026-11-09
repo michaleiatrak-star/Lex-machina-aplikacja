@@ -1,3 +1,4 @@
+import { downloadInstaller, type DownloadProgress } from "./application-download.js";
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -850,6 +851,22 @@ function locateSkillRoot(stage: string): string {
 }
 
 export class MaintenanceService {
+  private updateDownload: Promise<ApplicationUpdateDownload> | null = null;
+  private updateProgress: DownloadProgress = { phase: "idle", received: 0 };
+  applicationDownloadProgress(): DownloadProgress { return { ...this.updateProgress }; }
+  downloadApplicationUpdate(): Promise<ApplicationUpdateDownload> {
+    if (this.updateDownload) return this.updateDownload;
+    this.updateProgress = { phase: "checking", received: 0 };
+    this.updateDownload = this.stageApplicationUpdate().then(result => {
+      this.updateProgress = { phase: "ready", received: result.bytes, total: result.bytes };
+      return result;
+    }).catch(error => {
+      this.updateProgress = { ...this.updateProgress, phase: "failed" };
+      throw error;
+    }).finally(() => { this.updateDownload = null; });
+    return this.updateDownload;
+  }
+
   constructor(
     private readonly discovery: UpdateDiscovery,
     private readonly fetchImpl: typeof fetch = fetch,
@@ -1050,7 +1067,7 @@ export class MaintenanceService {
     return await this.discovery.check();
   }
 
-  async downloadApplicationUpdate(): Promise<ApplicationUpdateDownload> {
+  private async stageApplicationUpdate(): Promise<ApplicationUpdateDownload> {
     const status = await this.discovery.check();
     if (status.status !== "AVAILABLE") {
       throw new Error("APPLICATION_UPDATE_NOT_AVAILABLE");
@@ -1067,10 +1084,10 @@ export class MaintenanceService {
       throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
     }
     const version = requireLatestVersion(status);
-    const bytes = await downloadVerified(status.installer, this.fetchImpl);
+
     const root = applicationUpdateStagingRoot();
     fs.mkdirSync(root, { recursive: true });
-    const nonce = randomBytes(8).toString("hex");
+    const nonce = status.installer.sha256.slice(0, 16).toLowerCase();
     const token = `update_${version.replaceAll(".", "-")}_${nonce}.${macos ? "pkg" : "exe"}`;
     const receiptToken = token.replace(/\.(?:exe|pkg)$/i, ".json");
     const target = path.join(root, token);
@@ -1079,8 +1096,7 @@ export class MaintenanceService {
     const receiptTemporary = `${receiptPath}.tmp`;
 
     try {
-      fs.writeFileSync(temporary, bytes, { flag: "wx" });
-      fs.renameSync(temporary, target);
+      const downloadedBytes = await downloadInstaller(status.installer, target, value => { this.updateProgress = value; }, this.fetchImpl);
       const publisher: VerifiedApplicationPublisher = macos
         ? { verification: "UNSIGNED_ALLOWED", subject: null, thumbprint: null, productVersion: version, warning: "TEMPORARY_UNSIGNED_UPDATE_ALLOWED" }
         : this.installerVerifier.verify(
@@ -1095,10 +1111,11 @@ export class MaintenanceService {
         installerToken: token,
         originalFilename: status.installer.name,
         sha256: status.installer.sha256.toLowerCase(),
-        bytes: bytes.byteLength,
+        bytes: downloadedBytes,
         stagedAt,
         publisher
       };
+      fs.rmSync(receiptTemporary, { force: true });
       fs.writeFileSync(
         receiptTemporary,
         `${JSON.stringify(receipt, null, 2)}\n`,
@@ -1111,7 +1128,7 @@ export class MaintenanceService {
         receiptToken,
         filename: status.installer.name,
         sha256: status.installer.sha256.toLowerCase(),
-        bytes: bytes.byteLength,
+        bytes: downloadedBytes,
         stagedAt,
         publisher
       };

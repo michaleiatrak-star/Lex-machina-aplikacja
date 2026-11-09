@@ -283,10 +283,11 @@ import { markdownSection } from "./checkpoint-skill-sections.js";
 import { contractGraph, contractGraphPrompt } from "./contract-graph.js";
 import { registryConsistencyText, registryFactsText } from "./privacy/registry-enrichment.js";
 import { peselCheckText } from "./privacy/pesel-check.js";
+import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } from "./quote-source-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
-import { activeJurisdiction, COMPONENT_LABELS, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
+import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
@@ -1736,6 +1737,7 @@ export class SafeSessionExecutor implements SessionExecutor {
   // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
   private flashRoutes(): FlashRoute[] {
     const facade = activeJurisdictionPack();
+    if (!facade) return [];
     if (this.flashRoutesCache?.root === `${this.registry.root}:${facade}`) return this.flashRoutesCache.rows;
     // The chosen jurisdiction's facade (Polish law: prawo-polskie-v2) holds its flash routing.
     const rows = parseFlashRouting(this.readCorpus(`${facade}/SKILL.md`) ?? "");
@@ -2492,10 +2494,13 @@ export class SafeSessionExecutor implements SessionExecutor {
             return null;
           }
         });
+    // Polish courts, the Polish core-law corpus and ELI/ISAP verification serve Polish law only:
+    // another chosen country has them off (user, 2026-11-08: "inne wtedy wyłączasz").
+    const polishSystem = activeCountry() === "PL";
     const toolSchemas = [
       ...(nativeCorpus ? [] : corpusTools.schemas()),
-      ...(courtTools ? courtTools.schemas() : []),
-      ...(coreLawTools
+      ...(courtTools && polishSystem ? courtTools.schemas() : []),
+      ...(coreLawTools && polishSystem
         ? coreLawTools.schemas()
         : []),
       ...(caseFileTools ? caseFileTools.schemas() : []),
@@ -2504,7 +2509,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(federationTools
         ? localFederation ? federationTools.localSchemas() : federationTools.schemas()
         : []),
-      ...(verificationTools ? verificationTools.schemas() : [])
+      ...(verificationTools && polishSystem ? verificationTools.schemas() : [])
     ];
     // Mandatory path (hosted models): the profile, the corpus files the router's
     // mandatory gates require, loaded up front, and the mode decided at the entry.
@@ -2568,6 +2573,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     ]);
     corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
+    // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
+    const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
+    if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
     // the skill also by what the user delivers (ACTIVATION-MATRIX).
@@ -4189,6 +4197,48 @@ export class SafeSessionExecutor implements SessionExecutor {
         modelOutput = parts.disclaimer
           ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
           : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
+      }
+    }
+
+    // Every quote against its source, in every kind of work and for every country: a quoted
+    // provision against the wording verified in this turn (ELI for Poland, the national readers
+    // for the others), a quote attributed to a case document against the documents. A mismatch
+    // goes to the correction round with the source's words; the correction stays only when it
+    // leaves fewer mismatches (user, 2026-11-08).
+    if (legalTurn && !waitsForUser(modelOutput) && /[„“]/u.test(modelOutput)) {
+      const statutes = [
+        ...ledger.all().filter((record) => (record.kind === "statute" || record.kind === "journal") && record.evidence).map((record) => ({ claim: record.claim, evidence: record.evidence! })),
+        ...(this.legalFederationTools?.nationalReadings?.() ?? [])
+      ];
+      const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)];
+      const check = (answer: string) => [
+        ...statuteQuoteFindings(answer, statutes),
+        ...(citationSources.length ? documentQuoteFindings(processDocumentCitationMarkers(answer, citationSources, { otherTexts }).text) : [])
+      ];
+      const found = check(modelOutput);
+      if (found.length) {
+        step("MODEL", `kontrola cytatów ze źródłem: ${found.length} do korekty`);
+        let text = "";
+        try {
+          const corrected = await this.providers.stream(request.provider, {
+            model: request.model,
+            ...correctingRound(modelOutput, quoteCorrectionPrompt(found), [identityPrompt, ...pathSections].join("\n\n")),
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          text = corrected.fullText.trim();
+        } catch {
+          text = "";
+        }
+        const remaining = text ? check(text) : found;
+        if (text && remaining.length < found.length) {
+          corrections.push(answerCorrection("QUOTE_SOURCE", found.map((item) => `${item.kind === "STATUTE" ? item.claim : "dokument sprawy"}: „${item.quote.slice(0, 120)}”`), modelOutput, text));
+          modelOutput = text;
+        }
+        audit.record("gate", "QUOTE_SOURCE_CHECK", remaining.length && !(text && remaining.length < found.length) ? "DEGRADED" : remaining.length ? "DEGRADED" : "OK", {
+          findings: found.map((item) => `${item.kind}:${item.claim ?? ""}:${item.quote.slice(0, 80)}`),
+          remaining: (text && remaining.length < found.length ? remaining : found).length
+        });
       }
     }
 

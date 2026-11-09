@@ -6,7 +6,8 @@ export const SKILL_SELECTION_ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
 // The router, shared and the chosen jurisdiction's facade (Polish law: prawo-polskie-v2) — never
 // another country's facade, whose law would reach the turn.
 export function mandatorySessionSkills(): string[] {
-  return ["prawny-router-v3", "shared", activeJurisdictionPack()];
+  // A country without a package has no facade (empty name): nothing stands in for it.
+  return ["prawny-router-v3", "shared", activeJurisdictionPack()].filter(Boolean);
 }
 
 const STOP_WORDS = new Set([
@@ -823,7 +824,7 @@ export function resolveAdditionalSkills(
       activeJurisdictionPack(),
       primarySkill,
       ...additionalSkills
-    ],
+    ].filter(Boolean),
     executionSkills: [...executionSkills].filter((name) => retained.has(name)),
     workflowExecutionSkill:
       workflowExecutionSkill && retained.has(workflowExecutionSkill)

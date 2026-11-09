@@ -1,3 +1,4 @@
+import { ComponentSetup } from "./ComponentSetup.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./AuthApp.js";
@@ -12,6 +13,6 @@ if (!root) throw new Error("Missing #root application mount.");
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ComponentSetup><App /></ComponentSetup>
   </StrictMode>
 );

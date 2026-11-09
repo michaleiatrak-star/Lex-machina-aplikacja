@@ -1483,6 +1483,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/provider-accounts"
         | "/api/routes"
         | "/api/update/status"
+        | "/api/update/progress"
         | "/api/local-models"
         | "/api/local-models/update/status"
         | "/api/local-models/vision-ocr"
@@ -1559,6 +1560,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
+        "/api/settings/legal-sources/legi" => method == "GET",
+        "/api/settings/legal-sources/legi/build" => method == "POST",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
         "/api/diagnostics/anomalies/export" => method == "GET",
@@ -1741,6 +1744,10 @@ fn is_document_generation_route(path: &str) -> bool {
 fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
     let method = request.method().as_str();
     let path = request.uri().path();
+
+    if method == "POST" && path == "/api/update/download" {
+        return Duration::from_secs(35 * 60);
+    }
 
     if method == "POST" && (path == "/api/sessions/execute" || is_document_generation_route(path)) {
         return Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS);
@@ -2225,6 +2232,10 @@ mod tests {
         assert!(route_allowed("GET", "/api/sensitive-download/download_abc"));
         assert!(!route_allowed("POST", "/api/update/status"));
         assert!(route_allowed("POST", "/api/update/download"));
+        assert!(route_allowed("GET", "/api/update/progress"));
+        assert!(!route_allowed("POST", "/api/update/progress"));
+        let download = Request::builder().method("POST").uri("/api/update/download").body(Vec::new()).unwrap();
+        assert_eq!(proxy_read_timeout(&download), Duration::from_secs(35 * 60));
         assert!(route_allowed("GET", "/api/local-models"));
         assert!(route_allowed("GET", "/api/provider-accounts"));
         assert!(route_allowed("POST", "/api/provider-accounts/openai/logout"));
@@ -2244,6 +2255,9 @@ mod tests {
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));
+        assert!(route_allowed("GET", "/api/settings/legal-sources/legi"));
+        assert!(route_allowed("POST", "/api/settings/legal-sources/legi/build"));
+        assert!(!route_allowed("GET", "/api/settings/legal-sources/legi/build"));
         assert!(route_allowed("POST", "/api/core-law/acts"));
         assert!(route_allowed("POST", "/api/core-law/acts/lookup"));
         assert!(route_allowed("POST", "/api/core-law/acts/remove"));

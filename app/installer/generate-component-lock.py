@@ -35,8 +35,12 @@ def entries(root: Path, top: str) -> list[dict[str, object]]:
     if base.is_file() and not base.is_symlink():
         return [{"path": top, "bytes": base.stat().st_size, "sha256": sha256(base)}]
     rows: list[dict[str, object]] = []
-    for directory, _, names in os.walk(base):
+    for directory, subdirectories, names in os.walk(base):
+        # Python bytecode caches are rebuilt by Python and change from run to run: not locked, not shipped.
+        subdirectories[:] = [name for name in subdirectories if name != "__pycache__"]
         for name in names:
+            if name.endswith(".pyc"):
+                continue
             path = Path(directory) / name
             if path.is_symlink() or not path.is_file():
                 continue
@@ -88,6 +92,7 @@ def main() -> int:
     manifest = json.loads((code_root / "release-source.json").read_text(encoding="utf-8"))
     lock = {
         "schemaVersion": 4,
+        "installerInputs": {name: manifest["runtime"][name] for name in ("node", "python")},
         "status": "INSTALLED_COMPONENT_LOCK",
         "applicationVersion": manifest.get("applicationVersion", "UNKNOWN"),
         "target": "macos-arm64",

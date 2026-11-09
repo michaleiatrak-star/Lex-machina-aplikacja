@@ -31,7 +31,8 @@ describe(
           "assess_legal_source",
           "fetch_auxiliary_legal_source",
           "web_search",
-          "federated_legal_coverage"
+          "federated_legal_coverage",
+          "read_national_legislation"
         ]);
         expect(
           [...FEDERATED_LEGAL_TOOL_NAMES]
