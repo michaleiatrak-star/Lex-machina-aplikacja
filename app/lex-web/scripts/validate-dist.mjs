@@ -54,7 +54,7 @@ const required = [
   "Zablokuj",
   "Wyloguj",
   "Hasło i bezpieczeństwo",
-  "Odzyskaj konto kodem recovery",
+  "Odzyskaj konto kodem odzyskiwania",
   "Zapisz nowy kod odzyskiwania",
   "Wygeneruj nowy kod odzyskiwania",
   "Zmień hasło",
@@ -62,7 +62,7 @@ const required = [
   "Sprawy",
   "+ Nowa sprawa",
   "Nazwa sprawy",
-  "Sygnatura nie jest wymagana",
+  "sygnatura nie jest wymagana",
   "ID katalogu:",
   "Tryb pracy",
   "Automatyczny — prawny router",
@@ -77,7 +77,7 @@ const required = [
   "Wpisz USUŃ",
   "Usuń sprawę trwale",
   "ARCHIWALNA (tylko odczyt)",
-  "Kliknij lub przeciągnij pliki",
+  "przeciągnij pliki tutaj",
   "Otwórz eksplorator",
   "Struktura katalogów",
   "Główny katalog",
@@ -129,7 +129,8 @@ const required = [
 // aktualizacji (lex.update.detected, lex.update.skipped, src/update-prompt.ts) i rozmiar tekstu
 // rozmowy (lex.chatTextSize, src/text-size.ts). Każdy inny plik źródłowy
 // z localStorage albo bundle bez tych kluczy blokuje bramkę.
-const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts"]);
+// Język interfejsu (lex.language, src/i18n.ts): wybór na tym komputerze, bez danych sprawy.
+const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts", "i18n.ts"]);
 const sourceRoot = path.resolve(process.cwd(), "src");
 const localStorageSources = collect(sourceRoot)
   .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))
