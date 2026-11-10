@@ -1,4 +1,5 @@
 import { reportUsage } from "./usage-meter.js";
+import { answerLanguageInstruction } from "./answer-language.js";
 export class ProviderGatewayError extends Error {
     code;
     provider;
@@ -39,7 +40,13 @@ export class ProviderGateway {
     supportsImages(providerId, model) {
         return this.registry.get(providerId)?.supportsImages?.(model) === true;
     }
-    async stream(providerId, params) {
+    async stream(providerId, requested) {
+        // The interface language (a request in another language than Polish): appended after the
+        // prompt, so a cached prefix stays the same.
+        const language = answerLanguageInstruction();
+        const params = language
+            ? { ...requested, systemPrompt: requested.systemPrompt ? `${requested.systemPrompt}\n\n${language}` : language }
+            : requested;
         const provider = this.registry.get(providerId);
         if (!provider) {
             throw new ProviderGatewayError("UNKNOWN_PROVIDER", `Provider is not registered: ${providerId}`, providerId);

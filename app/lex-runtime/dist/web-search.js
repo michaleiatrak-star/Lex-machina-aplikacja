@@ -1,6 +1,7 @@
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
+import { effectiveSearchOrder, firecrawlApiKey, webSearchSettings } from "./web-search-settings.js";
 export class WebSearchError extends Error {
     code;
     constructor(code, detail) {
@@ -100,6 +101,27 @@ export function parseDuckDuckGoHtml(html, maxResults) {
     }
     return hits.slice(0, maxResults);
 }
+export function parseFirecrawlResults(payload, maxResults) {
+    const items = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.data?.web) ? payload.data.web : [];
+    return items
+        .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.url === "string" ? item.url.trim() : "",
+        snippet: typeof item.description === "string" ? decodeEntities(item.description) : ""
+    }))
+        .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+        .slice(0, maxResults);
+}
+export function parseSearxngResults(payload, maxResults) {
+    return (Array.isArray(payload.results) ? payload.results : [])
+        .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.url === "string" ? item.url.trim() : "",
+        snippet: typeof item.content === "string" ? decodeEntities(item.content) : ""
+    }))
+        .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+        .slice(0, maxResults);
+}
 async function readLimitedText(response) {
     const buffer = Buffer.from(await response.arrayBuffer());
     return buffer
@@ -111,11 +133,13 @@ export class PublicWebSearch {
     fetchImpl;
     timeoutMs;
     botCheckPauseMs;
-    constructor(env = process.env, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, botCheckPauseMs = 2_500) {
+    settings;
+    constructor(env = process.env, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, botCheckPauseMs = 2_500, settings = webSearchSettings) {
         this.env = env;
         this.fetchImpl = fetchImpl;
         this.timeoutMs = timeoutMs;
         this.botCheckPauseMs = botCheckPauseMs;
+        this.settings = settings;
     }
     async search(query, maxResults) {
         const provider = (this.env.LEX_WEB_SEARCH_PROVIDER ??
@@ -138,31 +162,114 @@ export class PublicWebSearch {
                 errors.push(`brave:${error instanceof Error ? error.message : String(error)}`);
             }
         }
-        if (provider === "auto" ||
-            provider === "duckduckgo" ||
-            provider === "ddg") {
-            // A bot check passes after a short pause more often than not (seen while checking the
-            // disciplinary courts' portals): one more try before "refused".
-            for (let attempt = 1; attempt <= 2; attempt += 1) {
-                try {
-                    const hits = withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
-                    if (hits.length > 0) {
-                        return { provider: "duckduckgo", hits };
-                    }
-                    break;
+        // Auto: the order measured by the comparison test (Ustawienia > Wyszukiwarka internetowa),
+        // then the remaining engines; a named provider runs alone.
+        const settings = this.settings();
+        const engines = provider === "auto"
+            ? effectiveSearchOrder(settings)
+            : provider === "searxng"
+                ? ["searxng"]
+                : provider === "firecrawl"
+                    ? ["firecrawl"]
+                    : provider === "duckduckgo" || provider === "ddg"
+                        ? ["duckduckgo"]
+                        : [];
+        for (const engine of engines) {
+            try {
+                const hits = withoutBlocked(await this.searchEngine(engine, query, maxResults, settings));
+                if (hits.length > 0) {
+                    return { provider: engine, hits };
                 }
-                catch (error) {
-                    const message = error instanceof Error ? error.message : String(error);
-                    if (message === "BOT_CHECK" && attempt === 1) {
-                        await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
-                        continue;
-                    }
-                    errors.push(`duckduckgo:${message}`);
-                    break;
-                }
+            }
+            catch (error) {
+                errors.push(`${engine}:${error instanceof Error ? error.message : String(error)}`);
             }
         }
         throw new WebSearchError("WEB_SEARCH_NO_RESULTS", errors.join("; ") || `provider=${provider}`);
+    }
+    /** One engine, no fallback (the comparison test and the auto order). */
+    async searchEngine(engine, query, maxResults, settings = this.settings()) {
+        if (engine === "searxng") {
+            if (!settings.searxngUrl)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchSearxng(query, maxResults, settings.searxngUrl);
+        }
+        if (engine === "firecrawl") {
+            const key = this.env.FIRECRAWL_API_KEY?.trim() || (settings.firecrawlConfigured ? firecrawlApiKey() : "");
+            if (!key)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchFirecrawl(query, maxResults, key);
+        }
+        // A bot check passes after a short pause more often than not (seen while checking the
+        // disciplinary courts' portals): one more try before "refused".
+        for (let attempt = 1;; attempt += 1) {
+            try {
+                return await this.searchDuckDuckGo(query, maxResults);
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (message === "BOT_CHECK" && attempt === 1) {
+                    await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
+                    continue;
+                }
+                throw error;
+            }
+        }
+    }
+    /** Firecrawl search API (v2): 2 credits per 10 results; the free plan has a monthly limit. */
+    async searchFirecrawl(query, maxResults, apiKey) {
+        const response = await this.fetchImpl("https://api.firecrawl.dev/v2/search", {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+                "User-Agent": USER_AGENT
+            },
+            body: JSON.stringify({ query, limit: Math.min(Math.max(maxResults, 1), 10), lang: "pl" }),
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        // 402: credits used up (free plan limit); 429: rate limit; 401: wrong key.
+        if (response.status === 402)
+            throw new Error("CREDITS_EXHAUSTED");
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
+        if (response.status === 401 || response.status === 403)
+            throw new Error("KEY_REJECTED");
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        return parseFirecrawlResults(JSON.parse(await readLimitedText(response)), maxResults);
+    }
+    async searchSearxng(query, maxResults, baseUrl) {
+        const url = new URL(`${baseUrl}/search`);
+        url.searchParams.set("q", query);
+        url.searchParams.set("format", "json");
+        url.searchParams.set("language", "pl");
+        url.searchParams.set("safesearch", "0");
+        const response = await this.fetchImpl(url, {
+            headers: {
+                Accept: "application/json",
+                "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6",
+                "User-Agent": USER_AGENT
+            },
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        // Public instances answer bots with 429 or a browser check; JSON output off gives 403.
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
+        if (response.status === 403)
+            throw new Error("JSON_FORMAT_DISABLED");
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        const text = await readLimitedText(response);
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        }
+        catch {
+            throw new Error("BOT_CHECK");
+        }
+        return parseSearxngResults(payload, maxResults);
     }
     async searchBrave(query, maxResults, apiKey) {
         const url = new URL("https://api.search.brave.com/res/v1/web/search");
@@ -239,8 +346,8 @@ export function webSearchLeads(text) {
         leads.entryIntoForce = [...new Set(inForce)].slice(0, 3);
     return leads;
 }
-const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
-function hostOf(url) {
+export const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
+export function hostOf(url) {
     try {
         return new URL(url).hostname.replace(/^www\./u, "");
     }

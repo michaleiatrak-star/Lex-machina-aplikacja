@@ -1,9 +1,55 @@
 import { citedDocuments } from "./case-content-grounding.js";
+import { parseSemanticVerdicts, relevantExcerpt } from "./case-semantic-check.js";
 // Kontrola treści przepisów (2026-11-09, odpowiedź Bielika o porozumieniu rozwiązującym):
 // aplikacja zweryfikowała art. 100 § 2 KP i postawiła ✅, a odpowiedź przypisała mu „zasadę
 // proporcjonalności” — przepis istniał, teza nie. Weryfikacja ELI/RAG potwierdza istnienie
 // i brzmienie; ta kontrola sprawdza, czy brzmienie mówi to, co odpowiedź o nim twierdzi.
 export const STATUTE_JUDGE_BATCH = 4;
+// A local model serves one request at a time (llama.cpp --parallel 1): its provisions go in one
+// call, each further call is another prompt evaluation and another wait.
+export const STATUTE_JUDGE_BATCH_LOCAL = 8;
+/**
+ * The judge of a provision's content only asks whether its wording carries the answer's claim:
+ * no topic, criteria or thesis for a provision that agrees, which were most of the output
+ * (2026-11-10: a verdict ran 150–250 tokens; on a local model a batch of four took minutes).
+ * Reason, thesis and quote only where the claim is not carried.
+ */
+export const STATUTE_JUDGE_SYSTEM = "KONTROLA TREŚCI PRZEPISÓW. Jesteś kontrolerem, nie autorem odpowiedzi. Dla każdego przepisu oceń wyłącznie na podstawie jego podanego brzmienia, " +
+    "czy to, co odpowiedź mówi o przepisie, z niego wynika: SUPPORTED — sens się zgadza (także parafraza); PARTIAL — część twierdzenia nie wynika albo pominięto istotne zastrzeżenie; " +
+    "UNSUPPORTED — brzmienie mówi co innego albo nic o tym nie mówi. Różnica słów przy tym samym sensie to SUPPORTED. Nie korzystaj z wiedzy spoza podanego brzmienia. " +
+    "Zwróć wyłącznie JSON z pozycją dla każdego przepisu. Dla SUPPORTED tylko signature i claim. Dla PARTIAL i UNSUPPORTED dodaj thesis (jedno zdanie: co odpowiedź twierdzi o przepisie), " +
+    "reason (jedno zdanie po polsku) i quote (dosłowny fragment brzmienia, 10–200 znaków, znak w znak): " +
+    '{"verdicts":[{"signature":"…","claim":"SUPPORTED"},{"signature":"…","claim":"UNSUPPORTED","thesis":"…","reason":"…","quote":"…"}]}';
+export function statuteJudgePrompt(documents) {
+    return documents
+        .map((document, index) => [
+        `PRZEPIS P${index + 1}: ${document.signature}`,
+        `CO ODPOWIEDŹ MÓWI O NIM:\n${document.claim.trim()}`,
+        `BRZMIENIE (z ELI):\n${relevantExcerpt(document.text, "", document.claim)}`
+    ].join("\n\n"))
+        .join("\n\n---\n\n");
+}
+/** Verdicts of the compact judge: an agreeing provision needs no quote; a problem keeps the quote check. */
+export function parseStatuteVerdicts(output, documents) {
+    const json = /\{[\s\S]*\}/u.exec(output)?.[0];
+    let raw;
+    try {
+        raw = json ? JSON.parse(json) : null;
+    }
+    catch {
+        raw = null;
+    }
+    const items = Array.isArray(raw?.verdicts) ? raw.verdicts : [];
+    // Problems go through the shared parser (quote must be in the wording); agreements are kept as they are.
+    const problems = parseSemanticVerdicts(JSON.stringify({ verdicts: items.filter((item) => item.claim !== "SUPPORTED").map((item) => ({ ...item, topic: "MATCH" })) }), documents);
+    const agreed = items
+        .filter((item) => item.claim === "SUPPORTED")
+        .flatMap((item) => {
+        const document = documents.find((candidate) => comparable(candidate.signature) === comparable(String(item.signature ?? "")));
+        return document ? [{ signature: document.signature, topic: "MATCH", claim: "SUPPORTED", reason: "", quote: "" }] : [];
+    });
+    return { verdicts: [...agreed, ...problems.verdicts], rejected: problems.rejected };
+}
 const comparable = (value) => value.normalize("NFKC").toLocaleLowerCase("pl").replace(/[.,;:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
 /** Claims whose wording a source tool returned in the turn (already judged by the grounding check). */
 export function claimsWithWording(sources) {
