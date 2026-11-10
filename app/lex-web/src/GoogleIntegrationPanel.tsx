@@ -118,7 +118,7 @@ export function GoogleIntegrationPanel() {
         </>
       ) : (
         <button type="button" className="chat-primary-action" disabled={busy} onClick={() => void connect()}>
-          {busy ? t("Czekam na Google…") : "Zaloguj kontem Google"}
+          {busy ? t("Czekam na Google…") : t("Zaloguj kontem Google")}
         </button>
       )}
       {status && message ? <p role="status">{message}</p> : null}

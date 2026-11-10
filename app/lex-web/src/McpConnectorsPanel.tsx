@@ -261,7 +261,7 @@ export function McpConnectorsPanel() {
                           disabled={Boolean(busy) || !status.packageAvailable}
                           onClick={() => check(server)}
                         >
-                          {busy === `check-${server.id}` ? "Sprawdzam…" : "Sprawdź"}
+                          {busy === `check-${server.id}` ? "Sprawdzam…" : t("Sprawdź")}
                         </button>
                         <button
                           type="button"
@@ -269,7 +269,7 @@ export function McpConnectorsPanel() {
                           disabled={Boolean(busy)}
                           onClick={() => uninstall(server)}
                         >
-                          {busy === server.id ? "Odinstalowuję…" : "Odinstaluj"}
+                          {busy === server.id ? "Odinstalowuję…" : t("Odinstaluj")}
                         </button>
                       </span>
                     ) : (
@@ -283,7 +283,7 @@ export function McpConnectorsPanel() {
                         }
                         onClick={() => install(server)}
                       >
-                        {busy === server.id ? "Instaluję…" : "Zainstaluj"}
+                        {busy === server.id ? "Instaluję…" : t("Zainstaluj")}
                       </button>
                     )}
                   </li>

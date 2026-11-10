@@ -122,7 +122,7 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
                     )}
                     {admin ? (
                       <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void recheck([court.nazwa])}>
-                        {busy === court.nazwa ? "Sprawdzanie…" : "Sprawdź"}
+                        {busy === court.nazwa ? "Sprawdzanie…" : t("Sprawdź")}
                       </button>
                     ) : null}
                   </span>

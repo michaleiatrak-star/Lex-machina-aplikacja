@@ -436,7 +436,7 @@ function AuthPanel({
             ? "Weryfikuję…"
             : phase === "bootstrap"
               ? t("Utwórz konto")
-              : "Zaloguj"}
+              : t("Zaloguj")}
         </button>
 
         {phase !== "bootstrap" && (

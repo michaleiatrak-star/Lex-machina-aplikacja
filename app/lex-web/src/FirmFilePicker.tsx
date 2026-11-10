@@ -87,7 +87,7 @@ export function FirmFilePicker(props: {
                   folderId,
                   pick: { kind: "document", documentId: processing.documentId, chunkIndices: processing.chunkIndices },
                   note:
-                    (processing.anonymized === false ? "Tekst jawny" : "Wersja zanonimizowana") +
+                    (processing.anonymized === false ? t("Tekst jawny") : t("Wersja zanonimizowana")) +
                     ` · ${processing.totalPages} ${processing.totalPages === 1 ? "strona" : "stron"}`
                 }
               : {

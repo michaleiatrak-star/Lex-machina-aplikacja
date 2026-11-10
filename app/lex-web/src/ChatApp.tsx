@@ -97,6 +97,7 @@ function messageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Kept in Polish: the conversation as the model receives it.
 function conversationForProvider(
   messages: ChatMessage[],
   next: string
@@ -105,12 +106,11 @@ function conversationForProvider(
     .filter((item) => item.role !== "system")
     .slice(-8)
     .map((item) =>
-      t("{value}: {content}", { value: item.role === "user" ? "Użytkownik" : "Asystent", content: item.content })
+      `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}`
     )
     .join("\n\n");
-  const combined = history
-    ? t("{history}\n\nUżytkownik: {next}", { history: history, next: next })
-    : next;
+  // Kept in Polish: the conversation sent to the model.
+  const combined = history ? `${history}\n\nUżytkownik: ${next}` : next;
   return combined.length > 27_000
     ? combined.slice(-27_000)
     : combined;
@@ -468,7 +468,7 @@ export default function ChatApp({
     ) {
       return selectedCase.caseId;
     }
-    return await createLocalCase("Nowa sprawa");
+    return await createLocalCase(t("Nowa sprawa"));
   }
 
   async function acceptFiles(
@@ -692,10 +692,10 @@ export default function ChatApp({
 
         <nav className="chat-tabs" aria-label={t("Sekcje aplikacji")}>
           {([
-            ["chat", "Czat"],
-            ["files", "Pliki"],
-            ["skills", "Skille"],
-            ["case", "Sprawa"],
+            ["chat", t("Czat")],
+            ["files", t("Pliki")],
+            ["skills", t("Skille")],
+            ["case", t("Sprawa")],
             ["settings", t("Model i API")]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
@@ -729,7 +729,7 @@ export default function ChatApp({
               }
             />
             <strong>
-              {runtimeOnline ? "Runtime aktywny" : "Runtime offline"}
+              {runtimeOnline ? t("Usługa aplikacji działa") : t("Usługa aplikacji niedostępna")}
             </strong>
           </div>
           <small>
@@ -750,11 +750,11 @@ export default function ChatApp({
             <p className="eyebrow">Lex Machina</p>
             <h1>
               {activeTab === "chat"
-                ? "Czat prawny"
+                ? t("Czat prawny")
                 : activeTab === "files"
                   ? t("Pliki i prywatność")
                   : activeTab === "skills"
-                    ? "Skille"
+                    ? t("Skille")
                     : activeTab === "case"
                       ? t("Sprawa i wiedza")
                       : t("Model i klucz API")}
@@ -987,7 +987,7 @@ export default function ChatApp({
                   disabled={!canSend}
                   onClick={() => void sendMessage()}
                 >
-                  {executing ? "Wysyłanie…" : "Wyślij"}
+                  {executing ? "Wysyłanie…" : t("Wyślij")}
                 </button>
               </div>
               {executionError ? (
@@ -1049,7 +1049,7 @@ export default function ChatApp({
                       >
                         <strong>{file.name}</strong>
                         <small>
-                          {index === 0 ? "Przetwarzanie" : "Oczekuje"}
+                          {index === 0 ? t("Przetwarzanie") : t("Oczekuje")}
                           {" · "}{describeDocumentFile(file)}
                         </small>
                       </li>
@@ -1197,7 +1197,7 @@ export default function ChatApp({
                   disabled={caseBusy}
                   onClick={() => void createLocalCase(newCaseName)}
                 >
-                  {caseBusy ? "Tworzę…" : "Utwórz"}
+                  {caseBusy ? "Tworzę…" : t("Utwórz")}
                 </button>
               </div>
             </article>

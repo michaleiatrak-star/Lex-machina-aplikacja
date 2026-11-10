@@ -147,7 +147,7 @@ export function ChatDocumentCard(props: {
             })
           }
         >
-          {preview ? t("Zwiń podgląd") : props.canWrite ? t("Podgląd i edycja") : "Podgląd"}
+          {preview ? t("Zwiń podgląd") : props.canWrite ? t("Podgląd i edycja") : t("Podgląd")}
         </button>
         {edited ? (
           <button

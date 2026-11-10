@@ -28,10 +28,10 @@ const ROLE_LABELS:
     CaseRole,
     string
   > = {
-    OWNER: "Właściciel",
-    EDITOR: "Edytor",
-    ANALYST: "Analityk",
-    VIEWER: "Odczyt"
+    OWNER: t("Właściciel"),
+    EDITOR: t("Edytor"),
+    ANALYST: t("Analityk"),
+    VIEWER: t("Odczyt")
   };
 
 const ROLE_HELP:

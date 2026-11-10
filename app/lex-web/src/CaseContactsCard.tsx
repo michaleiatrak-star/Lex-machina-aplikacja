@@ -133,7 +133,7 @@ export function CaseContactsCard({
             </select>
             <input
               maxLength={180}
-              placeholder={draft.kind === "PERSON" ? t("Imię i nazwisko") : "Nazwa organizacji"}
+              placeholder={draft.kind === "PERSON" ? t("Imię i nazwisko") : t("Nazwa organizacji")}
               {...field("name")}
             />
           </div>
@@ -161,7 +161,7 @@ export function CaseContactsCard({
         <div className="matter-schedule-item" key={contact.contactId}>
           <div className="matter-schedule-item-main">
             <span className="matter-schedule-kind">
-              {contact.kind === "PERSON" ? "Osoba" : "Organizacja"}
+              {contact.kind === "PERSON" ? t("Osoba") : t("Organizacja")}
               {contact.role ? ` · ${contact.role}` : ""}
             </span>
             <strong>{contact.name}</strong>

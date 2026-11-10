@@ -191,7 +191,7 @@ export function SheetEditor(props: {
               disabled={(!dirty && format === props.format && !props.macros) || saving || !saveAs.trim()}
               onClick={() => void save()}
             >
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
           </div>
         ) : props.readOnly ? (

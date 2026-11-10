@@ -167,7 +167,7 @@ export function VerifyEmailPanel({ token, onBack }: { token: string; onBack: () 
           </label>
           {error && <div className="alert alert-error auth-alert">{error}</div>}
           <button type="button" className="primary-button auth-submit" disabled={busy || !password} onClick={() => void submit()}>
-            {busy ? "Sprawdzanie…" : "Aktywuj konto"}
+            {busy ? "Sprawdzanie…" : t("Aktywuj konto")}
           </button>
         </>
       )}

@@ -44,7 +44,7 @@ const STAGE_LABELS: Record<
   ProcessPleadingWorkflowState["stage"],
   string
 > = {
-  CG_ACCEPTANCE: "Akceptacja startu",
+  CG_ACCEPTANCE: t("Akceptacja startu"),
   W1: t("W1 · rama i strategia"),
   PRE_W2: "PRE-W2 · weryfikacja",
   W2: t("W2 · projekt i red-team"),
@@ -57,12 +57,12 @@ const PLAIN_STAGE_LABELS: Record<
   ProcessPleadingWorkflowState["stage"],
   string
 > = {
-  CG_ACCEPTANCE: "Akceptacja startu",
+  CG_ACCEPTANCE: t("Akceptacja startu"),
   W1: t("Etap 1 · rama i strategia"),
   PRE_W2: "Etap 2 · weryfikacja",
   W2: t("Etap 3 · projekt i przegląd krytyczny"),
   W3: t("Etap 4 · kontrola końcowa"),
-  FINAL: "Pismo gotowe"
+  FINAL: t("Pismo gotowe")
 };
 
 const PLAIN_DOCUMENT_STATUS: Record<string, string> = {
@@ -239,7 +239,7 @@ export function ProcessPleadingWorkflowPanel({
       {latest && editText === null ? (
         <div className="process-workflow-actions">
           <button type="button" onClick={() => setShowDraft((value) => !value)}>
-            {showDraft ? "Ukryj tekst" : t("Pokaż tekst")}
+            {showDraft ? t("Ukryj tekst") : t("Pokaż tekst")}
           </button>
           <button type="button" disabled={locked} onClick={() => setEditText(latest.text)}>
             {t("Edytuj projekt")}
@@ -302,12 +302,12 @@ export function ProcessPleadingWorkflowPanel({
       <div className="process-workflow-heading">
         <div>
           <p className="eyebrow">
-            {developer ? "Deterministyczny pipeline pisma" : "Pismo procesowe"}
+            {developer ? t("Deterministyczny pipeline pisma") : t("Pismo procesowe")}
           </p>
           <h3>
             {state
               ? stageLabels[state.stage]
-              : developer ? "Pisma procesowe v3" : "Pismo procesowe etapami"}
+              : developer ? "Pisma procesowe v3" : t("Pismo procesowe etapami")}
           </h3>
         </div>
         <span
@@ -380,13 +380,13 @@ export function ProcessPleadingWorkflowPanel({
         <>
           <div className="process-workflow-stats">
             <span>
-              {developer ? "Zamknięte" : t("Zakończone kroki")}: {stats?.closed ?? 0}
+              {developer ? t("Zamknięte") : t("Zakończone kroki")}: {stats?.closed ?? 0}
             </span>
             <span>
-              {developer ? "N/A" : "Pominięte"}: {stats?.na ?? 0}
+              {developer ? "N/A" : t("Pominięte")}: {stats?.na ?? 0}
             </span>
             <span>
-              {developer ? t("Otwarte / oczekujące") : "Pozostało"}: {stats?.open ?? 0}
+              {developer ? t("Otwarte / oczekujące") : t("Pozostało")}: {stats?.open ?? 0}
             </span>
             {developer ? (
               <span>
@@ -440,7 +440,7 @@ export function ProcessPleadingWorkflowPanel({
                       {t("Anuluj")}
                     </button>
                   </div>
-                  <small>{t("Krok wróci do wykonania z Twoimi uwagami po kliknięciu „")}{developer ? "Kontynuuj pipeline" : "Kontynuuj"}”.</small>
+                  <small>{t("Krok wróci do wykonania z Twoimi uwagami po kliknięciu „")}{developer ? t("Kontynuuj pipeline") : t("Kontynuuj")}”.</small>
                 </>
               )}
             </div>
@@ -471,7 +471,7 @@ export function ProcessPleadingWorkflowPanel({
                 disabled={locked}
                 onClick={onContinue}
               >
-                {developer ? "Kontynuuj pipeline" : "Kontynuuj"}
+                {developer ? t("Kontynuuj pipeline") : t("Kontynuuj")}
               </button>
             </div>
           )}

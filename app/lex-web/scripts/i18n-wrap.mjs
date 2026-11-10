@@ -10,7 +10,9 @@ import ts from "typescript";
 const POLISH = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(?:i|w|z|na|do|nie|się|jest|oraz|lub|dla|przez|od|po|to|czy|jak|ten|ta)\b/iu;
 const SHOWN_ATTRIBUTES = new Set(["title", "placeholder", "aria-label", "alt", "label", "aria-description"]);
 const LABEL_PROPERTIES = new Set(["label", "title", "description", "help", "hint", "text", "message", "placeholder", "summary", "detail", "note", "caption", "heading", "empty", "tooltip"]);
-const KEEP_AS_IS = new Set(["Lex Machina", "admin", "ELI", "SAOS", "ISAP", "CBOSA", "KRS", "OK"]);
+const KEEP_AS_IS = new Set(["Lex Machina", "admin", "ELI", "SAOS", "ISAP", "CBOSA", "KRS", "OK", "Bielik", "Mistral", "System", "Files", "Gemini", "Claude", "Google", "Microsoft"]);
+// A short Polish label (one to four words, starting with a capital): "Czat", "Nowa faktura".
+const SHORT_LABEL = /^[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{2,}( [A-Za-ząćęłńóśźż]+){0,3}$/u;
 
 function shownText(text) {
   const core = text.replace(/\s+/gu, " ").trim();
@@ -130,7 +132,7 @@ export function wrapFile(file) {
         usesT = true;
       }
       return;
-    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && POLISH.test(node.text) && /\s/u.test(node.text) && shownLiteral(node)) {
+    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && ((POLISH.test(node.text) && /\s/u.test(node.text)) || (WRAP_ALL && SHORT_LABEL.test(node.text) && !KEEP_AS_IS.has(node.text))) && shownLiteral(node)) {
       const inside = WRAP_ALL || insideFunction(node);
       edits.push({ start: node.getStart(sourceFile), end: node.getEnd(), text: `${inside ? "t" : "N_"}(${quote(node.text)})` });
       if (inside) usesT = true;

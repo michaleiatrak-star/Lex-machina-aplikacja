@@ -48,7 +48,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const STATUS_TEXT: Record<string, string> = {
-  FOUND: "Znaleziono",
+  FOUND: t("Znaleziono"),
   NOT_FOUND: t("Brak w źródle"),
   AMBIGUOUS: t("Niejednoznaczne — zawęź zapytanie"),
   OUT_OF_SCOPE: t("OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku"),
@@ -565,7 +565,7 @@ export function McpSearchPanel() {
                   disabled={busy || missing}
                   onClick={() => void submit()}
                 >
-                  {busy ? "Szukam…" : "Szukaj"}
+                  {busy ? "Szukam…" : t("Szukaj")}
                 </button>
                 {busy && waited >= 5 ? (
                   <span className="field-help">
@@ -587,7 +587,7 @@ export function McpSearchPanel() {
             {toolLabel(view.tool).label}
           </p>
           <h2>
-            {status ? STATUS_TEXT[status] ?? status : view.ok ? "Wynik" : "Błąd"}
+            {status ? STATUS_TEXT[status] ?? status : view.ok ? t("Wynik") : t("Błąd")}
           </h2>
           {view.total !== null ? (
             <p className="field-help">
@@ -725,7 +725,7 @@ export function McpSearchPanel() {
           {view.next ? (
             <div className="chat-form-row compact">
               <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void loadMore()}>
-                {busy ? "Wczytuję…" : "Wczytaj kolejne wyniki"}
+                {busy ? "Wczytuję…" : t("Wczytaj kolejne wyniki")}
               </button>
             </div>
           ) : null}

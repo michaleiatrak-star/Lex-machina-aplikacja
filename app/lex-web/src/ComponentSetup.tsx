@@ -11,7 +11,7 @@ export function ComponentSetupView({ value, error, onStart, onFinish }: { value:
   const done = value.phase === "done";
   return <main className="component-setup"><section aria-labelledby="setup-title">
     <span className="component-setup-brand">LEX MACHINA</span>
-    <h1 id="setup-title">{done ? "Wszystko gotowe" : "Przygotowanie aplikacji"}</h1>
+    <h1 id="setup-title">{done ? t("Wszystko gotowe") : t("Przygotowanie aplikacji")}</h1>
     <p>{done ? t("Możesz już otworzyć aplikację.") : t("Sprawdzimy, które narzędzia są już na komputerze. Pobierzemy tylko brakujące lub wymagające aktualizacji.")}</p>
     {running ? <>
       <p role="status">{value.progress?.message || t("Sprawdzam, co trzeba przygotować…")}</p>

@@ -904,7 +904,7 @@ export function DocumentPrivacyPanel({
                                     disabled={batchLineSaving !== null || value.trim() === line.text}
                                     onClick={() => void saveBatchLineFix(draft, { page: page.page, line: line.line, text: line.text }, key)}
                                   >
-                                    {batchLineSaving === key ? "Zapisuję…" : "Zapisz"}
+                                    {batchLineSaving === key ? "Zapisuję…" : t("Zapisz")}
                                   </button>
                                 </span>
                               )}

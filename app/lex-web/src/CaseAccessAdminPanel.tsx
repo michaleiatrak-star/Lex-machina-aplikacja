@@ -19,10 +19,10 @@ import {
 type GrantableRole = Exclude<CaseRole, "OWNER">;
 
 const ROLE_LABELS: Record<CaseRole, string> = {
-  OWNER: "Właściciel",
-  EDITOR: "Edycja",
-  ANALYST: "Analiza",
-  VIEWER: "Podgląd"
+  OWNER: t("Właściciel"),
+  EDITOR: t("Edycja"),
+  ANALYST: t("Analiza"),
+  VIEWER: t("Podgląd")
 };
 
 const GRANTABLE: GrantableRole[] = ["EDITOR", "ANALYST", "VIEWER"];
@@ -400,7 +400,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                 }
               }}
             >
-              {item.archivedAt ? t("Przywróć z archiwum") : "Archiwizuj"}
+              {item.archivedAt ? t("Przywróć z archiwum") : t("Archiwizuj")}
             </button>
           </div>
 
@@ -787,7 +787,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             )
           }
         >
-          {busy === "quick" ? "Przypisywanie…" : "Przypisz"}
+          {busy === "quick" ? "Przypisywanie…" : t("Przypisz")}
         </button>
       </fieldset>
       </details>

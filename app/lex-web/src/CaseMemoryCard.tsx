@@ -242,7 +242,7 @@ export function CaseMemoryCard({
 /** The summary split at its "## " headings (text before the first one goes under "Podsumowanie"). */
 export function overviewParts(text: string): Array<{ title: string; body: string }> {
   const parts: Array<{ title: string; body: string }> = [];
-  let current = { title: "Podsumowanie", body: "" };
+  let current = { title: t("Podsumowanie"), body: "" };
   for (const line of text.split("\n")) {
     const heading = /^##\s+(.+?)\s*$/u.exec(line);
     if (heading) {

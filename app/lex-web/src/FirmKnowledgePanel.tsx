@@ -468,7 +468,7 @@ export function FirmKnowledgePanel({
           >
             {searching
               ? "Szukam…"
-              : "Szukaj"}
+              : t("Szukaj")}
           </button>
         </div>
 
@@ -541,7 +541,7 @@ export function FirmKnowledgePanel({
                         item.caseRole
                       )
                         ? t("Dodaj do analizy")
-                        : "Tylko odczyt"}
+                        : t("Tylko odczyt")}
                     </button>
                   </div>
                 </article>

@@ -95,22 +95,24 @@ function PartyFields({
 }
 
 // Treść oznaczeń jak w polu faktury; brzmienie wymogu sprawdza „Zweryfikuj przez ELI”.
+// Kept in Polish: statutory markings of a Polish VAT invoice (art. 106e ustawy o VAT).
 function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] {
   if (!annotations) return [];
   return [
     annotations.cashMethod ? "metoda kasowa" : "",
     annotations.selfBilling ? "samofakturowanie" : "",
-    annotations.reverseCharge ? t("odwrotne obciążenie") : "",
-    annotations.splitPayment ? t("mechanizm podzielonej płatności") : "",
+    annotations.reverseCharge ? "odwrotne obciążenie" : "",
+    annotations.splitPayment ? "mechanizm podzielonej płatności" : "",
     annotations.exemptionBasis ? `Podstawa zwolnienia: ${annotations.exemptionBasis}` : ""
   ].filter(Boolean);
 }
 
+// Kept in Polish: statutory markings of a Polish VAT invoice.
 const ANNOTATION_FLAGS: Array<[keyof Omit<InvoiceAnnotations, "exemptionBasis">, string]> = [
   ["cashMethod", "metoda kasowa"],
   ["selfBilling", "samofakturowanie"],
-  ["reverseCharge", t("odwrotne obciążenie")],
-  ["splitPayment", t("mechanizm podzielonej płatności")]
+  ["reverseCharge", "odwrotne obciążenie"],
+  ["splitPayment", "mechanizm podzielonej płatności"]
 ];
 
 function InvoiceDocument({
@@ -142,8 +144,8 @@ function InvoiceDocument({
         </div>
       </header>
       <div className="invoice-document-parties">
-        {party("Sprzedawca", invoice.seller)}
-        {party("Nabywca", invoice.buyer)}
+        {party(t("Sprzedawca"), invoice.seller)}
+        {party(t("Nabywca"), invoice.buyer)}
       </div>
       <table>
         <thead>
@@ -464,7 +466,7 @@ export function InvoicesPanel({
       <div className="invoice-main">
         {editing ? (
           <article className="chat-card invoice-editor">
-            <h2>{editing.invoiceId ? "Edycja szkicu" : "Nowa faktura"}</h2>
+            <h2>{editing.invoiceId ? t("Edycja szkicu") : t("Nowa faktura")}</h2>
             <div className="invoice-grid">
               <label>
                 {t("Numer faktury")}

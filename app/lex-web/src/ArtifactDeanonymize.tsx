@@ -150,7 +150,7 @@ export function ArtifactDeanonymize(props: {
           disabled={busy}
           onClick={() => void run(async () => finalize(await authorize(), {}))}
         >
-          {busy ? "Deanonimizuję…" : "Deanonimizuj"}
+          {busy ? "Deanonimizuję…" : t("Deanonimizuj")}
         </button>
         <button
           type="button"

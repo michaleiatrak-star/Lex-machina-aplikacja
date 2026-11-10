@@ -4,8 +4,8 @@ import type { MandatoryPathStep, MandatoryPathView } from "./api.js";
 const LAYERS: Array<[MandatoryPathStep["layer"], string]> = [
   ["ROUTER", t("Router i bramki")],
   ["SKILL", t("Wywołane skille")],
-  ["VERIFICATION", "Weryfikacja"],
-  ["HARD_GATE", "Hard gate"]
+  ["VERIFICATION", t("Weryfikacja")],
+  ["HARD_GATE", t("Hard gate")]
 ];
 
 const STATUS: Record<MandatoryPathStep["status"], string> = {

@@ -90,7 +90,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
             {t("Odśwież")}
           </button>
           <button type="button" className="chat-secondary-action" onClick={() => setOpen((value) => !value)}>
-            {open ? "Zwiń" : "Rozwiń"}
+            {open ? t("Zwiń") : t("Rozwiń")}
           </button>
         </span>
       </header>

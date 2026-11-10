@@ -31,7 +31,7 @@ import {
 
 const PROVIDERS: Array<[ProviderId, string]> = [
   ["openai", "OpenAI"],
-  ["anthropic", "Anthropic"],
+  ["anthropic", t("Anthropic")],
   ["xai", "xAI"],
   ["google", "Google"]
 ];
@@ -364,7 +364,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     type="password"
                     autoComplete="off"
                     aria-label={`Klucz API ${label}`}
-                    placeholder={stored?.configured ? t("nowy klucz zastąpi obecny") : "Wklej klucz API"}
+                    placeholder={stored?.configured ? t("nowy klucz zastąpi obecny") : t("Wklej klucz API")}
                     value={keyInputs[id] ?? ""}
                     onChange={(event) => setKeyInputs({ ...keyInputs, [id]: event.target.value })}
                   />
@@ -517,7 +517,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
               }, plan.planId ? "Plan zapisany." : "Plan dodany.")
             }
           >
-            {plan.planId ? "Zapisz plan" : "Dodaj plan"}
+            {plan.planId ? t("Zapisz plan") : t("Dodaj plan")}
           </button>
           {plan.planId && (
             <button type="button" disabled={busy} onClick={() => setPlan(EMPTY_PLAN)}>
@@ -570,7 +570,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                       )
                     }
                   >
-                    {account.status === "ACTIVE" ? "Wyłącz" : "Włącz"}
+                    {account.status === "ACTIVE" ? t("Wyłącz") : t("Włącz")}
                   </button>
                 )}
               </div>

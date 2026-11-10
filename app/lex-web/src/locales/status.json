@@ -47,9 +47,9 @@
    "wcale": 0
   },
   "en": {
-   "całość": 21,
-   "częściowo": 61,
-   "wcale": 5
+   "całość": 16,
+   "częściowo": 67,
+   "wcale": 4
   },
   "de": {
    "całość": 0,
@@ -240,7 +240,7 @@
  "components": [
   {
    "component": "AccountConnectProgress",
-   "translatable": 5,
+   "translatable": 7,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -590,11 +590,11 @@
   },
   {
    "component": "ArtifactDeanonymize",
-   "translatable": 11,
+   "translatable": 12,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 7
+    "en": 8
    },
    "state": {
     "pl": "całość",
@@ -690,7 +690,7 @@
   },
   {
    "component": "AuthApp",
-   "translatable": 44,
+   "translatable": 45,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -790,11 +790,11 @@
   },
   {
    "component": "CaseAccessAdminPanel",
-   "translatable": 97,
+   "translatable": 103,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 75
+    "en": 79
    },
    "state": {
     "pl": "całość",
@@ -840,11 +840,11 @@
   },
   {
    "component": "CaseCollaborationPanel",
-   "translatable": 37,
+   "translatable": 38,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 30
+    "en": 31
    },
    "state": {
     "pl": "całość",
@@ -890,7 +890,7 @@
   },
   {
    "component": "CaseContactsCard",
-   "translatable": 16,
+   "translatable": 17,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -898,7 +898,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1140,7 +1140,7 @@
   },
   {
    "component": "CaseMemoryCard",
-   "translatable": 35,
+   "translatable": 36,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1240,11 +1240,11 @@
   },
   {
    "component": "ChatApp",
-   "translatable": 76,
+   "translatable": 85,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 66
+    "en": 69
    },
    "state": {
     "pl": "całość",
@@ -1290,11 +1290,11 @@
   },
   {
    "component": "ChatDocumentCard",
-   "translatable": 17,
+   "translatable": 18,
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 13
+    "en": 14
    },
    "state": {
     "pl": "całość",
@@ -1340,7 +1340,7 @@
   },
   {
    "component": "ChatWidgetCard",
-   "translatable": 5,
+   "translatable": 7,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1440,7 +1440,7 @@
   },
   {
    "component": "CompanyNipField",
-   "translatable": 5,
+   "translatable": 6,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1490,7 +1490,7 @@
   },
   {
    "component": "ComponentSetup",
-   "translatable": 15,
+   "translatable": 16,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1498,7 +1498,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1540,7 +1540,7 @@
   },
   {
    "component": "CoreLawUpdatesSection",
-   "translatable": 68,
+   "translatable": 69,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1740,7 +1740,7 @@
   },
   {
    "component": "DocumentCitationContent",
-   "translatable": 22,
+   "translatable": 23,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1790,7 +1790,7 @@
   },
   {
    "component": "DocumentEditor",
-   "translatable": 25,
+   "translatable": 29,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1840,11 +1840,11 @@
   },
   {
    "component": "DocumentPrivacyPanel",
-   "translatable": 60,
+   "translatable": 61,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 54
+    "en": 55
    },
    "state": {
     "pl": "całość",
@@ -1890,7 +1890,7 @@
   },
   {
    "component": "DomainFallbackSection",
-   "translatable": 5,
+   "translatable": 6,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1940,11 +1940,11 @@
   },
   {
    "component": "FirmFilePicker",
-   "translatable": 12,
+   "translatable": 14,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 9
+    "en": 10
    },
    "state": {
     "pl": "całość",
@@ -1990,11 +1990,11 @@
   },
   {
    "component": "FirmKnowledgePanel",
-   "translatable": 20,
+   "translatable": 22,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 19
+    "en": 20
    },
    "state": {
     "pl": "całość",
@@ -2090,7 +2090,7 @@
   },
   {
    "component": "GoogleIntegrationPanel",
-   "translatable": 37,
+   "translatable": 38,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2340,7 +2340,7 @@
   },
   {
    "component": "InvoiceSettingsPanel",
-   "translatable": 65,
+   "translatable": 66,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2390,8 +2390,8 @@
   },
   {
    "component": "InvoicesPanel",
-   "translatable": 88,
-   "notYetTranslatable": 0,
+   "translatable": 87,
+   "notYetTranslatable": 4,
    "translated": {
     "de": 0,
     "en": 74
@@ -2440,7 +2440,7 @@
   },
   {
    "component": "JurisdictionSection",
-   "translatable": 16,
+   "translatable": 20,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2590,7 +2590,7 @@
   },
   {
    "component": "LegiIndexSection",
-   "translatable": 6,
+   "translatable": 7,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2640,7 +2640,7 @@
   },
   {
    "component": "LocalAiSetupPanel",
-   "translatable": 157,
+   "translatable": 163,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2740,7 +2740,7 @@
   },
   {
    "component": "MaintenancePanel",
-   "translatable": 62,
+   "translatable": 63,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2790,7 +2790,7 @@
   },
   {
    "component": "MandatoryPathDetails",
-   "translatable": 8,
+   "translatable": 10,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2840,15 +2840,15 @@
   },
   {
    "component": "MarkdownContent",
-   "translatable": 0,
+   "translatable": 2,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 1
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2890,11 +2890,11 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 590,
-   "notYetTranslatable": 8,
+   "translatable": 624,
+   "notYetTranslatable": 9,
    "translated": {
     "de": 0,
-    "en": 461
+    "en": 466
    },
    "state": {
     "pl": "całość",
@@ -2940,7 +2940,7 @@
   },
   {
    "component": "McpConnectorsPanel",
-   "translatable": 41,
+   "translatable": 44,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2990,11 +2990,11 @@
   },
   {
    "component": "McpSearchPanel",
-   "translatable": 41,
+   "translatable": 46,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 25
+    "en": 26
    },
    "state": {
     "pl": "całość",
@@ -3040,7 +3040,7 @@
   },
   {
    "component": "MicrosoftIntegration",
-   "translatable": 31,
+   "translatable": 34,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3190,7 +3190,7 @@
   },
   {
    "component": "PdfFormPanel",
-   "translatable": 14,
+   "translatable": 16,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3290,11 +3290,11 @@
   },
   {
    "component": "PrivacyKeyTable",
-   "translatable": 24,
+   "translatable": 32,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 16
+    "en": 20
    },
    "state": {
     "pl": "całość",
@@ -3340,7 +3340,7 @@
   },
   {
    "component": "PrivacyPreview",
-   "translatable": 64,
+   "translatable": 69,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3390,11 +3390,11 @@
   },
   {
    "component": "ProcessPleadingWorkflowPanel",
-   "translatable": 60,
+   "translatable": 71,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 52
+    "en": 54
    },
    "state": {
     "pl": "całość",
@@ -3490,7 +3490,7 @@
   },
   {
    "component": "RecoveryAuthPanel",
-   "translatable": 15,
+   "translatable": 16,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3498,7 +3498,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3590,11 +3590,11 @@
   },
   {
    "component": "RestorationReview",
-   "translatable": 24,
+   "translatable": 26,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 21
+    "en": 23
    },
    "state": {
     "pl": "całość",
@@ -3690,11 +3690,11 @@
   },
   {
    "component": "ServerAdminPanel",
-   "translatable": 104,
+   "translatable": 110,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 63
+    "en": 64
    },
    "state": {
     "pl": "całość",
@@ -3740,7 +3740,7 @@
   },
   {
    "component": "ServerAuthPanels",
-   "translatable": 33,
+   "translatable": 34,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3748,7 +3748,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3790,7 +3790,7 @@
   },
   {
    "component": "SheetEditor",
-   "translatable": 22,
+   "translatable": 23,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3990,7 +3990,7 @@
   },
   {
    "component": "TextFileEditor",
-   "translatable": 30,
+   "translatable": 38,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4040,7 +4040,7 @@
   },
   {
    "component": "TranscriptEditor",
-   "translatable": 16,
+   "translatable": 17,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4140,7 +4140,7 @@
   },
   {
    "component": "UpdatePrompt",
-   "translatable": 24,
+   "translatable": 25,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4190,11 +4190,11 @@
   },
   {
    "component": "UserAccountDialog",
-   "translatable": 44,
+   "translatable": 48,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 26
+    "en": 27
    },
    "state": {
     "pl": "całość",
@@ -4290,7 +4290,7 @@
   },
   {
    "component": "WokandaRegisterPanel",
-   "translatable": 23,
+   "translatable": 24,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4298,7 +4298,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4390,7 +4390,7 @@
   },
   {
    "component": "WorkspaceManager",
-   "translatable": 128,
+   "translatable": 130,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,

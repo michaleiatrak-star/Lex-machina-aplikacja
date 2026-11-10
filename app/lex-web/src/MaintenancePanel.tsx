@@ -554,7 +554,7 @@ export function MaintenancePanel({
                 {busy === "app-download"
                   ? t("Pobieranie i weryfikacja…")
                   : staged
-                    ? "Pobierz ponownie"
+                    ? t("Pobierz ponownie")
                     : t("Pobierz i zweryfikuj")}
               </button>
               <button

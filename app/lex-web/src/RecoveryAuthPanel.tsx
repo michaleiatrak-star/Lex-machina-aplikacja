@@ -212,7 +212,7 @@ export function RecoveryAuthPanel({
         >
           {busy
             ? "Odzyskuję…"
-            : "Odzyskaj konto"}
+            : t("Odzyskaj konto")}
         </button>
 
         <button

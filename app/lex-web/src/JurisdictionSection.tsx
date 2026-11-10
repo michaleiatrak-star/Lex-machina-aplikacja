@@ -21,10 +21,10 @@ const READING: Record<string, string> = {
 
 // Legal families: the category of the country list; the method the model uses follows from it.
 const FAMILIES: Array<[NonNullable<LegalSystemOption["family"]>, string]> = [
-  ["kontynentalne", "Prawo kontynentalne"],
-  ["nordyckie", "Prawo nordyckie"],
-  ["mieszane", "Systemy mieszane"],
-  ["common-law", "Common law"]
+  ["kontynentalne", t("Prawo kontynentalne")],
+  ["nordyckie", t("Prawo nordyckie")],
+  ["mieszane", t("Systemy mieszane")],
+  ["common-law", t("Common law")]
 ];
 
 /**

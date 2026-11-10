@@ -418,7 +418,7 @@ export function InvoiceSettingsPanel() {
         )}
         <div className="chat-form-row">
           <label className="chat-secondary-action invoice-file-button">
-            {settings?.logo ? t("Zmień logo") : "Wgraj logo"}
+            {settings?.logo ? t("Zmień logo") : t("Wgraj logo")}
             <input
               type="file"
               accept="image/png,image/jpeg"

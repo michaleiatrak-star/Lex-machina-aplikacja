@@ -107,7 +107,7 @@ export function MicrosoftIntegrationPanel() {
         </>
       ) : (
         <button type="button" className="chat-primary-action" disabled={busy} onClick={() => void connect()}>
-          {busy ? t("Czekam na Microsoft…") : "Zaloguj kontem Microsoft"}
+          {busy ? t("Czekam na Microsoft…") : t("Zaloguj kontem Microsoft")}
         </button>
       )}
       {message ? <p role="status">{message}</p> : null}
@@ -135,7 +135,7 @@ type Crumb = { place?: string; name: string };
 
 const ROOTS: Array<{ key: string; label: string; crumb: Crumb }> = [
   { key: "onedrive", label: N_("Mój OneDrive"), crumb: { place: "onedrive", name: t("Mój OneDrive") } },
-  { key: "shared", label: N_("Udostępnione dla mnie"), crumb: { place: "shared", name: "Udostępnione" } },
+  { key: "shared", label: N_("Udostępnione dla mnie"), crumb: { place: "shared", name: t("Udostępnione") } },
   { key: "sites", label: "SharePoint", crumb: { place: "sites", name: "SharePoint" } }
 ];
 
@@ -227,7 +227,7 @@ export function MicrosoftImportDialog({
               void open(path, query.trim());
             }}
           >
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={root === "sites" ? "Nazwa witryny SharePoint" : t("Szukaj po nazwie pliku")} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={root === "sites" ? t("Nazwa witryny SharePoint") : t("Szukaj po nazwie pliku")} />
             <button type="submit" className="chat-secondary-action" disabled={busy}>
               {t("Szukaj")}
             </button>

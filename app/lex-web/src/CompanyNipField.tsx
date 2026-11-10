@@ -63,7 +63,7 @@ export function CompanyNipField({
             title={t("Nazwa i adres z białej listy VAT, a gdy podmiotu tam nie ma: z CEIDG")}
             onClick={() => void load()}
           >
-            {state.kind === "busy" ? "Pobieram…" : "Pobierz dane"}
+            {state.kind === "busy" ? "Pobieram…" : t("Pobierz dane")}
           </button>
         </span>
       </label>

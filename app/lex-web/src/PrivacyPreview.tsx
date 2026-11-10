@@ -41,7 +41,7 @@ const overlaps = (a: { start: number; end: number }, b: { start: number; end: nu
 // A firm found in the VAT white list or KRS says so: the register match is visible.
 function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
   if (mark.firm === "REGISTRY") return t("Firma (biała lista VAT / KRS)");
-  if (mark.firm === "TEXT") return "Firma";
+  if (mark.firm === "TEXT") return t("Firma");
   return KIND_LABEL[mark.kind] ?? mark.kind;
 }
 
@@ -473,7 +473,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}”
                     </span>
                     <button type="button" onClick={() => (healthMasked(item) ? unmaskHealth(item) : maskHealth([item]))}>
-                      {healthMasked(item) ? "Odkryj" : "Zakryj"}
+                      {healthMasked(item) ? t("Odkryj") : t("Zakryj")}
                     </button>
                   </li>
                 ))}
@@ -500,7 +500,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · {item.aiNotPerson ? `AI: ${item.aiNotPerson}` : item.uncertain}
                     </span>
                     <button type="button" onClick={() => toggleKeep(item)}>
-                      {kept(item.page, item) ? t("Zakryj z powrotem") : "Odkryj"}
+                      {kept(item.page, item) ? t("Zakryj z powrotem") : t("Odkryj")}
                     </button>
                   </li>
                 ))}
@@ -636,7 +636,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             onChange={(event) => setMarkLabel(event.target.value)}
           />
           <button type="button" onClick={maskSelection}>
-            {markAction === "LABEL" ? t("Zastąp etykietą") : "Zakryj zaznaczenie"}
+            {markAction === "LABEL" ? t("Zastąp etykietą") : t("Zakryj zaznaczenie")}
           </button>
         </div>
       ) : null}
@@ -672,7 +672,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                   {t("Anuluj poprawkę")}
                 </button>
                 <button type="button" className="primary-button" onClick={() => void savePage()} disabled={saving}>
-                  {saving ? "Zapisuję…" : "Zapisz tekst strony"}
+                  {saving ? "Zapisuję…" : t("Zapisz tekst strony")}
                 </button>
               </div>
             </div>

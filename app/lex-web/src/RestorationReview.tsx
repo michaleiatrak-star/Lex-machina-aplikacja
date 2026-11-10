@@ -107,7 +107,7 @@ export function RestorationReview(props: {
     <section className="restoration-review" aria-label={t("Przywrócone dane")}>
       <div className="restoration-review-head">
         <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-          {open ? "Ukryj" : "Pokaż"} {t("przywrócone dane (")}{props.marks.length})
+          {open ? t("Ukryj") : t("Pokaż")} {t("przywrócone dane (")}{props.marks.length})
         </button>
         <small>
           {counts.review > 0 ? t("do sprawdzenia: {review}", { review: counts.review }) : t("wszystkie formy pewne lub regułowe")}

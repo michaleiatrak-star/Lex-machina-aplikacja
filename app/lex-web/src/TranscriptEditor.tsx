@@ -94,7 +94,7 @@ export function TranscriptEditor({
             {t("Pobierz .docx")}
           </button>
           <button type="button" className="chat-primary-action" disabled={busy || saving || !changed.length} onClick={() => void save()}>
-            {saving ? "Zapisywanie…" : changed.length ? `Zapisz poprawki (${changed.length} str.)` : "Brak zmian"}
+            {saving ? "Zapisywanie…" : changed.length ? `Zapisz poprawki (${changed.length} str.)` : t("Brak zmian")}
           </button>
         </div>
       </header>

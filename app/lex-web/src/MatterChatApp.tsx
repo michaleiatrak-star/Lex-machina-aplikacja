@@ -340,25 +340,25 @@ const PROVIDERS: Array<{
     id: "openai",
     label: "OpenAI",
     apiKeyUrl: "https://platform.openai.com/api-keys",
-    accountClientLabel: "Codex CLI"
+    accountClientLabel: t("Codex CLI")
   },
   {
     id: "anthropic",
     label: "Anthropic / Claude",
     apiKeyUrl: "https://platform.claude.com/settings/keys",
-    accountClientLabel: "Claude Code"
+    accountClientLabel: t("Claude Code")
   },
   {
     id: "xai",
     label: "xAI / Grok",
     apiKeyUrl: "https://console.x.ai/",
-    accountClientLabel: "Grok Build"
+    accountClientLabel: t("Grok Build")
   },
   {
     id: "google",
     label: "Google / Gemini",
     apiKeyUrl: "https://aistudio.google.com/apikey",
-    accountClientLabel: "Gemini CLI"
+    accountClientLabel: t("Gemini CLI")
   }
 ];
 
@@ -425,7 +425,7 @@ const PRIMARY_MODEL_SOURCES: Array<{
   },
   {
     id: "local",
-    label: "Lokalne"
+    label: t("Lokalne")
   }
 ];
 
@@ -446,7 +446,7 @@ const ACCOUNT_MODEL_LABELS: Record<
 // The case summary button's message (the server adds the template and keeps the answer).
 // Kept in Polish: the runtime recognises the request by this prefix (case-overview.ts).
 const CASE_OVERVIEW_REQUEST =
-  (t("Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy."));
+  ("Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.");
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
@@ -568,7 +568,7 @@ function suggestedCaseName(input: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 72);
-  return clean.length >= 8 ? clean : "Nowa sprawa";
+  return clean.length >= 8 ? clean : t("Nowa sprawa");
 }
 
 type DirectDocumentRequest = {
@@ -796,7 +796,7 @@ export function pendingFileMessage(
   status: "PROCESSING" | "PENDING" | "SAVING" | "FAILED",
   error?: string
 ): string {
-  const file = name ? `Plik ${name}` : "Dodany plik";
+  const file = name ? `Plik ${name}` : t("Dodany plik");
   if (status === "FAILED") {
     return t("{file} nie został odczytany{value}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.", { file: file, value: error ? `: ${error}` : "" });
   }
@@ -938,18 +938,18 @@ export function providerFailureMessage(
     provider.startsWith("anthropic")
       ? "Claude"
       : provider.startsWith("xai")
-        ? "Grok"
+        ? t("Grok")
         : provider.startsWith("google")
           ? "Gemini"
           : "ChatGPT/Codex";
   const client =
     provider.startsWith("anthropic")
-      ? "Claude Code"
+      ? t("Claude Code")
       : provider.startsWith("xai")
-        ? "Grok Build"
+        ? t("Grok Build")
         : provider.startsWith("google")
-          ? "Gemini CLI"
-          : "Codex";
+          ? t("Gemini CLI")
+          : t("Codex");
   const base = (() => {
     switch (reason) {
       case "ACCOUNT_SESSION_PLAN_UNSUPPORTED":
@@ -1334,7 +1334,7 @@ export function stepSummaryText(steps: StepSummary): string {
 
 /** A file over open or unexplained steps is only a draft (ZAKAZ-14: DRAFT — NIEWERYFIKOWANY). */
 export function documentChoiceLabel(steps: StepSummary | undefined): string {
-  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : "Generuj dokument";
+  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : t("Generuj dokument");
 }
 
 /**
@@ -1450,7 +1450,7 @@ export function PipelineChoices({
             }
           >
             {choice.kind === "CONTINUE"
-              ? "Kontynuuj"
+              ? t("Kontynuuj")
               : choice.kind === "DOCUMENT"
                 ? documentChoiceLabel(choice.steps)
                 : `Dalsza analiza: ${skillLabel(choice.skill, developer)}`}
@@ -1868,7 +1868,7 @@ export default function MatterChatApp({
     useState<ExecutionDiagnostic | null>(null);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepsSnapshot | null>(null);
   const [executionStage, setExecutionStage] =
-    useState("Przygotowanie sesji");
+    useState(t("Przygotowanie sesji"));
   const [draftText, setDraftText] =
     useState("");
   const [executionElapsedSeconds, setExecutionElapsedSeconds] =
@@ -3974,8 +3974,8 @@ export default function MatterChatApp({
     const stage = plan.stage;
     setExecutionStage(
       stage === "FINAL"
-        ? "Tworzenie gotowego dokumentu"
-        : "Tworzenie szkicu dokumentu"
+        ? t("Tworzenie gotowego dokumentu")
+        : t("Tworzenie szkicu dokumentu")
     );
     try {
       const generated =
@@ -4222,7 +4222,7 @@ export default function MatterChatApp({
     setExecuting(true);
     setExecutingCaseId(executionCaseId);
     setExecutionStage(
-      "Przygotowanie sesji"
+      t("Przygotowanie sesji")
     );
     setExecutionError("");
     setExecutionDiagnostic(null);
@@ -4290,7 +4290,7 @@ export default function MatterChatApp({
 
       setExecutionStage(
         provider === "local"
-          ? "Przygotowanie modelu lokalnego"
+          ? t("Przygotowanie modelu lokalnego")
           : t("Sprawdzanie gotowości modelu")
       );
       const localPreparationError =
@@ -4540,7 +4540,7 @@ export default function MatterChatApp({
       setMemoryRefresh((value) => value + 1);
 
       setExecutionStage(
-        "Finalizacja odpowiedzi"
+        t("Finalizacja odpowiedzi")
       );
       if (result.context?.documents?.length) {
         setLastDelivery({
@@ -5277,7 +5277,7 @@ export default function MatterChatApp({
                 onChange={(event) => setSwitcherQuery(event.target.value)}
               />
               <small className="case-switcher-caption">
-                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : "Ostatnio zmieniane"}
+                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : t("Ostatnio zmieniane")}
               </small>
               <div className="matter-thread-items">
                 {switcherCases.map((item) =>
@@ -5437,7 +5437,7 @@ export default function MatterChatApp({
         <div className="chat-sidebar-card">
           <div className="chat-status-line">
             <span className={runtimeOnline ? "chat-dot online" : "chat-dot offline"} />
-            <strong>{runtimeOnline ? "Runtime aktywny" : "Runtime offline"}</strong>
+            <strong>{runtimeOnline ? t("Runtime aktywny") : t("Runtime offline")}</strong>
           </div>
           <small>
             {selectedCase?.displayName || t("Nowy wątek utworzy własną sprawę")}
@@ -5591,8 +5591,8 @@ export default function MatterChatApp({
                 ) : models.length === 0 ? (
                   <option value="">
                     {provider === "local"
-                      ? "Brak zainstalowanego modelu"
-                      : "Brak modeli"}
+                      ? t("Brak zainstalowanego modelu")
+                      : t("Brak modeli")}
                   </option>
                 ) : null}
                 {models.map((item) => (
@@ -5627,8 +5627,8 @@ export default function MatterChatApp({
                   localModelStarting
                     ? "Uruchamianie…"
                     : localModelReady
-                      ? "Model uruchomiony"
-                      : "Uruchom lokalny model"}
+                      ? t("Model uruchomiony")
+                      : t("Uruchom lokalny model")}
                 </button>
               ) : isAccountPrimarySource(
                   provider
@@ -5693,16 +5693,16 @@ export default function MatterChatApp({
           <div>
             <p className="eyebrow">
               {activeTab === "chat" || activeTab === "case"
-                ? selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"
+                ? selectedCase ? selectedCase.displayName || (individual ? t("Rozmowa") : t("Sprawa bez nazwy")) : individual ? t("Nowa rozmowa") : t("Nowa sprawa")
                 : t("Cała kancelaria")}
             </p>
             <h1>
               {activeTab === "home"
-                ? "Start"
+                ? t("Start")
                 : activeTab === "calendar"
-                ? "Kalendarz spraw"
+                ? t("Kalendarz spraw")
                 : activeTab === "chat"
-                ? "Rozmowa"
+                ? t("Rozmowa")
                 : activeTab === "case"
                     ? t("Akta i dokumenty")
                     : activeTab === "firm"
@@ -5710,8 +5710,8 @@ export default function MatterChatApp({
                       : activeTab === "search"
                         ? t("Wyszukiwanie w źródłach MCP")
                         : activeTab === "invoices"
-                          ? "Faktury"
-                          : "Ustawienia"}
+                          ? t("Faktury")
+                          : t("Ustawienia")}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -6027,7 +6027,7 @@ export default function MatterChatApp({
                   <li key={`${file.name}-${file.lastModified}-${index}`}>
                     <strong>{file.name}</strong>
                     <small>
-                      {index === 0 ? documentStepLabel(file) : "Oczekuje"} · {describeDocumentFile(file)}
+                      {index === 0 ? documentStepLabel(file) : t("Oczekuje")} · {describeDocumentFile(file)}
                     </small>
                   </li>
                 ))}
@@ -6112,7 +6112,7 @@ export default function MatterChatApp({
                   <p className="eyebrow">{t("Tryb pracy")}</p>
                   <h3>
                     {workMode === "AUTO"
-                      ? developerMode ? "Automatyczny — prawny router" : "Automatyczny"
+                      ? developerMode ? "Automatyczny — prawny router" : t("Automatyczny")
                       : selectedDeterministicAction
                         ? `Mechaniczny — ${selectedDeterministicAction.label}`
                         : developerMode ? "Mechaniczny — wybierz skill wykonawczy" : "Mechaniczny — wybierz rodzaj pracy"}
@@ -6620,7 +6620,7 @@ export default function MatterChatApp({
                   <div className="chat-working-meta">
                     <span>
                       {runtimePulse === "OK"
-                        ? developerMode ? "Runtime odpowiada" : "Aplikacja pracuje"
+                        ? developerMode ? t("Runtime odpowiada") : t("Aplikacja pracuje")
                         : runtimePulse === "LOST"
                           ? developerMode
                             ? t("Brak odpowiedzi usługi aplikacji — operacja nadal oczekuje")
@@ -6643,7 +6643,7 @@ export default function MatterChatApp({
                 </div>
               ) : null}
               <div className="chat-composer-meta">
-                <span>{individual ? "Rozmowa" : "Sprawa"}: {selectedCase?.displayName || (individual ? t("nazwa z pierwszego pytania") : t("utworzy się przy pierwszej wiadomości"))}</span>
+                <span>{individual ? t("Rozmowa") : t("Sprawa")}: {selectedCase?.displayName || (individual ? t("nazwa z pierwszego pytania") : t("utworzy się przy pierwszej wiadomości"))}</span>
                 {individual ? null : (
                   <span>
                     {t("Działanie:")} {selectedDeterministicAction
@@ -6827,7 +6827,7 @@ export default function MatterChatApp({
                   disabled={!canSend}
                   onClick={() => void sendMessage()}
                 >
-                  {pendingFirstMessage && firstMessageFilesPending ? t("Czeka na pliki…") : executing || pendingFirstMessage ? "Wysyłanie…" : "Wyślij"}
+                  {pendingFirstMessage && firstMessageFilesPending ? t("Czeka na pliki…") : executing || pendingFirstMessage ? "Wysyłanie…" : t("Wyślij")}
                 </button>
               </div>
               {caseFilePickerOpen ? (
@@ -7960,17 +7960,17 @@ export default function MatterChatApp({
               aria-label={t("Sekcje ustawień")}
             >
               {([
-                ["Konto", "security", t("Hasło i bezpieczeństwo")],
-                ["Konto", "display", t("Wygląd i czytelność")],
-                ...(settingsPanels?.account ? [["Konto", "account", t("Plan i klucze API")]] : []),
-                ["Asystent AI", "models", t("Modele i AI")],
-                ["Asystent AI", "skills", t("Skille i routing")],
-                ["Kancelaria", "users", t("Użytkownicy i uprawnienia")],
-                ["Kancelaria", "invoices", t("Faktury i KSeF")],
-                ...(settingsPanels?.server ? [["Kancelaria", "server", "Tryb serwerowy"]] : []),
+                [t("Konto"), "security", t("Hasło i bezpieczeństwo")],
+                [t("Konto"), "display", t("Wygląd i czytelność")],
+                ...(settingsPanels?.account ? [[t("Konto"), "account", t("Plan i klucze API")]] : []),
+                [t("Asystent AI"), "models", t("Modele i AI")],
+                [t("Asystent AI"), "skills", t("Skille i routing")],
+                [t("Kancelaria"), "users", t("Użytkownicy i uprawnienia")],
+                [t("Kancelaria"), "invoices", t("Faktury i KSeF")],
+                ...(settingsPanels?.server ? [[t("Kancelaria"), "server", t("Tryb serwerowy")]] : []),
                 [t("Źródła i integracje"), "mcp", t("Integracje i konektory")],
                 [t("Źródła i integracje"), "courts", t("Wokandy sądów")],
-                ["Aplikacja", "maintenance", t("Aplikacja i utrzymanie")]
+                [t("Aplikacja"), "maintenance", t("Aplikacja i utrzymanie")]
               ] as Array<
                 [string, SettingsSection, string]
               >)
@@ -8072,7 +8072,7 @@ export default function MatterChatApp({
                             setProviderAccountMessage("");
                           }}
                         />
-                        {channel === "account" ? "Konto (logowanie, OAuth)" : "Klucz API"} · {status}
+                        {channel === "account" ? "Konto (logowanie, OAuth)" : t("Klucz API")} · {status}
                       </label>
                     );
                   })}
@@ -8100,7 +8100,7 @@ export default function MatterChatApp({
                   ) : models.length === 0 ? (
                     <option value="">
                       {provider === "local"
-                        ? "Brak zainstalowanych modeli lokalnych"
+                        ? t("Brak zainstalowanych modeli lokalnych")
                         : t("Brak dostępnych modeli")}
                     </option>
                   ) : null}
@@ -8153,8 +8153,8 @@ export default function MatterChatApp({
                     }
                   >
                     {providerConfigured
-                      ? "Klucz API aktywny"
-                      : "Brak aktywnego klucza API"}
+                      ? t("Klucz API aktywny")
+                      : t("Brak aktywnego klucza API")}
                   </span>
                 </div>
               )}
@@ -8198,17 +8198,17 @@ export default function MatterChatApp({
             <article className="chat-card chat-settings-auth">
               <p className="eyebrow">
                 {provider === "local"
-                  ? "Lokalne AI"
+                  ? t("Lokalne AI")
                   : isAccountPrimarySource(provider)
                     ? t("Konto użytkownika")
-                    : "Klucz API"}
+                    : t("Klucz API")}
               </p>
               <h2>
                 {provider === "local"
-                  ? "Konfiguracja lokalna"
+                  ? t("Konfiguracja lokalna")
                   : isAccountPrimarySource(provider)
                     ? t("Połączenie z kontem")
-                    : "Konfiguracja API"}
+                    : t("Konfiguracja API")}
                 {provider === "local" ? (
                   <InfoTip>{t("Modele lokalne działają przez llama.cpp, bez klucza API i bez logowania do konta.")}</InfoTip>
                 ) : isAccountPrimarySource(provider) ? (

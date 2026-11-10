@@ -16,16 +16,16 @@ const TOOLBAR: Array<{ action: FormatAction; label: string; title: string }> = [
   { action: "bold", label: "B", title: "Pogrubienie (Ctrl+B)" },
   { action: "italic", label: "I", title: N_("Kursywa (Ctrl+I)") },
   { action: "underline", label: "U", title: N_("Podkreślenie (Ctrl+U)") },
-  { action: "strike", label: "S", title: "Przekreślenie" },
+  { action: "strike", label: "S", title: t("Przekreślenie") },
   { action: "h1", label: "H1", title: N_("Nagłówek 1") },
   { action: "h2", label: "H2", title: N_("Nagłówek 2") },
   { action: "h3", label: "H3", title: N_("Nagłówek 3") },
-  { action: "bullet", label: "• Lista", title: "Lista punktowana" },
-  { action: "numbered", label: "1. Lista", title: "Lista numerowana" },
-  { action: "quote", label: "Cytat", title: "Cytat" },
+  { action: "bullet", label: "• Lista", title: t("Lista punktowana") },
+  { action: "numbered", label: "1. Lista", title: t("Lista numerowana") },
+  { action: "quote", label: t("Cytat"), title: t("Cytat") },
   { action: "code", label: "</>", title: "Kod / sygnatura" },
-  { action: "link", label: "Link", title: "Odnośnik" },
-  { action: "rule", label: "―", title: "Linia pozioma" }
+  { action: "link", label: t("Link"), title: t("Odnośnik") },
+  { action: "rule", label: "―", title: t("Linia pozioma") }
 ];
 
 const SHORTCUTS: Record<string, FormatAction> = { b: "bold", i: "italic", u: "underline" };
@@ -324,7 +324,7 @@ export function TextFileEditor(props: {
               onChange={(event) => setSaveAs(event.target.value)}
             />
             <button type="button" disabled={!dirty || saving || !saveAs.trim()} onClick={() => void save()}>
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
           </div>
         )}

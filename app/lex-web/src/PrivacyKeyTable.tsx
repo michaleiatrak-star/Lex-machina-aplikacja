@@ -4,24 +4,24 @@ import type { KeyGrammar, PrivacyKeyEntry } from "./api.js";
 import { caseLabel } from "./restoration-review.js";
 
 export const KIND_LABEL: Record<string, string> = {
-  PERSON: "Osoba",
-  FIRM: "Firma",
-  ADDRESS: "Adres",
+  PERSON: t("Osoba"),
+  FIRM: t("Firma"),
+  ADDRESS: t("Adres"),
   PESEL: "PESEL",
   NIP: "NIP",
   REGON: "REGON",
   IBAN: "Rachunek / IBAN",
   EMAIL: "E-mail",
-  PHONE: "Telefon",
+  PHONE: t("Telefon"),
   ID_CARD: t("Dowód osobisty"),
-  PASSPORT: "Paszport",
-  BIRTH_DATE: "Data urodzenia",
+  PASSPORT: t("Paszport"),
+  BIRTH_DATE: t("Data urodzenia"),
   LAND_REGISTRY: t("Księga wieczysta"),
   KRS: "KRS",
   VEHICLE_PLATE: "Nr rejestracyjny",
   BAR_NUMBER: "Nr wpisu adwokata/radcy",
   PAYMENT_CARD: t("Karta płatnicza"),
-  CUSTOM: "Inne"
+  CUSTOM: t("Inne")
 };
 
 const GENDER_LABEL = { m: "mężczyzna", f: "kobieta", unknown: "nieustalona" } as const;
@@ -73,7 +73,7 @@ export function PrivacyKeyTable(props: {
           {props.entries.length} {t("symboli · klucz widoczny tylko na tym komputerze, nigdy nie jest wysyłany do modeli")}
         </small>
         <button type="button" onClick={() => setVisible((value) => !value)}>
-          {visible ? "Ukryj dane" : t("Pokaż dane")}
+          {visible ? t("Ukryj dane") : t("Pokaż dane")}
         </button>
       </div>
       {props.entries.length === 0 ? (

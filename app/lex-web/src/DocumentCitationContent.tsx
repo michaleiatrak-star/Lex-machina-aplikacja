@@ -247,7 +247,7 @@ export function DocumentCitationContent({
             <div>
               {caseId || selected.caseId ? (
                 <button type="button" onClick={() => setWhole((value) => !value)}>
-                  {whole ? "Tylko fragment" : t("Cały dokument")}
+                  {whole ? t("Tylko fragment") : t("Cały dokument")}
                 </button>
               ) : null}
               {onAskAbout ? (

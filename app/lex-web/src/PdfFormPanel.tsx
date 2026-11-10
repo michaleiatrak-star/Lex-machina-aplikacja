@@ -84,7 +84,7 @@ export function PdfFormPanel(props: {
       <header>
         <strong>{t("Formularz PDF:")} {fields.length} {t("pól")}</strong>
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
-          {open ? "Zwiń" : "Wypełnij"}
+          {open ? t("Zwiń") : t("Wypełnij")}
         </button>
       </header>
       {open ? (

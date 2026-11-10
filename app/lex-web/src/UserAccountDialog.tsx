@@ -19,8 +19,8 @@ const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
 ];
 
 const APP_ROLES: Array<[AuthenticatedUser["appRole"], string]> = [
-  ["USER", "Użytkownik"],
-  ["ADMIN", "Administrator"]
+  ["USER", t("Użytkownik")],
+  ["ADMIN", t("Administrator")]
 ];
 
 const MESSAGES: Record<string, string> = {
@@ -229,7 +229,7 @@ export function UserAccountDialog({
                   user.status === "ACTIVE" ? t("Konto zablokowane, a jego sesje unieważnione.") : "Konto odblokowane."
                 )}
               >
-                {user.status === "ACTIVE" ? "Zablokuj konto" : "Odblokuj konto"}
+                {user.status === "ACTIVE" ? t("Zablokuj konto") : t("Odblokuj konto")}
               </button>
               <button
                 type="button"

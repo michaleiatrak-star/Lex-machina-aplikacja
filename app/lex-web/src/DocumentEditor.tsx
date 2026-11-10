@@ -76,8 +76,8 @@ const COMMANDS: Command[] = [
   { label: "H1", title: N_("Nagłówek 1"), command: "formatBlock", value: "h1" },
   { label: "H2", title: N_("Nagłówek 2"), command: "formatBlock", value: "h2" },
   { label: "H3", title: N_("Nagłówek 3"), command: "formatBlock", value: "h3" },
-  { label: "• Lista", title: "Lista punktowana", command: "insertUnorderedList" },
-  { label: "1. Lista", title: "Lista numerowana", command: "insertOrderedList" },
+  { label: "• Lista", title: t("Lista punktowana"), command: "insertUnorderedList" },
+  { label: "1. Lista", title: t("Lista numerowana"), command: "insertOrderedList" },
   { label: N_("Cofnij"), title: N_("Cofnij (Ctrl+Z)"), command: "undo" },
   { label: N_("Ponów"), title: N_("Ponów (Ctrl+Y)"), command: "redo" }
 ];
@@ -193,7 +193,7 @@ export function DocumentEditor(props: {
         }}
       />
       <div className="text-editor-footer">
-        <small>{dirty ? "Niezapisane zmiany" : ""}</small>
+        <small>{dirty ? t("Niezapisane zmiany") : ""}</small>
         {props.readOnly ? (
           <small>{t("Sprawa tylko do odczytu.")}</small>
         ) : (
@@ -219,7 +219,7 @@ export function DocumentEditor(props: {
               </label>
             ) : null}
             <button type="button" disabled={(!dirty && format === props.format) || saving || !saveAs.trim()} onClick={() => void save()}>
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
             {editing
               ? (props.extraActions ?? []).map((action) => (

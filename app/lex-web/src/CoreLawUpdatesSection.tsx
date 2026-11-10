@@ -371,7 +371,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         disabled={disabled}
                         onClick={() => void run(`act:${act.eli}`, () => applyCoreLawUpdates([act.eli]))}
                       >
-                        {act.state === "UPDATE_AVAILABLE" ? "Zastosuj" : t("Sprawdź i zaktualizuj")}
+                        {act.state === "UPDATE_AVAILABLE" ? t("Zastosuj") : t("Sprawdź i zaktualizuj")}
                       </button>
                     ) : null}
                   </li>

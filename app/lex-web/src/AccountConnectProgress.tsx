@@ -8,9 +8,9 @@ export type AccountConnectPhase =
   | { kind: "failed"; message: string };
 
 const STEPS = [
-  "Sprawdzanie klienta",
+  t("Sprawdzanie klienta"),
   "Pobieranie klienta (npm)",
-  "Sprawdzanie pobranego klienta",
+  t("Sprawdzanie pobranego klienta"),
   t("Logowanie w oknie dostawcy")
 ] as const;
 

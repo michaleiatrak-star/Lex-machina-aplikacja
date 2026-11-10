@@ -221,19 +221,19 @@ function progressLabel(
 ): string {
   switch (phase) {
     case "STARTING":
-      return "Przygotowanie";
+      return t("Przygotowanie");
     case "DOWNLOAD":
-      return "Pobieranie";
+      return t("Pobieranie");
     case "CACHE_HIT":
-      return "Zweryfikowany cache";
+      return t("Zweryfikowany cache");
     case "VERIFIED":
       return "SHA-256 zweryfikowane";
     case "VALIDATING_RUNTIME":
-      return "Test uruchomienia";
+      return t("Test uruchomienia");
     case "READY":
-      return "Gotowe";
+      return t("Gotowe");
     case "FAILED":
-      return "Błąd";
+      return t("Błąd");
   }
 }
 
@@ -357,7 +357,7 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>{progress ? progressLabel(progress.phase) : "Przygotowanie"}</strong>
+            <strong>{progress ? progressLabel(progress.phase) : t("Przygotowanie")}</strong>
             {progress ? <small>{progress.label}</small> : null}
           </div>
           {progress?.percent !== null && progress?.percent !== undefined ? (

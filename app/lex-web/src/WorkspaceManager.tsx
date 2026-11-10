@@ -1528,7 +1528,7 @@ export function WorkspaceManager({
                           <div>
                             <strong title={item.filename}>{item.filename}</strong>
                             <span title={item.mediaType}>
-                              {item.kind === "TEMPLATE" ? "Wzór" : "Dokument"} · {fileTypeLabel(item)} · {bytesLabel(item.bytes)}
+                              {item.kind === "TEMPLATE" ? t("Wzór") : t("Dokument")} · {fileTypeLabel(item)} · {bytesLabel(item.bytes)}
                             </span>
                             {documentSearch.trim() ? (
                               <>
@@ -1601,7 +1601,7 @@ export function WorkspaceManager({
                             >
                               {knowledgeHitFor(item)
                                 ? t("Podgląd s. {pageStart}", { pageStart: knowledgeHitFor(item)!.pageStart })
-                                : "Podgląd"}
+                                : t("Podgląd")}
                             </button>
                             {processingFor(item)?.reviewed === false ? (
                               <button

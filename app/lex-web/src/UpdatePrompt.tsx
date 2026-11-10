@@ -90,7 +90,7 @@ export function UpdatePrompt() {
     return (
       <div className="update-prompt-overlay">
         <section className="update-prompt" role="dialog" aria-modal="true" aria-labelledby="update-outcome-title">
-          <h2 id="update-outcome-title">{outcome.kind === "INSTALLED" ? "Aktualizacja zainstalowana" : t("Aktualizacja nie została zainstalowana")}</h2>
+          <h2 id="update-outcome-title">{outcome.kind === "INSTALLED" ? t("Aktualizacja zainstalowana") : t("Aktualizacja nie została zainstalowana")}</h2>
           <p className={outcome.kind === "INSTALLED" ? "update-prompt-status" : "update-prompt-error"} role={outcome.kind === "INSTALLED" ? "status" : "alert"}>
             {outcome.message}
           </p>
