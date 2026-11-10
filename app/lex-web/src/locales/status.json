@@ -47,9 +47,9 @@
    "wcale": 0
   },
   "en": {
-   "całość": 5,
-   "częściowo": 38,
-   "wcale": 44
+   "całość": 33,
+   "częściowo": 49,
+   "wcale": 5
   },
   "de": {
    "całość": 0,
@@ -794,7 +794,7 @@
    "notYetTranslatable": 14,
    "translated": {
     "de": 0,
-    "en": 72
+    "en": 75
    },
    "state": {
     "pl": "całość",
@@ -844,7 +844,7 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 30
    },
    "state": {
     "pl": "całość",
@@ -894,11 +894,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 4
+    "en": 16
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -944,7 +944,7 @@
    "notYetTranslatable": 5,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 19
    },
    "state": {
     "pl": "całość",
@@ -994,7 +994,7 @@
    "notYetTranslatable": 8,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 33
    },
    "state": {
     "pl": "całość",
@@ -1044,11 +1044,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 10
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1094,11 +1094,11 @@
    "notYetTranslatable": 2,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1144,7 +1144,7 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 29
    },
    "state": {
     "pl": "całość",
@@ -1194,11 +1194,11 @@
    "notYetTranslatable": 2,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 15
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1244,7 +1244,7 @@
    "notYetTranslatable": 11,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 64
    },
    "state": {
     "pl": "całość",
@@ -1294,7 +1294,7 @@
    "notYetTranslatable": 3,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 13
    },
    "state": {
     "pl": "całość",
@@ -1344,11 +1344,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 2
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1394,11 +1394,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 6
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1444,11 +1444,11 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1494,11 +1494,11 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 15
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1544,11 +1544,11 @@
    "notYetTranslatable": 5,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 55
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1594,11 +1594,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 2
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1644,11 +1644,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 5
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1694,11 +1694,11 @@
    "notYetTranslatable": 2,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 34
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1744,11 +1744,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 20
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1794,7 +1794,7 @@
    "notYetTranslatable": 3,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 22
    },
    "state": {
     "pl": "całość",
@@ -1844,11 +1844,11 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 54
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1894,11 +1894,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1944,11 +1944,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 9
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1994,11 +1994,11 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 19
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2044,11 +2044,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 7
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2094,7 +2094,7 @@
    "notYetTranslatable": 13,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 22
    },
    "state": {
     "pl": "całość",
@@ -2144,11 +2144,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 3
+    "en": 19
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2244,11 +2244,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2294,11 +2294,11 @@
    "notYetTranslatable": 6,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 9
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2344,7 +2344,7 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 57
    },
    "state": {
     "pl": "całość",
@@ -2394,7 +2394,7 @@
    "notYetTranslatable": 10,
    "translated": {
     "de": 0,
-    "en": 4
+    "en": 74
    },
    "state": {
     "pl": "całość",
@@ -2444,11 +2444,11 @@
    "notYetTranslatable": 9,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 7
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2494,11 +2494,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 1
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2544,11 +2544,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 8
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2594,11 +2594,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2644,11 +2644,11 @@
    "notYetTranslatable": 27,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 110
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2694,11 +2694,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 6
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2744,11 +2744,11 @@
    "notYetTranslatable": 15,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 40
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2794,11 +2794,11 @@
    "notYetTranslatable": 4,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2894,7 +2894,7 @@
    "notYetTranslatable": 81,
    "translated": {
     "de": 0,
-    "en": 17
+    "en": 459
    },
    "state": {
     "pl": "całość",
@@ -2944,11 +2944,11 @@
    "notYetTranslatable": 15,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 22
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2994,11 +2994,11 @@
    "notYetTranslatable": 15,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 25
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3044,7 +3044,7 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 29
    },
    "state": {
     "pl": "całość",
@@ -3094,11 +3094,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 8
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3144,11 +3144,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 9
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3194,11 +3194,11 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 8
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3244,11 +3244,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 8
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3294,7 +3294,7 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 16
    },
    "state": {
     "pl": "całość",
@@ -3344,7 +3344,7 @@
    "notYetTranslatable": 13,
    "translated": {
     "de": 0,
-    "en": 3
+    "en": 44
    },
    "state": {
     "pl": "całość",
@@ -3394,7 +3394,7 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 52
    },
    "state": {
     "pl": "całość",
@@ -3444,11 +3444,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 6
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3494,7 +3494,7 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 4
+    "en": 15
    },
    "state": {
     "pl": "całość",
@@ -3544,11 +3544,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 1
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3594,11 +3594,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 21
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3644,11 +3644,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 3
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3694,7 +3694,7 @@
    "notYetTranslatable": 36,
    "translated": {
     "de": 0,
-    "en": 4
+    "en": 63
    },
    "state": {
     "pl": "całość",
@@ -3744,7 +3744,7 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 4
+    "en": 33
    },
    "state": {
     "pl": "całość",
@@ -3794,11 +3794,11 @@
    "notYetTranslatable": 3,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 20
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3844,11 +3844,11 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 31
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3944,11 +3944,11 @@
    "notYetTranslatable": 3,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 1
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3994,7 +3994,7 @@
    "notYetTranslatable": 1,
    "translated": {
     "de": 0,
-    "en": 1
+    "en": 27
    },
    "state": {
     "pl": "całość",
@@ -4044,11 +4044,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 13
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4094,11 +4094,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 10
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4144,11 +4144,11 @@
    "notYetTranslatable": 7,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 19
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4194,7 +4194,7 @@
    "notYetTranslatable": 16,
    "translated": {
     "de": 0,
-    "en": 6
+    "en": 24
    },
    "state": {
     "pl": "całość",
@@ -4244,7 +4244,7 @@
    "notYetTranslatable": 9,
    "translated": {
     "de": 0,
-    "en": 2
+    "en": 11
    },
    "state": {
     "pl": "całość",
@@ -4294,11 +4294,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 23
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4344,11 +4344,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 9
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4394,7 +4394,7 @@
    "notYetTranslatable": 9,
    "translated": {
     "de": 0,
-    "en": 8
+    "en": 88
    },
    "state": {
     "pl": "całość",
@@ -4444,11 +4444,11 @@
    "notYetTranslatable": 6,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 4
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4494,11 +4494,11 @@
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 0
+    "en": 5
    },
    "state": {
     "pl": "całość",
-    "en": "wcale",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",

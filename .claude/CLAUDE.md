@@ -20,6 +20,7 @@ When creating or updating markdown documentation files:
 - **Delete verbose explanations** - if it takes more than 3 sentences, it's probably too long
 
 Default to 1-2 sentence explanations. Only expand when complexity absolutely requires it.
+
 ## Interface (lex-web)
 
 Before a UI change is done, check it against these rules. If unsure, consult expert sources (NN/g, Atlassian/Carbon design systems, WAI-ARIA APG), never memory.
