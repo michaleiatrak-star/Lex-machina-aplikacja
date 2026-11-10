@@ -123,7 +123,7 @@ export function CalendarPanel({
   }
 
   async function remove(event: UpcomingCaseEvent): Promise<void> {
-    if (busy || !window.confirm(`Usunąć zdarzenie „${event.title}” (${dayLabel(event.startsAt.slice(0, 10))})?`)) return;
+    if (busy || !window.confirm(t("Usunąć zdarzenie „{title}” ({value})?", { title: event.title, value: dayLabel(event.startsAt.slice(0, 10)) }))) return;
     setBusy(true);
     setError("");
     try {
@@ -201,7 +201,7 @@ export function CalendarPanel({
                 key={day.key}
                 type="button"
                 title={items.map((item) => `${item.startsAt.slice(11)} ${caseScheduleKindLabel(item.kind)}: ${item.title}`).join("\n") || undefined}
-                aria-label={`${dayLabel(day.key)}${count ? `, zdarzeń: ${count}` : ""}`}
+                aria-label={`${dayLabel(day.key)}${count ? t(", zdarzeń: {count}", { count: count }) : ""}`}
                 className={[
                   "lex-calendar-day",
                   day.inMonth ? "" : "outside",

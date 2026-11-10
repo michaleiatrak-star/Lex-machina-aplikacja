@@ -232,7 +232,7 @@ export function DocumentPrivacyPanel({
       );
       setBatchLineFixes((current) => Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)));
     } catch (failure) {
-      setError(`Nie udało się zapisać poprawki linii: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setError(t("Nie udało się zapisać poprawki linii: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setBatchLineSaving(null);
     }
@@ -486,7 +486,7 @@ export function DocumentPrivacyPanel({
       onCaseFilesChange?.();
     } catch (cause) {
       setBatchDrafts((current) => [...current.filter((next) => next.review.documentId !== review.documentId), draft]);
-      setSaveError(`Nie zatwierdzono ${draft.fileName}: ${cause instanceof Error ? cause.message : "DOCUMENT_PRIVACY_FINALIZATION_FAILED"}. Plik czeka na liście poniżej.`);
+      setSaveError(t("Nie zatwierdzono {fileName}: {value}. Plik czeka na liście poniżej.", { fileName: draft.fileName, value: cause instanceof Error ? cause.message : "DOCUMENT_PRIVACY_FINALIZATION_FAILED" }));
     } finally {
       setSaving((current) => {
         const at = current.indexOf(draft.fileName);
@@ -570,7 +570,7 @@ export function DocumentPrivacyPanel({
     onCaseFilesChange?.();
     if (failures.length > 0) {
       setError(
-        `Nie zatwierdzono ${failures.length} plików. ${failures.join(" · ")}`
+        t("Nie zatwierdzono {count} plików. {value}", { count: failures.length, value: failures.join(" · ") })
       );
     }
     setBatchFinalizing(false);
@@ -786,7 +786,7 @@ export function DocumentPrivacyPanel({
 
       {saving.length > 0 || saveError ? (
         <p className="field-help" role="status">
-          {saving.length > 0 ? `Zapisywanie w tle: ${saving.join(", ")}.` : ""}
+          {saving.length > 0 ? t("Zapisywanie w tle: {value}.", { value: saving.join(", ") }) : ""}
           {saveError ? ` ${saveError}` : ""}
         </p>
       ) : null}
@@ -808,7 +808,7 @@ export function DocumentPrivacyPanel({
           onKeepClear={(current) => {
             if (
               window.confirm(
-                `„${activeFileName || current.documentId}” bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi. Kontynuować?`
+                t("„{documentId}” bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi. Kontynuować?", { documentId: activeFileName || current.documentId })
               )
             ) {
               void stageWith(current, keepAllDirectives(current), "KEEP_CLEAR");
@@ -844,7 +844,7 @@ export function DocumentPrivacyPanel({
             >
               {batchFinalizing
                 ? "Zatwierdzanie…"
-                : `Zatwierdź decyzje dla ${batchDrafts.length} plików`}
+                : t("Zatwierdź decyzje dla {count} plików", { count: batchDrafts.length })}
             </button>
           </div>
 

@@ -29,10 +29,10 @@ const GRANTABLE: GrantableRole[] = ["EDITOR", "ANALYST", "VIEWER"];
 
 // Uprawnienia ról jak w runtime (case-access.ts: READ / WRITE / ANALYZE / MANAGE).
 const ROLE_HELP: Record<CaseRole, string> = {
-  OWNER: "Właściciel: pełny dostęp i zarządzanie osobami; ma klucz sprawy.",
-  EDITOR: "Edycja: odczyt, dodawanie i zmiana dokumentów, analizy z modelem.",
-  ANALYST: "Analiza: odczyt i analizy z modelem, bez zmian w aktach sprawy.",
-  VIEWER: "Podgląd: tylko odczyt akt i rozmów."
+  OWNER: t("Właściciel: pełny dostęp i zarządzanie osobami; ma klucz sprawy."),
+  EDITOR: t("Edycja: odczyt, dodawanie i zmiana dokumentów, analizy z modelem."),
+  ANALYST: t("Analiza: odczyt i analizy z modelem, bez zmian w aktach sprawy."),
+  VIEWER: t("Podgląd: tylko odczyt akt i rozmów.")
 };
 
 // "2 osoby: Marcin (Edycja), Anna (Podgląd)" — skrót składu sprawy w nagłówku karty.
@@ -182,9 +182,9 @@ export function bulkAccessPlan(
   for (const item of cases) {
     if (!selected.has(item.caseId)) continue;
     const member = item.members.find((entry) => entry.userId === userId);
-    if (!item.canManage) skipped.push({ caseId: item.caseId, reason: "nie jesteś właścicielem" });
-    else if (member?.role === "OWNER") skipped.push({ caseId: item.caseId, reason: "osoba jest właścicielem" });
-    else if (action.kind === "revoke" && !member) skipped.push({ caseId: item.caseId, reason: "bez dostępu" });
+    if (!item.canManage) skipped.push({ caseId: item.caseId, reason: t("nie jesteś właścicielem") });
+    else if (member?.role === "OWNER") skipped.push({ caseId: item.caseId, reason: t("osoba jest właścicielem") });
+    else if (action.kind === "revoke" && !member) skipped.push({ caseId: item.caseId, reason: t("bez dostępu") });
     else if (action.kind === "grant" && member && member.role === action.role && member.canReidentify === action.canReidentify) {
       skipped.push({ caseId: item.caseId, reason: "bez zmian" });
     } else apply.push(item.caseId);
@@ -310,7 +310,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       (user) => !item.members.some((member) => member.userId === user.userId)
     );
     const name = item.displayName || item.caseId;
-    const ownerOnly = item.canManage ? undefined : "Zmienia właściciel sprawy.";
+    const ownerOnly = item.canManage ? undefined : t("Zmienia właściciel sprawy.");
     const grant = (userId: string, role: GrantableRole, canReidentify: boolean, done: string) =>
       void run(`${item.caseId}:${userId}`, () => grantCaseAccess(item.caseId, { userId, role, canReidentify }), done);
     return (
@@ -333,7 +333,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             <input
               type="checkbox"
               className="case-access-bulk-check"
-              aria-label={`Zaznacz sprawę „${name}” do zmiany zbiorczej`}
+              aria-label={t("Zaznacz sprawę „{name}” do zmiany zbiorczej", { name: name })}
               title={item.canManage ? t("Zaznacz do zmiany zbiorczej") : t("Zmienia właściciel sprawy.")}
               disabled={!item.canManage || Boolean(busy)}
               checked={bulkSelected.has(item.caseId)}
@@ -381,7 +381,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               <button
                 type="button"
                 title={ownerOnly ?? t("Zmień nazwę sprawy")}
-                aria-label={`Zmień nazwę sprawy „${name}”`}
+                aria-label={t("Zmień nazwę sprawy „{name}”", { name: name })}
                 disabled={Boolean(busy) || !item.canManage}
                 onClick={() => setRenaming({ caseId: item.caseId, name: item.displayName ?? "" })}
               >
@@ -394,9 +394,9 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               disabled={Boolean(busy) || !item.canManage}
               onClick={() => {
                 if (item.archivedAt) {
-                  void run(`archive:${item.caseId}`, () => unarchiveCase(item.caseId), "Sprawa przywrócona z archiwum.");
-                } else if (window.confirm(`Przenieść sprawę „${name}” do archiwum? Można ją potem przywrócić.`)) {
-                  void run(`archive:${item.caseId}`, () => archiveCase(item.caseId), "Sprawa przeniesiona do archiwum.");
+                  void run(`archive:${item.caseId}`, () => unarchiveCase(item.caseId), t("Sprawa przywrócona z archiwum."));
+                } else if (window.confirm(t("Przenieść sprawę „{name}” do archiwum? Można ją potem przywrócić.", { name: name }))) {
+                  void run(`archive:${item.caseId}`, () => archiveCase(item.caseId), t("Sprawa przeniesiona do archiwum."));
                 }
               }}
             >
@@ -468,7 +468,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                             member.userId,
                             member.role as GrantableRole,
                             event.target.checked,
-                            "Uprawnienie do deanonimizacji zmienione."
+                            t("Uprawnienie do deanonimizacji zmienione.")
                           )
                         }
                       />
@@ -487,13 +487,13 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Odebrać ${member.displayName} dostęp do sprawy „${name}”? Klucz sprawy zostanie zmieniony.`
+                              t("Odebrać {displayName} dostęp do sprawy „{name}”? Klucz sprawy zostanie zmieniony.", { displayName: member.displayName, name: name })
                             )
                           ) {
                             void run(
                               `${item.caseId}:${member.userId}`,
                               () => revokeCaseAccess(item.caseId, member.userId),
-                              "Dostęp odebrany, klucz sprawy zmieniony."
+                              t("Dostęp odebrany, klucz sprawy zmieniony.")
                             );
                           }
                         }}
@@ -579,7 +579,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                           return next;
                         });
                       },
-                      "Dostęp nadany."
+                      t("Dostęp nadany.")
                     )
                   }
                 >
@@ -686,7 +686,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           <span>
             {t("Wyświetlono {shown} z {all} spraw", { shown: listed.length, all: cases.length })}
             {caseRange.from || caseRange.to
-              ? ` · ${caseRange.from ? new Date(caseRange.from).toLocaleDateString(currentLocale()) : "…"} – ${caseRange.to ? new Date(caseRange.to).toLocaleDateString(currentLocale()) : "…"}`
+              ? t(" · {value} – {value2}", { value: caseRange.from ? new Date(caseRange.from).toLocaleDateString(currentLocale()) : "…", value2: caseRange.to ? new Date(caseRange.to).toLocaleDateString(currentLocale()) : "…" })
               : ""}
           </span>
           {caseQuery || userFilter || caseRange.from || caseRange.to || caseSort !== "name-asc" ? (
@@ -742,7 +742,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             return (
               <option key={item.caseId} value={item.caseId}>
                 {item.displayName || item.caseId}
-                {member ? ` (ma dostęp: ${ROLE_LABELS[member.role]})` : ""}
+                {member ? t(" (ma dostęp: {value})", { value: ROLE_LABELS[member.role] }) : ""}
               </option>
             );
           })}
@@ -783,7 +783,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                 });
                 setQuick({ ...quick, caseId: "" });
               },
-              "Osoba przypisana do sprawy."
+              t("Osoba przypisana do sprawy.")
             )
           }
         >
@@ -887,7 +887,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               if (
                 bulk.kind === "revoke" &&
                 plan.apply.length > 0 &&
-                !window.confirm(`Odebrać dostęp ${person} w ${plan.apply.length} sprawach?`)
+                !window.confirm(t("Odebrać dostęp {person} w {count} sprawach?", { person: person, count: plan.apply.length }))
               ) {
                 return;
               }
@@ -907,11 +907,11 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                   if (failed.length) throw new Error(`Nie udało się w ${failed.length} sprawach — ${failed.slice(0, 5).join("; ")}`);
                   setBulkSelected(new Set());
                 },
-                `Zmieniono w ${plan.apply.length} sprawach${plan.skipped.length ? `; pominięto ${plan.skipped.length} (${[...new Set(plan.skipped.map((item) => item.reason))].join(", ")})` : ""}.`
+                t("Zmieniono w {count} sprawach{value}.", { count: plan.apply.length, value: plan.skipped.length ? `; pominięto ${plan.skipped.length} (${[...new Set(plan.skipped.map((item) => item.reason))].join(", ")})` : "" })
               );
             }}
           >
-            {busy === "bulk" ? "Zmieniam…" : `Zastosuj do ${bulkSelected.size} spraw`}
+            {busy === "bulk" ? "Zmieniam…" : t("Zastosuj do {count} spraw", { count: bulkSelected.size })}
           </button>
         </div>
         </div>

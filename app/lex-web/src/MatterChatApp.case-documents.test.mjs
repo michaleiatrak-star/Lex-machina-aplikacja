@@ -8,7 +8,7 @@ const source = readFileSync(
 
 describe("MatterChatApp case documents UI", () => {
   it("keeps case documents in one tab (Akta i dokumenty) without a duplicate Akta tab", () => {
-    expect(source).toContain('["case", "Akta i dokumenty"]');
+    expect(source).toContain('["case", N_("Akta i dokumenty")]');
     expect(source).not.toContain('["files", "Akta"]');
     expect(source).not.toContain('activeTab === "files"');
     expect(source).not.toContain('| "files"');

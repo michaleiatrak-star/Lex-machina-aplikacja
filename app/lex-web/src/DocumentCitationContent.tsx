@@ -129,7 +129,7 @@ export function askAboutText(citation: WorkspaceDocumentCitation, viewer: HTMLEl
       : "";
   const passage = (marked || citation.quote || highlighted || citation.contextText).replace(/\s+/gu, " ").trim();
   const shown = passage.length > 600 ? `${passage.slice(0, 600)}…` : passage;
-  return `Wyjaśnij ten fragment (${citation.label}): „${shown}”\n`;
+  return t("Wyjaśnij ten fragment ({label}): „{shown}”\n", { label: citation.label, shown: shown });
 }
 
 export function DocumentCitationContent({
@@ -180,7 +180,7 @@ export function DocumentCitationContent({
           key={`${key}-${citation.citationId}-${index}`}
           type="button"
           className="document-citation-link"
-          title={`Przejdź do cytowanego fragmentu: ${citation.label}`}
+          title={t("Przejdź do cytowanego fragmentu: {label}", { label: citation.label })}
           aria-controls={`citation-${citation.citationId}`}
           onClick={() => { setSelected(citation); setWhole(false); }}
         >

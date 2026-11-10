@@ -191,10 +191,10 @@ export function TextFileEditor(props: {
     try {
       await props.onSave(name, text);
       setSavedText(text);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }
@@ -287,7 +287,7 @@ export function TextFileEditor(props: {
           />
           <label>
             <input type="checkbox" checked={matchCase} onChange={(event) => setMatchCase(event.target.checked)} />
-            Aa
+            {t("Aa")}
           </label>
           <small>{needle ? `${countOccurrences(text, needle, matchCase)} wyst.` : ""}</small>
           <button type="button" onClick={find}>{t("Następne")}</button>

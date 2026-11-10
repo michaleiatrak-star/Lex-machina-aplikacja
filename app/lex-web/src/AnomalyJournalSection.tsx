@@ -14,17 +14,17 @@ import { downloadBlob } from "./download-file.js";
 import { InfoTip } from "./InfoTip";
 
 const CODE_TEXT: Record<string, string> = {
-  RESOURCE_PATH_CORRECTED: "model podał błędną ścieżkę lub nazwę; podano jedyny pasujący plik",
-  LEGAL_RESOURCE_NOT_FOUND: "model próbował wczytać nieistniejący plik skilla",
-  LEGAL_SKILL_NOT_FOUND: "model podał nieistniejący skill",
+  RESOURCE_PATH_CORRECTED: t("model podał błędną ścieżkę lub nazwę; podano jedyny pasujący plik"),
+  LEGAL_RESOURCE_NOT_FOUND: t("model próbował wczytać nieistniejący plik skilla"),
+  LEGAL_SKILL_NOT_FOUND: t("model podał nieistniejący skill"),
   ROUTER_V3_REQUIRED_FIRST: "odczyt przed routerem v3",
-  SESSION_BLOCKED: "odpowiedź zablokowana przez bramki",
-  FINALIZATION_DEGRADED: "odpowiedź z niezweryfikowanymi przepisami lub orzeczeniami",
-  SESSION_EXECUTION_FAILED: "nieobsłużony błąd wykonania"
+  SESSION_BLOCKED: t("odpowiedź zablokowana przez bramki"),
+  FINALIZATION_DEGRADED: t("odpowiedź z niezweryfikowanymi przepisami lub orzeczeniami"),
+  SESSION_EXECUTION_FAILED: t("nieobsłużony błąd wykonania")
 };
 
 const AREA_TEXT: Record<string, string> = {
-  SKILL_PATH: "ścieżka skilla",
+  SKILL_PATH: t("ścieżka skilla"),
   CORPUS: "korpus skilli",
   GATE: "bramka",
   SESSION: "sesja",
@@ -117,7 +117,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
           </strong>
         </div>
         <span className={errors || loadError ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
-          {loadError ? t("dziennik niedostępny") : `${errors} błędów · ${warnings} ostrzeżeń`}
+          {loadError ? t("dziennik niedostępny") : t("{errors} błędów · {warnings} ostrzeżeń", { errors: errors, warnings: warnings })}
         </span>
       </summary>
 
@@ -148,7 +148,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
           <small>{t("Powtarzające się (ten sam kod i plik):")}</small>
           <table className="anomaly-table">
             <thead>
-              <tr><th>{t("Waga")}</th><th>Kod</th><th>{t("Plik / cel")}</th><th>Ile</th><th>{t("Ostatnio")}</th><th>{t("Model")}</th></tr>
+              <tr><th>{t("Waga")}</th><th>{t("Kod")}</th><th>{t("Plik / cel")}</th><th>{t("Ile")}</th><th>{t("Ostatnio")}</th><th>{t("Model")}</th></tr>
             </thead>
             <tbody>
               {summary.slice(0, 30).map((row) => (

@@ -7,7 +7,7 @@ export function downloadDescription(value: Progress): string {
   if (value.phase === "ready") return t("Aktualizacja jest gotowa do instalacji.");
   if (value.phase === "failed") return t("Pobieranie zostało przerwane. Możesz spróbować ponownie.");
   const mb = (bytes: number) => (bytes / 1024 / 1024).toLocaleString(currentLocale(), { maximumFractionDigits: 1 });
-  return value.total ? `Pobieram aktualizację: ${mb(value.received)} z ${mb(value.total)} MB` : `Pobieram aktualizację: ${mb(value.received)} MB`;
+  return value.total ? t("Pobieram aktualizację: {received} z {total} MB", { received: mb(value.received), total: mb(value.total) }) : t("Pobieram aktualizację: {received} MB", { received: mb(value.received) });
 }
 export function ApplicationDownloadProgress() {
   const [value, setValue] = useState<Progress>({ phase: "idle", received: 0 });

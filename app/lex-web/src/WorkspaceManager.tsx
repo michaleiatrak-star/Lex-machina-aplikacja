@@ -139,7 +139,7 @@ export function documentProcessingFailureMessage(
       ? failure.reason ?? ""
       : "";
   if (code.startsWith("DESKTOP_RUNTIME_PROXY_FAILED")) {
-    return `Przetwarzanie dokumentu nie zakończyło się w limicie czasu połączenia z lokalnym runtime. Kod: ${code}`;
+    return t("Przetwarzanie dokumentu nie zakończyło się w limicie czasu połączenia z lokalnym runtime. Kod: {code}", { code: code });
   }
   if (code !== "STORED_FILE_PROCESSING_FAILED") {
     return code;
@@ -153,17 +153,17 @@ export function documentProcessingFailureMessage(
   if (reason === "OCR_MODELS_INCOMPLETE") return OCR_MODELS_INCOMPLETE;
   const cause =
     reason === "OCR_REQUIRED" || reason === "OCR_ENGINE_MISSING"
-      ? "dokument wymaga OCR, ale lokalny silnik OCR nie jest zainstalowany lub jest niekompletny"
+      ? t("dokument wymaga OCR, ale lokalny silnik OCR nie jest zainstalowany lub jest niekompletny")
       : reason === "OCR_ENGINE_START_FAILED"
-        ? "nie udało się uruchomić lokalnego silnika OCR (Python)"
+        ? t("nie udało się uruchomić lokalnego silnika OCR (Python)")
       : reason.startsWith("OCR_")
-        ? "lokalny OCR nie przetworzył stron wymagających rozpoznania tekstu"
+        ? t("lokalny OCR nie przetworzył stron wymagających rozpoznania tekstu")
         : reason.startsWith("DOCUMENT_")
-          ? "dokument przekracza limity bezpieczeństwa przetwarzania"
+          ? t("dokument przekracza limity bezpieczeństwa przetwarzania")
           : reason
-            ? "błąd lokalnego przetwarzania dokumentu"
-            : "nieokreślony błąd lokalnego przetwarzania dokumentu";
-  return `Nie udało się przetworzyć dokumentu: ${cause}.${reason ? ` Kod: ${reason}` : ""}`;
+            ? t("błąd lokalnego przetwarzania dokumentu")
+            : t("nieokreślony błąd lokalnego przetwarzania dokumentu");
+  return t("Nie udało się przetworzyć dokumentu: {cause}.{value}", { cause: cause, value: reason ? ` Kod: ${reason}` : "" });
 }
 
 function canRunPrivacyPipeline(
@@ -247,7 +247,7 @@ function folderDepth(folder: WorkspaceFolder, all: WorkspaceFolder[]): number {
 const SPEAKER_CHOICES: ReadonlyArray<{ value: number; label: string }> = [
   { value: -1, label: N_("Rozmówcy: jak w ustawieniach") },
   { value: 0, label: N_("Rozmówcy: automatycznie") },
-  ...Array.from({ length: 11 }, (_, index) => ({ value: index + 2, label: `Rozmówcy: ${index + 2}` }))
+  ...Array.from({ length: 11 }, (_, index) => ({ value: index + 2, label: t("Rozmówcy: {value}", { value: index + 2 }) }))
 ];
 
 type PrivacyPreviewQueueItem = {
@@ -451,7 +451,7 @@ export function WorkspaceManager({
   const sharedKeyDocument = processedEntries.find((entry) => entry.processing!.sharedKey);
   const processedDocuments = [
     ...(sharedKeyDocument
-      ? [{ filename: "Klucz sprawy (wspólny dla dokumentów)", documentId: sharedKeyDocument.processing!.documentId }]
+      ? [{ filename: t("Klucz sprawy (wspólny dla dokumentów)"), documentId: sharedKeyDocument.processing!.documentId }]
       : []),
     ...processedEntries
       .filter((entry) => !entry.processing!.sharedKey)
@@ -466,8 +466,8 @@ export function WorkspaceManager({
         remapped += (await joinSharedKey(caseId, entry.processing!.documentId)).remapped;
       }
       setNotice(
-        `Połączono klucze ${ownKeyDocuments.length} dokumentów w klucz sprawy (przenumerowane symbole: ${remapped}). ` +
-          "Ta sama osoba ma teraz jeden symbol we wszystkich dokumentach sprawy."
+        t("Połączono klucze {count} dokumentów w klucz sprawy (przenumerowane symbole: {remapped}). ", { count: ownKeyDocuments.length, remapped: remapped }) +
+          t("Ta sama osoba ma teraz jeden symbol we wszystkich dokumentach sprawy.")
       );
     });
   }
@@ -534,8 +534,8 @@ export function WorkspaceManager({
       }
       setNotice(
         autoQueue
-          ? `Dodano ${files.length} plik(ów) do akt sprawy i do kolejki przetwarzania.`
-          : `Dodano ${files.length} plik(ów) do akt sprawy. PDF i zdjęcia przechodzą OCR w tle; potem wybierz sposób i „Przetwórz”.`
+          ? t("Dodano {count} plik(ów) do akt sprawy i do kolejki przetwarzania.", { count: files.length })
+          : t("Dodano {count} plik(ów) do akt sprawy. PDF i zdjęcia przechodzą OCR w tle; potem wybierz sposób i „Przetwórz”.", { count: files.length })
       );
     });
   }
@@ -547,7 +547,7 @@ export function WorkspaceManager({
       else pendingBackgroundRead.current.add(uploadId);
       if (selectedFolder) await moveWorkspaceItem(caseId, uploadId, selectedFolder);
     }
-    setNotice(`Dodano ${uploadIds.length} plik(ów) do akt sprawy${autoQueue ? " i do kolejki przetwarzania" : ""}.`);
+    setNotice(t("Dodano {count} plik(ów) do akt sprawy{value}.", { count: uploadIds.length, value: autoQueue ? t(" i do kolejki przetwarzania") : "" }));
     await refresh();
   }
 
@@ -564,7 +564,7 @@ export function WorkspaceManager({
       const vision = await getVisionOcrStatus().catch(() => null);
       if (!vision?.installed || !vision.engineInstalled) {
         setLocalAiMessage(
-          `„${processingModeLabel(mode)}” wymaga modelu wizyjnego: zainstaluj go w panelu lokalnej AI.`
+          t("„{mode}” wymaga modelu wizyjnego: zainstaluj go w panelu lokalnej AI.", { mode: processingModeLabel(mode) })
         );
         return false;
       }
@@ -625,7 +625,7 @@ export function WorkspaceManager({
       clear.length &&
       !clearConfirmed &&
       !window.confirm(
-        `${clear.map((item) => `„${item.filename}”`).join(", ")}: bez anonimizacji - tekst jawny trafi do modelu. Kontynuować?`
+        t("{value}: bez anonimizacji - tekst jawny trafi do modelu. Kontynuować?", { value: clear.map((item) => `„${item.filename}”`).join(", ") })
       )
     ) {
       return;
@@ -685,7 +685,7 @@ export function WorkspaceManager({
       readerRunning.current = false;
       if (caseRef.current === runCase) {
         const summary = queueSummary(queueRef.current);
-        if (summary.toChoose) setNotice(`OCR w tle zakończony: ${summary.toChoose} plików czeka na wybór sposobu i „Przetwórz”${summary.failed ? `, ${summary.failed} z błędem` : ""}.`);
+        if (summary.toChoose) setNotice(t("OCR w tle zakończony: {toChoose} plików czeka na wybór sposobu i „Przetwórz”{value}.", { toChoose: summary.toChoose, value: summary.failed ? `, ${summary.failed} z błędem` : "" }));
       }
     }
   }
@@ -805,7 +805,7 @@ export function WorkspaceManager({
       }
       nextPreview();
       setNotice(
-        `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
+        t("„{filename}”: zatwierdzono po podglądzie · {ocrPages} stron OCR · {findings} anonimizacji · osobny vault/deanonimizator zapisany dla {documentId}.", { filename: pending.item.filename, ocrPages: result.ocrPages, findings: result.privacy.findings, documentId: result.documentId })
       );
     });
   }
@@ -986,7 +986,7 @@ export function WorkspaceManager({
     setModeByItem((current) => ({ ...current, ...Object.fromEntries(others.map((other) => [other.itemId, mode])) }));
     if (caseFileCategory(item) === "RECORDING") applySpeakers(others, speakersByItem[item.itemId] ?? -1);
     const label = DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === mode)?.label ?? mode;
-    setNotice(`„${label}” ustawiono także w ${others.length === 1 ? "1 pliku" : `${others.length} plikach`} kategorii „${caseFileCategoryLabel(caseFileCategory(item))}”.`);
+    setNotice(t("„{label}” ustawiono także w {value} kategorii „{value2}”.", { label: label, value: others.length === 1 ? "1 pliku" : `${others.length} plikach`, value2: caseFileCategoryLabel(caseFileCategory(item)) }));
   }
 
   function knowledgeHitFor(
@@ -1338,7 +1338,7 @@ export function WorkspaceManager({
                 disabled={busy}
                 onClick={() => void processAll(unprocessed)}
               >
-                {`Przetwórz wszystkie (${unprocessed.length})`}
+                {t("Przetwórz wszystkie ({count})", { count: unprocessed.length })}
               </button>
               <InfoTip>{t("Każdy plik po kolei: korekta i anonimizacja w wybranym sposobie, podgląd do zatwierdzenia, zapis; na ten czas OCR pozostałych plików w tle czeka po bieżącej stronie.")}</InfoTip>
             </span>
@@ -1481,7 +1481,7 @@ export function WorkspaceManager({
                       {pending.length > 1 ? (
                         <span className="workspace-category-actions">
                           <select
-                            aria-label={`Sposób przetwarzania dla kategorii: ${group.label}`}
+                            aria-label={t("Sposób przetwarzania dla kategorii: {label}", { label: group.label })}
                             value={pendingModes.length === 1 ? pendingModes[0] : ""}
                             disabled={busy}
                             title={t("Ten sam sposób przetwarzania dla wszystkich nieprzetworzonych plików tej kategorii")}
@@ -1499,7 +1499,7 @@ export function WorkspaceManager({
                           </select>
                           {group.category === "RECORDING" ? (
                             <select
-                              aria-label={`Liczba rozmówców dla kategorii: ${group.label}`}
+                              aria-label={t("Liczba rozmówców dla kategorii: {label}", { label: group.label })}
                               value={(() => {
                                 const counts = [...new Set(pending.map((item) => speakersByItem[item.itemId] ?? -1))];
                                 return counts.length === 1 ? String(counts[0]) : "mixed";
@@ -1516,7 +1516,7 @@ export function WorkspaceManager({
                             </select>
                           ) : null}
                           <button type="button" disabled={busy} onClick={() => void processAll(pending)}>
-                            {`Przetwórz kategorię (${pending.length})`}
+                            {t("Przetwórz kategorię ({count})", { count: pending.length })}
                           </button>
                         </span>
                       ) : null}
@@ -1573,7 +1573,7 @@ export function WorkspaceManager({
                                 <span>
                                   {processingFor(item)
                                     ? processingFor(item)!.ocrPages > 0
-                                      ? `OCR: ${processingFor(item)!.ocrPages} z ${processingFor(item)!.totalPages} stron`
+                                      ? t("OCR: {ocrPages} z {totalPages} stron", { ocrPages: processingFor(item)!.ocrPages, totalPages: processingFor(item)!.totalPages })
                                       : `Tekst cyfrowy · ${processingFor(item)!.totalPages} ${processingFor(item)!.totalPages === 1 ? "strona" : "stron"}`
                                     : t("Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”")}
                                 </span>
@@ -1600,7 +1600,7 @@ export function WorkspaceManager({
                               }
                             >
                               {knowledgeHitFor(item)
-                                ? `Podgląd s. ${knowledgeHitFor(item)!.pageStart}`
+                                ? t("Podgląd s. {pageStart}", { pageStart: knowledgeHitFor(item)!.pageStart })
                                 : "Podgląd"}
                             </button>
                             {processingFor(item)?.reviewed === false ? (
@@ -1663,7 +1663,7 @@ export function WorkspaceManager({
                                   <small role="status">{queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
                                 ) : null}
                                 <select
-                                  aria-label={`Sposób przetwarzania: ${item.filename}`}
+                                  aria-label={t("Sposób przetwarzania: {filename}", { filename: item.filename })}
                                   value={modeFor(item)}
                                   disabled={busy}
                                   title={DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === modeFor(item))?.title}
@@ -1682,7 +1682,7 @@ export function WorkspaceManager({
                                 </select>
                                 {caseFileCategory(item) === "RECORDING" ? (
                                   <select
-                                    aria-label={`Liczba rozmówców: ${item.filename}`}
+                                    aria-label={t("Liczba rozmówców: {filename}", { filename: item.filename })}
                                     value={String(speakersByItem[item.itemId] ?? -1)}
                                     disabled={busy}
                                     title={t("Podana liczba osób daje dokładniejszy podział na rozmówców")}
@@ -1700,10 +1700,10 @@ export function WorkspaceManager({
                                     type="button"
                                     className="workspace-apply-all"
                                     disabled={busy}
-                                    title={`Ustawia ten sam sposób przetwarzania${caseFileCategory(item) === "RECORDING" ? " i liczbę rozmówców" : ""} we wszystkich nieprzetworzonych plikach kategorii „${caseFileCategoryLabel(caseFileCategory(item))}”`}
+                                    title={t("Ustawia ten sam sposób przetwarzania{value} we wszystkich nieprzetworzonych plikach kategorii „{value2}”", { value: caseFileCategory(item) === "RECORDING" ? t(" i liczbę rozmówców") : "", value2: caseFileCategoryLabel(caseFileCategory(item)) })}
                                     onClick={() => applyLike(item)}
                                   >
-                                    {`Zastosuj do wszystkich tego typu (${othersLike(item).length})`}
+                                    {t("Zastosuj do wszystkich tego typu ({count})", { count: othersLike(item).length })}
                                   </button>
                                 ) : null}
                                 <button
@@ -1714,7 +1714,7 @@ export function WorkspaceManager({
                                     if (
                                       processingModeKeepsClearText(mode) &&
                                       !window.confirm(
-                                        `„${item.filename}” zostanie przetworzony bez anonimizacji. Wybrany do czatu trafi do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
+                                        t("„{filename}” zostanie przetworzony bez anonimizacji. Wybrany do czatu trafi do modelu z danymi osobowymi w jawnej postaci. Kontynuować?", { filename: item.filename })
                                       )
                                     ) {
                                       return;
@@ -1752,7 +1752,7 @@ export function WorkspaceManager({
                                 className="workspace-delete"
                                 disabled={busy}
                                 onClick={() => void run(async () => {
-                                  if (!window.confirm(`Usunąć plik „${item.filename}”?`)) return;
+                                  if (!window.confirm(t("Usunąć plik „{filename}”?", { filename: item.filename }))) return;
                                   await deleteWorkspaceItem(caseId, item.itemId);
                                   if (preview?.item.itemId === item.itemId) setPreview(null);
                                 })}
@@ -1786,9 +1786,9 @@ export function WorkspaceManager({
                                     const result = await deanonymizeUpload(caseId, item.itemId, fileDeanonymize.documentId);
                                     setFileDeanonymize(null);
                                     setNotice(
-                                      `Utworzono „${result.upload.filename}”: przywrócono ${result.restored} wartości.` +
+                                      t("Utworzono „{filename}”: przywrócono {restored} wartości.", { filename: result.upload.filename, restored: result.restored }) +
                                         (result.unresolved.length
-                                          ? ` Symbole spoza klucza zostały bez zmian: ${result.unresolved.join(", ")}.`
+                                          ? t(" Symbole spoza klucza zostały bez zmian: {value}.", { value: result.unresolved.join(", ") })
                                           : "")
                                     );
                                   })
@@ -1854,8 +1854,8 @@ export function WorkspaceManager({
                       ) : (
                         <span className="anonymized-badge deanonymized-badge">{t("Deanonimizowany")}</span>
                       )}
-                      {source ? ` powstał z: ${source.filename}` : ""}
-                      {derived.length ? ` · wersja z danymi: ${derived.map((entry) => entry.filename).join(", ")}` : ""}
+                      {source ? t(" powstał z: {filename}", { filename: source.filename }) : ""}
+                      {derived.length ? t(" · wersja z danymi: {value}", { value: derived.map((entry) => entry.filename).join(", ") }) : ""}
                     </small>
                   </div>
                   <div className="workspace-item-actions">
@@ -1888,7 +1888,7 @@ export function WorkspaceManager({
                             entry.artifactId === artifact.artifactId ? { ...entry, filename } : entry
                           )
                         );
-                        setNotice(`Zmieniono nazwę na „${filename}”.`);
+                        setNotice(t("Zmieniono nazwę na „{filename}”.", { filename: filename }));
                         onArtifactRenamed?.(artifact.artifactId, filename);
                       }}
                       onCancel={() => setRenamingArtifact(null)}
@@ -1922,7 +1922,7 @@ export function WorkspaceManager({
               <small>
                 {preview.item.mediaType}
                 {preview.page
-                  ? ` · trafienie na s. ${preview.page}`
+                  ? t(" · trafienie na s. {page}", { page: preview.page })
                   : ""}
               </small>
             </div>
@@ -1974,7 +1974,7 @@ export function WorkspaceManager({
               />
             </>
           ) : preview.url ? (
-            <img src={preview.url} alt={`Podgląd ${preview.item.filename}`} />
+            <img src={preview.url} alt={t("Podgląd {filename}", { filename: preview.item.filename })} />
           ) : (
             <p>
               {t("Brak bezpiecznego podglądu tego formatu. Użyj „Otwórz w systemie”.")}
@@ -2008,7 +2008,7 @@ export function WorkspaceManager({
             <strong>
               {t("Kolejka przetwarzania ·")} {(() => {
                 const summary = queueSummary(queue);
-                return `w toku ${summary.running} · czeka ${summary.waiting} · do wyboru ${summary.toChoose} · do podglądu ${summary.ready}${summary.failed ? ` · błędy ${summary.failed}` : ""}`;
+                return t("w toku {running} · czeka {waiting} · do wyboru {toChoose} · do podglądu {ready}{value}", { running: summary.running, waiting: summary.waiting, toChoose: summary.toChoose, ready: summary.ready, value: summary.failed ? ` · błędy ${summary.failed}` : "" });
               })()}
             </strong>
             {queue.some((entry) => entry.status === "QUEUED") ? (

@@ -4,19 +4,19 @@ import { ApiError, getJurisdiction, setLegalSystem, type JurisdictionSettings, t
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
-  JURISDICTION_FIXED_BY_DEPLOYMENT: "System prawny ustawia wdrożenie (LEX_JURISDICTION_PACK / LEX_JURISDICTION_COUNTRY); zmiana w aplikacji jest wyłączona.",
-  JURISDICTION_UNKNOWN: "Nie ma takiego kraju w rejestrze."
+  JURISDICTION_FIXED_BY_DEPLOYMENT: t("System prawny ustawia wdrożenie (LEX_JURISDICTION_PACK / LEX_JURISDICTION_COUNTRY); zmiana w aplikacji jest wyłączona."),
+  JURISDICTION_UNKNOWN: t("Nie ma takiego kraju w rejestrze.")
 };
 
 const READING: Record<string, string> = {
-  "PEŁNY": "pełna weryfikacja przepisów",
-  CZYTNIK: "czytnik tekstu przepisów ze źródła urzędowego",
-  PDF: "tekst z urzędowego PDF",
-  KLUCZ: "źródło wymaga klucza API",
-  JS: "portal wymaga przeglądarki (brak odczytu automatycznego)",
+  "PEŁNY": t("pełna weryfikacja przepisów"),
+  CZYTNIK: t("czytnik tekstu przepisów ze źródła urzędowego"),
+  PDF: t("tekst z urzędowego PDF"),
+  KLUCZ: t("źródło wymaga klucza API"),
+  JS: t("portal wymaga przeglądarki (brak odczytu automatycznego)"),
   BLOKADA: "portal blokuje odczyt automatyczny",
-  "BRAK-POŁĄCZENIA": "brak połączenia ze źródłem",
-  "DO-ZBADANIA": "źródło do zbadania"
+  "BRAK-POŁĄCZENIA": t("brak połączenia ze źródłem"),
+  "DO-ZBADANIA": t("źródło do zbadania")
 };
 
 // Legal families: the category of the country list; the method the model uses follows from it.

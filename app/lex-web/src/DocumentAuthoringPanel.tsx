@@ -316,7 +316,7 @@ export function DocumentAuthoringPanel({
       setGenerated(null);
       setMessage(
         (savedPath ? `Zapisano: ${savedPath}. ` : "") +
-        `Finalny dokument zawiera oryginalne dane przywrócone mechanicznie z klucza anonimizacja↔deanonimizacja (${final.replacements} zamian). Model nie uczestniczył w reidentyfikacji. Dokument przeszedł HYBRID, G8 i G10.`
+        t("Finalny dokument zawiera oryginalne dane przywrócone mechanicznie z klucza anonimizacja↔deanonimizacja ({replacements} zamian). Model nie uczestniczył w reidentyfikacji. Dokument przeszedł HYBRID, G8 i G10.", { replacements: final.replacements })
       );
     } catch (value) {
       setPassword("");

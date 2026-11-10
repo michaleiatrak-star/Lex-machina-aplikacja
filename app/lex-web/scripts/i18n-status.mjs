@@ -17,6 +17,9 @@ const POLISH = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(?:i|w|z|na|do|nie|się
 // Attributes whose text the user reads.
 const SHOWN_ATTRIBUTES = new Set(["title", "placeholder", "aria-label", "alt", "label", "aria-description"]);
 
+// Names, codes and units that stay as they are in every language (Lex Machina, ELI, DOCX, ms).
+const CODE_LIKE = (text) => /^[A-Z0-9 .·\-/_:+()]+$/u.test(text) || /^(Lex Machina|ms|Aa|KSeF|NIP:?|MB ·)$/u.test(text);
+
 function literalText(node) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   return null;
@@ -39,7 +42,7 @@ export function measure(file, code) {
     }
     if (ts.isJsxText(node)) {
       const text = node.text.replace(/\s+/gu, " ").trim();
-      if (/\p{L}{2,}/u.test(text)) untranslated.push(text);
+      if (/\p{L}{2,}/u.test(text) && !CODE_LIKE(text)) untranslated.push(text);
     } else if (ts.isJsxAttribute(node) && node.initializer) {
       const name = node.name.getText(sourceFile);
       const value = ts.isStringLiteral(node.initializer) ? node.initializer.text : null;

@@ -5,7 +5,7 @@ import { InfoTip } from "./InfoTip";
 
 const LABELS: Record<DomainFallbackChoice, string> = {
   off: "Wyłączony",
-  session: "Model rozmowy (ten sam, co odpowiada)",
+  session: t("Model rozmowy (ten sam, co odpowiada)"),
   "local/bielik-11b-v3-q4km": "Lokalny Bielik 11B v3 (zalecany lokalnie)",
   "local/mistral-nemo-12b-q4km": "Lokalny Mistral NeMo 12B"
 };

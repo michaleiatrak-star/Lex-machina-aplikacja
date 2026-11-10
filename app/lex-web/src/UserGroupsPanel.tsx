@@ -14,11 +14,11 @@ import {
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
-  USER_GROUP_NAME_TAKEN: "Grupa o tej nazwie już istnieje.",
-  USER_GROUP_NAME_INVALID: "Nazwa grupy: od 1 do 80 znaków.",
-  USER_GROUP_MEMBERS_INVALID: "Lista członków zawiera nieznanego użytkownika.",
-  USER_GROUP_NOT_FOUND: "Grupa już nie istnieje.",
-  AUTHORIZATION_DENIED: "Grupami zarządza administrator."
+  USER_GROUP_NAME_TAKEN: t("Grupa o tej nazwie już istnieje."),
+  USER_GROUP_NAME_INVALID: t("Nazwa grupy: od 1 do 80 znaków."),
+  USER_GROUP_MEMBERS_INVALID: t("Lista członków zawiera nieznanego użytkownika."),
+  USER_GROUP_NOT_FOUND: t("Grupa już nie istnieje."),
+  AUTHORIZATION_DENIED: t("Grupami zarządza administrator.")
 };
 
 export function groupErrorText(error: unknown): string {
@@ -27,17 +27,17 @@ export function groupErrorText(error: unknown): string {
 }
 
 const SKIP_REASONS: Record<string, string> = {
-  ALREADY_HAS_ACCESS: "ma już dostęp",
-  TARGET_CRYPTO_NOT_READY: "nie zalogował się jeszcze ani razu (brak kluczy szyfrowania)",
+  ALREADY_HAS_ACCESS: t("ma już dostęp"),
+  TARGET_CRYPTO_NOT_READY: t("nie zalogował się jeszcze ani razu (brak kluczy szyfrowania)"),
   TARGET_USER_NOT_FOUND: "konto nieaktywne"
 };
 
 /** "Dodano 3 osoby; pominięto: @jan (ma już dostęp)". */
 export function groupShareSummary(result: GroupShareResult, names: Map<string, string>): string {
   const name = (userId: string) => names.get(userId) ?? userId;
-  const added = result.granted.length ? `Dodano do sprawy: ${result.granted.map(name).join(", ")}.` : "Nikt nowy nie został dodany.";
+  const added = result.granted.length ? t("Dodano do sprawy: {value}.", { value: result.granted.map(name).join(", ") }) : t("Nikt nowy nie został dodany.");
   const skipped = result.skipped.map((item) => `${name(item.userId)} (${SKIP_REASONS[item.reason] ?? item.reason})`);
-  return skipped.length ? `${added} Pominięto: ${skipped.join(", ")}.` : added;
+  return skipped.length ? t("{added} Pominięto: {value}.", { added: added, value: skipped.join(", ") }) : added;
 }
 
 /** Ustawienia -> Użytkownicy (administrator): grupy do udostępniania spraw jednym kliknięciem. */
@@ -88,7 +88,7 @@ export function UserGroupsPanel() {
       <ul className="user-groups-list">
         {groups.map((group) => (
           <li key={group.groupId}>
-            <strong>{group.name}</strong> · {group.memberUserIds.length} os.
+            <strong>{group.name}</strong> · {group.memberUserIds.length} {t("os.")}
             <small>{group.memberUserIds.map(label).join(", ")}</small>
             <span>
               <button type="button" className="chat-link-button" disabled={busy} onClick={() => setEditing({ groupId: group.groupId, name: group.name, members: new Set(group.memberUserIds) })}>
@@ -99,7 +99,7 @@ export function UserGroupsPanel() {
                 className="chat-link-button"
                 disabled={busy}
                 onClick={() => {
-                  if (window.confirm(`Usunąć grupę „${group.name}”? Dostęp do spraw już nadany zostaje.`)) void run(() => deleteUserGroup(group.groupId));
+                  if (window.confirm(t("Usunąć grupę „{name}”? Dostęp do spraw już nadany zostaje.", { name: group.name }))) void run(() => deleteUserGroup(group.groupId));
                 }}
               >
                 {t("Usuń")}

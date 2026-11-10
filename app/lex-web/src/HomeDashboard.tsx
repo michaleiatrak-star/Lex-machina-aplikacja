@@ -230,7 +230,7 @@ export function HomeDashboard({
                         className="matter-thread-edit"
                         disabled={renaming}
                         title={t("Zmień nazwę sprawy")}
-                        aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                        aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
                         onClick={() => setRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })}
                       >
                         <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">

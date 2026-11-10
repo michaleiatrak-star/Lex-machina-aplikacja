@@ -45,10 +45,10 @@ const STAGE_LABELS: Record<
   string
 > = {
   CG_ACCEPTANCE: "Akceptacja startu",
-  W1: "W1 · rama i strategia",
+  W1: t("W1 · rama i strategia"),
   PRE_W2: "PRE-W2 · weryfikacja",
-  W2: "W2 · projekt i red-team",
-  W3: "W3 · walidacja końcowa",
+  W2: t("W2 · projekt i red-team"),
+  W3: t("W3 · walidacja końcowa"),
   FINAL: "FINAL"
 };
 
@@ -58,10 +58,10 @@ const PLAIN_STAGE_LABELS: Record<
   string
 > = {
   CG_ACCEPTANCE: "Akceptacja startu",
-  W1: "Etap 1 · rama i strategia",
+  W1: t("Etap 1 · rama i strategia"),
   PRE_W2: "Etap 2 · weryfikacja",
-  W2: "Etap 3 · projekt i przegląd krytyczny",
-  W3: "Etap 4 · kontrola końcowa",
+  W2: t("Etap 3 · projekt i przegląd krytyczny"),
+  W3: t("Etap 4 · kontrola końcowa"),
   FINAL: "Pismo gotowe"
 };
 
@@ -232,7 +232,7 @@ export function ProcessPleadingWorkflowPanel({
         <strong>{t("Projekt pisma")}</strong>
         <span>
           {latest
-            ? `wersja ${latest.version} · ${latest.source === "USER" ? "Twoja poprawka" : developer ? `pipeline, etap ${latest.stage}` : "przygotowana przez aplikację"}`
+            ? t("wersja {version} · {value}", { version: latest.version, value: latest.source === "USER" ? "Twoja poprawka" : developer ? `pipeline, etap ${latest.stage}` : t("przygotowana przez aplikację") })
             : developer ? t("jeszcze nie powstał (pojawi się po W2)") : t("jeszcze nie powstał (pojawi się w etapie projektu)")}
         </span>
       </div>
@@ -288,7 +288,7 @@ export function ProcessPleadingWorkflowPanel({
               .reverse()
               .map((item) => (
                 <li key={item.version}>
-                  {`v${item.version} · ${item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : developer ? `pipeline ${item.checkpoint ?? item.stage}` : "aplikacja"} · ${new Date(item.createdAt).toLocaleString(currentLocale())}`}
+                  {t("v{version} · {value} · {value2}", { version: item.version, value: item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : developer ? `pipeline ${item.checkpoint ?? item.stage}` : "aplikacja", value2: new Date(item.createdAt).toLocaleString(currentLocale()) })}
                 </li>
               ))}
           </ul>

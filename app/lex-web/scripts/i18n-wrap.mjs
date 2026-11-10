@@ -53,6 +53,20 @@ function isComparisonOrKey(node) {
 /** Whether a string literal (not in JSX attributes) is a text the user reads. */
 function shownLiteral(node) {
   if (isComparisonOrKey(node)) return false;
+  if (WRAP_ALL) {
+    let up = node;
+    while (ts.isParenthesizedExpression(up.parent) || ts.isConditionalExpression(up.parent) || (ts.isBinaryExpression(up.parent) && up.parent.operatorToken.kind === ts.SyntaxKind.PlusToken)) {
+      if (ts.isConditionalExpression(up.parent) && up.parent.condition === up) return false;
+      up = up.parent;
+    }
+    const parent = up.parent;
+    if (ts.isCallExpression(parent) && parent.arguments.includes(up)) {
+      return !/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare|executeMessage)$/u.test(parent.expression.getText());
+    }
+    if (ts.isNewExpression(parent)) return false;
+    if (ts.isBinaryExpression(parent)) return false;
+    return true;
+  }
   let current = node;
   // Through conditional branches, parentheses and ?? / || defaults.
   while (
@@ -66,15 +80,26 @@ function shownLiteral(node) {
   if (ts.isJsxExpression(parent)) return !ts.isJsxAttribute(parent.parent) || SHOWN_ATTRIBUTES.has(parent.parent.name.getText());
   if (ts.isCallExpression(parent) && parent.arguments.includes(current)) {
     const callee = parent.expression.getText();
+    if (WRAP_ALL && !/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare)$/u.test(callee)) return true;
     return /^set[A-Z]\w*$/u.test(callee) || /(^|\.)(confirm|alert|prompt)$/u.test(callee) || /^(setError|setNotice|setMessage|showError|notify)$/u.test(callee);
   }
   if (ts.isPropertyAssignment(parent) && parent.initializer === current) {
     const name = parent.name.getText().replace(/["']/gu, "");
-    return LABEL_PROPERTIES.has(name);
+    return LABEL_PROPERTIES.has(name) || WRAP_ALL;
   }
   if (ts.isReturnStatement(parent)) return /(Label|Message|Text|Title|Description|Hint|Help)$/u.test(enclosingFunctionName(current));
+  // --all: every other Polish sentence too, except arguments of string and lookup functions.
+  if (WRAP_ALL) {
+    if (ts.isCallExpression(parent)) {
+      const callee = parent.expression.getText();
+      if (/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare)$/u.test(callee)) return false;
+    }
+    if (ts.isNewExpression(parent) && /RegExp|Error/u.test(parent.expression.getText())) return false;
+    return true;
+  }
   return false;
 }
+const WRAP_ALL = process.argv.includes("--all");
 
 export function wrapFile(file) {
   const code = fs.readFileSync(file, "utf8");
@@ -84,10 +109,12 @@ export function wrapFile(file) {
   let usesT = false;
   let usesN = false;
   const visit = (node) => {
+    // Code marked "Kept in Polish" (messages the runtime matches) is left as it is.
+    if (ts.getLeadingCommentRanges(code, node.getFullStart())?.some((range) => code.slice(range.pos, range.end).includes("Kept in Polish"))) return;
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && (node.expression.text === "t" || node.expression.text === "N_")) return;
     if (ts.isJsxText(node)) {
       const core = shownText(node.text);
-      if (core && POLISH.test(node.text) || (core && /[a-ząćęłńóśźż]{3,}/u.test(core))) {
+      if (core && (WRAP_ALL || POLISH.test(node.text) || /[a-ząćęłńóśźż]{3,}/u.test(core))) {
         const raw = node.text;
         const start = node.pos;
         const lead = raw.match(/^\s*/u)[0].length;
@@ -104,10 +131,30 @@ export function wrapFile(file) {
       }
       return;
     } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && POLISH.test(node.text) && /\s/u.test(node.text) && shownLiteral(node)) {
-      const inside = insideFunction(node);
+      const inside = WRAP_ALL || insideFunction(node);
       edits.push({ start: node.getStart(sourceFile), end: node.getEnd(), text: `${inside ? "t" : "N_"}(${quote(node.text)})` });
       if (inside) usesT = true;
       else usesN = true;
+    } else if (WRAP_ALL && ts.isTemplateExpression(node) && POLISH.test(node.getText(sourceFile)) && /\s/u.test(node.head.text + node.templateSpans.map((span) => span.literal.text).join("")) && shownLiteral(node)) {
+      // `Tekst ${a.b} …` -> t("Tekst {b} …", { b: a.b }): the placeholder is named after the value.
+      const names = new Map();
+      let text = node.head.text;
+      const values = [];
+      for (const span of node.templateSpans) {
+        const expr = span.expression.getText(sourceFile);
+        let base = (expr.match(/([A-Za-z_]\w*)\s*(?:\)|\(\))?\s*$/u)?.[1] ?? "value").replace(/^(length|size)$/u, "count");
+        if (!/^[a-z]/u.test(base)) base = "value";
+        let name = base;
+        for (let n = 2; names.has(name) && names.get(name) !== expr; n += 1) name = `${base}${n}`;
+        if (!names.has(name)) {
+          names.set(name, expr);
+          values.push(`${name}: ${expr}`);
+        }
+        text += `{${name}}` + span.literal.text;
+      }
+      edits.push({ start: node.getStart(sourceFile), end: node.getEnd(), text: `t(${quote(text)}, { ${values.join(", ")} })` });
+      usesT = true;
+      return;
     } else if (ts.isTemplateExpression(node) && POLISH.test(node.getText(sourceFile))) {
       templates.push(`${file}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1} ${node.getText(sourceFile).slice(0, 90)}`);
     }
@@ -131,7 +178,7 @@ export function wrapFile(file) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("i18n-wrap.mjs")) {
-  for (const file of process.argv.slice(2)) {
+  for (const file of process.argv.slice(2).filter((arg) => !arg.startsWith("--"))) {
     const result = wrapFile(file);
     console.log(`${result.file}: ${result.edits} texts`);
     for (const line of result.templates) console.log(`  TEMPLATE (by hand): ${line}`);

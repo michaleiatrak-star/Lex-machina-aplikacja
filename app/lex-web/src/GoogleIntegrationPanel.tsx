@@ -17,18 +17,18 @@ import { InfoTip } from "./InfoTip";
 import { openExternalUrl } from "./SnVerification.js";
 
 const ERRORS: Record<string, string> = {
-  GOOGLE_NOT_CONFIGURED: "Brak klienta OAuth Google (plik google-oauth-client.json) — integracja jest wyłączona w tej instalacji.",
-  GOOGLE_NOT_CONNECTED: "Konto Google nie jest połączone — połącz je w Ustawieniach → Integracje.",
-  GOOGLE_RECONNECT_REQUIRED: "Google cofnął dostęp (odwołanie albo koniec 7-dniowego okresu aplikacji testowej). Połącz konto ponownie.",
-  GOOGLE_CONSENT_DENIED: "Odmówiono zgody w oknie Google.",
-  GOOGLE_SCOPE_DENIED: "Nie zaznaczono dostępu ani do Gmaila, ani do Dysku.",
-  GOOGLE_REFRESH_TOKEN_MISSING: "Google nie wydał trwałego dostępu. Usuń aplikację w myaccount.google.com/permissions i połącz ponownie.",
-  GOOGLE_ACCOUNT_UNREADABLE: "Zapisanego połączenia nie da się odczytać (zmiana klucza konta). Rozłącz i połącz ponownie.",
-  GOOGLE_GMAIL_ACCESS_DENIED: "Brak dostępu do Gmaila — przy łączeniu nie zaznaczono Gmaila.",
-  GOOGLE_DRIVE_ACCESS_DENIED: "Brak dostępu do Dysku — przy łączeniu nie zaznaczono Dysku.",
-  GOOGLE_NETWORK_ERROR: "Brak połączenia z Google.",
-  GOOGLE_IMPORT_TOO_MANY: "Naraz można dodać do 20 wątków i plików.",
-  GOOGLE_FLOW_NOT_FOUND: "Okno łączenia wygasło — spróbuj ponownie."
+  GOOGLE_NOT_CONFIGURED: t("Brak klienta OAuth Google (plik google-oauth-client.json) — integracja jest wyłączona w tej instalacji."),
+  GOOGLE_NOT_CONNECTED: t("Konto Google nie jest połączone — połącz je w Ustawieniach → Integracje."),
+  GOOGLE_RECONNECT_REQUIRED: t("Google cofnął dostęp (odwołanie albo koniec 7-dniowego okresu aplikacji testowej). Połącz konto ponownie."),
+  GOOGLE_CONSENT_DENIED: t("Odmówiono zgody w oknie Google."),
+  GOOGLE_SCOPE_DENIED: t("Nie zaznaczono dostępu ani do Gmaila, ani do Dysku."),
+  GOOGLE_REFRESH_TOKEN_MISSING: t("Google nie wydał trwałego dostępu. Usuń aplikację w myaccount.google.com/permissions i połącz ponownie."),
+  GOOGLE_ACCOUNT_UNREADABLE: t("Zapisanego połączenia nie da się odczytać (zmiana klucza konta). Rozłącz i połącz ponownie."),
+  GOOGLE_GMAIL_ACCESS_DENIED: t("Brak dostępu do Gmaila — przy łączeniu nie zaznaczono Gmaila."),
+  GOOGLE_DRIVE_ACCESS_DENIED: t("Brak dostępu do Dysku — przy łączeniu nie zaznaczono Dysku."),
+  GOOGLE_NETWORK_ERROR: t("Brak połączenia z Google."),
+  GOOGLE_IMPORT_TOO_MANY: t("Naraz można dodać do 20 wątków i plików."),
+  GOOGLE_FLOW_NOT_FOUND: t("Okno łączenia wygasło — spróbuj ponownie.")
 };
 
 // Ukryte do czasu dostarczenia klienta OAuth wydawcy w instalatorze (logowanie kontem Google).
@@ -110,7 +110,7 @@ export function GoogleIntegrationPanel() {
           <p>
             {t("Połączono:")} <strong>{status.email}</strong>
             {" · "}{t("Gmail:")} {status.gmail ? "tak" : "nie"} {t("· Dysk:")} {status.drive ? "tak" : "nie"}
-            {status.connectedAt ? ` · od ${new Date(status.connectedAt).toLocaleDateString(currentLocale())}` : ""}
+            {status.connectedAt ? t(" · od {value}", { value: new Date(status.connectedAt).toLocaleDateString(currentLocale()) }) : ""}
           </p>
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void disconnect()}>
             {t("Rozłącz konto Google")}
@@ -139,7 +139,7 @@ export function GoogleImportDialog({
   const [tab, setTab] = useState<"gmail" | "drive">("gmail");
   const [query, setQuery] = useState("has:attachment");
   const [threads, setThreads] = useState<GmailThreadSummary[]>([]);
-  const [folders, setFolders] = useState<Array<{ id?: string; name: string }>>([{ name: "Mój dysk" }]);
+  const [folders, setFolders] = useState<Array<{ id?: string; name: string }>>([{ name: t("Mój dysk") }]);
   const [driveQuery, setDriveQuery] = useState("");
   const [items, setItems] = useState<DriveItem[]>([]);
   const [picked, setPicked] = useState<{ gmail: Set<string>; drive: Set<string> }>({ gmail: new Set(), drive: new Set() });
@@ -259,7 +259,7 @@ export function GoogleImportDialog({
         <div className="google-import-actions">
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={onClose}>{t("Anuluj")}</button>
           <button type="button" className="chat-primary-action" disabled={busy || !count} onClick={() => void submit()}>
-            {busy ? "Pracuję…" : `Dodaj do akt (${count})`}
+            {busy ? "Pracuję…" : t("Dodaj do akt ({count})", { count: count })}
           </button>
         </div>
       </div>

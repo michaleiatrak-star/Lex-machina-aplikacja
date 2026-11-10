@@ -1,7 +1,5 @@
-import { ComponentSetup } from "./ComponentSetup.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./AuthApp.js";
 import "./theme.css";
 import "./styles.css";
 import { applyTheme, readTheme } from "./text-size.js";
@@ -12,10 +10,13 @@ applyTheme(readTheme());
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root application mount.");
 
-// The interface language's catalog before the first render (a missing one leaves Polish).
+// The interface language's catalog is loaded before the interface modules are imported, so texts
+// defined at module level (t() in constants) are already in that language; a missing catalog
+// leaves Polish. Changing the language reloads the window.
 void loadLocale(preferredLocale())
   .catch(() => undefined)
-  .finally(() => {
+  .then(() => Promise.all([import("./AuthApp.js"), import("./ComponentSetup.js")]))
+  .then(([{ default: App }, { ComponentSetup }]) => {
     createRoot(root).render(
       <StrictMode>
         <ComponentSetup><App /></ComponentSetup>

@@ -48,7 +48,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
         if (!cancelled) setWidgetId(result.widgetId);
       })
       .catch((failure) => {
-        if (!cancelled) setError(`Nie udało się otworzyć widgetu (${failure instanceof ApiError ? failure.code : String(failure)}).`);
+        if (!cancelled) setError(t("Nie udało się otworzyć widgetu ({failure}).", { failure: failure instanceof ApiError ? failure.code : String(failure) }));
       });
     return () => {
       cancelled = true;
@@ -62,7 +62,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
       const message = readMessage(event.data, widgetId);
       if (!message) return;
       if (message.type === "size") setHeight(Math.min(1400, Math.max(160, message.height + 8)));
-      if (message.type === "error") setError(`Błąd w widgecie: ${message.message}`);
+      if (message.type === "error") setError(t("Błąd w widgecie: {message}", { message: message.message }));
       if (message.type === "prompt") {
         if (onPrompt) {
           onPrompt(message.text);
@@ -73,7 +73,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
         const bytes = Uint8Array.from(atob(message.base64), (char) => char.charCodeAt(0));
         void downloadBlob(new Blob([bytes]), message.filename)
           .then((saved) => setStatus(saved ? `Zapisano: ${saved}` : `Pobrano: ${message.filename}`))
-          .catch((failure) => setError(`Nie udało się zapisać pliku (${failure instanceof ApiError ? failure.code : String(failure)}).`));
+          .catch((failure) => setError(t("Nie udało się zapisać pliku ({failure}).", { failure: failure instanceof ApiError ? failure.code : String(failure) })));
       }
     };
     window.addEventListener("message", listener);

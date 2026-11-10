@@ -62,10 +62,10 @@ export function SheetEditor(props: {
         sheets: chosen.map((entry) => ({ name: entry.name, rows: trimRows(entry.rows) }))
       });
       setDirty(false);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }

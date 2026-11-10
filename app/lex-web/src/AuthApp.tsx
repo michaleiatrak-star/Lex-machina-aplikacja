@@ -408,7 +408,7 @@ function AuthPanel({
           <div className="alert alert-error auth-alert">
             {error}
             {retryLabel
-              ? ` ${t("Ponowna próba po {time}.", { time: retryLabel })}`
+              ? t(" {value}", { value: t("Ponowna próba po {time}.", { time: retryLabel }) })
               : ""}
           </div>
         )}

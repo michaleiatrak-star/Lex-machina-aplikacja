@@ -11,14 +11,14 @@ import {
 
 const STATUS: Record<InvoiceRequirementStatus, string> = {
   UNVERIFIED: "niezweryfikowane",
-  VERIFIED: "zgodne z ELI",
-  MISMATCH: "rozbieżne z ELI",
-  NOT_FOUND: "brak punktu w ELI"
+  VERIFIED: t("zgodne z ELI"),
+  MISMATCH: t("rozbieżne z ELI"),
+  NOT_FOUND: t("brak punktu w ELI")
 };
 
 const ERRORS: Record<string, string> = {
-  INVOICE_LEGAL_SOURCE_UNAVAILABLE: "Konektor ISAP (ELI) nie zwrócił tekstu. Sprawdź go w Ustawieniach → Konektory MCP.",
-  INVOICE_LEGAL_TEXT_MISSING: "Konektor ISAP odpowiedział bez brzmienia artykułu."
+  INVOICE_LEGAL_SOURCE_UNAVAILABLE: t("Konektor ISAP (ELI) nie zwrócił tekstu. Sprawdź go w Ustawieniach → Konektory MCP."),
+  INVOICE_LEGAL_TEXT_MISSING: t("Konektor ISAP odpowiedział bez brzmienia artykułu.")
 };
 
 // Lista elementów faktury, które obsługuje generator, ze statusem weryfikacji
@@ -75,7 +75,7 @@ export function InvoiceRequirementsCard() {
               ELI {report.eli}{t(", art.")} {report.article}
             </a>
           ) : `ELI ${report.eli}, art. ${report.article}`}
-          {report.statusDate ? `, stan prawny na ${report.statusDate}` : ""}
+          {report.statusDate ? t(", stan prawny na {statusDate}", { statusDate: report.statusDate }) : ""}
           {report.retrievedAt ? `, pobrano ${new Date(report.retrievedAt).toLocaleString(currentLocale())}` : ""}.
         </p>
       ) : (

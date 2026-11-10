@@ -42,28 +42,28 @@ function previewKey(target: SourcePreviewTarget): string {
 type FieldValue = string | boolean;
 
 const ERRORS: Record<string, string> = {
-  MCP_SOURCE_UNAVAILABLE: "Źródło nie odpowiada albo nie jest zainstalowane — to niedostępność źródła, nie brak danych.",
-  MCP_ARGUMENTS_INVALID: "Nieprawidłowe parametry zapytania.",
-  UNKNOWN_MCP_SERVER: "Nieznane źródło MCP."
+  MCP_SOURCE_UNAVAILABLE: t("Źródło nie odpowiada albo nie jest zainstalowane — to niedostępność źródła, nie brak danych."),
+  MCP_ARGUMENTS_INVALID: t("Nieprawidłowe parametry zapytania."),
+  UNKNOWN_MCP_SERVER: t("Nieznane źródło MCP.")
 };
 
 const STATUS_TEXT: Record<string, string> = {
   FOUND: "Znaleziono",
-  NOT_FOUND: "Brak w źródle",
-  AMBIGUOUS: "Niejednoznaczne — zawęź zapytanie",
-  OUT_OF_SCOPE: "OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku",
-  ERROR: "Błąd źródła",
-  PENDING: "Zlecenie w kolejce źródła — wynik w przygotowaniu",
-  SOURCE_UNAVAILABLE: "Źródło niedostępne — nie wnioskuj o braku",
-  POLICY_BLOCKED: "Zablokowane przez politykę źródeł",
+  NOT_FOUND: t("Brak w źródle"),
+  AMBIGUOUS: t("Niejednoznaczne — zawęź zapytanie"),
+  OUT_OF_SCOPE: t("OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku"),
+  ERROR: t("Błąd źródła"),
+  PENDING: t("Zlecenie w kolejce źródła — wynik w przygotowaniu"),
+  SOURCE_UNAVAILABLE: t("Źródło niedostępne — nie wnioskuj o braku"),
+  POLICY_BLOCKED: t("Zablokowane przez politykę źródeł"),
   OK: "OK"
 };
 
 export const INTEGRITY_TEXT: Record<McpPackageInfo["integrity"], string> = {
-  MATCH: "zgodny z sumą kontrolną skilla (najnowsza instalacja)",
-  MISMATCH: "NIEZGODNY z sumą kontrolną skilla — zaktualizuj skille",
-  UNVERIFIED: "brak sumy kontrolnej w skillu — nie da się potwierdzić wersji",
-  MISSING: "brak pakietu serwerów MCP"
+  MATCH: t("zgodny z sumą kontrolną skilla (najnowsza instalacja)"),
+  MISMATCH: t("NIEZGODNY z sumą kontrolną skilla — zaktualizuj skille"),
+  UNVERIFIED: t("brak sumy kontrolnej w skillu — nie da się potwierdzić wersji"),
+  MISSING: t("brak pakietu serwerów MCP")
 };
 
 function failureText(error: unknown): string {
@@ -411,7 +411,7 @@ export function McpSearchPanel() {
         ...previous,
         [item.key]: document
           ? { busy: false, document, args, tool: detailTool }
-          : { busy: false, error: page.notice ?? STATUS_TEXT[page.status ?? ""] ?? "Źródło nie zwróciło treści." }
+          : { busy: false, error: page.notice ?? STATUS_TEXT[page.status ?? ""] ?? t("Źródło nie zwróciło treści.") }
       }));
     } catch (failure) {
       setDetails((previous) => ({
@@ -607,9 +607,7 @@ export function McpSearchPanel() {
             <div className="chat-form-row compact">
               <p className="field-help">
                 {pendingAttempt
-                  ? `Odbieranie wyniku z kolejki źródła: próba ${pendingAttempt} z ${PENDING_ATTEMPTS}${
-                      view.pending.message ? ` (${view.pending.message})` : ""
-                    }…`
+                  ? t("Odbieranie wyniku z kolejki źródła: próba {pendingAttempt} z {value}{value2}…", { pendingAttempt: pendingAttempt, value: PENDING_ATTEMPTS, value2: view.pending.message ? ` (${view.pending.message})` : "" })
                   : t("Wynik jeszcze niegotowy. Brak wyniku nie oznacza braku danych w źródle.")}
               </p>
               {pendingAttempt ? null : (

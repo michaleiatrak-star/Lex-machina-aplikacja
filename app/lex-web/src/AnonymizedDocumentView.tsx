@@ -20,11 +20,11 @@ import { modelExportFilename, modelExportText } from "./model-export.js";
 import { downloadBlob } from "./download-file.js";
 
 const DOCX_ERRORS: Record<string, string> = {
-  DOCX_ANONYMIZED_SOURCE_CHANGED: "Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx.",
-  DOCX_ANONYMIZED_ALIGNMENT_FAILED: "Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie.",
-  DOCX_ANONYMIZED_TEXT_MISMATCH: "Kontrola zgodności nie przeszła - plik nie został wydany.",
-  DOCX_ANONYMIZED_LEAK: "Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany.",
-  DOCX_ANONYMIZED_UNSUPPORTED: "Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny."
+  DOCX_ANONYMIZED_SOURCE_CHANGED: t("Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx."),
+  DOCX_ANONYMIZED_ALIGNMENT_FAILED: t("Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie."),
+  DOCX_ANONYMIZED_TEXT_MISMATCH: t("Kontrola zgodności nie przeszła - plik nie został wydany."),
+  DOCX_ANONYMIZED_LEAK: t("Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany."),
+  DOCX_ANONYMIZED_UNSUPPORTED: t("Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny.")
 };
 
 function docxErrorText(error: unknown): string {
@@ -42,7 +42,7 @@ function withPages(text: string, totalPages: number, key: string): ReactNode[] {
   let cursor = 0;
   for (const match of text.matchAll(PAGE_HEADER)) {
     if (match.index! > cursor) out.push(<span key={`${key}-${cursor}`}>{text.slice(cursor, match.index)}</span>);
-    const part = match[2] && match[2] !== "1" ? " (ciąg dalszy)" : "";
+    const part = match[2] && match[2] !== "1" ? t(" (ciąg dalszy)") : "";
     out.push(
       <span key={`${key}-p${match.index}`} className="anonymized-page">
         {t("Strona")} {match[1]} z {totalPages}{part}
@@ -149,7 +149,7 @@ export function AnonymizedDocumentView(props: {
         if (!cancelled) setVersion(next);
       })
       .catch((failure) => {
-        if (!cancelled) setStatus(`Nie udało się wczytać: ${failure instanceof Error ? failure.message : String(failure)}`);
+        if (!cancelled) setStatus(t("Nie udało się wczytać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       });
     return () => {
       cancelled = true;
@@ -171,7 +171,7 @@ export function AnonymizedDocumentView(props: {
           ? t("Tego tekstu nie ma w wersji zanonimizowanej (może już jest zastąpiony symbolem).")
           : code === "PRIVACY_EDIT_UNKNOWN_TOKEN"
             ? t("Poprawka zawiera symbol, którego nie ma w kluczu tego dokumentu (np. zmieniony numer). Przywróć symbol w pierwotnej postaci.")
-          : `Nie udało się zapisać: ${code}`
+          : t("Nie udało się zapisać: {code}", { code: code })
       );
     } finally {
       setBusy(false);
@@ -196,18 +196,18 @@ export function AnonymizedDocumentView(props: {
         const added = next as AnonymizedVersion & { token: string; replaced: number };
         setSelection("");
         setHighlight(added.token);
-        return `Zanonimizowano jako ${added.token} (wystąpienia: ${added.replaced}). Klucz zaktualizowano.`;
+        return t("Zanonimizowano jako {token} (wystąpienia: {replaced}). Klucz zaktualizowano.", { token: added.token, replaced: added.replaced });
       }
     );
   }
 
   function remove(entry: PrivacyKeyEntry): void {
-    if (!window.confirm(`Przywrócić jawną wartość w miejsce ${entry.token} i usunąć symbol z klucza?`)) return;
+    if (!window.confirm(t("Przywrócić jawną wartość w miejsce {token} i usunąć symbol z klucza?", { token: entry.token }))) return;
     void apply(
       () => removeFromAnonymization(props.caseId, props.documentId, entry.token),
       (next) =>
-        `Przywrócono jawną wartość (wystąpienia: ${(next as AnonymizedVersion & { restored: number }).restored})` +
-        (entry.forms ? " w mianowniku - sprawdź odmianę w tekście." : ".")
+        t("Przywrócono jawną wartość (wystąpienia: {restored})", { restored: (next as AnonymizedVersion & { restored: number }).restored }) +
+        (entry.forms ? t(" w mianowniku - sprawdź odmianę w tekście.") : ".")
     );
   }
 
@@ -215,14 +215,14 @@ export function AnonymizedDocumentView(props: {
     if (!Object.keys(forms).length) return;
     void apply(
       () => updateAnonymizationForms(props.caseId, props.documentId, entry.token, forms),
-      () => `Zapisano formy dla ${entry.token}; będą użyte przy przywracaniu danych.`
+      () => t("Zapisano formy dla {token}; będą użyte przy przywracaniu danych.", { token: entry.token })
     );
   }
 
   function saveGrammar(entry: PrivacyKeyEntry, grammar: KeyGrammar): void {
     void apply(
       () => updateAnonymizationGrammar(props.caseId, props.documentId, entry.token, grammar),
-      () => `Zapisano, kim jest ${entry.token}; model dostanie to w kluczu, a odmiana przy przywracaniu się zmieniła.`
+      () => t("Zapisano, kim jest {token}; model dostanie to w kluczu, a odmiana przy przywracaniu się zmieniła.", { token: entry.token })
     );
   }
 
@@ -267,7 +267,7 @@ export function AnonymizedDocumentView(props: {
                       if (savedPath) setStatus(`Zapisano: ${savedPath}`);
                     })
                     .catch((error) =>
-                      setStatus(`Nie udało się zapisać pliku: ${error instanceof Error ? error.message : String(error)}`)
+                      setStatus(t("Nie udało się zapisać pliku: {error}", { error: error instanceof Error ? error.message : String(error) }))
                     );
                 }}
               >
@@ -288,7 +288,7 @@ export function AnonymizedDocumentView(props: {
                         setStatus(
                           [
                             savedPath ? `Zapisano: ${savedPath}` : "Pobrano zanonimizowany .docx.",
-                            media ? `Uwaga: obrazy i osadzone obiekty (${media.split(":")[1]}) nie są anonimizowane - sprawdź je przed wysłaniem.` : ""
+                            media ? t("Uwaga: obrazy i osadzone obiekty ({value}) nie są anonimizowane - sprawdź je przed wysłaniem.", { value: media.split(":")[1] }) : ""
                           ].filter(Boolean).join(" ")
                         );
                       })
@@ -320,7 +320,7 @@ export function AnonymizedDocumentView(props: {
                 onClick={() =>
                   void apply(
                     () => approveAnonymizedVersion(props.caseId, props.documentId),
-                    () => "Zatwierdzono. Dokument może trafić do wybranego modelu."
+                    () => t("Zatwierdzono. Dokument może trafić do wybranego modelu.")
                   )
                 }
               >
@@ -406,7 +406,7 @@ export function AnonymizedDocumentView(props: {
                             () => editAnonymizedText(props.caseId, props.documentId, chunk.index, editingChunk.text),
                             () => {
                               setEditingChunk(null);
-                              return "Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.";
+                              return t("Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.");
                             }
                           )
                         }

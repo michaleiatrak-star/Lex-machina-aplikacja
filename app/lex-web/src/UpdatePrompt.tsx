@@ -30,8 +30,8 @@ import {
  */
 const UPDATE_STEPS = (macos: boolean): string[] =>
   macos
-    ? ["Pobieranie i sprawdzenie instalatora", "Instalator macOS: przejdź jego kroki", "Lex Machina otworzy się i pokaże dalsze przygotowanie"]
-    : ["Pobieranie i sprawdzenie instalatora", "Instalacja — okno z paskiem postępu pokaże kolejne etapy", "Lex Machina uruchomi się sama po instalacji"];
+    ? [t("Pobieranie i sprawdzenie instalatora"), t("Instalator macOS: przejdź jego kroki"), t("Lex Machina otworzy się i pokaże dalsze przygotowanie")]
+    : [t("Pobieranie i sprawdzenie instalatora"), t("Instalacja — okno z paskiem postępu pokaże kolejne etapy"), t("Lex Machina uruchomi się sama po instalacji")];
 
 export function UpdatePrompt() {
   const [store] = useState(updateStore);

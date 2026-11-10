@@ -71,7 +71,7 @@ export function DeanonymizationReview(props: {
     <div className="deanonymization-review">
       <p>
         {t("Sprawdź przywrócone dane przed utworzeniem pliku. Poprawka formy zmienia wszystkie wystąpienia tego samego symbolu w dokumencie.")} {toReview.length > 0
-          ? `Do sprawdzenia: ${toReview.length}.`
+          ? t("Do sprawdzenia: {count}.", { count: toReview.length })
           : t("Wszystkie formy pochodzą ze słownika, reguł lub dokumentu.")}
       </p>
       <RestorationReview

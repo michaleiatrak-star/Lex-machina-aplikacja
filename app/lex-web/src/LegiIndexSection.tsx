@@ -43,10 +43,10 @@ export function LegiIndexSection() {
             </InfoTip>
           </strong>
         </div>
-        <span>{status?.built ? `indeks z ${String(status.built.built).slice(0, 10)}: ${status.built.codes} kodeksów` : "brak indeksu"}</span>
+        <span>{status?.built ? t("indeks z {value}: {codes} kodeksów", { value: String(status.built.built).slice(0, 10), codes: status.built.codes }) : "brak indeksu"}</span>
       </div>
       <button type="button" disabled={building || !status} onClick={() => void start()}>
-        {building ? `Indeksowanie… (${status?.build?.files ?? 0} plików)` : status?.built ? t("Odśwież indeks LEGI") : "Zbuduj indeks LEGI"}
+        {building ? t("Indeksowanie… ({value} plików)", { value: status?.build?.files ?? 0 }) : status?.built ? t("Odśwież indeks LEGI") : "Zbuduj indeks LEGI"}
       </button>
       {status?.build?.state === "FAILED" ? <p className="field-error">{t("Indeksowanie nie powiodło się:")} {status.build.error}</p> : null}
       {error ? <p className="field-error">{error}</p> : null}

@@ -70,7 +70,7 @@ export function RestorationReview(props: {
       setStatus(remember ? t("Poprawiono i zapamiętano formę dla tego nazwiska.") : t("Poprawiono w tym miejscu."));
       setSelected(null);
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setBusy(false);
     }
@@ -85,7 +85,7 @@ export function RestorationReview(props: {
       <mark
         key={`m${index}`}
         className={`restored restored-${tone}${selected === index ? " restored-selected" : ""}`}
-        title={`${mark.kind}${mark.case ? ` · ${caseLabel(mark.case)}` : ""} · ${TONE_LABEL[tone]} · pewność ${Math.round(mark.confidence * 100)}%`}
+        title={t("{kind}{value} · {value2} · pewność {value3}%", { kind: mark.kind, value: mark.case ? ` · ${caseLabel(mark.case)}` : "", value2: TONE_LABEL[tone], value3: Math.round(mark.confidence * 100) })}
         role="button"
         tabIndex={0}
         onClick={() => select(index)}
@@ -110,7 +110,7 @@ export function RestorationReview(props: {
           {open ? "Ukryj" : "Pokaż"} {t("przywrócone dane (")}{props.marks.length})
         </button>
         <small>
-          {counts.review > 0 ? `do sprawdzenia: ${counts.review}` : t("wszystkie formy pewne lub regułowe")}
+          {counts.review > 0 ? t("do sprawdzenia: {review}", { review: counts.review }) : t("wszystkie formy pewne lub regułowe")}
           {counts.manual > 0 ? ` · poprawione: ${counts.manual}` : ""}
           {unresolved.length > 0 ? ` · nieodtworzone symbole: ${unresolved.length}` : ""}
         </small>

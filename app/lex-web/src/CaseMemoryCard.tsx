@@ -47,7 +47,7 @@ export function CaseMemoryCard({
         setEditing(false);
       })
       .catch((error: unknown) => {
-        if (active) setMessage(`Pamięć sprawy niedostępna: ${error instanceof Error ? error.message : String(error)}`);
+        if (active) setMessage(t("Pamięć sprawy niedostępna: {error}", { error: error instanceof Error ? error.message : String(error) }));
       });
     return () => {
       active = false;
@@ -83,11 +83,11 @@ export function CaseMemoryCard({
           <InfoTip>
             {t("Kolejne odpowiedzi w sprawie zaczynają od tych ustaleń. Przepis jest użyty bez ponownej weryfikacji tylko, gdy w Sejm ELI nie ma nowszego tekstu jednolitego ani nowelizacji.")}
           </InfoTip>{" "}
-          {provisions.length ? `${provisions.length} przepisów` : t("bez przepisów")}
-          {summary ? `, streszczenie ${summary.coveredMessages} wiadomości` : ""}
+          {provisions.length ? t("{count} przepisów", { count: provisions.length }) : t("bez przepisów")}
+          {summary ? t(", streszczenie {coveredMessages} wiadomości", { coveredMessages: summary.coveredMessages }) : ""}
           {overview ? ", podsumowanie" : ""}
           {chronology ? t(", oś czasu") : ""}
-          {work.length ? `, prace: ${work.filter((item) => item.status === "DONE").length} zamkniętych, ${work.filter((item) => item.status === "OPEN").length} otwartych` : ""}
+          {work.length ? t(", prace: {count} zamkniętych, {count2} otwartych", { count: work.filter((item) => item.status === "DONE").length, count2: work.filter((item) => item.status === "OPEN").length }) : ""}
         </summary>
         <h3>
           {t("Podsumowanie sprawy")}
@@ -206,7 +206,7 @@ export function CaseMemoryCard({
                   provision.claim
                 )}{" "}
                 — {provision.status}, t.j. {provision.consolidatedText ?? "—"}{t(", pobrano")} {date(provision.fetchedAt)}
-                {provision.freshnessCheckedAt ? `, aktualność sprawdzona ${date(provision.freshnessCheckedAt)}` : ""}
+                {provision.freshnessCheckedAt ? t(", aktualność sprawdzona {freshnessCheckedAt}", { freshnessCheckedAt: date(provision.freshnessCheckedAt) }) : ""}
               </li>
             ))}
           </ul>
@@ -227,7 +227,7 @@ export function CaseMemoryCard({
                 await clearCaseMemory(caseId);
                 setMemory({ summary: null, evidence: null, chronology: null, overview: null, work: [] });
                 setDraft("");
-              }, "Pamięć sprawy wyczyszczona.")
+              }, t("Pamięć sprawy wyczyszczona."))
             }
           >
             {t("Wyczyść pamięć sprawy")}

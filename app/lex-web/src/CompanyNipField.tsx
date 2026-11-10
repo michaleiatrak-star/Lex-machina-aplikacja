@@ -35,7 +35,7 @@ export function CompanyNipField({
     } catch (error) {
       setState({
         kind: "failed",
-        message: error instanceof CompanyLookupError ? error.message : `Nie udało się pobrać danych: ${error instanceof Error ? error.message : String(error)}`
+        message: error instanceof CompanyLookupError ? error.message : t("Nie udało się pobrać danych: {error}", { error: error instanceof Error ? error.message : String(error) })
       });
     }
   }

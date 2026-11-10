@@ -50,8 +50,8 @@ import "./invoices.css";
 const SORTS: Array<[InvoiceSort, string]> = [
   ["date-desc", "Data: najnowsze"],
   ["date-asc", "Data: najstarsze"],
-  ["client-asc", "Klient: A–Z"],
-  ["client-desc", "Klient: Z–A"]
+  ["client-asc", t("Klient: A–Z")],
+  ["client-desc", t("Klient: Z–A")]
 ];
 
 type Editing = { invoiceId: string | null; draft: InvoiceDraft };
@@ -100,8 +100,8 @@ function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] 
   return [
     annotations.cashMethod ? "metoda kasowa" : "",
     annotations.selfBilling ? "samofakturowanie" : "",
-    annotations.reverseCharge ? "odwrotne obciążenie" : "",
-    annotations.splitPayment ? "mechanizm podzielonej płatności" : "",
+    annotations.reverseCharge ? t("odwrotne obciążenie") : "",
+    annotations.splitPayment ? t("mechanizm podzielonej płatności") : "",
     annotations.exemptionBasis ? `Podstawa zwolnienia: ${annotations.exemptionBasis}` : ""
   ].filter(Boolean);
 }
@@ -109,8 +109,8 @@ function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] 
 const ANNOTATION_FLAGS: Array<[keyof Omit<InvoiceAnnotations, "exemptionBasis">, string]> = [
   ["cashMethod", "metoda kasowa"],
   ["selfBilling", "samofakturowanie"],
-  ["reverseCharge", "odwrotne obciążenie"],
-  ["splitPayment", "mechanizm podzielonej płatności"]
+  ["reverseCharge", t("odwrotne obciążenie")],
+  ["splitPayment", t("mechanizm podzielonej płatności")]
 ];
 
 function InvoiceDocument({
@@ -148,7 +148,7 @@ function InvoiceDocument({
       <table>
         <thead>
           <tr>
-            <th>Lp.</th>
+            <th>{t("Lp.")}</th>
             <th>{t("Nazwa towaru lub usługi")}</th>
             <th>J.m.</th>
             <th>{t("Ilość")}</th>
@@ -287,7 +287,7 @@ export function InvoicesPanel({
     setConfirmIssue(false);
     setTemplateName(null);
     setEditing({ invoiceId: null, draft: draftFromTemplate(template, settings?.seller, today(), defaults) });
-    setMessage(`Nowa faktura ze wzoru „${template.name}”. Uzupełnij numer i sprawdź pozycje.`);
+    setMessage(t("Nowa faktura ze wzoru „{name}”. Uzupełnij numer i sprawdź pozycje.", { name: template.name }));
   }
 
   // Zapis jako wzór; wzór o tej samej nazwie jest aktualizowany.
@@ -300,16 +300,16 @@ export function InvoicesPanel({
       await refreshTemplates();
       setTemplateId(saved.template.templateId);
       setTemplateName(null);
-    }, existing ? `Wzór „${name}” zaktualizowany.` : `Wzór „${name}” zapisany.`);
+    }, existing ? t("Wzór „{name}” zaktualizowany.", { name: name }) : t("Wzór „{name}” zapisany.", { name: name }));
   }
 
   function removeTemplate(): void {
     const template = templates.find((item) => item.templateId === templateId);
-    if (!template || !window.confirm(`Usunąć wzór „${template.name}”? Faktury utworzone ze wzoru zostają.`)) return;
+    if (!template || !window.confirm(t("Usunąć wzór „{name}”? Faktury utworzone ze wzoru zostają.", { name: template.name }))) return;
     void run(async () => {
       await deleteInvoiceTemplate(template.templateId);
       await refreshTemplates();
-    }, `Wzór „${template.name}” usunięty.`);
+    }, t("Wzór „{name}” usunięty.", { name: template.name }));
   }
 
   function startNew(): void {
@@ -499,7 +499,7 @@ export function InvoicesPanel({
                   // Jedyny rachunek sprzedawcy z wykazu VAT trafia do pustego pola rachunku.
                   if (editing.draft.paymentMethod !== "przelew" || editing.draft.bankAccount?.trim() || lookup.accounts.length !== 1) return null;
                   patch({ bankAccount: lookup.accounts[0] });
-                  return "Rachunek z wykazu VAT wstawiony.";
+                  return t("Rachunek z wykazu VAT wstawiony.");
                 }}
               />
               <PartyFields title={t("Nabywca")} party={editing.draft.buyer} onChange={(buyer) => patch({ buyer })} />
@@ -683,7 +683,7 @@ export function InvoicesPanel({
                       void run(async () => {
                         await deleteInvoice(selected.invoiceId);
                         setSelected(null);
-                      }, "Szkic usunięty.")
+                      }, t("Szkic usunięty."))
                     }
                   >
                     {t("Usuń szkic")}
@@ -699,7 +699,7 @@ export function InvoicesPanel({
                     const copy = await duplicateInvoice(selected.invoiceId);
                     setSelected(null);
                     setEditing({ invoiceId: copy.invoice.invoiceId, draft: draftOf(copy.invoice) });
-                  }, `Utworzono szkic na podstawie faktury ${selected.number}.`)
+                  }, t("Utworzono szkic na podstawie faktury {number}.", { number: selected.number }))
                 }
               >
                 {t("Nowa na podstawie tej")}
@@ -714,7 +714,7 @@ export function InvoicesPanel({
                     const saved = await downloadBlob(exported.blob, exported.filename);
                     const where = saved ? `Zapisano: ${saved}.` : `Pobrano ${exported.filename}.`;
                     return exported.logoOmitted
-                      ? `${where} Logo pominięto: obraz w nieobsługiwanym formacie (np. PNG z przeplotem); zapisz logo ponownie jako zwykły PNG lub JPEG.`
+                      ? t("{where} Logo pominięto: obraz w nieobsługiwanym formacie (np. PNG z przeplotem); zapisz logo ponownie jako zwykły PNG lub JPEG.", { where: where })
                       : where;
                   })
                 }

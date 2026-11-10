@@ -19,11 +19,11 @@ import { InfoTip } from "./InfoTip";
 
 const STATE_LABEL: Record<CoreLawActStatus["state"], string> = {
   CURRENT: "aktualny",
-  UPDATE_AVAILABLE: "jest aktualizacja",
-  CHECK_DUE: "do sprawdzenia",
+  UPDATE_AVAILABLE: t("jest aktualizacja"),
+  CHECK_DUE: t("do sprawdzenia"),
   MISSING: "niepobrany",
-  ERROR: "błąd pobierania",
-  UNAVAILABLE: "brak tekstu w ELI"
+  ERROR: t("błąd pobierania"),
+  UNAVAILABLE: t("brak tekstu w ELI")
 };
 
 export function coreLawProgressText(progress: CoreLawProgress): string {
@@ -49,7 +49,7 @@ const CHANGE_LABEL: Record<CoreLawStatus["recent"][number]["kind"], string> = {
   CONSOLIDATED: "nowy tekst jednolity",
   AMENDMENT: "dodana nowelizacja",
   ADDED: "dodany akt",
-  REMOVED: "usunięty akt"
+  REMOVED: t("usunięty akt")
 };
 
 export function coreLawActErrorText(code: string): string {
@@ -162,7 +162,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
             : status.refreshing
               ? "sprawdzanie…"
               : groups.needsUpdate.length
-                ? `do aktualizacji: ${groups.needsUpdate.length}`
+                ? t("do aktualizacji: {count}", { count: groups.needsUpdate.length })
                 : "aktualne"}
         </span>
       </div>
@@ -261,14 +261,14 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   <small>
                     {found.act.type ?? "akt"} · {found.act.baseEli}
                     {found.act.status ? ` · ${found.act.status}` : ""}
-                    {found.act.promulgation ? ` · ogłoszony ${day(found.act.promulgation)}` : ""}
+                    {found.act.promulgation ? t(" · ogłoszony {promulgation}", { promulgation: day(found.act.promulgation) }) : ""}
                   </small>
                   <small>
                     {found.act.consolidated
-                      ? `Do RAG: tekst jednolity ${found.act.currentEli}.`
-                      : `Do RAG: tekst aktu ${found.act.currentEli} (brak tekstu jednolitego w ELI).`}
+                      ? t("Do RAG: tekst jednolity {currentEli}.", { currentEli: found.act.currentEli })
+                      : t("Do RAG: tekst aktu {currentEli} (brak tekstu jednolitego w ELI).", { currentEli: found.act.currentEli })}
                     {found.act.inputEli !== found.act.currentEli && found.act.inputEli !== found.act.baseEli
-                      ? ` Podano ${found.act.inputEli}; w ELI jest nowszy tekst jednolity.`
+                      ? t(" Podano {inputEli}; w ELI jest nowszy tekst jednolity.", { inputEli: found.act.inputEli })
                       : ""}
                   </small>
                   {found.act.amendmentsAfter ? (
@@ -319,7 +319,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         className="danger-button"
                         disabled={disabled}
                         onClick={() => {
-                          if (window.confirm(`Usunąć z kopii przepisów „${actName(act)}”?`)) {
+                          if (window.confirm(t("Usunąć z kopii przepisów „{act}”?", { act: actName(act) }))) {
                             void run(`remove:${act.eli}`, () => removeCoreLawAct(act.eli));
                           }
                         }}
@@ -346,7 +346,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                     {act.pendingConsolidated ? (
                       <small>
                         {t("Nowszy tekst jednolity")} {act.pendingConsolidated.eli}
-                        {act.pendingConsolidated.promulgation ? ` z ${day(act.pendingConsolidated.promulgation)}` : ""}{" "}
+                        {act.pendingConsolidated.promulgation ? t(" z {promulgation}", { promulgation: day(act.pendingConsolidated.promulgation) }) : ""}{" "}
                         {t("zastąpi tekst w RAG.")}
                       </small>
                     ) : null}
@@ -354,7 +354,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                       <small key={amendment.eli}>
                         {t("Nowelizacja")} {amendment.eli}
                         {amendment.title ? ` „${amendment.title}”` : ""}
-                        {amendment.promulgation ? ` z ${day(amendment.promulgation)}` : ""} {t("zostanie dodana do RAG.")}
+                        {amendment.promulgation ? t(" z {promulgation}", { promulgation: day(amendment.promulgation) }) : ""} {t("zostanie dodana do RAG.")}
                       </small>
                     ))}
                     {status.progress?.eli === act.currentEli || status.progress?.eli === act.eli ? (
@@ -413,7 +413,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   </div>
                   <small>
                     {t("pobrano")} {day(act.fetchedAt)} · {act.articleCount} {t("art.")}
-                    {act.consolidated ? ` · sprawdzono w ELI ${day(act.relationsCheckedAt)}` : ""}
+                    {act.consolidated ? t(" · sprawdzono w ELI {relationsCheckedAt}", { relationsCheckedAt: day(act.relationsCheckedAt) }) : ""}
                   </small>
                   {act.amendmentsAfter.map((amendment) => (
                     <small key={amendment.eli}>

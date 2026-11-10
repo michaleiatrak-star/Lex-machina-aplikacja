@@ -19,15 +19,15 @@ import { INTEGRITY_TEXT } from "./McpSearchPanel.js";
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
-  CEIDG_KEY_NOT_JWT: "To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token.",
-  CEIDG_KEY_REJECTED: "CEIDG odrzucił token (HTTP 401/403) — jest nieprawidłowy albo wygasł. Wygeneruj nowy w Hurtowni danych CEIDG.",
-  CEIDG_KEY_REQUIRED: "CEIDG wymaga klucza API. Najpierw wklej i zatwierdź klucz poniżej.",
-  CLAUDE_DESKTOP_NOT_INSTALLED: "Na tym komputerze nie znaleziono Claude Desktop — odznacz synchronizację.",
-  CLAUDE_DESKTOP_CONFIG_INVALID: "Plik claude_desktop_config.json jest uszkodzony (niepoprawny JSON) — popraw go ręcznie.",
-  LEX_MCP_PACKAGE_MISSING: "Brak pakietu serwerów MCP wybranej jurysdykcji (prawo polskie: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli.",
-  LEX_MCP_PROBE_TIMEOUT: "Serwer MCP nie odpowiedział w 30 s — instalacja przerwana.",
-  LEX_MCP_PROBE_NO_TOOLS: "Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana.",
-  AUTHORIZATION_DENIED: "Konektorami MCP zarządza administrator aplikacji."
+  CEIDG_KEY_NOT_JWT: t("To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token."),
+  CEIDG_KEY_REJECTED: t("CEIDG odrzucił token (HTTP 401/403) — jest nieprawidłowy albo wygasł. Wygeneruj nowy w Hurtowni danych CEIDG."),
+  CEIDG_KEY_REQUIRED: t("CEIDG wymaga klucza API. Najpierw wklej i zatwierdź klucz poniżej."),
+  CLAUDE_DESKTOP_NOT_INSTALLED: t("Na tym komputerze nie znaleziono Claude Desktop — odznacz synchronizację."),
+  CLAUDE_DESKTOP_CONFIG_INVALID: t("Plik claude_desktop_config.json jest uszkodzony (niepoprawny JSON) — popraw go ręcznie."),
+  LEX_MCP_PACKAGE_MISSING: t("Brak pakietu serwerów MCP wybranej jurysdykcji (prawo polskie: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli."),
+  LEX_MCP_PROBE_TIMEOUT: t("Serwer MCP nie odpowiedział w 30 s — instalacja przerwana."),
+  LEX_MCP_PROBE_NO_TOOLS: t("Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana."),
+  AUTHORIZATION_DENIED: t("Konektorami MCP zarządza administrator aplikacji.")
 };
 
 function checkText(server: McpServerStatus): string {
@@ -35,8 +35,8 @@ function checkText(server: McpServerStatus): string {
   if (!check) return "";
   const at = new Date(check.at).toLocaleString(currentLocale());
   return check.ok
-    ? ` · działa (sprawdzono ${at})`
-    : ` · nie działa: ${ERRORS[check.error ?? ""] ?? check.error} (sprawdzono ${at})`;
+    ? t(" · działa (sprawdzono {at})", { at: at })
+    : t(" · nie działa: {error} (sprawdzono {at})", { error: ERRORS[check.error ?? ""] ?? check.error, at: at });
 }
 
 function failureText(error: unknown): string {
@@ -138,8 +138,8 @@ export function McpConnectorsPanel() {
       (result) => {
         const { check: outcome } = result as { check: { ok: boolean; tools?: string[]; error?: string } };
         return outcome.ok
-          ? `${server.id} działa: ${outcome.tools?.join(", ")}.`
-          : `${server.id} nie działa: ${ERRORS[outcome.error ?? ""] ?? outcome.error}.`;
+          ? t("{id} działa: {value}.", { id: server.id, value: outcome.tools?.join(", ") })
+          : t("{id} nie działa: {error}.", { id: server.id, error: ERRORS[outcome.error ?? ""] ?? outcome.error });
       }
     );
   }
@@ -166,13 +166,13 @@ export function McpConnectorsPanel() {
         };
         const verdict =
           verification === "VERIFIED"
-            ? "Klucz CEIDG zatwierdzony — API przyjęło token."
+            ? t("Klucz CEIDG zatwierdzony — API przyjęło token.")
             : verification === "RATE_LIMITED"
-              ? "Klucz zapisany; CEIDG zwrócił limit zapytań (429), więc nie sprawdzono go teraz — nie ponawiaj od razu."
-              : "Klucz zapisany, ale API CEIDG było nieosiągalne — sprawdzenie nastąpi przy pierwszym zapytaniu.";
+              ? t("Klucz zapisany; CEIDG zwrócił limit zapytań (429), więc nie sprawdzono go teraz — nie ponawiaj od razu.")
+              : t("Klucz zapisany, ale API CEIDG było nieosiągalne — sprawdzenie nastąpi przy pierwszym zapytaniu.");
         return verdict +
-          " Teraz możesz zainstalować CEIDG." +
-          (containsPersonalData ? " Token zawiera Twoje dane osobowe (PESEL) — nie udostępniaj go." : "");
+          t(" Teraz możesz zainstalować CEIDG.") +
+          (containsPersonalData ? t(" Token zawiera Twoje dane osobowe (PESEL) — nie udostępniaj go.") : "");
       }
     );
   }
@@ -181,7 +181,7 @@ export function McpConnectorsPanel() {
     void run(
       "ceidg-key",
       () => clearCeidgApiKey(),
-      () => "Klucz CEIDG usunięty. CEIDG nie będzie uruchamiany do czasu podania nowego klucza."
+      () => t("Klucz CEIDG usunięty. CEIDG nie będzie uruchamiany do czasu podania nowego klucza.")
     );
   }
 

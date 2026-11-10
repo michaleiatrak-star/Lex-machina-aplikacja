@@ -81,7 +81,7 @@ export function FirmKnowledgePicker({
     <details className="firm-picker">
       <summary>
         {t("Materiały do tej rozmowy:")} {coveredFiles} z {files.length} {t("plików")}
-        {defaults ? ` · domyślne foldery kancelarii: ${defaults}` : ""}
+        {defaults ? t(" · domyślne foldery kancelarii: {defaults}", { defaults: defaults }) : ""}
       </summary>
       {folders.length === 0 && files.length === 0 ? <small className="firm-picker-note">{t("Baza know-how jest pusta.")}</small> : null}
       <ul className="firm-picker-list">

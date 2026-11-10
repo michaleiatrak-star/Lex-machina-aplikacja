@@ -64,8 +64,8 @@ export function unfinishedDocuments(
 /** The request sent by "Dokończ analizę": the pages left, without going over the read ones. */
 export function finishAnalysisMessage(name: string, item: UnfinishedDocument): string {
   return (
-    `Dokończ analizę dokumentu „${name}”: przeczytaj nieprzeczytane strony ${formatRanges(item.missing)} z ${item.totalPages} ` +
-    `(read_case_file, kolejne fragmenty) i uzupełnij wcześniejszy wynik. Nie powtarzaj stron już omówionych (${formatRanges(item.read)}).`
+    t("Dokończ analizę dokumentu „{name}”: przeczytaj nieprzeczytane strony {missing} z {totalPages} ", { name: name, missing: formatRanges(item.missing), totalPages: item.totalPages }) +
+    t("(read_case_file, kolejne fragmenty) i uzupełnij wcześniejszy wynik. Nie powtarzaj stron już omówionych ({read}).", { read: formatRanges(item.read) })
   );
 }
 
@@ -77,8 +77,8 @@ export function CoverageLine({ entries, label }: { entries: DocumentCoverageEntr
       {entries
         .map((entry) =>
           entry.status === "FULL"
-            ? `${label(entry)} w całości (${entry.totalPages} s.)`
-            : `${label(entry)} częściowo: s. ${formatRanges(entry.pages)} z ${entry.totalPages}`
+            ? t("{entry} w całości ({totalPages} s.)", { entry: label(entry), totalPages: entry.totalPages })
+            : t("{entry} częściowo: s. {pages} z {totalPages}", { entry: label(entry), pages: formatRanges(entry.pages), totalPages: entry.totalPages })
         )
         .join("; ")}
     </small>

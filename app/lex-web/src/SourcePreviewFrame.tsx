@@ -5,9 +5,9 @@ import { PdfPreview } from "./PdfPreview.js";
 import type { SourcePreviewTarget } from "./mcp-search-results.js";
 
 const ERRORS: Record<string, string> = {
-  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, KIO, UODO, ISAP/ELI, EUR-Lex, SN, KRS, NBP). Użyj „Otwórz w źródle”.",
-  SOURCE_PREVIEW_NO_POLISH_TEXT: "Repozytorium UE (Cellar) nie ma polskiej wersji tego dokumentu. Użyj „Otwórz w źródle”.",
-  SOURCE_PREVIEW_TOO_LARGE: "Strona źródła jest zbyt duża do podglądu. Użyj „Otwórz w źródle”."
+  SOURCE_PREVIEW_HOST_NOT_ALLOWED: t("Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, KIO, UODO, ISAP/ELI, EUR-Lex, SN, KRS, NBP). Użyj „Otwórz w źródle”."),
+  SOURCE_PREVIEW_NO_POLISH_TEXT: t("Repozytorium UE (Cellar) nie ma polskiej wersji tego dokumentu. Użyj „Otwórz w źródle”."),
+  SOURCE_PREVIEW_TOO_LARGE: t("Strona źródła jest zbyt duża do podglądu. Użyj „Otwórz w źródle”.")
 };
 
 // The source page, fetched by the runtime without scripts, in a sandboxed frame
@@ -62,7 +62,7 @@ export function SourcePreviewFrame(props: { target: SourcePreviewTarget }) {
   return (
     <iframe
       className="source-preview-frame"
-      title={`Podgląd źródła: ${key}`}
+      title={t("Podgląd źródła: {key}", { key: key })}
       src={state.blobUrl}
       sandbox=""
       referrerPolicy="no-referrer"

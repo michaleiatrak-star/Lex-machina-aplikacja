@@ -19,16 +19,16 @@ import {
 } from "./api.js";
 
 export const WOKANDA_STATUS_LABEL: Record<WokandaCourtInfo["status"], string> = {
-  PORTAL: "wokanda dostępna dla aplikacji",
-  BROWSER: "wokanda tylko w przeglądarce",
-  NONE: "sąd nie publikuje wokandy",
-  UNREACHABLE: "strona sądu nie odpowiada"
+  PORTAL: t("wokanda dostępna dla aplikacji"),
+  BROWSER: t("wokanda tylko w przeglądarce"),
+  NONE: t("sąd nie publikuje wokandy"),
+  UNREACHABLE: t("strona sądu nie odpowiada")
 };
 
 const SOURCE_LABEL: Record<CaseCourtInfo["zrodlo"], string> = {
-  AKTA: "z dokumentów sprawy",
-  PISMO: "z pierwszego pisma",
-  UZYTKOWNIK: "wpisane ręcznie"
+  AKTA: t("z dokumentów sprawy"),
+  PISMO: t("z pierwszego pisma"),
+  UZYTKOWNIK: t("wpisane ręcznie")
 };
 
 /** "2026-11-05" + "08:00" as the local time of this computer (Poland). */
@@ -49,7 +49,7 @@ export function hearingLine(hearing: WokandaHearing): string {
     hearing.sala ? `sala ${hearing.sala}` : "",
     hearing.miejsce ?? "",
     hearing.wydzial,
-    hearing.przewodniczacy ? `przewodniczący: ${hearing.przewodniczacy}` : "",
+    hearing.przewodniczacy ? t("przewodniczący: {przewodniczacy}", { przewodniczacy: hearing.przewodniczacy }) : "",
     hearing.status ? `status: ${hearing.status}` : ""
   ]
     .filter(Boolean)
@@ -147,9 +147,9 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
         title: `Rozprawa ${hearing.sygnatura}`,
         startsAt: hearingStartsAt(hearing),
         location: [court?.nazwa, hearing.miejsce, hearing.sala ? `sala ${hearing.sala}` : ""].filter(Boolean).join(", "),
-        notes: `Z wokandy sądu (${hearing.url}).${hearing.przewodniczacy ? ` Przewodniczący: ${hearing.przewodniczacy}.` : ""}`
+        notes: t("Z wokandy sądu ({url}).{value}", { url: hearing.url, value: hearing.przewodniczacy ? ` Przewodniczący: ${hearing.przewodniczacy}.` : "" })
       });
-      setMessage(`Termin ${hearing.data} ${hearing.godzina} dodany do kalendarza sprawy.`);
+      setMessage(t("Termin {data} {godzina} dodany do kalendarza sprawy.", { data: hearing.data, godzina: hearing.godzina }));
       setSchedule((await listCaseSchedule(caseId).catch(() => ({ events: schedule }))).events);
       onScheduleChanged?.();
     } catch (error) {
@@ -219,7 +219,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
               <input inputMode="numeric" value={parts.numer} maxLength={6} placeholder="1768" onChange={(event) => setParts({ ...parts, numer: event.target.value.replace(/\D/gu, "") })} />
             </label>
             <label>
-              Rok
+              {t("Rok")}
               <select value={parts.rok} onChange={(event) => setParts({ ...parts, rok: event.target.value })}>
                 <option value="">–</option>
                 {signatureYears().map((value) => (

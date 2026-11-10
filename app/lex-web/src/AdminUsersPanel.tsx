@@ -57,8 +57,8 @@ function errorMessage(
 }
 
 const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
-  ["PROFESSIONAL", "Kancelaria (sprawy i narzędzia)"],
-  ["INDIVIDUAL", "Użytkownik indywidualny (sam czat)"]
+  ["PROFESSIONAL", t("Kancelaria (sprawy i narzędzia)")],
+  ["INDIVIDUAL", t("Użytkownik indywidualny (sam czat)")]
 ];
 
 function accountKindLabel(kind: AccountKind | undefined): string {

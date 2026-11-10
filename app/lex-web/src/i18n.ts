@@ -139,12 +139,12 @@ export async function loadLocale(code: LocaleCode): Promise<void> {
  * The text in the interface language. `text` is the Polish source; {name} placeholders are
  * filled from `values` after translation (a translation may move them).
  */
-export function t(text: string, values?: Record<string, string | number>): string {
+export function t(text: string, values?: Record<string, unknown>): string {
   const translated =
     current === SOURCE
       ? text
       : catalogs.get(current)?.[text] ?? catalogs.get(FALLBACK)?.[text] ?? text;
-  return values ? translated.replace(/\{(\w+)\}/gu, (match, name: string) => (name in values ? String(values[name]) : match)) : translated;
+  return values ? translated.replace(/\{(\w+)\}/gu, (match, name: string) => (name in values ? String(values[name] ?? "") : match)) : translated;
 }
 
 /**

@@ -78,17 +78,17 @@ export function caseLawDocument(copy: CaseLawCopy): File {
   const title = [copy.court, copy.form, copy.signature, copy.date].filter(Boolean).join(" ");
   const header = [
     `Orzeczenie: ${title || copy.cardUrl}`,
-    `Karta orzeczenia (źródło): ${copy.cardUrl}`,
+    t("Karta orzeczenia (źródło): {cardUrl}", { cardUrl: copy.cardUrl }),
     `Tekst pobrany: ${copy.fetchedAt.slice(0, 16).replace("T", " ")} UTC · SHA-256: ${copy.sha256}`,
     ""
   ].join("\n");
-  const name = `Orzeczenie ${(copy.signature ?? copy.court).replace(/[\\/:*?"<>|]+/g, "-").trim()}${copy.date ? ` z ${copy.date}` : ""}.txt`;
+  const name = t("Orzeczenie {trim}{value}.txt", { trim: (copy.signature ?? copy.court).replace(/[\\/:*?"<>|]+/g, "-").trim(), value: copy.date ? ` z ${copy.date}` : "" });
   return new File([`${header}\n${copy.text}\n`], name, { type: "text/plain" });
 }
 
 const ERRORS: Record<string, string> = {
-  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Pełny tekst jest dostępny tylko z oficjalnych źródeł orzeczeń i interpretacji.",
-  CASE_PREVIEW_TEXT_EMPTY: "Źródło nie zwróciło tekstu rozstrzygnięcia."
+  SOURCE_PREVIEW_HOST_NOT_ALLOWED: t("Pełny tekst jest dostępny tylko z oficjalnych źródeł orzeczeń i interpretacji."),
+  CASE_PREVIEW_TEXT_EMPTY: t("Źródło nie zwróciło tekstu rozstrzygnięcia.")
 };
 
 /**
@@ -164,7 +164,7 @@ export function CaseLawPreview(props: {
           <button type="button" className="chat-secondary-action" disabled={saving.kind === "saving" || saving.kind === "done"} onClick={() => void save()}>
             {saving.kind === "saving" ? t("Zapisywanie w aktach…") : saving.kind === "done" ? t("Zapisano w aktach sprawy") : t("Zapisz w aktach sprawy")}
           </button>{" "}
-          {saving.kind === "done" ? `${saving.name} (z linkiem do karty orzeczenia)` : null}
+          {saving.kind === "done" ? t("{name} (z linkiem do karty orzeczenia)", { name: saving.name }) : null}
           {saving.kind === "error" ? <span className="chat-inline-error">{saving.message}</span> : null}
         </p>
       ) : null}

@@ -134,7 +134,7 @@ export function FirmFilePicker(props: {
             type="button"
             className="firm-pick-toggle"
             aria-expanded={expanded}
-            aria-label={expanded ? `Zwiń ${folder.name}` : `Rozwiń ${folder.name}`}
+            aria-label={expanded ? t("Zwiń {name}", { name: folder.name }) : t("Rozwiń {name}", { name: folder.name })}
             onClick={() => toggleOpen(key)}
           >
             {expanded ? "▾" : "▸"}
@@ -142,7 +142,7 @@ export function FirmFilePicker(props: {
           <FolderCheckbox
             state={folderState(folder, props.selected)}
             disabled={picks.length === 0}
-            label={`Zaznacz cały folder ${folder.name}`}
+            label={t("Zaznacz cały folder {name}", { name: folder.name })}
             onChange={(select) => props.onChange(picks, select)}
           />
           <strong onClick={() => toggleOpen(key)}>{folder.name}</strong>

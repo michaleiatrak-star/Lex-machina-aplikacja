@@ -123,10 +123,10 @@ export function DocumentEditor(props: {
     try {
       await props.onSave(name, format, blocksFromDom(target as unknown as NodeLike), { trackChanges: trackChanges && format === "docx" });
       setDirty(false);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }
@@ -240,7 +240,7 @@ export function DocumentEditor(props: {
                           setStatus(message);
                         })
                         .catch((failure: unknown) =>
-                          setStatus(`Nie udało się: ${failure instanceof Error ? failure.message : String(failure)}`)
+                          setStatus(t("Nie udało się: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }))
                         )
                         .finally(() => setSaving(false));
                     }}

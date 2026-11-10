@@ -86,7 +86,7 @@ export function TranscriptEditor({
           </p>
           <strong>{fileName}</strong>
           <small>
-            {t("czas trwania")} {transcriptDuration(draft)} · {total} {t("wypowiedzi")}{speakers.length ? ` · rozmówcy: ${speakers.length}` : t(" · bez podziału na rozmówców")}
+            {t("czas trwania")} {transcriptDuration(draft)} · {total} {t("wypowiedzi")}{speakers.length ? t(" · rozmówcy: {count}", { count: speakers.length }) : t(" · bez podziału na rozmówców")}
           </small>
         </div>
         <div className="case-court-actions">
@@ -128,7 +128,7 @@ export function TranscriptEditor({
                 value={renames[speaker] ?? ""}
                 maxLength={40}
                 placeholder={t("Nazwa, np. Sędzia")}
-                aria-label={`Nowa nazwa dla: ${speaker}`}
+                aria-label={t("Nowa nazwa dla: {speaker}", { speaker: speaker })}
                 onChange={(event) => setRenames({ ...renames, [speaker]: event.target.value })}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -159,7 +159,7 @@ export function TranscriptEditor({
                 </select>
               ) : null}
               <textarea
-                aria-label={`Wypowiedź ${turn.time}`}
+                aria-label={t("Wypowiedź {time}", { time: turn.time })}
                 value={turn.text}
                 rows={Math.min(6, Math.max(1, Math.ceil(turn.text.length / 90)))}
                 onChange={(event) => editTurn(page.page, index, { text: event.target.value })}

@@ -30,10 +30,10 @@ export async function openExternalUrl(url: string): Promise<void> {
 }
 
 const SN_VERIFICATION_ERRORS: Record<string, string> = {
-  SN_VERIFICATION_WINDOW_MISSING: "Okno weryfikacji sn.pl jest zamknięte — otwórz je ponownie i kliknij „Gotowe” przed jego zamknięciem.",
-  SN_VERIFICATION_NO_COOKIES: "sn.pl nie ustawił jeszcze sesji — dokończ weryfikację w oknie sn.pl.",
-  SN_VERIFICATION_COOKIES_FAILED: "Nie udało się odczytać sesji z okna sn.pl.",
-  SN_SESSION_EMPTY: "sn.pl nie ustawił jeszcze sesji — dokończ weryfikację w oknie sn.pl."
+  SN_VERIFICATION_WINDOW_MISSING: t("Okno weryfikacji sn.pl jest zamknięte — otwórz je ponownie i kliknij „Gotowe” przed jego zamknięciem."),
+  SN_VERIFICATION_NO_COOKIES: t("sn.pl nie ustawił jeszcze sesji — dokończ weryfikację w oknie sn.pl."),
+  SN_VERIFICATION_COOKIES_FAILED: t("Nie udało się odczytać sesji z okna sn.pl."),
+  SN_SESSION_EMPTY: t("sn.pl nie ustawił jeszcze sesji — dokończ weryfikację w oknie sn.pl.")
 };
 
 // sn.pl (Imperva) wymaga weryfikacji człowieka: użytkownik rozwiązuje captcha w oknie sn.pl,
@@ -159,10 +159,10 @@ export function SnVerification({
 
 export const SN_SERVER_REASONS: Record<string, string> = {
   SN_SERVER_REJECTED:
-    "sn.pl odrzuca zapytania z adresu serwera (ochrona Imperva; z adresów centrów danych często bez captchy do rozwiązania). Orzeczenia SN do ok. 2016 r. aplikacja sprawdza zastępczo w SAOS; nowsze — wklej sesję z przeglądarki w tej samej sieci co serwer albo użyj aplikacji na komputerze.",
+    t("sn.pl odrzuca zapytania z adresu serwera (ochrona Imperva; z adresów centrów danych często bez captchy do rozwiązania). Orzeczenia SN do ok. 2016 r. aplikacja sprawdza zastępczo w SAOS; nowsze — wklej sesję z przeglądarki w tej samej sieci co serwer albo użyj aplikacji na komputerze."),
   SN_SERVER_BROWSER_MISSING:
-    "Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację.",
-  SN_CONNECTOR_UNAVAILABLE: "Konektor SN nie odpowiada na serwerze."
+    t("Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację."),
+  SN_CONNECTOR_UNAVAILABLE: t("Konektor SN nie odpowiada na serwerze.")
 };
 
 // Tryb serwerowy (przeglądarka, bez okna sn.pl aplikacji): próba serwera albo sesja wklejona
@@ -231,7 +231,7 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
       else if (result === "closed") setMessage(t("Przerwano oczekiwanie na weryfikację w oknie sn.pl."));
       else setMessage(t("Weryfikacja w oknie nie przeszła w 10 minut."));
     } catch (error) {
-      setMessage(error instanceof ApiError ? `Nie udało się otworzyć okna sn.pl (${error.code}).` : t("Nie udało się otworzyć okna sn.pl."));
+      setMessage(error instanceof ApiError ? t("Nie udało się otworzyć okna sn.pl ({code}).", { code: error.code }) : t("Nie udało się otworzyć okna sn.pl."));
     } finally {
       setStage("idle");
     }
@@ -246,7 +246,7 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
         onVerified();
       } else setMessage(SN_SERVER_REASONS[result.reason ?? ""] ?? t("Weryfikacja na serwerze nie przeszła."));
     } catch (error) {
-      setMessage(error instanceof ApiError ? `Weryfikacja na serwerze nie powiodła się (${error.code}).` : t("Weryfikacja na serwerze nie powiodła się."));
+      setMessage(error instanceof ApiError ? t("Weryfikacja na serwerze nie powiodła się ({code}).", { code: error.code }) : t("Weryfikacja na serwerze nie powiodła się."));
     } finally {
       setStage("idle");
     }

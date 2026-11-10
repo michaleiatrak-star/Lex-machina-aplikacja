@@ -14,8 +14,8 @@ import {
 } from "./api.js";
 
 const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
-  ["PROFESSIONAL", "Kancelaria (sprawy i narzędzia)"],
-  ["INDIVIDUAL", "Użytkownik indywidualny (sam czat)"]
+  ["PROFESSIONAL", t("Kancelaria (sprawy i narzędzia)")],
+  ["INDIVIDUAL", t("Użytkownik indywidualny (sam czat)")]
 ];
 
 const APP_ROLES: Array<[AuthenticatedUser["appRole"], string]> = [
@@ -25,15 +25,15 @@ const APP_ROLES: Array<[AuthenticatedUser["appRole"], string]> = [
 
 const MESSAGES: Record<string, string> = {
   USER_DELETE_REQUIRES_DISABLE: "Najpierw zablokuj konto.",
-  USER_DELETE_REQUIRES_CASE_CLEANUP: "Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy.",
-  INVALID_USER_REQUEST: "Sprawdź nazwę i adres e-mail.",
-  SELF_ADMIN_MUTATION_DENIED: "Własne uprawnienia, blokadę i usunięcie zmienia inny administrator.",
-  LAST_ADMIN_REQUIRED: "Musi zostać co najmniej jeden aktywny administrator.",
-  USER_STATUS_CONFLICT: "Najpierw odbierz uprawnienia administratora (zablokowane konto nie może być administratorem).",
-  ACCOUNT_EMAIL_MISSING: "Konto nie ma adresu e-mail: wpisz go w polu E-mail i zapisz.",
-  PASSWORD_RESET_NOT_AVAILABLE: "Konto nie logowało się od włączenia trybu serwerowego: reset bez utraty danych nie jest jeszcze możliwy. Użytkownik może użyć kodu odzyskiwania.",
-  SMTP_NOT_CONFIGURED: "Poczta serwera nie jest skonfigurowana (Ustawienia serwera > SMTP).",
-  SERVER_MODE_DISABLED: "Reset hasła linkiem działa w trybie serwerowym."
+  USER_DELETE_REQUIRES_CASE_CLEANUP: t("Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy."),
+  INVALID_USER_REQUEST: t("Sprawdź nazwę i adres e-mail."),
+  SELF_ADMIN_MUTATION_DENIED: t("Własne uprawnienia, blokadę i usunięcie zmienia inny administrator."),
+  LAST_ADMIN_REQUIRED: t("Musi zostać co najmniej jeden aktywny administrator."),
+  USER_STATUS_CONFLICT: t("Najpierw odbierz uprawnienia administratora (zablokowane konto nie może być administratorem)."),
+  ACCOUNT_EMAIL_MISSING: t("Konto nie ma adresu e-mail: wpisz go w polu E-mail i zapisz."),
+  PASSWORD_RESET_NOT_AVAILABLE: t("Konto nie logowało się od włączenia trybu serwerowego: reset bez utraty danych nie jest jeszcze możliwy. Użytkownik może użyć kodu odzyskiwania."),
+  SMTP_NOT_CONFIGURED: t("Poczta serwera nie jest skonfigurowana (Ustawienia serwera > SMTP)."),
+  SERVER_MODE_DISABLED: t("Reset hasła linkiem działa w trybie serwerowym.")
 };
 
 function errorMessage(failure: unknown): string {
@@ -93,7 +93,7 @@ export function UserAccountDialog({
   }
 
   const profileChanged = displayName.trim() !== user.displayName || email.trim() !== (user.email ?? "");
-  const relogin = self ? "Zmiana zadziała po ponownym zalogowaniu." : "Użytkownik zobaczy zmianę po ponownym zalogowaniu.";
+  const relogin = self ? t("Zmiana zadziała po ponownym zalogowaniu.") : t("Użytkownik zobaczy zmianę po ponownym zalogowaniu.");
 
   return (
     <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-labelledby="user-account-dialog-title" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -152,7 +152,7 @@ export function UserAccountDialog({
                 const role = event.target.value as AuthenticatedUser["appRole"];
                 void run(
                   () => setAdminUserRole(user.userId, role),
-                  `${role === "ADMIN" ? "Nadano uprawnienia administratora" : "Odebrano uprawnienia administratora"}. Sesje konta zakończone: zmiana działa od następnego logowania.`
+                  t("{value}. Sesje konta zakończone: zmiana działa od następnego logowania.", { value: role === "ADMIN" ? "Nadano uprawnienia administratora" : "Odebrano uprawnienia administratora" })
                 );
               }}
             >
@@ -176,11 +176,11 @@ export function UserAccountDialog({
                   type="button"
                   className="chat-secondary-action"
                   onClick={() => {
-                    if (!window.confirm(`Ustawić hasło jednorazowe dla @${user.loginName}? Obecne hasło przestanie działać.`)) return;
+                    if (!window.confirm(t("Ustawić hasło jednorazowe dla @{loginName}? Obecne hasło przestanie działać.", { loginName: user.loginName }))) return;
                     void run(async () => {
                       const result = await setAdminOneTimePassword(user.userId);
                       setOneTimePassword(result.oneTimePassword);
-                    }, "Ustawiono hasło jednorazowe. Przekaż je użytkownikowi bezpiecznym kanałem.");
+                    }, t("Ustawiono hasło jednorazowe. Przekaż je użytkownikowi bezpiecznym kanałem."));
                   }}
                 >
                   {t("Ustaw hasło jednorazowe")}
@@ -190,7 +190,7 @@ export function UserAccountDialog({
                   className="chat-secondary-action"
                   onClick={() => void run(async () => {
                     const sent = await sendAdminPasswordReset(user.userId);
-                    onChanged(`Link resetu hasła wysłany na ${sent.sentTo}.`);
+                    onChanged(t("Link resetu hasła wysłany na {sentTo}.", { sentTo: sent.sentTo }));
                   }, "")}
                 >
                   {t("Wyślij link resetu na e-mail")}
@@ -226,7 +226,7 @@ export function UserAccountDialog({
                 className="chat-secondary-action"
                 onClick={() => void run(
                   () => setAdminUserStatus(user.userId, user.status === "ACTIVE" ? "DISABLED" : "ACTIVE"),
-                  user.status === "ACTIVE" ? "Konto zablokowane, a jego sesje unieważnione." : "Konto odblokowane."
+                  user.status === "ACTIVE" ? t("Konto zablokowane, a jego sesje unieważnione.") : "Konto odblokowane."
                 )}
               >
                 {user.status === "ACTIVE" ? "Zablokuj konto" : "Odblokuj konto"}
@@ -237,8 +237,8 @@ export function UserAccountDialog({
                 disabled={user.status !== "DISABLED"}
                 title={user.status !== "DISABLED" ? t("Usunąć można tylko zablokowane konto.") : undefined}
                 onClick={() => {
-                  if (!window.confirm(`Trwale usunąć konto @${user.loginName}? Operacja jest możliwa tylko dla zablokowanego konta bez powiązań ze sprawami.`)) return;
-                  void run(() => deleteAdminUser(user.userId), "Konto zostało trwale usunięte.", true);
+                  if (!window.confirm(t("Trwale usunąć konto @{loginName}? Operacja jest możliwa tylko dla zablokowanego konta bez powiązań ze sprawami.", { loginName: user.loginName }))) return;
+                  void run(() => deleteAdminUser(user.userId), t("Konto zostało trwale usunięte."), true);
                 }}
               >
                 {t("Usuń konto")}

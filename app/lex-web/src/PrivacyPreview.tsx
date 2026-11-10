@@ -47,23 +47,23 @@ function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): st
 
 // Why a local recognizer is down, in words (the raw reason stays in the tooltip).
 export function recognizerReason(reason: string): string {
-  if (/No module named '?morfeusz2/iu.test(reason)) return "brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji";
-  if (/No module named '?stanza/iu.test(reason)) return "brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji";
-  if (/No module named/iu.test(reason)) return "brak składnika Pythona - uruchom naprawę instalacji";
-  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return "nie znaleziono Pythona - uruchom naprawę instalacji";
-  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return "nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie";
-  if (/SELF_TEST_NO_PERSON/u.test(reason)) return "uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji";
-  if (/MemoryError|out of memory/iu.test(reason)) return "za mało pamięci";
+  if (/No module named '?morfeusz2/iu.test(reason)) return t("brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji");
+  if (/No module named '?stanza/iu.test(reason)) return t("brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji");
+  if (/No module named/iu.test(reason)) return t("brak składnika Pythona - uruchom naprawę instalacji");
+  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return t("nie znaleziono Pythona - uruchom naprawę instalacji");
+  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return t("nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie");
+  if (/SELF_TEST_NO_PERSON/u.test(reason)) return t("uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji");
+  if (/MemoryError|out of memory/iu.test(reason)) return t("za mało pamięci");
   if (/DLL load failed|nie można odnaleźć określonego modułu|specified module could not be found|MSVCP|VCRUNTIME/iu.test(reason))
-    return "nie ładuje się biblioteka systemowa (Visual C++) - uruchom naprawę instalacji";
+    return t("nie ładuje się biblioteka systemowa (Visual C++) - uruchom naprawę instalacji");
   if (/FileNotFoundError|No such file|\.tsv|\.dict?\b|surnames_pesel|given_names_pesel|teryt/iu.test(reason))
-    return "brak pliku słownika (PESEL/TERYT) - uruchom naprawę instalacji";
+    return t("brak pliku słownika (PESEL/TERYT) - uruchom naprawę instalacji");
   if (/PermissionError|Access is denied|Odmowa dostępu|EACCES|EPERM/iu.test(reason))
-    return "brak uprawnień do plików programu (np. blokada antywirusa) - uruchom naprawę instalacji";
+    return t("brak uprawnień do plików programu (np. blokada antywirusa) - uruchom naprawę instalacji");
   if (/SyntaxError|ImportError|AttributeError|NameError/iu.test(reason))
-    return "niezgodna wersja skryptu - uruchom naprawę instalacji";
-  if (/UnicodeDecodeError|UnicodeEncodeError/iu.test(reason)) return "błąd kodowania znaków - zgłoś szczegóły techniczne";
-  return "błąd uruchomienia - zgłoś szczegóły techniczne";
+    return t("niezgodna wersja skryptu - uruchom naprawę instalacji");
+  if (/UnicodeDecodeError|UnicodeEncodeError/iu.test(reason)) return t("błąd kodowania znaków - zgłoś szczegóły techniczne");
+  return t("błąd uruchomienia - zgłoś szczegóły techniczne");
 }
 
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
@@ -282,7 +282,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       setScanRevision((value) => value + 1);
       return { review: nextReview, directives: nextDirectives };
     } catch (failure) {
-      setError(`Nie udało się zapisać tekstu strony: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setError(t("Nie udało się zapisać tekstu strony: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       return null;
     } finally {
       setSaving(false);
@@ -310,7 +310,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       setSelection(null);
       return true;
     } catch (failure) {
-      setError(`Nie udało się zapisać transkrypcji: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setError(t("Nie udało się zapisać transkrypcji: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       return false;
     } finally {
       setSaving(false);
@@ -348,10 +348,10 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${("aiNotPerson" in mark && mark.aiNotPerson) || ("uncertain" in mark && mark.uncertain) ? " is-ai-hint" : ""}`}
               title={
                 mark.user
-                  ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
+                  ? t("{kind} - Twoje zaznaczenie; kliknij, aby cofnąć", { kind: KIND_LABEL[mark.kind] ?? mark.kind })
                   : open
                     ? t("Zostanie jawne - kliknij, aby zakryć")
-                    : `${suggestionLabel(mark)} - zostanie zakryte; kliknij, aby zostawić jawne`
+                    : t("{mark} - zostanie zakryte; kliknij, aby zostawić jawne", { mark: suggestionLabel(mark) })
               }
               onClick={() =>
                 mark.user
@@ -375,14 +375,14 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   );
 
   return (
-    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
+    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={t("Podgląd przed zatwierdzeniem: {fileName}", { fileName: props.fileName })}>
       <header className="privacy-preview-head">
         <div>
           <strong>{t("Podgląd przed zatwierdzeniem:")} {props.fileName}</strong>
           <small>
             {props.keepClear
               ? t("Tekst bez anonimizacji - sprawdź odczyt, zanim trafi do modelu.")
-              : `Zakryte zostanie: ${masked} · zostawione jawne z Twojej decyzji: ${clear}.`}
+              : t("Zakryte zostanie: {masked} · zostawione jawne z Twojej decyzji: {clear}.", { masked: masked, clear: clear })}
           </small>
           {props.keepClear ? null : (
             <InfoTip>{t("Kliknij zaznaczenie, aby zostawić je jawne; zaznacz tekst myszą, aby go zakryć.")}</InfoTip>
@@ -421,7 +421,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             type="button"
             className="primary-button"
             disabled={props.busy || saving}
-            title={editing ? `Zapisze poprawiony tekst strony ${editing.page} i zatwierdzi plik` : undefined}
+            title={editing ? t("Zapisze poprawiony tekst strony {page} i zatwierdzi plik", { page: editing.page }) : undefined}
             onClick={() => void confirm()}
           >
             {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}

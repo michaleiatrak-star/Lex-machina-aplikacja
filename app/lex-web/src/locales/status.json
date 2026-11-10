@@ -47,8 +47,8 @@
    "wcale": 0
   },
   "en": {
-   "całość": 33,
-   "częściowo": 49,
+   "całość": 21,
+   "częściowo": 61,
    "wcale": 5
   },
   "de": {
@@ -240,8 +240,8 @@
  "components": [
   {
    "component": "AccountConnectProgress",
-   "translatable": 4,
-   "notYetTranslatable": 2,
+   "translatable": 5,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 4
@@ -340,8 +340,8 @@
   },
   {
    "component": "AdminUsersPanel",
-   "translatable": 19,
-   "notYetTranslatable": 2,
+   "translatable": 21,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 19
@@ -390,8 +390,8 @@
   },
   {
    "component": "AnomalyJournalSection",
-   "translatable": 19,
-   "notYetTranslatable": 9,
+   "translatable": 29,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 19
@@ -440,8 +440,8 @@
   },
   {
    "component": "AnonymizedDocumentView",
-   "translatable": 32,
-   "notYetTranslatable": 9,
+   "translatable": 50,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 32
@@ -540,7 +540,7 @@
   },
   {
    "component": "ApplicationDownloadProgress",
-   "translatable": 3,
+   "translatable": 5,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -548,7 +548,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -590,7 +590,7 @@
   },
   {
    "component": "ArtifactDeanonymize",
-   "translatable": 7,
+   "translatable": 11,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -598,7 +598,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -691,10 +691,10 @@
   {
    "component": "AuthApp",
    "translatable": 44,
-   "notYetTranslatable": 6,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 44
+    "en": 43
    },
    "state": {
     "pl": "całość",
@@ -740,7 +740,7 @@
   },
   {
    "component": "CalendarPanel",
-   "translatable": 24,
+   "translatable": 26,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -748,7 +748,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -790,8 +790,8 @@
   },
   {
    "component": "CaseAccessAdminPanel",
-   "translatable": 75,
-   "notYetTranslatable": 14,
+   "translatable": 97,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 75
@@ -840,8 +840,8 @@
   },
   {
    "component": "CaseCollaborationPanel",
-   "translatable": 30,
-   "notYetTranslatable": 7,
+   "translatable": 37,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 30
@@ -940,8 +940,8 @@
   },
   {
    "component": "CaseControls",
-   "translatable": 19,
-   "notYetTranslatable": 5,
+   "translatable": 25,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 19
@@ -990,8 +990,8 @@
   },
   {
    "component": "CaseCourtCard",
-   "translatable": 33,
-   "notYetTranslatable": 8,
+   "translatable": 44,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 33
@@ -1090,8 +1090,8 @@
   },
   {
    "component": "CaseLawPreview",
-   "translatable": 4,
-   "notYetTranslatable": 2,
+   "translatable": 9,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 4
@@ -1140,8 +1140,8 @@
   },
   {
    "component": "CaseMemoryCard",
-   "translatable": 29,
-   "notYetTranslatable": 1,
+   "translatable": 35,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 29
@@ -1190,8 +1190,8 @@
   },
   {
    "component": "CaseWorkspacePanel",
-   "translatable": 15,
-   "notYetTranslatable": 2,
+   "translatable": 16,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 15
@@ -1240,11 +1240,11 @@
   },
   {
    "component": "ChatApp",
-   "translatable": 64,
-   "notYetTranslatable": 11,
+   "translatable": 76,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 64
+    "en": 66
    },
    "state": {
     "pl": "całość",
@@ -1290,8 +1290,8 @@
   },
   {
    "component": "ChatDocumentCard",
-   "translatable": 13,
-   "notYetTranslatable": 3,
+   "translatable": 17,
+   "notYetTranslatable": 1,
    "translated": {
     "de": 0,
     "en": 13
@@ -1340,7 +1340,7 @@
   },
   {
    "component": "ChatWidgetCard",
-   "translatable": 2,
+   "translatable": 5,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1348,7 +1348,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1440,8 +1440,8 @@
   },
   {
    "component": "CompanyNipField",
-   "translatable": 4,
-   "notYetTranslatable": 1,
+   "translatable": 5,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 4
@@ -1491,14 +1491,14 @@
   {
    "component": "ComponentSetup",
    "translatable": 15,
-   "notYetTranslatable": 1,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 15
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1540,8 +1540,8 @@
   },
   {
    "component": "CoreLawUpdatesSection",
-   "translatable": 55,
-   "notYetTranslatable": 5,
+   "translatable": 68,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 55
@@ -1640,7 +1640,7 @@
   },
   {
    "component": "DeanonymizationReview",
-   "translatable": 5,
+   "translatable": 6,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1648,7 +1648,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1690,8 +1690,8 @@
   },
   {
    "component": "DocumentAuthoringPanel",
-   "translatable": 34,
-   "notYetTranslatable": 2,
+   "translatable": 35,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 34
@@ -1740,7 +1740,7 @@
   },
   {
    "component": "DocumentCitationContent",
-   "translatable": 20,
+   "translatable": 22,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1748,7 +1748,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1790,8 +1790,8 @@
   },
   {
    "component": "DocumentEditor",
-   "translatable": 22,
-   "notYetTranslatable": 3,
+   "translatable": 25,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 22
@@ -1840,8 +1840,8 @@
   },
   {
    "component": "DocumentPrivacyPanel",
-   "translatable": 54,
-   "notYetTranslatable": 1,
+   "translatable": 60,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 54
@@ -1890,7 +1890,7 @@
   },
   {
    "component": "DomainFallbackSection",
-   "translatable": 4,
+   "translatable": 5,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1898,7 +1898,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1940,7 +1940,7 @@
   },
   {
    "component": "FirmFilePicker",
-   "translatable": 9,
+   "translatable": 12,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -1948,7 +1948,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -1990,8 +1990,8 @@
   },
   {
    "component": "FirmKnowledgePanel",
-   "translatable": 19,
-   "notYetTranslatable": 1,
+   "translatable": 20,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 19
@@ -2040,7 +2040,7 @@
   },
   {
    "component": "FirmKnowledgePicker",
-   "translatable": 7,
+   "translatable": 8,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2048,7 +2048,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2090,11 +2090,11 @@
   },
   {
    "component": "GoogleIntegrationPanel",
-   "translatable": 22,
-   "notYetTranslatable": 13,
+   "translatable": 37,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 22
+    "en": 24
    },
    "state": {
     "pl": "całość",
@@ -2140,7 +2140,7 @@
   },
   {
    "component": "HomeDashboard",
-   "translatable": 19,
+   "translatable": 20,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2148,7 +2148,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2190,8 +2190,8 @@
   },
   {
    "component": "InfoTip",
-   "translatable": 0,
-   "notYetTranslatable": 1,
+   "translatable": 1,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 0
@@ -2290,8 +2290,8 @@
   },
   {
    "component": "InvoiceRequirementsCard",
-   "translatable": 9,
-   "notYetTranslatable": 6,
+   "translatable": 15,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 9
@@ -2340,8 +2340,8 @@
   },
   {
    "component": "InvoiceSettingsPanel",
-   "translatable": 57,
-   "notYetTranslatable": 7,
+   "translatable": 65,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 57
@@ -2390,8 +2390,8 @@
   },
   {
    "component": "InvoicesPanel",
-   "translatable": 74,
-   "notYetTranslatable": 10,
+   "translatable": 88,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 74
@@ -2440,8 +2440,8 @@
   },
   {
    "component": "JurisdictionSection",
-   "translatable": 7,
-   "notYetTranslatable": 9,
+   "translatable": 16,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 7
@@ -2590,7 +2590,7 @@
   },
   {
    "component": "LegiIndexSection",
-   "translatable": 4,
+   "translatable": 6,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -2598,7 +2598,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -2640,8 +2640,8 @@
   },
   {
    "component": "LocalAiSetupPanel",
-   "translatable": 110,
-   "notYetTranslatable": 27,
+   "translatable": 157,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 110
@@ -2740,8 +2740,8 @@
   },
   {
    "component": "MaintenancePanel",
-   "translatable": 40,
-   "notYetTranslatable": 15,
+   "translatable": 62,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 40
@@ -2790,8 +2790,8 @@
   },
   {
    "component": "MandatoryPathDetails",
-   "translatable": 4,
-   "notYetTranslatable": 4,
+   "translatable": 8,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 4
@@ -2890,11 +2890,11 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 459,
-   "notYetTranslatable": 81,
+   "translatable": 590,
+   "notYetTranslatable": 8,
    "translated": {
     "de": 0,
-    "en": 459
+    "en": 461
    },
    "state": {
     "pl": "całość",
@@ -2940,8 +2940,8 @@
   },
   {
    "component": "McpConnectorsPanel",
-   "translatable": 22,
-   "notYetTranslatable": 15,
+   "translatable": 41,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 22
@@ -2990,8 +2990,8 @@
   },
   {
    "component": "McpSearchPanel",
-   "translatable": 25,
-   "notYetTranslatable": 15,
+   "translatable": 41,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 25
@@ -3040,8 +3040,8 @@
   },
   {
    "component": "MicrosoftIntegration",
-   "translatable": 29,
-   "notYetTranslatable": 1,
+   "translatable": 31,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 29
@@ -3090,7 +3090,7 @@
   },
   {
    "component": "MyServerAccountPanel",
-   "translatable": 8,
+   "translatable": 9,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3098,7 +3098,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3190,8 +3190,8 @@
   },
   {
    "component": "PdfFormPanel",
-   "translatable": 8,
-   "notYetTranslatable": 1,
+   "translatable": 14,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 8
@@ -3290,8 +3290,8 @@
   },
   {
    "component": "PrivacyKeyTable",
-   "translatable": 16,
-   "notYetTranslatable": 7,
+   "translatable": 24,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 16
@@ -3340,8 +3340,8 @@
   },
   {
    "component": "PrivacyPreview",
-   "translatable": 44,
-   "notYetTranslatable": 13,
+   "translatable": 64,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 44
@@ -3390,8 +3390,8 @@
   },
   {
    "component": "ProcessPleadingWorkflowPanel",
-   "translatable": 52,
-   "notYetTranslatable": 7,
+   "translatable": 60,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 52
@@ -3491,14 +3491,14 @@
   {
    "component": "RecoveryAuthPanel",
    "translatable": 15,
-   "notYetTranslatable": 1,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 15
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3590,7 +3590,7 @@
   },
   {
    "component": "RestorationReview",
-   "translatable": 21,
+   "translatable": 24,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -3598,7 +3598,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3690,8 +3690,8 @@
   },
   {
    "component": "ServerAdminPanel",
-   "translatable": 63,
-   "notYetTranslatable": 36,
+   "translatable": 104,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 63
@@ -3741,14 +3741,14 @@
   {
    "component": "ServerAuthPanels",
    "translatable": 33,
-   "notYetTranslatable": 1,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 33
    },
    "state": {
     "pl": "całość",
-    "en": "częściowo",
+    "en": "całość",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -3790,8 +3790,8 @@
   },
   {
    "component": "SheetEditor",
-   "translatable": 20,
-   "notYetTranslatable": 3,
+   "translatable": 22,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 20
@@ -3840,8 +3840,8 @@
   },
   {
    "component": "SnVerification",
-   "translatable": 31,
-   "notYetTranslatable": 7,
+   "translatable": 39,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 31
@@ -3890,8 +3890,8 @@
   },
   {
    "component": "SourceLinkedText",
-   "translatable": 0,
-   "notYetTranslatable": 1,
+   "translatable": 1,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 0
@@ -3940,8 +3940,8 @@
   },
   {
    "component": "SourcePreviewFrame",
-   "translatable": 1,
-   "notYetTranslatable": 3,
+   "translatable": 5,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 1
@@ -3990,8 +3990,8 @@
   },
   {
    "component": "TextFileEditor",
-   "translatable": 27,
-   "notYetTranslatable": 1,
+   "translatable": 30,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 27
@@ -4040,7 +4040,7 @@
   },
   {
    "component": "TranscriptEditor",
-   "translatable": 13,
+   "translatable": 16,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4048,7 +4048,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",
@@ -4140,8 +4140,8 @@
   },
   {
    "component": "UpdatePrompt",
-   "translatable": 19,
-   "notYetTranslatable": 7,
+   "translatable": 24,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 19
@@ -4190,11 +4190,11 @@
   },
   {
    "component": "UserAccountDialog",
-   "translatable": 24,
-   "notYetTranslatable": 16,
+   "translatable": 44,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
-    "en": 24
+    "en": 26
    },
    "state": {
     "pl": "całość",
@@ -4240,8 +4240,8 @@
   },
   {
    "component": "UserGroupsPanel",
-   "translatable": 11,
-   "notYetTranslatable": 9,
+   "translatable": 23,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 11
@@ -4390,8 +4390,8 @@
   },
   {
    "component": "WorkspaceManager",
-   "translatable": 88,
-   "notYetTranslatable": 9,
+   "translatable": 128,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 88
@@ -4440,8 +4440,8 @@
   },
   {
    "component": "answer-corrections-view",
-   "translatable": 4,
-   "notYetTranslatable": 6,
+   "translatable": 11,
+   "notYetTranslatable": 0,
    "translated": {
     "de": 0,
     "en": 4
@@ -4490,7 +4490,7 @@
   },
   {
    "component": "document-coverage-view",
-   "translatable": 5,
+   "translatable": 9,
    "notYetTranslatable": 0,
    "translated": {
     "de": 0,
@@ -4498,7 +4498,7 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
+    "en": "częściowo",
     "de": "wcale",
     "fr": "wcale",
     "it": "wcale",

@@ -102,7 +102,7 @@ export function InvoiceSettingsPanel() {
       {message ? <div className="alert">{message}</div> : null}
 
       <section>
-        <h3>KSeF</h3>
+        <h3>{t("KSeF")}</h3>
         <p className="alert" role="note">
           <strong>{t("Wysyłka do KSeF jest niedostępna w tej wersji.")}</strong> {t("Faktury wystawiasz i drukujesz w programie.")}
           <InfoTip>{t("Token ani środowisko KSeF nie są teraz potrzebne do pracy.")}</InfoTip>
@@ -160,7 +160,7 @@ export function InvoiceSettingsPanel() {
                   void run(async () => {
                     const next = await clearKsefToken();
                     setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                  }, "Token KSeF usunięty.")
+                  }, t("Token KSeF usunięty."))
                 }
               >
                 {t("Usuń token")}
@@ -185,7 +185,7 @@ export function InvoiceSettingsPanel() {
                 void run(async () => {
                   const next = await setKsefEnvironment("test");
                   setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                }, "Przełączono na środowisko testowe.")
+                }, t("Przełączono na środowisko testowe."))
               }
             >
               {t("Wróć na środowisko testowe")}
@@ -207,7 +207,7 @@ export function InvoiceSettingsPanel() {
                       setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
                       setAskProduction(false);
                       setProductionPhrase("");
-                    }, "Przełączono na środowisko produkcyjne.")
+                    }, t("Przełączono na środowisko produkcyjne."))
                   }
                 >
                   {t("Przełącz na produkcję")}
@@ -303,7 +303,7 @@ export function InvoiceSettingsPanel() {
               void run(async () => {
                 const next = await setInvoiceDefaults(defaults);
                 setSettings((current) => (current ? { ...current, defaults: next.defaults } : current));
-              }, "Ustawienia domyślne zapisane.")
+              }, t("Ustawienia domyślne zapisane."))
             }
           >
             {t("Zapisz domyślne")}
@@ -339,7 +339,7 @@ export function InvoiceSettingsPanel() {
         </h3>
         <p className="field-help">
           {settings?.numbering
-            ? `Włączona: ${settings.numbering.pattern}.`
+            ? t("Włączona: {pattern}.", { pattern: settings.numbering.pattern })
             : t("Wyłączona: numer wpisujesz ręcznie.")}
         </p>
         <div className="invoice-grid">
@@ -396,7 +396,7 @@ export function InvoiceSettingsPanel() {
                     const { numbering: _removed, ...rest } = current;
                     return rest;
                   });
-                }, "Autonumeracja wyłączona.")
+                }, t("Autonumeracja wyłączona."))
               }
             >
               {t("Wyłącz autonumerację")}
@@ -452,7 +452,7 @@ export function InvoiceSettingsPanel() {
                     const { logo: _removed, ...rest } = current;
                     return rest;
                   });
-                }, "Logo usunięte.")
+                }, t("Logo usunięte."))
               }
             >
               {t("Usuń logo")}

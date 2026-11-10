@@ -105,11 +105,11 @@ function conversationForProvider(
     .filter((item) => item.role !== "system")
     .slice(-8)
     .map((item) =>
-      `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}`
+      t("{value}: {content}", { value: item.role === "user" ? "Użytkownik" : "Asystent", content: item.content })
     )
     .join("\n\n");
   const combined = history
-    ? `${history}\n\nUżytkownik: ${next}`
+    ? t("{history}\n\nUżytkownik: {next}", { history: history, next: next })
     : next;
   return combined.length > 27_000
     ? combined.slice(-27_000)
@@ -178,7 +178,7 @@ export function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      "HARD GATE zatrzymał odpowiedź przed prezentacją, ponieważ wymagany ślad weryfikacji nie był kompletny.",
+      t("HARD GATE zatrzymał odpowiedź przed prezentacją, ponieważ wymagany ślad weryfikacji nie był kompletny."),
     evidence: execution.evidence,
     ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
     meta:
@@ -230,7 +230,7 @@ export default function ChatApp({
       id: "welcome",
       role: "system",
       content:
-        "Opisz sprawę albo zadanie. Lex Machina dobierze routing i potrzebne skille automatycznie. Prawny router i shared są zawsze aktywne."
+        t("Opisz sprawę albo zadanie. Lex Machina dobierze routing i potrzebne skille automatycznie. Prawny router i shared są zawsze aktywne.")
     }
   ]);
   const [query, setQuery] = useState("");
@@ -649,14 +649,14 @@ export default function ChatApp({
         error instanceof Error ? error.message : String(error);
       const friendly =
         code === "PROVIDER_NOT_CONFIGURED"
-          ? "Brak lokalnego klucza API dla wybranego dostawcy."
+          ? t("Brak lokalnego klucza API dla wybranego dostawcy.")
           : code === "PROVIDER_EXECUTION_FAILED"
-            ? "Provider odrzucił lub przerwał wykonanie."
+            ? t("Provider odrzucił lub przerwał wykonanie.")
             : code === "DOCUMENT_NOT_REVIEWED"
-              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
+              ? t("Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu.")
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
-              ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
-              : `Nie udało się wykonać sesji: ${code}`;
+              ? t("Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu.")
+              : t("Nie udało się wykonać sesji: {code}", { code: code });
       setExecutionError(friendly);
       setMessages((current) => [
         ...current,
@@ -696,7 +696,7 @@ export default function ChatApp({
             ["files", "Pliki"],
             ["skills", "Skille"],
             ["case", "Sprawa"],
-            ["settings", "Model i API"]
+            ["settings", t("Model i API")]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
               key={id}
@@ -1329,8 +1329,8 @@ export default function ChatApp({
                   }
                 >
                   {model
-                    ? `Klucz API dla ${providerDefinition.label} ↗`
-                    : `Utwórz / pobierz klucz ${providerDefinition.label} ↗`}
+                    ? t("Klucz API dla {label} ↗", { label: providerDefinition.label })
+                    : t("Utwórz / pobierz klucz {label} ↗", { label: providerDefinition.label })}
                 </button>
               ) : null}
             </article>

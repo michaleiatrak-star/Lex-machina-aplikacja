@@ -11,7 +11,7 @@ const STEPS = [
   "Sprawdzanie klienta",
   "Pobieranie klienta (npm)",
   "Sprawdzanie pobranego klienta",
-  "Logowanie w oknie dostawcy"
+  t("Logowanie w oknie dostawcy")
 ] as const;
 
 function stepIndex(phase: AccountConnectPhase): number {

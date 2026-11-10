@@ -262,7 +262,7 @@ export function CaseWorkspacePanel({
                   ) : (
                     <small>
                       {template.role
-                        ? `${TEMPLATE_KINDS.find(([id]) => id === template.role!.kind)?.[1] ?? template.role.kind}${template.role.isDefault ? " · domyślny" : ""}`
+                        ? `${TEMPLATE_KINDS.find(([id]) => id === template.role!.kind)?.[1] ?? template.role.kind}${template.role.isDefault ? t(" · domyślny") : ""}`
                         : "rodzaj nieustawiony"}
                     </small>
                   )}

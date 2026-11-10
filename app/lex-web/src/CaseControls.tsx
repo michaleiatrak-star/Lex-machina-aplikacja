@@ -202,7 +202,7 @@ export default function CaseControls({
         <small>
           {automaticCaseType
             ? t("Automatyczny: system dobiera równolegle potrzebne skille wykonawcze i wszystkie pasujące dziedziny prawa dla każdej wiadomości.")
-            : `Priorytetowe skille (${caseTypeSkills.length}): ${caseTypeSkills.map(labelForSkill).join(", ")}. Automatyczny routing może nadal dołożyć kolejne skille i dodatkowe domeny DR.`}
+            : t("Priorytetowe skille ({count}): {value}. Automatyczny routing może nadal dołożyć kolejne skille i dodatkowe domeny DR.", { count: caseTypeSkills.length, value: caseTypeSkills.map(labelForSkill).join(", ") })}
         </small>
       </div>
 
@@ -252,7 +252,7 @@ export default function CaseControls({
                     setNewCaseName("");
                     setSelectedCaseId(created.caseId);
                   },
-                  "Utworzono sprawę."
+                  t("Utworzono sprawę.")
                 )
               }
             >
@@ -282,7 +282,7 @@ export default function CaseControls({
                   onClick={() =>
                     void runCaseAction(
                       () => renameCase(selectedCase.caseId, renameValue.trim()),
-                      "Zmieniono nazwę sprawy."
+                      t("Zmieniono nazwę sprawy.")
                     )
                   }
                 >
@@ -295,7 +295,7 @@ export default function CaseControls({
                     onClick={() =>
                       void runCaseAction(
                         () => unarchiveCase(selectedCase.caseId),
-                        "Przywrócono sprawę z archiwum."
+                        t("Przywrócono sprawę z archiwum.")
                       )
                     }
                   >
@@ -308,7 +308,7 @@ export default function CaseControls({
                     onClick={() =>
                       void runCaseAction(
                         () => archiveCase(selectedCase.caseId),
-                        "Zarchiwizowano sprawę."
+                        t("Zarchiwizowano sprawę.")
                       )
                     }
                   >
@@ -347,7 +347,7 @@ export default function CaseControls({
                       onClick={() =>
                         void runCaseAction(
                           () => deleteCase(selectedCase.caseId, deletePassword),
-                          "Usunięto sprawę trwale."
+                          t("Usunięto sprawę trwale.")
                         )
                       }
                     >

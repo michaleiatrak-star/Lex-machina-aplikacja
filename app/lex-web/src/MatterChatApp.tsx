@@ -39,7 +39,7 @@ import { ProvisionPreview } from "./ProvisionPreview.js";
 import { CaseLawPreview, attributedSentence, caseLawDocument, caseLawReferences, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 
-// Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
+// Kept in Polish: the same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
@@ -320,14 +320,14 @@ const WELCOME: CaseChatMessage = {
   id: "welcome",
   role: "system",
   content:
-    "Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze."
+    t("Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze.")
 };
 
 const WELCOME_INDIVIDUAL: CaseChatMessage = {
   id: "welcome",
   role: "system",
   content:
-    "Opisz swoją sprawę albo zadaj pytanie prawne. Możesz dołączyć pismo lub zdjęcie dokumentu. Rozmowa dostanie nazwę od Twojego pierwszego pytania."
+    t("Opisz swoją sprawę albo zadaj pytanie prawne. Możesz dołączyć pismo lub zdjęcie dokumentu. Rozmowa dostanie nazwę od Twojego pierwszego pytania.")
 };
 
 const PROVIDERS: Array<{
@@ -374,15 +374,15 @@ export function provisionFailureText(error: string): string {
     // ACCOUNT_SESSION_CLI_PROVISION_FAILED:<provider>:<exit code>:<npm error lines>
     const detail = error.split(":").slice(3).join(":").trim();
     const cause = /ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|proxy|certificate|CERT_/i.test(detail)
-      ? "brak połączenia z serwerem npm (sieć, proxy lub certyfikat)"
+      ? t("brak połączenia z serwerem npm (sieć, proxy lub certyfikat)")
       : /not recognized|is not recognized|ENOENT/i.test(detail)
         ? "brak wymaganego programu podczas instalacji"
         : /EPERM|EACCES|EBUSY/i.test(detail)
-          ? "brak dostępu do plików (program antywirusowy lub otwarty plik)"
-          : "błąd instalacji npm";
-    return `Pobieranie klienta nie powiodło się: ${cause}.${detail ? ` Szczegóły: ${detail}` : ""}`;
+          ? t("brak dostępu do plików (program antywirusowy lub otwarty plik)")
+          : t("błąd instalacji npm");
+    return t("Pobieranie klienta nie powiodło się: {cause}.{value}", { cause: cause, value: detail ? ` Szczegóły: ${detail}` : "" });
   }
-  return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
+  return t("Nie udało się przygotować klienta: {value}.", { value: error || t("nieznany błąd") });
 }
 
 // Kolejność w selektorze: modele główne (konto/API) u góry, lokalna AI na dole.
@@ -444,8 +444,9 @@ const ACCOUNT_MODEL_LABELS: Record<
 };
 
 // The case summary button's message (the server adds the template and keeps the answer).
+// Kept in Polish: the runtime recognises the request by this prefix (case-overview.ts).
 const CASE_OVERVIEW_REQUEST =
-  "Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.";
+  (t("Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy."));
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
@@ -797,12 +798,12 @@ export function pendingFileMessage(
 ): string {
   const file = name ? `Plik ${name}` : "Dodany plik";
   if (status === "FAILED") {
-    return `${file} nie został odczytany${error ? `: ${error}` : ""}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.`;
+    return t("{file} nie został odczytany{value}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.", { file: file, value: error ? `: ${error}` : "" });
   }
   if (status === "PROCESSING" || status === "SAVING") {
-    return `${file} jest jeszcze przetwarzany. Poczekaj na koniec albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+    return t("{file} jest jeszcze przetwarzany. Poczekaj na koniec albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.", { file: file });
   }
-  return `${file} czeka na Twoją decyzję (przetworzenie albo zapis bez przetwarzania). Wybierz ją albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+  return t("{file} czeka na Twoją decyzję (przetworzenie albo zapis bez przetwarzania). Wybierz ją albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.", { file: file });
 }
 
 export function directDocumentRequest(
@@ -924,7 +925,7 @@ export function localModelFailureMessage(
     case "LOCAL_MODEL_INFERENCE_FAILED":
       return t("Połączenie z lokalnym llama.cpp zostało wcześniej potwierdzone testem połączenia, ale sama generacja odpowiedzi nie zakończyła się poprawnie. Kod: LOCAL_MODEL_INFERENCE_FAILED");
     default:
-      return `Lokalny model nie mógł wykonać odpowiedzi.${reason ? ` Kod: ${reason}` : ""}`;
+      return t("Lokalny model nie mógł wykonać odpowiedzi.{value}", { value: reason ? ` Kod: ${reason}` : "" });
   }
 }
 
@@ -954,30 +955,30 @@ export function providerFailureMessage(
       case "ACCOUNT_SESSION_PLAN_UNSUPPORTED":
         return provider.startsWith("google")
           ? t("Google nie obsługuje już Gemini CLI w bezpłatnym planie konta Google („Gemini Code Assist for individuals”) — ponowne logowanie nie pomoże. Użyj „Google Gemini · API” z kluczem z Google AI Studio (Ustawienia → Modele i AI) albo konta z płatnym planem.")
-          : `${name} odrzuca plan Twojego konta dla klienta ${client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.`;
+          : t("{name} odrzuca plan Twojego konta dla klienta {client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.", { name: name, client: client });
       case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
-        return `${name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.`;
+        return t("{name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.", { name: name });
       case "ACCOUNT_SESSION_AUTH_EXPIRED":
       case "ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH":
-        return `Sesja ${name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.`;
+        return t("Sesja {name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.", { name: name });
       case "ACCOUNT_SESSION_CAPACITY":
-        return `${name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.`;
+        return t("{name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.", { name: name });
       case "ACCOUNT_SESSION_PROMPT_REJECTED":
-        return `${name} odrzucił bieżące żądanie po stronie usługi.`;
+        return t("{name} odrzucił bieżące żądanie po stronie usługi.", { name: name });
       case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
-        return `Klient ${client} jest niezgodny z kontraktem Lex Machina. Lex Machina używa przypiętej wersji prywatnego klienta; ponów połączenie konta.`;
+        return t("Klient {client} jest niezgodny z kontraktem Lex Machina. Lex Machina używa przypiętej wersji prywatnego klienta; ponów połączenie konta.", { client: client });
       case "ACCOUNT_SESSION_CLI_SPAWN_FAILED":
-        return `Nie udało się uruchomić klienta ${client}. Ponów połączenie konta w Ustawieniach, aby Lex Machina przygotowała przypiętą wersję klienta.`;
+        return t("Nie udało się uruchomić klienta {client}. Ponów połączenie konta w Ustawieniach, aby Lex Machina przygotowała przypiętą wersję klienta.", { client: client });
       case "ACCOUNT_SESSION_CLI_STALLED":
-        return `Klient ${client} nie rozpoczął pracy w ciągu 120 s (brak żadnej odpowiedzi procesu).`;
+        return t("Klient {client} nie rozpoczął pracy w ciągu 120 s (brak żadnej odpowiedzi procesu).", { client: client });
       case "ACCOUNT_SESSION_COMMAND_TIMEOUT":
-        return `Klient ${client} przekroczył limit czasu wykonania.`;
+        return t("Klient {client} przekroczył limit czasu wykonania.", { client: client });
       case "ACCOUNT_SESSION_EMPTY_RESPONSE":
-        return `${name} zakończył wykonanie bez treści odpowiedzi${provider.startsWith("anthropic") ? "" : " także po jednym ponowieniu z prośbą o tekst"}. Zwykle oznacza to, że model zużył limit odpowiedzi na rozumowanie nad długim kontekstem; „reasoning_out” w szczegółach pokazuje, ile. Ponów wiadomość albo zawęź pytanie lub kontekst sprawy.`;
+        return t("{name} zakończył wykonanie bez treści odpowiedzi{value}. Zwykle oznacza to, że model zużył limit odpowiedzi na rozumowanie nad długim kontekstem; „reasoning_out” w szczegółach pokazuje, ile. Ponów wiadomość albo zawęź pytanie lub kontekst sprawy.", { name: name, value: provider.startsWith("anthropic") ? "" : t(" także po jednym ponowieniu z prośbą o tekst") });
       case "ACCOUNT_SESSION_CLI_FAILED":
-        return `Klient ${client} zakończył wykonanie błędem.`;
+        return t("Klient {client} zakończył wykonanie błędem.", { client: client });
       default:
-        return `${name} odrzucił lub przerwał wykonanie.`;
+        return t("{name} odrzucił lub przerwał wykonanie.", { name: name });
     }
   })();
   const code =
@@ -986,7 +987,7 @@ export function providerFailureMessage(
       : "";
   const detail =
     description?.trim()
-      ? ` Szczegóły: ${description.trim().slice(0, 600)}`
+      ? t(" Szczegóły: {value}", { value: description.trim().slice(0, 600) })
       : "";
   return `${base}${code}${detail}`;
 }
@@ -1101,7 +1102,7 @@ export function blockedReasonText(
       ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
       : []),
     ...(references.length
-      ? [`odwołania zablokowane przez G8: ${references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ")}`]
+      ? [t("odwołania zablokowane przez G8: {value}", { value: references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ") })]
       : []),
     ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
   ];
@@ -1124,7 +1125,7 @@ function executionMessage(
       : "";
     const contextMeta =
       execution.context?.modelContextTokens
-        ? ` · runtime ${execution.context.modelContextTokens.toLocaleString(currentLocale())} tok. · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString(currentLocale())} tok.${execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : ""}`
+        ? t(" · runtime {value} tok. · dokumenty ~{value2} tok.{value3}", { value: execution.context.modelContextTokens.toLocaleString(currentLocale()), value2: execution.context.estimatedDocumentTokens.toLocaleString(currentLocale()), value3: execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : "" })
         : execution.context
           ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString(currentLocale())} tok.`
           : "";
@@ -1134,15 +1135,15 @@ function executionMessage(
       : "";
     const citationMeta =
       execution.documentCitationFreshness
-        ? ` · cytaty odświeżone: ${execution.documentCitationFreshness.checked}`
+        ? t(" · cytaty odświeżone: {checked}", { checked: execution.documentCitationFreshness.checked })
         : "";
     const workflowMeta =
       execution.processAuto
-        ? ` · AUTO: ${execution.processAuto.steps.length}/${execution.processAuto.maxSteps} kroków · ${execution.processAuto.stopped}`
+        ? t(" · AUTO: {count}/{maxSteps} kroków · {stopped}", { count: execution.processAuto.steps.length, maxSteps: execution.processAuto.maxSteps, stopped: execution.processAuto.stopped })
         : execution.processWorkflow
           ? ` · proces: ${execution.processWorkflow.stage}${execution.processWorkflow.pendingCheckpoint ? ` · czeka: ${execution.processWorkflow.pendingCheckpoint}` : ""}`
           : execution.courtWorkflow
-            ? ` · analiza sądowa: ${execution.courtWorkflow.stage}${execution.courtWorkflow.nextCheckpoint ? ` · następny: ${execution.courtWorkflow.nextCheckpoint}` : ""}`
+            ? t(" · analiza sądowa: {stage}{value}", { stage: execution.courtWorkflow.stage, value: execution.courtWorkflow.nextCheckpoint ? ` · następny: ${execution.courtWorkflow.nextCheckpoint}` : "" })
             : "";
     const modelRoutingMeta = ` · model: ${execution.model}`;
     const verificationDegraded =
@@ -1150,11 +1151,11 @@ function executionMessage(
       execution.gateI?.result === "BLOCKED";
     const verificationWarning =
       verificationDegraded
-        ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
+        ? t("⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n")
         : "";
     // The chronology was kept as the case's timeline: said under the answer.
     const timelineNote = execution.chronologySaved
-      ? "\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._"
+      ? t("\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._")
       : "";
     // The step passed but a tool call was refused on the way: its checkpoint stays open.
     const heldNotice = execution.checkpointHeld
@@ -1209,15 +1210,15 @@ function executionMessage(
         modelRoutingMeta +
         (execution.modeDecision ? ` · tryb ${execution.modeDecision.mode}` : "") +
         (execution.firmTemplateApplied
-          ? ` · wzór kancelarii: ${execution.firmTemplateApplied.filename} (domyślny: ${execution.firmTemplateApplied.kind})`
+          ? t(" · wzór kancelarii: {filename} (domyślny: {kind})", { filename: execution.firmTemplateApplied.filename, kind: execution.firmTemplateApplied.kind })
           : "") +
         (execution.mandatoryPath
-          ? ` · ścieżka ${execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA"} ${execution.mandatoryPath.steps.filter((step) => step.status === "MET").length}/${execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length}`
+          ? t(" · ścieżka {value} {count}/{count2}", { value: execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA", count: execution.mandatoryPath.steps.filter((step) => step.status === "MET").length, count2: execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length })
           : "") +
         ` · VERIFIED ${execution.verification.verified}` +
         ` · SUPPORTED ${execution.verification.supported}` +
         (verificationDegraded
-          ? ` · WERYFIKACJA NIEPEŁNA · UNVERIFIED ${execution.verification.unverified}`
+          ? t(" · WERYFIKACJA NIEPEŁNA · UNVERIFIED {unverified}", { unverified: execution.verification.unverified })
           : "")
     };
   }
@@ -1264,29 +1265,29 @@ function accountLoginFailureText(code: string): string {
     case "ACCOUNT_SESSION_AUTH_EXPIRED":
       return t("Sesja klienta dostawcy wygasła. Zaloguj się ponownie.");
     default:
-      return `Logowanie nie powiodło się (kod: ${code}).`;
+      return t("Logowanie nie powiodło się (kod: {code}).", { code: code });
   }
 }
 
 const EXPORT_REFERENCE_STATUS: Record<string, string> = {
-  UNVERIFIED_MARKED: "niezweryfikowany w źródle",
+  UNVERIFIED_MARKED: t("niezweryfikowany w źródle"),
   UNVERIFIED_NOT_MARKED: "niezweryfikowany",
   MISSING_LEDGER_RECORD: "bez weryfikacji",
-  MISSING_VERIFICATION_MARKER: "niespójny ślad weryfikacji",
-  VERIFICATION_MARKER_MISMATCH: "niespójny ślad weryfikacji"
+  MISSING_VERIFICATION_MARKER: t("niespójny ślad weryfikacji"),
+  VERIFICATION_MARKER_MISMATCH: t("niespójny ślad weryfikacji")
 };
 
 /** What to check in a generated file before using it (empty when nothing). */
 export function documentWarningsText(warnings: string[] | undefined): string {
-  return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
+  return warnings?.length ? t(" Sprawdź przed użyciem: {value}.", { value: warnings.join("; ") }) : "";
 }
 
 // Whether the firm's letterhead (header, footer, page setup of its DOCX template) is in the file.
 export function letterheadText(letterhead: GeneratedDocumentResponse["letterhead"]): string {
   if (!letterhead) return "";
   return letterhead.applied
-    ? ` Pismo wstawione do wzoru kancelarii (nagłówek: ${letterhead.headers}, stopka: ${letterhead.footers}, grafiki: ${letterhead.images}; marginesy ze wzoru).`
-    : ` Wzoru kancelarii nie wstawiono do pliku (${letterhead.reason}); plik ma układ Lex.`;
+    ? t(" Pismo wstawione do wzoru kancelarii (nagłówek: {headers}, stopka: {footers}, grafiki: {images}; marginesy ze wzoru).", { headers: letterhead.headers, footers: letterhead.footers, images: letterhead.images })
+    : t(" Wzoru kancelarii nie wstawiono do pliku ({reason}); plik ma układ Lex.", { reason: letterhead.reason });
 }
 
 type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
@@ -1301,12 +1302,13 @@ const OWN_DOCUMENT_NOUN: Record<string, string> = {
   "pisma-proste-v2": "pismo"
 };
 
+// Kept in Polish: messages the runtime and the model read as instructions (task-routing.ts).
 export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; own?: true; reason?: string }): string {
   // A long letter in parts: the next part, or the same part again with its problems.
   const part = choice.kind === "CONTINUE" ? /^(Popraw )?część (\d{1,2}) z (\d{1,2})/iu.exec(choice.reason ?? "") : null;
   if (part) return part[1] ? `Popraw część ${part[2]} z ${part[3]}.` : `Kontynuuj: napisz część ${part[2]} z ${part[3]}.`;
   if (choice.kind === "CONTINUE") {
-    return t("Kontynuuj: wykonaj teraz zapowiedzianą weryfikację przepisów w źródłach (ELI) i podaj pełną odpowiedź na pismo, bez zapowiadania kolejnych kroków.");
+    return "Kontynuuj: wykonaj teraz zapowiedzianą weryfikację przepisów w źródłach (ELI) i podaj pełną odpowiedź na pismo, bez zapowiadania kolejnych kroków.";
   }
   if (choice.own) {
     return `Wygeneruj ${OWN_DOCUMENT_NOUN[choice.skill] ?? "dokument"} w pliku .docx z powyższego wyniku, bez zmian merytorycznych.`;
@@ -1322,8 +1324,8 @@ type StepSummary = NonNullable<NonNullable<PipelineNext["choices"]>[number]["ste
 export function stepSummaryText(steps: StepSummary): string {
   const skipped = steps.skipped.map((entry) => `${entry.checkpoint} (${entry.reason ?? "bez podanego powodu"})`);
   return [
-    `Kroki pisma: wykonane ${steps.done} z ${steps.total}`,
-    skipped.length ? `pominięte: ${skipped.join("; ")}` : "",
+    t("Kroki pisma: wykonane {done} z {total}", { done: steps.done, total: steps.total }),
+    skipped.length ? t("pominięte: {value}", { value: skipped.join("; ") }) : "",
     steps.open.length ? `otwarte: ${steps.open.join(", ")}` : ""
   ]
     .filter(Boolean)
@@ -1372,7 +1374,7 @@ export function PipelineChoices({
         </button>
         <InfoTip>
           {developer
-            ? `Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości (${longFile.reason}) po walidacji HYBRID-VAL.`
+            ? t("Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości ({reason}) po walidacji HYBRID-VAL.", { reason: longFile.reason })
             : t("Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości po końcowej kontroli.")}
         </InfoTip>
       </div>
@@ -1389,7 +1391,7 @@ export function PipelineChoices({
         </button>
         <InfoTip>
           {resumesPart
-            ? `Długie pismo powstaje w częściach (${resume.reason}). „Kontynuuj” prosi o tę część; aplikacja sprawdza ją z planem i poprzednimi częściami.`
+            ? t("Długie pismo powstaje w częściach ({reason}). „Kontynuuj” prosi o tę część; aplikacja sprawdza ją z planem i poprzednimi częściami.", { reason: resume.reason })
             : t("Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia.")}
         </InfoTip>
       </div>
@@ -1431,7 +1433,7 @@ export function PipelineChoices({
               ? t("„Generuj dokument” tworzy plik z tego wyniku po walidacji HYBRID-VAL.")
               : onDocument
                 ? t("„Generuj dokument” tworzy plik .docx z pisma powyżej (format kancelaryjny, pola do uzupełnienia) po walidacji HYBRID-VAL.")
-                : `„Generuj dokument” tworzy plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
+                : t("„Generuj dokument” tworzy plik po walidacji HYBRID-VAL ({skill}).", { skill: choices.find((choice) => choice.kind === "DOCUMENT")!.skill })}
           </InfoTip>
         ) : null}
       </span>
@@ -1462,18 +1464,18 @@ export function PipelineChoices({
 
 /** A workflow step whose checkpoint was not closed: which refused steps, and what to do. */
 export function checkpointHeldNotice(steps: string[]): string {
-  return `Etap nie został zamknięty: w tej turze odmówiono kroku (${steps.join("; ")}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.`;
+  return t("Etap nie został zamknięty: w tej turze odmówiono kroku ({value}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.", { value: steps.join("; ") });
 }
 
 // HYBRID-VAL (document-generation-validation.ts) before the .docx, in words.
 const HYBRID_REASON: Record<string, string> = {
-  EMPTY_DOCUMENT: "dokument jest pusty",
-  OPEN_PLACEHOLDER: "zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)",
+  EMPTY_DOCUMENT: t("dokument jest pusty"),
+  OPEN_PLACEHOLDER: t("zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)"),
   DRAFT_UNVERIFIED: "dokument ma oznaczenie DRAFT — NIEWERYFIKOWANY",
-  PRIVACY_TOKEN_REMAINS: "zostały symbole anonimizacji",
-  CONTROL_CHARACTER: "tekst zawiera znaki sterujące",
-  SOURCE_SESSION_BLOCKED_EVENT: "w rozmowie, z której powstaje dokument, był zablokowany krok",
-  SOURCE_DOCUMENT_AUDIT_MISSING: "brak śladu odczytu dokumentu źródłowego sprawy"
+  PRIVACY_TOKEN_REMAINS: t("zostały symbole anonimizacji"),
+  CONTROL_CHARACTER: t("tekst zawiera znaki sterujące"),
+  SOURCE_SESSION_BLOCKED_EVENT: t("w rozmowie, z której powstaje dokument, był zablokowany krok"),
+  SOURCE_DOCUMENT_AUDIT_MISSING: t("brak śladu odczytu dokumentu źródłowego sprawy")
 };
 
 /** A refused export in words: which provisions or judgments stopped the file. */
@@ -1484,32 +1486,30 @@ export function exportBlockedMessage(error: unknown): string | null {
   }
   if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
     const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
-    return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
+    return t("Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że {value}. Popraw treść w rozmowie i wygeneruj dokument ponownie.", { value: reasons
       .map((reason) => HYBRID_REASON[reason] ?? reason)
-      .join("; ")}. Popraw treść w rozmowie i wygeneruj dokument ponownie.`;
+      .join("; ") });
   }
   if (error instanceof ApiError && /^TOKENIZED_DOCUMENT_VALIDATION_FAILED/.test(error.code)) {
     const reason = error.code.split(":").slice(1).join(":");
-    return `Plik nie został zapisany: ${
-      reason === "EMPTY_DOCUMENT"
-        ? "z odpowiedzi nie powstała treść pisma (sama odpowiedź nie zawiera pisma: najpierw poproś o jego treść)"
+    return t("Plik nie został zapisany: {value}. Spróbuj ponownie; jeśli się powtórzy, zgłoś kod: {code}.", { value: reason === "EMPTY_DOCUMENT"
+        ? t("z odpowiedzi nie powstała treść pisma (sama odpowiedź nie zawiera pisma: najpierw poproś o jego treść)")
         : reason === "RENDERED_TEXT_MISMATCH"
-          ? "tekst zapisanego pliku różni się od przygotowanej treści (kontrola zgodności pliku)"
+          ? t("tekst zapisanego pliku różni się od przygotowanej treści (kontrola zgodności pliku)")
           : reason.startsWith("ALIAS_MISSING")
-            ? "w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)"
-            : "kontrola zgodności pliku nie przeszła"
-    }. Spróbuj ponownie; jeśli się powtórzy, zgłoś kod: ${error.code}.`;
+            ? t("w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)")
+            : t("kontrola zgodności pliku nie przeszła"), code: error.code });
   }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
   const listed = references
     .slice(0, 12)
-    .map((reference) => `${reference.claim} (${EXPORT_REFERENCE_STATUS[reference.status] ?? "orzeczenie: cytat lub teza niepotwierdzone"})`);
-  const more = references.length > listed.length ? ` i ${references.length - listed.length} innych` : "";
+    .map((reference) => t("{claim} ({value})", { claim: reference.claim, value: EXPORT_REFERENCE_STATUS[reference.status] ?? t("orzeczenie: cytat lub teza niepotwierdzone") }));
+  const more = references.length > listed.length ? t(" i {count} innych", { count: references.length - listed.length }) : "";
   return listed.length
-    ? `Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: ${listed.join("; ")}${more}.` +
-        (error.draftAvailable ? " Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku." : " Popraw lub usuń te powołania i spróbuj ponownie.")
-    : `Pismo nie zostało zapisane: bramka eksportu (${error.code}).`;
+    ? t("Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: {value}{more}.", { value: listed.join("; "), more: more }) +
+        (error.draftAvailable ? t(" Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku.") : t(" Popraw lub usuń te powołania i spróbuj ponownie."))
+    : t("Pismo nie zostało zapisane: bramka eksportu ({code}).", { code: error.code });
 }
 
 export default function MatterChatApp({
@@ -2034,9 +2034,9 @@ export default function MatterChatApp({
     const taken = fresh.slice(0, Math.max(0, documentLimit - selectedFileCount));
     setPickerNotice(
       taken.length < fresh.length
-        ? `Limit ${documentLimit} plików w jednej wiadomości` +
-            (localModelSelected ? " dla modelu lokalnego" : "") +
-            `: dodano ${taken.length} z ${fresh.length}. Odznacz inne pliki albo wyślij pozostałe w kolejnej wiadomości.`
+        ? t("Limit {documentLimit} plików w jednej wiadomości", { documentLimit: documentLimit }) +
+            (localModelSelected ? t(" dla modelu lokalnego") : "") +
+            t(": dodano {count} z {count2}. Odznacz inne pliki albo wyślij pozostałe w kolejnej wiadomości.", { count: taken.length, count2: fresh.length })
         : ""
     );
     const documents = taken.flatMap((pick) => (pick.kind === "document" ? [pick] : []));
@@ -2597,7 +2597,7 @@ export default function MatterChatApp({
           const next = sourceModels.find((item) => item.selectable);
           if (current && next) {
             queueMicrotask(() =>
-              setModelNotice(`Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: ${next.displayName}.`)
+              setModelNotice(t("Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: {displayName}.", { displayName: next.displayName }))
             );
           }
           return next?.id ?? "";
@@ -2914,7 +2914,7 @@ export default function MatterChatApp({
         await resetCaseWorkflow(current.caseId, { kind: "process-pleading" });
         setProcessWorkflowRefresh((value) => value + 1);
       } catch (error) {
-        setExecutionError("Nie udało się zamknąć pipeline'u pisma procesowego: " + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
+        setExecutionError(t("Nie udało się zamknąć pipeline'u pisma procesowego: ") + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
         return;
       }
     }
@@ -3017,7 +3017,7 @@ export default function MatterChatApp({
     if (
       clear.length > 0 &&
       !window.confirm(
-        `${clear.map((item) => `„${item.file.name}”`).join(", ")}: bez anonimizacji - wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
+        t("{value}: bez anonimizacji - wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?", { value: clear.map((item) => `„${item.file.name}”`).join(", ") })
       )
     ) {
       return;
@@ -3136,13 +3136,13 @@ export default function MatterChatApp({
     for (const reference of references) {
       if (reference.kind === "BLOB_WITHOUT_SIGNATURE") {
         notes.push(
-          "Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. " +
-            "Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; " +
-            "możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu."
+          t("Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. ") +
+            t("Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; ") +
+            t("możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu.")
         );
         continue;
       }
-      setPickerNotice(`Pobieram orzeczenie ${reference.kind === "SIGNATURE" ? reference.signature : "z karty"} i dodaję do akt sprawy…`);
+      setPickerNotice(t("Pobieram orzeczenie {value} i dodaję do akt sprawy…", { value: reference.kind === "SIGNATURE" ? reference.signature : t("z karty") }));
       try {
         const copy = await resolveCaseLaw({
           ...(reference.kind === "CARD" ? { cardUrl: reference.cardUrl } : { signature: reference.signature, cardUrl: reference.link }),
@@ -3150,10 +3150,10 @@ export default function MatterChatApp({
         });
         const attachment = await saveCaseLawToCase(caseLawDocument(copy));
         attached.push(attachment);
-        notes.push(`Dodano do akt: ${[copy.court, copy.signature].filter(Boolean).join(" ")} (karta: ${copy.cardUrl}).`);
+        notes.push(t("Dodano do akt: {value} (karta: {cardUrl}).", { value: [copy.court, copy.signature].filter(Boolean).join(" "), cardUrl: copy.cardUrl }));
       } catch (error) {
         const code = error instanceof Error ? error.message : String(error);
-        notes.push(`Nie udało się pobrać orzeczenia (${code}). Model sprawdzi je narzędziem weryfikacji.`);
+        notes.push(t("Nie udało się pobrać orzeczenia ({code}). Model sprawdzi je narzędziem weryfikacji.", { code: code }));
       }
     }
     if (attached.length) pickFiles(attached.map((item) => ({ kind: "document" as const, documentId: item.documentId, chunkIndices: item.chunkIndices })), true, caseId);
@@ -3198,7 +3198,7 @@ export default function MatterChatApp({
   async function sendStagedImagesToModel(ids: string[]): Promise<void> {
     const items = documentStaging.items.filter((entry) => ids.includes(entry.id) && directImageType(entry.file));
     if (directImages.length + items.length > MAX_DIRECT_IMAGES || items.some((item) => item.file.size > MAX_DIRECT_IMAGE_BYTES)) {
-      setExecutionError(`Do jednej wiadomości można dołączyć najwyżej ${MAX_DIRECT_IMAGES} obrazy, każdy do 5 MB.`);
+      setExecutionError(t("Do jednej wiadomości można dołączyć najwyżej {value} obrazy, każdy do 5 MB.", { value: MAX_DIRECT_IMAGES }));
       return;
     }
     for (const item of items) {
@@ -3207,7 +3207,7 @@ export default function MatterChatApp({
         setDirectImages((current) => [...current, image]);
         removeStagedDocuments([item.id]);
       } catch {
-        setExecutionError(`Nie udało się odczytać pliku ${item.file.name}.`);
+        setExecutionError(t("Nie udało się odczytać pliku {name}.", { name: item.file.name }));
       }
     }
   }
@@ -3354,7 +3354,7 @@ export default function MatterChatApp({
     const label = providerDefinition?.accountClientLabel ?? "klienta";
     if (
       !window.confirm(
-        `Odinstalować ${label} pobranego przez Lex Machina? Logowanie u dostawcy pozostaje; aby je usunąć, najpierw kliknij „Wyloguj”.`
+        t("Odinstalować {label} pobranego przez Lex Machina? Logowanie u dostawcy pozostaje; aby je usunąć, najpierw kliknij „Wyloguj”.", { label: label })
       )
     ) {
       return;
@@ -3364,7 +3364,7 @@ export default function MatterChatApp({
       const result = await uninstallProviderAccountClient(runtimeProvider);
       setProviderAccountMessage(
         result.status.installed
-          ? `Usunięto klienta Lex Machina, ale nadal działa inny klient (${result.status.command}) spoza katalogu Lex Machina — odinstaluj go w systemie.`
+          ? t("Usunięto klienta Lex Machina, ale nadal działa inny klient ({command}) spoza katalogu Lex Machina — odinstaluj go w systemie.", { command: result.status.command })
           : t("Klient odinstalowany. „Połącz konto” pobierze go ponownie.")
       );
     } catch (error) {
@@ -3649,7 +3649,7 @@ export default function MatterChatApp({
       ) {
         return (
           "Lokalny model wymaga naprawy profilu. " +
-          "Poproś administratora aplikacji o uruchomienie naprawy lokalnej AI. " +
+          t("Poproś administratora aplikacji o uruchomienie naprawy lokalnej AI. ") +
           `Kod: ${codeOf(initialError)}`
         );
       }
@@ -3761,7 +3761,7 @@ export default function MatterChatApp({
           );
         setModelError(code);
         return (
-          "Nie udało się uruchomić lokalnego modelu nawet po automatycznej naprawie profilu. " +
+          t("Nie udało się uruchomić lokalnego modelu nawet po automatycznej naprawie profilu. ") +
           `Kod: ${code}`
         );
       }
@@ -3855,7 +3855,7 @@ export default function MatterChatApp({
       setContractRetry({ text: pending.text, messageId: pending.messageId });
     } catch (error) {
       setExecutionError(
-        "Nie udało się ustawić trybu analizy umowy: " +
+        t("Nie udało się ustawić trybu analizy umowy: ") +
           (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
       );
     } finally {
@@ -3896,7 +3896,7 @@ export default function MatterChatApp({
       setContractRetry({ text: pending.text, messageId: pending.messageId, ...(pending.switchTo ? { switchTo: pending.switchTo } : {}) });
     } catch (error) {
       setExecutionError(
-        "Nie udało się przygotować etapu sprawy: " +
+        t("Nie udało się przygotować etapu sprawy: ") +
           (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
       );
     } finally {
@@ -3986,6 +3986,7 @@ export default function MatterChatApp({
               buildSkillSelectionEnvelope(
                 conversationForProvider(
                   context,
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   letterWorkflow === "contract"
                     ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
                     : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
@@ -4035,8 +4036,8 @@ export default function MatterChatApp({
             role: "assistant",
             content:
               (stage === "FINAL"
-                ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
-                : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
+                ? t("Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze.")
+                : t("Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.")) +
               documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
             meta: "dokument: " + generated.artifact.filename,
             generatedDocument: {
@@ -4067,13 +4068,13 @@ export default function MatterChatApp({
             role: "system",
             content:
               exportBlockedMessage(documentError) ??
-              "Nie udało się utworzyć pliku pisma: " +
+              t("Nie udało się utworzyć pliku pisma: ") +
               (documentError instanceof ApiError
                 ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
                 : documentError instanceof Error
                   ? documentError.message
                   : String(documentError)) +
-              ". Możesz poprosić: „wygeneruj to w pliku docx”."
+              t(". Możesz poprosić: „wygeneruj to w pliku docx”.")
           }
         ]);
       }
@@ -4202,7 +4203,7 @@ export default function MatterChatApp({
                   )
               }
             : options.switchTo
-              ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
+              ? { meta: t("{action} | Przełączono na: {label}", { action: deterministicActionMeta(options.switchTo.action), label: options.switchTo.label }) }
               : {})
       };
     // A message the user sends starts a new chain of automatic steps.
@@ -4441,18 +4442,18 @@ export default function MatterChatApp({
                     (savedFinal
                       ? "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " z danymi osobowymi zapisano: " +
+                        t(" z danymi osobowymi zapisano: ") +
                         savedFinal +
                         "." +
-                        (toCheck ? ` Formy do sprawdzenia: ${toCheck} - użyj podglądu w karcie.` : "") +
-                        " Karta poniżej: wersja z symbolami (podgląd, edycja, ponowne przywrócenie danych)."
+                        (toCheck ? t(" Formy do sprawdzenia: {toCheck} - użyj podglądu w karcie.", { toCheck: toCheck }) : "") +
+                        t(" Karta poniżej: wersja z symbolami (podgląd, edycja, ponowne przywrócenie danych).")
                       : downloadedFinal
                       ? "Gotowy dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
+                        t(" jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze.")
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy.") +
+                        t(" jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy.")) +
                     documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
                   meta:
                     "dokument: " +
@@ -4475,7 +4476,7 @@ export default function MatterChatApp({
 
       setExecutionStage(
         selectedFileCount > 0
-          ? `Wysyłanie ${selectedFileCount} ${selectedFileCount === 1 ? "pliku" : "plików"} do modelu · analiza prawna i weryfikacja źródeł`
+          ? t("Wysyłanie {selectedFileCount} {value} do modelu · analiza prawna i weryfikacja źródeł", { selectedFileCount: selectedFileCount, value: selectedFileCount === 1 ? "pliku" : "plików" })
           : developerMode ? t("Analiza prawna, routing i weryfikacja źródeł") : t("Analiza prawna i weryfikacja źródeł")
       );
       setLastDelivery(null);
@@ -4599,7 +4600,8 @@ export default function MatterChatApp({
       if (pleadingPipelineNeeded(result) && canWriteCase(selectedCase)) {
         setWorkflowRecoveryRequest({
           caseId: executionCaseId,
-          text: t("Rozpocznij proces przygotowania pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą."),
+          // Kept in Polish: a message the runtime and the model read as an instruction.
+          text: "Rozpocznij proces przygotowania pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą.",
           messageId: `pipeline-${userMessage.id}`,
           recovery: { kind: "process-start", acceptOnly: false }
         });
@@ -4689,7 +4691,7 @@ export default function MatterChatApp({
             "PRIMARY_MODEL_NOT_READY"
           ? t("Wybrany model nie jest jeszcze gotowy do użycia.")
         : code === "PROVIDER_NOT_CONFIGURED"
-          ? "Brak lokalnego klucza API dla wybranego dostawcy."
+          ? t("Brak lokalnego klucza API dla wybranego dostawcy.")
           : code === "CHAT_PRIVACY_GATE_FAILED"
             ? t("Lokalna pseudonimizacja nie mogła się wykonać, więc zapytanie zostało zatrzymane przed wysłaniem do modelu. Sprawdź lokalną usługę prywatności w panelu Utrzymanie.")
           : code === "LOCAL_MODEL_EXECUTION_FAILED"
@@ -4853,7 +4855,7 @@ export default function MatterChatApp({
     } catch (error) {
       setExecutionError(
         error instanceof Error
-          ? "Nie udało się przygotować podglądu przywróconych danych: " + error.message
+          ? t("Nie udało się przygotować podglądu przywróconych danych: ") + error.message
           : t("Nie udało się przygotować podglądu przywróconych danych.")
       );
     } finally {
@@ -4886,18 +4888,18 @@ export default function MatterChatApp({
       setFinalReview(null);
       setGeneratedDocumentMessage(
         (savedPath
-          ? `Finalny dokument z przywróconymi danymi został zapisany: ${savedPath}.`
-          : "Finalny dokument z przywróconymi danymi został utworzony i pobrany.") +
-          (corrected > 0 ? ` Ręczne poprawki: ${corrected}.` : "")
+          ? t("Finalny dokument z przywróconymi danymi został zapisany: {savedPath}.", { savedPath: savedPath })
+          : t("Finalny dokument z przywróconymi danymi został utworzony i pobrany.")) +
+          (corrected > 0 ? t(" Ręczne poprawki: {corrected}.", { corrected: corrected }) : "")
       );
       setWorkspaceRefresh((value) => value + 1);
     } catch (error) {
       setExecutionError(
         error instanceof Error
-          ? "Nie udało się przywrócić danych do finalnego dokumentu: " +
+          ? t("Nie udało się przywrócić danych do finalnego dokumentu: ") +
             error.message +
             (/REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(error.message)
-              ? ". Podaj hasło ponownie."
+              ? t(". Podaj hasło ponownie.")
               : "")
           : t("Nie udało się przywrócić danych do finalnego dokumentu.")
       );
@@ -5349,7 +5351,7 @@ export default function MatterChatApp({
                           className="matter-thread-edit"
                           disabled={caseBusy}
                           title={t("Zmień nazwę sprawy")}
-                          aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                          aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
                           onClick={() =>
                             setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
                           }
@@ -5403,14 +5405,14 @@ export default function MatterChatApp({
 
         <nav className="chat-tabs" aria-label={t("Sekcje aplikacji")}>
           {((individual
-            ? [["", [["chat", "Rozmowa"], ["settings", "Ustawienia"]]]]
+            ? [["", [["chat", N_("Rozmowa")], ["settings", N_("Ustawienia")]]]]
             : [
-                ["Ta sprawa", [["chat", "Rozmowa"], ["case", "Akta i dokumenty"]]],
-                ["Kancelaria", [["home", "Start"], ["calendar", "Kalendarz"], ["firm", "Wzory i wiedza"], ["search", "Wyszukiwanie"], ["invoices", "Faktury"]]],
-                ["", [["settings", "Ustawienia"]]]
+                [N_("Ta sprawa"), [["chat", N_("Rozmowa")], ["case", N_("Akta i dokumenty")]]],
+                [N_("Kancelaria"), [["home", N_("Start")], ["calendar", N_("Kalendarz")], ["firm", N_("Wzory i wiedza")], ["search", N_("Wyszukiwanie")], ["invoices", N_("Faktury")]]],
+                ["", [["settings", N_("Ustawienia")]]]
               ]) as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
-            <div key={group || "app"} className="chat-tab-group" role="group" aria-label={group || "Aplikacja"}>
-              {group ? <small className="chat-tab-group-label">{group}</small> : null}
+            <div key={group || "app"} className="chat-tab-group" role="group" aria-label={t(group || N_("Aplikacja"))}>
+              {group ? <small className="chat-tab-group-label">{t(group)}</small> : null}
               {tabs.map(([id, label]) => (
                 <button
                   key={id}
@@ -5418,7 +5420,7 @@ export default function MatterChatApp({
                   className={activeTab === id ? "chat-tab chat-tab-active" : "chat-tab"}
                   onClick={() => setActiveTab(id)}
                 >
-                  {label}
+                  {t(label)}
                   {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
                     <span title={t("Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)")}>
                       {documentDropQueue.files.length + documentStaging.items.length}
@@ -5677,7 +5679,7 @@ export default function MatterChatApp({
               <small
                 className={
                   localStartMessage ===
-                  "Lokalny model działa."
+                  t("Lokalny model działa.")
                     ? "chat-model-dock-message ready"
                     : "chat-model-dock-message"
                 }
@@ -5938,11 +5940,11 @@ export default function MatterChatApp({
                           ? ` · ${progressLabel(documentProgress[item.id]!)}`
                           : t(" · zapisuję i przetwarzam…")
                         : ""}
-                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? "spróbuj ponownie"}` : ""}
+                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
                     </small>
                     <span className="chat-file-actions">
                       <select
-                        aria-label={`Sposób przetwarzania: ${item.file.name}`}
+                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
                         value={item.mode}
                         disabled={item.status === "SAVING"}
                         title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
@@ -6090,11 +6092,13 @@ export default function MatterChatApp({
               busy={executing || caseBusy}
               onContinue={() => {
                 void executeMessage(
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   "Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem."
                 );
               }}
               onDownloadDraft={() => {
                 void executeMessage(
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   "Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy."
                 );
               }}
@@ -6474,7 +6478,7 @@ export default function MatterChatApp({
                             <small>
                               {t("Kontrola krzyżowa:")} {
                                 item.crossCheckStatus === "CONFIRMED_R1_R2A"
-                                  ? `potwierdzony w ${item.crossCheckTier ?? "R1/2A"}`
+                                  ? t("potwierdzony w {value}", { value: item.crossCheckTier ?? "R1/2A" })
                                   : item.crossCheckStatus === "CONFLICT"
                                     ? t("konflikt ze źródłem wyższego rzędu")
                                     : item.crossCheckStatus === "UNAVAILABLE"
@@ -6653,7 +6657,7 @@ export default function MatterChatApp({
                     {t("Obraz do modelu:")} {image.name}{" "}
                     <button
                       type="button"
-                      aria-label={`Usuń obraz ${image.name}`}
+                      aria-label={t("Usuń obraz {name}", { name: image.name })}
                       onClick={() => setDirectImages((current) => current.filter((entry) => entry.id !== image.id))}
                     >
                       ×
@@ -6681,7 +6685,7 @@ export default function MatterChatApp({
                       <button
                         type="button"
                         className="chat-chip-remove"
-                        aria-label={`Odłącz ${fileLabel(attachment.documentId)}`}
+                        aria-label={t("Odłącz {documentId}", { documentId: fileLabel(attachment.documentId) })}
                         onClick={() => pickFiles([{ kind: "document", documentId: attachment.documentId, chunkIndices: attachment.chunkIndices }], false, attachment.caseId)}
                       >
                         ×
@@ -6696,7 +6700,7 @@ export default function MatterChatApp({
                       <button
                         type="button"
                         className="chat-chip-remove"
-                        aria-label={`Odłącz ${firmFileNames[id] ?? "wzór kancelarii"}`}
+                        aria-label={t("Odłącz {value}", { value: firmFileNames[id] ?? t("wzór kancelarii") })}
                         onClick={() => setFirmTemplateIds((current) => current.filter((item) => item !== id))}
                       >
                         ×
@@ -6741,9 +6745,9 @@ export default function MatterChatApp({
                                   ? t("wyszukane w sprawie · ")
                                   : ""}
                             {document.status === "FULL"
-                              ? `w całości (${document.chunks} ${document.chunks === 1 ? "fragment" : "fragmentów"})`
+                              ? t("w całości ({chunks} {value})", { chunks: document.chunks, value: document.chunks === 1 ? "fragment" : "fragmentów" })
                               : document.status === "PARTIAL"
-                                ? `częściowo: ${document.fullChunks + document.digestChunks} z ${document.chunks} fragmentów`
+                                ? t("częściowo: {digestChunks} z {chunks} fragmentów", { digestChunks: document.fullChunks + document.digestChunks, chunks: document.chunks })
                                 : document.status === "DIGEST"
                                   ? t("tylko streszczenie fragmentów")
                                   : t("pominięty - brak miejsca w oknie modelu")}
@@ -6875,11 +6879,11 @@ export default function MatterChatApp({
                         {Math.round(documentFit.estimate.budgetTokens / 1000)} {t("tys. tokenów")}
                         {documentFit.estimate.fits
                           ? ""
-                          : ` - za dużo; największe: ${[...documentFit.estimate.documents]
+                          : t(" - za dużo; największe: {value}. Odznacz część plików; wysyłka jest zablokowana.", { value: [...documentFit.estimate.documents]
                               .sort((left, right) => right.tokens - left.tokens)
                               .slice(0, 3)
                               .map((document) => `${fileLabel(document.documentId, document.title)} (~${Math.round(document.tokens / 1000)} tys.)`)
-                              .join(", ")}. Odznacz część plików; wysyłka jest zablokowana.`}
+                              .join(", ") })}
                       </small>
                     </div>
                   ) : null}
@@ -7035,7 +7039,7 @@ export default function MatterChatApp({
                                   onClick={() => {
                                     if (
                                       !window.confirm(
-                                        `„${item.filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?`
+                                        t("„{filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?", { filename: item.filename })
                                       )
                                     ) {
                                       return;
@@ -7332,7 +7336,7 @@ export default function MatterChatApp({
                       </summary>
                       <dl>
                         <div>
-                          <dt>Kod</dt>
+                          <dt>{t("Kod")}</dt>
                           <dd>
                             <code>
                               {executionDiagnostic.code}
@@ -7434,7 +7438,7 @@ export default function MatterChatApp({
               (PRIMARY_MODEL_SOURCES.find((item) => item.id === provider)?.label ?? provider) +
               (provider === "local"
                 ? localModelReady
-                  ? " · działa"
+                  ? t(" · działa")
                   : localModelStarting || localStartBusy
                     ? " · uruchamianie"
                     : localRuntimeStatus
@@ -7956,17 +7960,17 @@ export default function MatterChatApp({
               aria-label={t("Sekcje ustawień")}
             >
               {([
-                ["Konto", "security", "Hasło i bezpieczeństwo"],
-                ["Konto", "display", "Wygląd i czytelność"],
-                ...(settingsPanels?.account ? [["Konto", "account", "Plan i klucze API"]] : []),
-                ["Asystent AI", "models", "Modele i AI"],
-                ["Asystent AI", "skills", "Skille i routing"],
-                ["Kancelaria", "users", "Użytkownicy i uprawnienia"],
-                ["Kancelaria", "invoices", "Faktury i KSeF"],
+                ["Konto", "security", t("Hasło i bezpieczeństwo")],
+                ["Konto", "display", t("Wygląd i czytelność")],
+                ...(settingsPanels?.account ? [["Konto", "account", t("Plan i klucze API")]] : []),
+                ["Asystent AI", "models", t("Modele i AI")],
+                ["Asystent AI", "skills", t("Skille i routing")],
+                ["Kancelaria", "users", t("Użytkownicy i uprawnienia")],
+                ["Kancelaria", "invoices", t("Faktury i KSeF")],
                 ...(settingsPanels?.server ? [["Kancelaria", "server", "Tryb serwerowy"]] : []),
-                ["Źródła i integracje", "mcp", "Integracje i konektory"],
-                ["Źródła i integracje", "courts", "Wokandy sądów"],
-                ["Aplikacja", "maintenance", "Aplikacja i utrzymanie"]
+                [t("Źródła i integracje"), "mcp", t("Integracje i konektory")],
+                [t("Źródła i integracje"), "courts", t("Wokandy sądów")],
+                ["Aplikacja", "maintenance", t("Aplikacja i utrzymanie")]
               ] as Array<
                 [string, SettingsSection, string]
               >)
@@ -8185,8 +8189,8 @@ export default function MatterChatApp({
                   onClick={() => void openExternalUrl(providerDefinition.apiKeyUrl)}
                 >
                   {model
-                    ? `Klucz API dla ${providerDefinition.label} — otwórz w przeglądarce ↗`
-                    : `Utwórz / pobierz klucz ${providerDefinition.label} — otwórz w przeglądarce ↗`}
+                    ? t("Klucz API dla {label} — otwórz w przeglądarce ↗", { label: providerDefinition.label })
+                    : t("Utwórz / pobierz klucz {label} — otwórz w przeglądarce ↗", { label: providerDefinition.label })}
                 </button>
               ) : null}
             </article>
@@ -8342,7 +8346,7 @@ export default function MatterChatApp({
                     {accountSession
                       ? accountSession.installed
                         ? accountSession.authenticated
-                          ? `Połączone · ${accountSession.command}`
+                          ? t("Połączone · {command}", { command: accountSession.command })
                           : `Klient zainstalowany, brak aktywnej sesji · ${accountSession.command}`
                         : `Brak klienta · ${accountSession.command}`
                       : t("Sprawdzanie klienta i sesji…")}

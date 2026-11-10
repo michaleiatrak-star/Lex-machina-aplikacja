@@ -13,25 +13,25 @@ export const KIND_LABEL: Record<string, string> = {
   IBAN: "Rachunek / IBAN",
   EMAIL: "E-mail",
   PHONE: "Telefon",
-  ID_CARD: "Dowód osobisty",
+  ID_CARD: t("Dowód osobisty"),
   PASSPORT: "Paszport",
   BIRTH_DATE: "Data urodzenia",
-  LAND_REGISTRY: "Księga wieczysta",
+  LAND_REGISTRY: t("Księga wieczysta"),
   KRS: "KRS",
   VEHICLE_PLATE: "Nr rejestracyjny",
   BAR_NUMBER: "Nr wpisu adwokata/radcy",
-  PAYMENT_CARD: "Karta płatnicza",
+  PAYMENT_CARD: t("Karta płatnicza"),
   CUSTOM: "Inne"
 };
 
 const GENDER_LABEL = { m: "mężczyzna", f: "kobieta", unknown: "nieustalona" } as const;
 
 const GRAMMAR_LABEL: Record<KeyGrammar, string> = {
-  m: "osoba - mężczyzna",
+  m: t("osoba - mężczyzna"),
   f: "osoba - kobieta",
-  "group-m": "kilka osób (np. małżonkowie)",
+  "group-m": t("kilka osób (np. małżonkowie)"),
   "group-f": "kilka kobiet",
-  organization: "firma (nazwa z imieniem/nazwiskiem)"
+  organization: t("firma (nazwa z imieniem/nazwiskiem)")
 };
 
 function grammarOf(entry: PrivacyKeyEntry): KeyGrammar | "" {
@@ -42,7 +42,7 @@ function grammarOf(entry: PrivacyKeyEntry): KeyGrammar | "" {
 
 function describeEntry(entry: PrivacyKeyEntry): string {
   if (entry.entity === "organization") return ` · firma${entry.legalForm ? ` (${entry.legalForm})` : ""}`;
-  if (entry.entity === "group") return entry.gender === "f" ? " · kilka kobiet" : " · kilka osób";
+  if (entry.entity === "group") return entry.gender === "f" ? " · kilka kobiet" : t(" · kilka osób");
   return entry.gender ? ` · ${GENDER_LABEL[entry.gender]}` : "";
 }
 
@@ -100,7 +100,7 @@ export function PrivacyKeyTable(props: {
                     {describeEntry(entry)}
                     {entry.kind === "PERSON" && props.onSaveGrammar ? (
                       <select
-                        aria-label={`Kim jest ${entry.token}`}
+                        aria-label={t("Kim jest {token}", { token: entry.token })}
                         title={t("Rodzaj i liczba trafiają do klucza dla modelu (uzgadnianie form) i zmieniają odmianę przy przywracaniu")}
                         disabled={props.busy}
                         value={grammarOf(entry)}

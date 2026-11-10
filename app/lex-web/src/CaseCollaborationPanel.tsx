@@ -40,11 +40,11 @@ const ROLE_HELP:
     string
   > = {
     EDITOR:
-      "odczyt, dodawanie dokumentów i analiza",
+      t("odczyt, dodawanie dokumentów i analiza"),
     ANALYST:
-      "odczyt i analiza bez modyfikacji akt",
+      t("odczyt i analiza bez modyfikacji akt"),
     VIEWER:
-      "wyłącznie odczyt akt"
+      t("wyłącznie odczyt akt")
   };
 
 function ParticipantRow({
@@ -110,7 +110,7 @@ function ParticipantRow({
     if (!editable) return;
     if (
       !window.confirm(
-        `Odebrać @${entry.user.loginName} dostęp do tej sprawy? Klucz sprawy zostanie obrócony dla pozostałych uczestników.`
+        t("Odebrać @{loginName} dostęp do tej sprawy? Klucz sprawy zostanie obrócony dla pozostałych uczestników.", { loginName: entry.user.loginName })
       )
     ) {
       return;
@@ -588,7 +588,7 @@ export function CaseCollaborationPanel({
             <select value={groupId} disabled={busy} onChange={(event) => setGroupId(event.target.value)}>
               {groups.map((group) => (
                 <option key={group.groupId} value={group.groupId}>
-                  {group.name} ({group.memberUserIds.length} os.)
+                  {group.name} ({group.memberUserIds.length} {t("os.)")}
                 </option>
               ))}
             </select>
@@ -744,7 +744,7 @@ export function CaseCollaborationPanel({
                     );
                     await refresh();
                     setMessage(
-                      `Zaktualizowano dostęp @${current.user.loginName}.`
+                      t("Zaktualizowano dostęp @{loginName}.", { loginName: current.user.loginName })
                     );
                   }
                 );
@@ -761,7 +761,7 @@ export function CaseCollaborationPanel({
                     );
                     await refresh();
                     setMessage(
-                      `Odebrano dostęp @${current.user.loginName} i obrócono klucz sprawy.`
+                      t("Odebrano dostęp @{loginName} i obrócono klucz sprawy.", { loginName: current.user.loginName })
                     );
                   }
                 );

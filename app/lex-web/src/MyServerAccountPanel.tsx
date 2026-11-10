@@ -24,7 +24,7 @@ export function MyServerAccountPanel() {
       <p className="eyebrow">{t("Konto")}</p>
       <h2>{t("Plan")}</h2>
       <p>
-        {t("Plan:")} <strong>{account.plan?.name ?? "brak"}</strong> {t("· limit:")} {limit !== null ? `${limit.toLocaleString(currentLocale())} tokenów / mies.` : "bez limitu"}
+        {t("Plan:")} <strong>{account.plan?.name ?? "brak"}</strong> {t("· limit:")} {limit !== null ? t("{value} tokenów / mies.", { value: limit.toLocaleString(currentLocale()) }) : "bez limitu"}
       </p>
       <p>
         {t("Zużycie w")} {account.month}: {used.toLocaleString(currentLocale())} {t("tokenów")}

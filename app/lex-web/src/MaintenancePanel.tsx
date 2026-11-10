@@ -46,7 +46,7 @@ function shortDate(value: string | null | undefined): string {
 }
 
 function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse["lastResult"]>): string {
-  const source = result.source === "channel" && result.channel ? `kanał ${CHANNEL_LABEL[result.channel]}` : "wydanie skilli";
+  const source = result.source === "channel" && result.channel ? t("kanał {value}", { value: CHANNEL_LABEL[result.channel] }) : "wydanie skilli";
   const target = result.target ? (result.source === "channel" ? ` (commit ${result.target.slice(0, 7)})` : ` ${result.target}`) : "";
   switch (result.outcome) {
     case "INSTALLED":
@@ -54,9 +54,9 @@ function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse[
     case "UP_TO_DATE":
       return `aktualne (${source}).`;
     case "BLOCKED":
-      return `nowsze skille są, ale wydanie nie ma kompletu do weryfikacji (${result.detail ?? "brak"}); bez instalacji.`;
+      return t("nowsze skille są, ale wydanie nie ma kompletu do weryfikacji ({value}); bez instalacji.", { value: result.detail ?? "brak" });
     default:
-      return `nie udało się (${source}: ${result.detail ?? "błąd"}).`;
+      return t("nie udało się ({source}: {value}).", { source: source, value: result.detail ?? "błąd" });
   }
 }
 
@@ -71,7 +71,7 @@ function channelUnavailableText(reason: string | undefined): string {
   if (reason === "SKILL_CHANNEL_DIRECTORY_MISSING") {
     return t("W repozytorium Lex Machina nie ma katalogu tego kanału.");
   }
-  return `Nie udało się sprawdzić kanału skilli (${reason}).`;
+  return t("Nie udało się sprawdzić kanału skilli ({reason}).", { reason: reason });
 }
 
 function formatBytes(bytes: number): string {
@@ -90,27 +90,27 @@ export function friendlyError(error: unknown): string {
         : String(error);
 
   if (/UPDATE_ASSET_HASH|UPDATE_ASSET_SIZE|UPDATE_ASSET_RANGE/.test(code)) {
-    return "Pobrane pliki są niekompletne lub uszkodzone. Spróbuj pobrać aktualizację ponownie.";
+    return t("Pobrane pliki są niekompletne lub uszkodzone. Spróbuj pobrać aktualizację ponownie.");
   }
   if (/UPDATE_ASSET_DOWNLOAD|fetch failed|Failed to fetch|TimeoutError|AbortError/.test(code)) {
-    return "Pobieranie zostało przerwane. Sprawdź połączenie z internetem i spróbuj ponownie.";
+    return t("Pobieranie zostało przerwane. Sprawdź połączenie z internetem i spróbuj ponownie.");
   }
   // The update runner (PowerShell) ended at once: it never ran the update script.
   if (code.startsWith("APPLICATION_UPDATE_RUNNER_EXITED")) {
     const detail = code.split(":").slice(2).join(":").trim();
     return (
-      "Instalator aktualizacji nie mógł się uruchomić: Windows zatrzymał skrypt aktualizacji (najczęściej zasady wykonywania " +
-      "skryptów PowerShell ustawione przez administratora albo program antywirusowy). Aplikacja pozostaje bez zmian. " +
-      "Zainstaluj nową wersję instalatorem ze strony wydania; szczegóły: %LOCALAPPDATA%\\LexMachina\\update-runner-start.log" +
+      t("Instalator aktualizacji nie mógł się uruchomić: Windows zatrzymał skrypt aktualizacji (najczęściej zasady wykonywania ") +
+      t("skryptów PowerShell ustawione przez administratora albo program antywirusowy). Aplikacja pozostaje bez zmian. ") +
+      t("Zainstaluj nową wersję instalatorem ze strony wydania; szczegóły: %LOCALAPPDATA%\\LexMachina\\update-runner-start.log") +
       (detail ? ` (${detail.slice(0, 300)})` : "")
     );
   }
   if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
-    return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
+    return t("Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.");
   }
   // Wydanie bez instalatora dla tego systemu (z sumą SHA-256 GitHub), nie błąd podpisu.
   if (code === "APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED") {
-    return "Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.";
+    return t("Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.");
   }
   if (
     code.includes("SIGNER_POLICY_MISSING") ||
@@ -118,19 +118,19 @@ export function friendlyError(error: unknown): string {
     code.includes("SIGNATURE_INVALID") ||
     code.includes("NOT_VERIFIED")
   ) {
-    return "Aktualizacja programu jest zablokowana przez politykę bezpieczeństwa: produkcyjny podpis Authenticode nie został jeszcze poprawnie skonfigurowany albo nie przeszedł weryfikacji.";
+    return t("Aktualizacja programu jest zablokowana przez politykę bezpieczeństwa: produkcyjny podpis Authenticode nie został jeszcze poprawnie skonfigurowany albo nie przeszedł weryfikacji.");
   }
   if (
     code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
     code.includes("APPLICATION_UPDATE_PLATFORM_UNSUPPORTED")
   ) {
-    return "Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).";
+    return t("Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).");
   }
   if (code === "APPLICATION_UPDATE_NOT_AVAILABLE") {
-    return "Brak nowszej wersji programu do pobrania.";
+    return t("Brak nowszej wersji programu do pobrania.");
   }
   if (code === "SKILL_UPDATE_NOT_AVAILABLE") {
-    return "Brak nowszego pakietu skilli do zastosowania.";
+    return t("Brak nowszego pakietu skilli do zastosowania.");
   }
   return code;
 }
@@ -154,8 +154,8 @@ export function appStatusLabel(status: string | undefined): string {
 
 export function manualUpdateInstruction(userAgent: string): string {
   return /Mac OS X|Macintosh/i.test(userAgent)
-    ? "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
-    : "Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.";
+    ? t("Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają.")
+    : t("Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.");
 }
 
 /**
@@ -258,7 +258,7 @@ export function MaintenancePanel({
       return "SPRAWDZANIE";
     }
     if (error) {
-      return "BŁĄD SPRAWDZANIA";
+      return t("BŁĄD SPRAWDZANIA");
     }
     return "AKTUALNE";
   }, [
@@ -325,7 +325,7 @@ export function MaintenancePanel({
         await downloadApplicationUpdate();
       setStaged(result);
       setMessage(
-        `Aktualizacja ${result.version} jest gotowa do instalacji (${formatBytes(result.bytes)}).`
+        t("Aktualizacja {version} jest gotowa do instalacji ({bytes}).", { version: result.version, bytes: formatBytes(result.bytes) })
       );
     } catch (problem) {
       setMessage("");
@@ -385,12 +385,12 @@ export function MaintenancePanel({
     setBusy("skills");
     setError("");
     setMessage(
-      `Pobieram skille z kanału ${CHANNEL_LABEL[channel]} repozytorium Lex Machina, sprawdzam sumę każdego pliku i strukturę, potem aktywuję.`
+      t("Pobieram skille z kanału {value} repozytorium Lex Machina, sprawdzam sumę każdego pliku i strukturę, potem aktywuję.", { value: CHANNEL_LABEL[channel] })
     );
     try {
       const result = await refreshSkillsFromChannel(channel);
       setMessage(
-        `Skille odświeżone z kanału ${CHANNEL_LABEL[result.channel]} (${result.directory}, commit ${result.commit.slice(0, 7)}, ${result.files} plików). Uruchom ponownie program, aby wczytał nowe skille; przy nieudanym starcie wróci poprzednia wersja.`
+        t("Skille odświeżone z kanału {value} ({directory}, commit {value2}, {files} plików). Uruchom ponownie program, aby wczytał nowe skille; przy nieudanym starcie wróci poprzednia wersja.", { value: CHANNEL_LABEL[result.channel], directory: result.directory, value2: result.commit.slice(0, 7), files: result.files })
       );
       setSkillStatus(await getSkillChannelStatus(channel));
     } catch (problem) {
@@ -629,7 +629,7 @@ export function MaintenancePanel({
               />
               {t("Aktualizuj skille automatycznie")}
               <InfoTip>
-                Co {autoUpdate.intervalHours} {t("godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).")}
+                {t("Co")} {autoUpdate.intervalHours} {t("godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).")}
               </InfoTip>
             </label>
           ) : null}

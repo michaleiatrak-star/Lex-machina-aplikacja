@@ -2,8 +2,8 @@ import { t } from "./i18n";
 import type { MandatoryPathStep, MandatoryPathView } from "./api.js";
 
 const LAYERS: Array<[MandatoryPathStep["layer"], string]> = [
-  ["ROUTER", "Router i bramki"],
-  ["SKILL", "Wywołane skille"],
+  ["ROUTER", t("Router i bramki")],
+  ["SKILL", t("Wywołane skille")],
   ["VERIFICATION", "Weryfikacja"],
   ["HARD_GATE", "Hard gate"]
 ];
@@ -11,8 +11,8 @@ const LAYERS: Array<[MandatoryPathStep["layer"], string]> = [
 const STATUS: Record<MandatoryPathStep["status"], string> = {
   MET: "spełniony",
   MISSING: "BRAK",
-  NOT_TRIGGERED: "nie dotyczy",
-  NOT_EVALUATED: "nie oceniany"
+  NOT_TRIGGERED: t("nie dotyczy"),
+  NOT_EVALUATED: t("nie oceniany")
 };
 
 /**

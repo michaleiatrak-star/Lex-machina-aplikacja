@@ -61,7 +61,7 @@ export function ChatDocumentCard(props: {
     });
     await uploadCaseFile(caseId, new File([blob], filename, { type: blob.type }));
     setEdited({ blob, filename });
-    setStatus(`Wersja edytowana „${filename}” zapisana w aktach sprawy.`);
+    setStatus(t("Wersja edytowana „{filename}” zapisana w aktach sprawy.", { filename: filename }));
   }
 
   // A pleading file from the process pipeline: the edited text can become the
@@ -77,8 +77,8 @@ export function ChatDocumentCard(props: {
     const current = await getProcessPleadingDraft(caseId);
     await saveProcessPleadingDraft(caseId, { text, change, expectedRevision: current.draft?.revision ?? 0 });
     return change === "SUBSTANTIVE"
-      ? "Zapisano jako projekt pisma. Zmiana merytoryczna: pipeline wraca do W2 (atak na projekt i kontrole W3)."
-      : "Zapisano jako projekt pisma (drobna poprawka; zamknięte kontrole zostają).";
+      ? t("Zapisano jako projekt pisma. Zmiana merytoryczna: pipeline wraca do W2 (atak na projekt i kontrole W3).")
+      : t("Zapisano jako projekt pisma (drobna poprawka; zamknięte kontrole zostają).");
   }
 
   async function run(action: () => Promise<void>): Promise<void> {
@@ -205,7 +205,7 @@ export function ChatDocumentCard(props: {
           filename={filename}
           onRenamed={(next) => {
             setRenaming(false);
-            setStatus(`Zmieniono nazwę na „${next}”.`);
+            setStatus(t("Zmieniono nazwę na „{next}”.", { next: next }));
             props.onRenamed?.(document.artifactId, next);
           }}
           onCancel={() => setRenaming(false)}

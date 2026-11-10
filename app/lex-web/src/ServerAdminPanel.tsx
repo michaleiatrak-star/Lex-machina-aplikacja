@@ -48,24 +48,24 @@ const STAGES: Record<string, string> = {
 function failureText(failure: unknown): string {
   if (!(failure instanceof ApiError)) return t("Brak połączenia z usługą aplikacji.");
   const known: Record<string, string> = {
-    AUTHORIZATION_DENIED: "Brak uprawnień administratora.",
-    SERVER_MODE_FORCED: "Tryb jest ustalony zmienną LEX_SERVER_MODE_FORCE i nie można go zmienić tutaj.",
-    INVALID_SMTP_SETTINGS: "Nieprawidłowe ustawienia SMTP.",
-    INVALID_PUBLIC_BASE_URL: "Nieprawidłowy adres aplikacji (https://…).",
-    MAIL_NOT_CONFIGURED: "Uzupełnij serwer SMTP, nadawcę i adres aplikacji.",
-    MAIL_DELIVERY_FAILED: "Serwer SMTP odrzucił wiadomość albo jest nieosiągalny.",
-    INVALID_PLAN: "Nieprawidłowy plan (nazwa, limit tokenów).",
-    PLAN_NAME_EXISTS: "Plan o tej nazwie już istnieje.",
-    PLAN_IN_USE: "Plan jest przypisany do kont albo jest planem domyślnym.",
-    INVALID_PROVIDER_API_KEY: "Nieprawidłowy klucz API.",
-    INVALID_GLOBAL_TOKEN_LIMIT: "Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu).",
-    ADMIN_HAS_NO_PLAN: "Administrator nie podlega planom.",
-    USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora.",
-    SERVER_MODE_REQUIRED: "Dostęp z sieci wymaga włączonego trybu serwerowego.",
-    NETWORK_CHANGE_LOCAL_ONLY: "Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1).",
-    HTTPS_REQUIRED_FOR_NETWORK: "Dostęp z sieci działa tylko z HTTPS.",
-    TEMPORARY_ADMIN_PASSWORD: "Najpierw zmień tymczasowe hasło administratora (admin/admin).",
-    BROWSER_ACCESS_UNAVAILABLE: "Strona aplikacji nie nasłuchuje (port zajęty albo wyłączony)."
+    AUTHORIZATION_DENIED: t("Brak uprawnień administratora."),
+    SERVER_MODE_FORCED: t("Tryb jest ustalony zmienną LEX_SERVER_MODE_FORCE i nie można go zmienić tutaj."),
+    INVALID_SMTP_SETTINGS: t("Nieprawidłowe ustawienia SMTP."),
+    INVALID_PUBLIC_BASE_URL: t("Nieprawidłowy adres aplikacji (https://…)."),
+    MAIL_NOT_CONFIGURED: t("Uzupełnij serwer SMTP, nadawcę i adres aplikacji."),
+    MAIL_DELIVERY_FAILED: t("Serwer SMTP odrzucił wiadomość albo jest nieosiągalny."),
+    INVALID_PLAN: t("Nieprawidłowy plan (nazwa, limit tokenów)."),
+    PLAN_NAME_EXISTS: t("Plan o tej nazwie już istnieje."),
+    PLAN_IN_USE: t("Plan jest przypisany do kont albo jest planem domyślnym."),
+    INVALID_PROVIDER_API_KEY: t("Nieprawidłowy klucz API."),
+    INVALID_GLOBAL_TOKEN_LIMIT: t("Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu)."),
+    ADMIN_HAS_NO_PLAN: t("Administrator nie podlega planom."),
+    USER_STATUS_CONFLICT: t("Nie można zmienić statusu konta administratora."),
+    SERVER_MODE_REQUIRED: t("Dostęp z sieci wymaga włączonego trybu serwerowego."),
+    NETWORK_CHANGE_LOCAL_ONLY: t("Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1)."),
+    HTTPS_REQUIRED_FOR_NETWORK: t("Dostęp z sieci działa tylko z HTTPS."),
+    TEMPORARY_ADMIN_PASSWORD: t("Najpierw zmień tymczasowe hasło administratora (admin/admin)."),
+    BROWSER_ACCESS_UNAVAILABLE: t("Strona aplikacji nie nasłuchuje (port zajęty albo wyłączony).")
   };
   return known[failure.code] ?? failure.code;
 }
@@ -175,7 +175,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
               void run(async () => {
                 await setServerModeEnabled(enabled);
                 onModeChanged?.(enabled);
-              }, enabled ? "Tryb serwerowy włączony." : "Tryb serwerowy wyłączony.");
+              }, enabled ? t("Tryb serwerowy włączony.") : t("Tryb serwerowy wyłączony."));
             }}
           />
           {t("Tryb serwerowy")} {settings.forced ? t("(ustalony przez LEX_SERVER_MODE_FORCE)") : ""}
@@ -187,16 +187,16 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
         <p className="field-help">
           {settings.browser?.state === "LISTENING"
             ? `Aplikacja: ${settings.browser.addresses.join(", ")}.`
-            : `Strona aplikacji nie nasłuchuje${settings.browser?.error ? ` (${settings.browser.error})` : ""}.`}
+            : t("Strona aplikacji nie nasłuchuje{value}.", { value: settings.browser?.error ? ` (${settings.browser.error})` : "" })}
         </p>
         <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
           {(
             [
-              ["LOCAL", "Lokalny (domyślny)", "Tylko z tego komputera (127.0.0.1). Połączenia z sieci są odrzucane."],
+              ["LOCAL", t("Lokalny (domyślny)"), t("Tylko z tego komputera (127.0.0.1). Połączenia z sieci są odrzucane.")],
               [
                 "NETWORK",
-                "Z sieci",
-                "Także z innych komputerów, tylko przez HTTPS: adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego."
+                t("Z sieci"),
+                t("Także z innych komputerów, tylko przez HTTPS: adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego.")
               ]
             ] as Array<[NetworkAccess, string, string]>
           ).map(([mode, label, help]) => (
@@ -211,7 +211,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     await setServerNetworkAccess(mode);
                     // Serwer nasłuchuje od nowa; chwila na zamknięcie połączeń.
                     await new Promise((resolve) => window.setTimeout(resolve, 600));
-                  }, mode === "NETWORK" ? "Dostęp z sieci włączony." : "Dostęp tylko z tego komputera.");
+                  }, mode === "NETWORK" ? t("Dostęp z sieci włączony.") : t("Dostęp tylko z tego komputera."));
                 }}
               />
               <span>
@@ -223,8 +223,8 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
         <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
           {(
             [
-              ["HTTPS", "HTTPS (domyślny)", "Połączenie szyfrowane. Wpisany adres http:// przechodzi na https://."],
-              ["HTTP", "HTTP", "Bez szyfrowania; tylko dostęp lokalny albo za serwerem pośredniczącym z HTTPS."]
+              ["HTTPS", t("HTTPS (domyślny)"), t("Połączenie szyfrowane. Wpisany adres http:// przechodzi na https://.")],
+              ["HTTP", "HTTP", t("Bez szyfrowania; tylko dostęp lokalny albo za serwerem pośredniczącym z HTTPS.")]
             ] as Array<[BrowserProtocol, string, string]>
           ).map(([protocol, label, help]) => (
             <label key={protocol} className="chat-settings-channel-option">
@@ -242,7 +242,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     if (window.location.protocol !== target) {
                       window.location.href = `${target}//${window.location.host}${window.location.pathname}`;
                     }
-                  }, protocol === "HTTPS" ? "HTTPS włączone." : "HTTP włączone.");
+                  }, protocol === "HTTPS" ? t("HTTPS włączone.") : t("HTTP włączone."));
                 }}
               />
               <span>
@@ -335,7 +335,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
             {t("Wyślij wiadomość testową na adres")}
             <input value={testTo} onChange={(event) => setTestTo(event.target.value)} />
           </label>
-          <button type="button" disabled={busy || !testTo.trim()} onClick={() => void run(() => sendServerTestMail(testTo.trim()), "Wiadomość testowa wysłana.")}>
+          <button type="button" disabled={busy || !testTo.trim()} onClick={() => void run(() => sendServerTestMail(testTo.trim()), t("Wiadomość testowa wysłana."))}>
             {t("Wyślij test")}
           </button>
         </div>
@@ -381,7 +381,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     {t("Zapisz")}
                   </button>
                   {stored?.configured && (
-                    <button type="button" className="danger-button" disabled={busy} onClick={() => void run(() => clearServerProviderKey(id), `Usunięto klucz ${label}.`)}>
+                    <button type="button" className="danger-button" disabled={busy} onClick={() => void run(() => clearServerProviderKey(id), t("Usunięto klucz {label}.", { label: label }))}>
                       {t("Usuń")}
                     </button>
                   )}
@@ -399,7 +399,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
         </p>
         <p>
           {t("Zużycie w")} {settings.month}: <strong>{tokens(settings.globalUsage.inputTokens + settings.globalUsage.outputTokens)}</strong>
-          {settings.globalMonthlyTokenLimit !== null ? ` z ${tokens(settings.globalMonthlyTokenLimit)}` : " (bez limitu)"} {t("tokenów")}
+          {settings.globalMonthlyTokenLimit !== null ? t(" z {globalMonthlyTokenLimit}", { globalMonthlyTokenLimit: tokens(settings.globalMonthlyTokenLimit) }) : " (bez limitu)"} {t("tokenów")}
         </p>
         <div className="admin-user-create">
           <label>
@@ -431,7 +431,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
           <select
             value={settings.defaultPlanId ?? ""}
             disabled={busy}
-            onChange={(event) => void run(() => updateServerSettings({ defaultPlanId: event.target.value || null }), "Zapisano plan domyślny.")}
+            onChange={(event) => void run(() => updateServerSettings({ defaultPlanId: event.target.value || null }), t("Zapisano plan domyślny."))}
           >
             <option value="">{t("(brak)")}</option>
             {plans.map((item) => (
@@ -447,7 +447,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
               <div>
                 <strong>{item.name}</strong>
                 <span>
-                  {item.monthlyTokenLimit === null ? "bez limitu" : `${tokens(item.monthlyTokenLimit)} tokenów / mies.`} ·{" "}
+                  {item.monthlyTokenLimit === null ? "bez limitu" : t("{monthlyTokenLimit} tokenów / mies.", { monthlyTokenLimit: tokens(item.monthlyTokenLimit) })} ·{" "}
                   {item.allowedProviders.join(", ") || t("brak dostawców")}
                 </span>
               </div>
@@ -467,7 +467,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                 >
                   {t("Edytuj")}
                 </button>
-                <button type="button" className="danger-button" disabled={busy} onClick={() => void run(() => deleteServerPlan(item.planId), "Plan usunięty.")}>
+                <button type="button" className="danger-button" disabled={busy} onClick={() => void run(() => deleteServerPlan(item.planId), t("Plan usunięty."))}>
                   {t("Usuń")}
                 </button>
               </div>
@@ -566,7 +566,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     onClick={() =>
                       void run(
                         () => setServerAccountStatus(account.userId, account.status === "ACTIVE" ? "DISABLED" : "ACTIVE"),
-                        account.status === "ACTIVE" ? "Konto wyłączone." : "Konto włączone."
+                        account.status === "ACTIVE" ? t("Konto wyłączone.") : t("Konto włączone.")
                       )
                     }
                   >
@@ -612,7 +612,7 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
                     </strong>
                     <span>
                       {t("sprawa:")} {turn.caseId ?? "brak"} {t("· skill:")} {turn.skill ?? "?"} {t("· etap")} {turn.step}/{turn.totalSteps}
-                      {turn.stage ? ` (${STAGES[turn.stage] ?? turn.stage})` : ""} {t("· tokeny:")} {tokens(turn.inputTokens)} we / {tokens(turn.outputTokens)} {t("wy · start")}{" "}
+                      {turn.stage ? ` (${STAGES[turn.stage] ?? turn.stage})` : ""} {t("· tokeny:")} {tokens(turn.inputTokens)} {t("we /")} {tokens(turn.outputTokens)} {t("wy · start")}{" "}
                       {new Date(turn.startedAt).toLocaleTimeString(currentLocale())}
                     </span>
                   </div>

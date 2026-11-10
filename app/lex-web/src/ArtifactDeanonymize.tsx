@@ -54,8 +54,8 @@ export function ArtifactDeanonymize(props: {
     ).length;
     if (final.downloadTicket) setTicket({ ticketId: final.downloadTicket.ticketId, filename: final.artifact.filename });
     props.onDone(
-      `Utworzono „${final.artifact.filename}” (${final.replacements} podstawień) i zapisano w aktach sprawy.` +
-        (toCheck ? ` Formy do sprawdzenia: ${toCheck} - użyj podglądu.` : "") +
+      t("Utworzono „{filename}” ({replacements} podstawień) i zapisano w aktach sprawy.", { filename: final.artifact.filename, replacements: final.replacements }) +
+        (toCheck ? t(" Formy do sprawdzenia: {toCheck} - użyj podglądu.", { toCheck: toCheck }) : "") +
         (unresolved ? ` Symbole spoza klucza: ${unresolved}.` : "")
     );
   }
@@ -69,8 +69,8 @@ export function ArtifactDeanonymize(props: {
       const code = failure instanceof Error ? failure.message : String(failure);
       setError(
         /REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(code)
-          ? `Uprawnienie wygasło (${code}) - spróbuj ponownie.`
-          : `Nie udało się deanonimizować: ${code}`
+          ? t("Uprawnienie wygasło ({code}) - spróbuj ponownie.", { code: code })
+          : t("Nie udało się deanonimizować: {code}", { code: code })
       );
       if (/REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(code)) setReview(null);
     } finally {

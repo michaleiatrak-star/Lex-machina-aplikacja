@@ -99,7 +99,7 @@ export function MicrosoftIntegrationPanel() {
         <>
           <p>
             {t("Połączono:")} <strong>{status.email}</strong> {t("· SharePoint:")} {status.sharepoint ? "tak" : "nie"}
-            {status.connectedAt ? ` · od ${new Date(status.connectedAt).toLocaleDateString(currentLocale())}` : ""}
+            {status.connectedAt ? t(" · od {value}", { value: new Date(status.connectedAt).toLocaleDateString(currentLocale()) }) : ""}
           </p>
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void disconnect()}>
             {t("Rozłącz konto Microsoft")}
@@ -134,7 +134,7 @@ export function useMicrosoftConnected(): boolean {
 type Crumb = { place?: string; name: string };
 
 const ROOTS: Array<{ key: string; label: string; crumb: Crumb }> = [
-  { key: "onedrive", label: N_("Mój OneDrive"), crumb: { place: "onedrive", name: "Mój OneDrive" } },
+  { key: "onedrive", label: N_("Mój OneDrive"), crumb: { place: "onedrive", name: t("Mój OneDrive") } },
   { key: "shared", label: N_("Udostępnione dla mnie"), crumb: { place: "shared", name: "Udostępnione" } },
   { key: "sites", label: "SharePoint", crumb: { place: "sites", name: "SharePoint" } }
 ];
@@ -274,7 +274,7 @@ export function MicrosoftImportDialog({
             {t("Anuluj")}
           </button>
           <button type="button" className="chat-primary-action" disabled={busy || !picked.size} onClick={() => void submit()}>
-            {busy ? "Pracuję…" : `Dodaj do akt (${picked.size})`}
+            {busy ? "Pracuję…" : t("Dodaj do akt ({count})", { count: picked.size })}
           </button>
         </div>
       </div>

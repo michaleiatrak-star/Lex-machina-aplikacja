@@ -320,7 +320,7 @@ export function FirmKnowledgePanel({
           </h3>
         </div>
         <span className="security-pill">
-          ENCRYPTED + ACL
+          {t("ENCRYPTED + ACL")}
         </span>
       </div>
 
