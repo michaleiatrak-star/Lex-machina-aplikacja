@@ -8,7 +8,7 @@ import {
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
 import { casesNewestFirst } from "./case-calendar.js";
-import { CASE_ROLE_LABEL } from "./api";
+import { CASE_ROLE_LABEL, type JurisdictionSettings } from "./api";
 import { LanguagePicker } from "./LanguagePicker";
 import { TranslationStatus } from "./TranslationStatus";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
@@ -91,6 +91,7 @@ import {
   getProviderAccountStatus,
   getProviderStatus,
   getRoutes,
+  getJurisdiction,
   isDesktopShell,
   finalizeDocument as finalizeCaseDocument,
   getVisionOcrStatus,
@@ -1788,6 +1789,8 @@ export default function MatterChatApp({
   >(null);
 
   const [routes, setRoutes] = useState<string[]>([]);
+  // The legal system chosen in Settings: its national package (if any) is the third core skill.
+  const [jurisdiction, setJurisdictionView] = useState<JurisdictionSettings | null>(null);
   const [skills, setSkills] = useState<PublicSkillDescriptor[]>(
     FALLBACK_EXECUTION_SKILLS
   );
@@ -2201,9 +2204,10 @@ export default function MatterChatApp({
           !MANDATORY_SKILLS.includes(
             item.name as (typeof MANDATORY_SKILLS)[number]
           ) &&
-          item.name !== "prawo-polskie-v2"
+          item.name !== "prawo-polskie-v2" &&
+          item.name !== jurisdiction?.active
       ),
-    [executionSkills]
+    [executionSkills, jurisdiction]
   );
   const manualSkillSelection = useMemo(
     () =>
@@ -2365,6 +2369,15 @@ export default function MatterChatApp({
   // Another legal system chosen in Settings: the national package and its domain skills change at
   // once — the catalog and routes are read again (replaced, not merged: the previous jurisdiction's
   // skills leave the list) and a manual selection keeps only skills the new catalog offers.
+  useEffect(() => {
+    const readJurisdiction = (): void => {
+      void getJurisdiction().then(setJurisdictionView).catch(() => undefined);
+    };
+    readJurisdiction();
+    window.addEventListener("lex:jurisdiction-changed", readJurisdiction);
+    return () => window.removeEventListener("lex:jurisdiction-changed", readJurisdiction);
+  }, []);
+
   useEffect(() => {
     const reload = (): void => {
       void Promise.all([getSkills(), getRoutes()])
@@ -6098,8 +6111,8 @@ export default function MatterChatApp({
                           ? t("Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości.")
                           : t("Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku.")
                         : workMode === "AUTO"
-                        ? t("Program dobiera dziedziny DR, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych.")
-                        : t("Wybrany skill uruchamia stały proces; program nadal dobiera dziedzinę DR. Po pierwszej wiadomości wybór zostaje przypięty do wątku.")}
+                        ? t("Program dobiera dziedziny prawa, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych.")
+                        : t("Wybrany skill uruchamia stały proces; program nadal dobiera dziedzinę prawa. Po pierwszej wiadomości wybór zostaje przypięty do wątku.")}
                     </InfoTip>
                   </h3>
                 </div>
@@ -8561,7 +8574,7 @@ export default function MatterChatApp({
                   ? selectedDeterministicAction.label
                   : "AUTO · prawny-router-v3"}
                 <InfoTip>
-                  {t("Tryb pracy wybierasz nad polem pierwszej wiadomości; bez wyboru program sam dobiera dziedziny DR i skille. Po pierwszej wiadomości tryb jest przypięty do wątku.")}
+                  {t("Tryb pracy wybierasz nad polem pierwszej wiadomości; bez wyboru program sam dobiera dziedziny prawa i skille. Po pierwszej wiadomości tryb jest przypięty do wątku.")}
                 </InfoTip>
               </h2>
               <div className="chat-model-select-row">
@@ -8606,10 +8619,27 @@ export default function MatterChatApp({
                   <strong>{t("✓ shared")}</strong>
                   <small>{t("zawsze aktywny")}</small>
                 </div>
-                <div>
-                  <strong>{t("✓ prawo-polskie-v2")}</strong>
-                  <small>{t("zawsze aktywny dla zapytań prawnych PL")}</small>
-                </div>
+                {jurisdiction ? (
+                  jurisdiction.active ? (
+                    <div>
+                      <strong>✓ {jurisdiction.active}</strong>
+                      <small>
+                        {t("zawsze aktywny dla zapytań prawnych: {country}", {
+                          country: jurisdiction.countries.find((entry) => entry.code === jurisdiction.country)?.name ?? jurisdiction.country
+                        })}
+                      </small>
+                    </div>
+                  ) : (
+                    <div>
+                      <strong>{t("Brak pakietu prawa krajowego")}</strong>
+                      <small>
+                        {t("{country}: działają skille metod, bez dziedzin prawa tego kraju", {
+                          country: jurisdiction.countries.find((entry) => entry.code === jurisdiction.country)?.name ?? jurisdiction.country
+                        })}
+                      </small>
+                    </div>
+                  )
+                ) : null}
               </div>
             </article>
 
@@ -8619,8 +8649,8 @@ export default function MatterChatApp({
                   <p className="eyebrow">{t("Dziedziny prawa")}</p>
                   <h2>
                     {domainSelection.length === routes.length
-                      ? `Wszystkie moduły DR (${routes.length})`
-                      : `${domainSelection.length} z ${routes.length} modułów DR`}
+                      ? t("Wszystkie dziedziny prawa ({count})", { count: routes.length })
+                      : t("{selected} z {count} dziedzin prawa", { selected: domainSelection.length, count: routes.length })}
                     <InfoTip>{t("Odznaczenie ogranicza dziedziny, z których program korzysta w tej rozmowie. Pełny zestaw nie nakłada ograniczeń.")}</InfoTip>
                   </h2>
                 </div>
@@ -8682,7 +8712,7 @@ export default function MatterChatApp({
                   <p className="eyebrow">{t("Skille wykonawcze")}</p>
                   <h2>
                     {t("Dodatkowe skille wykonawcze ·")} {manualSkillSelection.length} z {selectableExecutionSkills.length} {t("zaznaczonych")}
-                    <InfoTip>{t("Domyślnie zaznaczone są wszystkie. Moduły DR (dziedziny prawa) wybierasz w sekcji powyżej.")}</InfoTip>
+                    <InfoTip>{t("Domyślnie zaznaczone są wszystkie. Dziedziny prawa wybierasz w sekcji powyżej.")}</InfoTip>
                   </h2>
                 </div>
                 <div className="chat-model-select-row">
