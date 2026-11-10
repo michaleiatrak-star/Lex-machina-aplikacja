@@ -4,6 +4,12 @@ import {
   classifyKnownLegalSourceUrl,
   type LegalSourceTier
 } from "./legal-source-policy.js";
+import {
+  effectiveSearchOrder,
+  webSearchSettings,
+  type SearchEngineName,
+  type WebSearchSettings
+} from "./web-search-settings.js";
 
 /**
  * General internet search for every model in the Lex tool path (ChatGPT,
@@ -22,7 +28,8 @@ export type WebSearchHit = {
 
 export type WebSearchProviderName =
   | "brave"
-  | "duckduckgo";
+  | "duckduckgo"
+  | "searxng";
 
 export type WebSearchResponse = {
   provider: WebSearchProviderName;
@@ -179,6 +186,20 @@ export function parseDuckDuckGoHtml(
   return hits.slice(0, maxResults);
 }
 
+export function parseSearxngResults(
+  payload: { results?: Array<{ url?: unknown; title?: unknown; content?: unknown }> },
+  maxResults: number
+): WebSearchHit[] {
+  return (Array.isArray(payload.results) ? payload.results : [])
+    .map((item) => ({
+      title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+      url: typeof item.url === "string" ? item.url.trim() : "",
+      snippet: typeof item.content === "string" ? decodeEntities(item.content) : ""
+    }))
+    .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+    .slice(0, maxResults);
+}
+
 async function readLimitedText(
   response: Response
 ): Promise<string> {
@@ -194,7 +215,8 @@ export class PublicWebSearch implements WebSearchProvider {
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
-    private readonly botCheckPauseMs = 2_500
+    private readonly botCheckPauseMs = 2_500,
+    private readonly settings: () => WebSearchSettings = webSearchSettings
   ) {}
 
   async search(
@@ -234,30 +256,25 @@ export class PublicWebSearch implements WebSearchProvider {
       }
     }
 
-    if (
-      provider === "auto" ||
-      provider === "duckduckgo" ||
-      provider === "ddg"
-    ) {
-      // A bot check passes after a short pause more often than not (seen while checking the
-      // disciplinary courts' portals): one more try before "refused".
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-          const hits =
-            withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
-          if (hits.length > 0) {
-            return { provider: "duckduckgo", hits };
-          }
-          break;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (message === "BOT_CHECK" && attempt === 1) {
-            await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
-            continue;
-          }
-          errors.push(`duckduckgo:${message}`);
-          break;
+    // Auto: the order measured by the comparison test (Ustawienia > Wyszukiwarka internetowa),
+    // then the remaining engines; a named provider runs alone.
+    const settings = this.settings();
+    const engines: SearchEngineName[] =
+      provider === "auto"
+        ? effectiveSearchOrder(settings)
+        : provider === "searxng"
+          ? ["searxng"]
+          : provider === "duckduckgo" || provider === "ddg"
+            ? ["duckduckgo"]
+            : [];
+    for (const engine of engines) {
+      try {
+        const hits = withoutBlocked(await this.searchEngine(engine, query, maxResults, settings));
+        if (hits.length > 0) {
+          return { provider: engine, hits };
         }
+      } catch (error) {
+        errors.push(`${engine}:${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -265,6 +282,66 @@ export class PublicWebSearch implements WebSearchProvider {
       "WEB_SEARCH_NO_RESULTS",
       errors.join("; ") || `provider=${provider}`
     );
+  }
+
+  /** One engine, no fallback (the comparison test and the auto order). */
+  async searchEngine(
+    engine: SearchEngineName,
+    query: string,
+    maxResults: number,
+    settings: WebSearchSettings = this.settings()
+  ): Promise<WebSearchHit[]> {
+    if (engine === "searxng") {
+      if (!settings.searxngUrl) throw new Error("NOT_CONFIGURED");
+      return this.searchSearxng(query, maxResults, settings.searxngUrl);
+    }
+    // A bot check passes after a short pause more often than not (seen while checking the
+    // disciplinary courts' portals): one more try before "refused".
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.searchDuckDuckGo(query, maxResults);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message === "BOT_CHECK" && attempt === 1) {
+          await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  private async searchSearxng(
+    query: string,
+    maxResults: number,
+    baseUrl: string
+  ): Promise<WebSearchHit[]> {
+    const url = new URL(`${baseUrl}/search`);
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("language", "pl");
+    url.searchParams.set("safesearch", "0");
+    const response =
+      await this.fetchImpl(url, {
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6",
+          "User-Agent": USER_AGENT
+        },
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    // Public instances answer bots with 429 or a browser check; JSON output off gives 403.
+    if (response.status === 429) throw new Error("RATE_LIMITED");
+    if (response.status === 403) throw new Error("JSON_FORMAT_DISABLED");
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    const text = await readLimitedText(response);
+    let payload: { results?: Array<{ url?: unknown; title?: unknown; content?: unknown }> };
+    try {
+      payload = JSON.parse(text) as typeof payload;
+    } catch {
+      throw new Error("BOT_CHECK");
+    }
+    return parseSearxngResults(payload, maxResults);
   }
 
   private async searchBrave(
@@ -377,9 +454,9 @@ export function webSearchLeads(text: string): WebSearchLeads {
   return leads;
 }
 
-const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
+export const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
 
-function hostOf(url: string): string {
+export function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./u, "");
   } catch {

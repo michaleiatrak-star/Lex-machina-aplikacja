@@ -2,6 +2,16 @@ import type { Express, Request, Response } from "express";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
+import { PublicWebSearch } from "../web-search.js";
+import { runWebSearchBenchmark } from "../web-search-benchmark.js";
+import {
+  SEARCH_ENGINES,
+  effectiveSearchOrder,
+  saveWebSearchTest,
+  searxngUrlForced,
+  setSearxngUrl,
+  webSearchSettings
+} from "../web-search-settings.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice, type DomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -580,6 +590,50 @@ export function registerMcpConnectorRoutes(
     }
     setLocalOfflineMode(enabled);
     res.json({ enabled: localOfflineMode() });
+  });
+
+  // Wyszukiwarka internetowa (Ustawienia): adres SearXNG, test porównawczy z tego komputera, kolejność.
+  const webSearchView = () => {
+    const settings = webSearchSettings();
+    const provider = (process.env.LEX_WEB_SEARCH_PROVIDER ?? "auto").trim().toLowerCase();
+    return {
+      ...settings,
+      effectiveOrder: effectiveSearchOrder(settings),
+      engines: SEARCH_ENGINES,
+      searxngUrlForced: searxngUrlForced(),
+      providerForced: provider !== "auto" ? provider : null
+    };
+  };
+  app.get("/api/settings/web-search", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json(webSearchView());
+  });
+  app.put("/api/settings/web-search", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    try {
+      setSearxngUrl(req.body?.searxngUrl ?? "");
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
+      return;
+    }
+    res.json(webSearchView());
+  });
+  app.post("/api/settings/web-search/test", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const provider = (process.env.LEX_WEB_SEARCH_PROVIDER ?? "auto").trim().toLowerCase();
+    if (provider === "off" || provider === "disabled") {
+      res.status(409).json({ error: "WEB_SEARCH_DISABLED" });
+      return;
+    }
+    const search = new PublicWebSearch(process.env, fetch, 10_000, 1_500);
+    const settings = webSearchSettings();
+    try {
+      const result = await runWebSearchBenchmark(SEARCH_ENGINES, (engine, query, max) => search.searchEngine(engine, query, max, settings));
+      saveWebSearchTest(result);
+      res.json(webSearchView());
+    } catch (error) {
+      res.status(500).json({ error: "WEB_SEARCH_TEST_FAILED", description: error instanceof Error ? error.message.slice(0, 200) : "" });
+    }
   });
 
   // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.

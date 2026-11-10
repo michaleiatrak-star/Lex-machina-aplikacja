@@ -4182,6 +4182,43 @@ export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }>
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
+export type SearchEngineName = "searxng" | "duckduckgo";
+
+export type SearchEngineScore = {
+  engine: SearchEngineName;
+  score: number;
+  availability: number;
+  officialSources: number;
+  freeSources?: number;
+  relevance: number;
+  medianMs: number | null;
+  queries: number;
+  answered: number;
+  error?: string;
+};
+
+export type WebSearchSettings = {
+  searxngUrl: string;
+  order: SearchEngineName[];
+  effectiveOrder: SearchEngineName[];
+  engines: SearchEngineName[];
+  lastTest: { testedAt: string; scores: SearchEngineScore[] } | null;
+  searxngUrlForced: boolean;
+  providerForced: string | null;
+};
+
+export function getWebSearchSettings(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search");
+}
+
+export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
+}
+
+export function runWebSearchTest(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search/test", { method: "POST", body: "{}" });
+}
+
 export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {
   return json("/api/settings/domain-fallback");
 }

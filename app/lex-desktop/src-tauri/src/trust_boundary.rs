@@ -1565,6 +1565,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
         // Tryb offline modelu lokalnego (bez źródeł zewnętrznych).
         "/api/settings/local-offline" => matches!(method, "GET" | "PUT"),
+        // Wyszukiwarka internetowa: adres SearXNG i test porównawczy (zmiana tylko administrator — runtime).
+        "/api/settings/web-search" => matches!(method, "GET" | "PUT"),
+        "/api/settings/web-search/test" => method == "POST",
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         "/api/settings/legal-sources/legi" => method == "GET",
@@ -1766,7 +1769,9 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
         );
     }
 
-    if method == "POST" && path == "/api/mcp-search/query" {
+    if method == "POST"
+        && matches!(path, "/api/mcp-search/query" | "/api/settings/web-search/test")
+    {
         return Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS);
     }
 
@@ -2262,6 +2267,11 @@ mod tests {
         assert!(!route_allowed("DELETE", "/api/settings/domain-fallback"));
         assert!(route_allowed("PUT", "/api/settings/local-offline"));
         assert!(!route_allowed("POST", "/api/settings/local-offline"));
+        assert!(route_allowed("GET", "/api/settings/web-search"));
+        assert!(route_allowed("PUT", "/api/settings/web-search"));
+        assert!(!route_allowed("DELETE", "/api/settings/web-search"));
+        assert!(route_allowed("POST", "/api/settings/web-search/test"));
+        assert!(!route_allowed("GET", "/api/settings/web-search/test"));
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));
