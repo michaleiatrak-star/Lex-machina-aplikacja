@@ -41,8 +41,13 @@ export function caseMembersText(item: CaseAccessOverviewItem): string {
   if (!others.length) return t("tylko właściciel");
   const people = others.map((member) => `${member.displayName} (${ROLE_LABELS[member.role]})`).join(", ");
   const count = others.length;
-  const noun = count === 1 ? "osoba" : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? "osoby" : "osób";
-  return `${count} ${noun}: ${people}`;
+  // Polish plural forms as keys (one / few / many); each catalog gives its language's wording.
+  const few = count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14);
+  return count === 1
+    ? t("{count} osoba: {people}", { count, people })
+    : few
+      ? t("{count} osoby: {people}", { count, people })
+      : t("{count} osób: {people}", { count, people });
 }
 
 function errorText(failure: unknown): string {
@@ -353,7 +358,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           </span>
           <span className="case-access-admin-meta">
             {t("Właściciel:")} {owner ? owner.displayName : "—"}
-            {item.canManage ? " (Ty)" : ""} · {caseMembersText(item)}
+            {item.canManage ? t(" (Ty)") : ""} · {caseMembersText(item)}
           </span>
         </summary>
 
@@ -883,7 +888,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               const action: BulkAccessAction =
                 bulk.kind === "revoke" ? { kind: "revoke" } : { kind: "grant", role: bulk.role, canReidentify: bulk.canReidentify };
               const plan = bulkAccessPlan(cases, bulkSelected, bulk.userId, action);
-              const person = users.find((user) => user.userId === bulk.userId)?.displayName ?? "osoby";
+              const person = users.find((user) => user.userId === bulk.userId)?.displayName ?? t("tej osoby");
               if (
                 bulk.kind === "revoke" &&
                 plan.apply.length > 0 &&
