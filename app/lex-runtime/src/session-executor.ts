@@ -97,6 +97,7 @@ import type {
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
 import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
@@ -2483,6 +2484,28 @@ export class SafeSessionExecutor implements SessionExecutor {
               : {})
           })
         : undefined;
+    // Independent review in an isolated call (LEGAL GAUNTLET v3 II.4): with the matter's files,
+    // for the models that get the case-file tools.
+    const independentReview =
+      caseFileTools && request.caseFiles
+        ? new IndependentReviewToolRuntime({
+            gateway: this.providers,
+            provider: request.provider,
+            model: request.model,
+            caseFiles: request.caseFiles,
+            aliasText: (documentId, text) =>
+              request.caseFiles!.sharedKey(documentId) ? text : namespaceChunkTokens(text, aliasRegistry.prefixFor(documentId)),
+            marker: newAuthorMarker(),
+            reviewerInstructions: reviewerInstructions((resource) => {
+              const resolved = this.registry.resolveResource("shared", resource);
+              try {
+                return resolved ? fs.readFileSync(resolved, "utf8") : null;
+              } catch {
+                return null;
+              }
+            })
+          })
+        : undefined;
     // Local 11-12B models call tools unreliably: they get the most relevant
     // core law articles in the prompt (retrieval, not training).
     const coreLawRag =
@@ -2522,6 +2545,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? coreLawTools.schemas()
         : []),
       ...(caseFileTools ? caseFileTools.schemas() : []),
+      ...(independentReview ? independentReview.schemas() : []),
       ...reportTools.schemas(),
       ...(widgetTools ? widgetTools.schemas() : []),
       ...(federationTools
@@ -3147,6 +3171,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     ].join("\n\n");
     const toolPromptTurn = [
       ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      // Per turn (a new marker each time), so the stable prompt stays cached.
+      ...(independentReview ? [independentReview.systemPromptAppendix()] : []),
       ...[stageTailPrompt(stageTail.sections)].filter((block): block is string => Boolean(block)),
       ...pathSections.filter((section) => !stablePath(section)),
       ...(evidencePrompt ? [evidencePrompt] : []),
@@ -3463,6 +3489,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
         const courtCalls = calls.filter((call) => courtTools?.handles(call.name) ?? false);
         const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
+        const reviewCalls = calls.filter((call) => independentReview?.handles(call.name) ?? false);
         const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
         const federationCalls = calls.filter(
           (call) =>
@@ -3483,6 +3510,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             !reportTools.handles(call.name) &&
             !(courtTools?.handles(call.name) ?? false) &&
             !(caseFileTools?.handles(call.name) ?? false) &&
+            !(independentReview?.handles(call.name) ?? false) &&
             !(widgetTools?.handles(call.name) ?? false) &&
             !(federationTools?.handles(call.name) ?? false)
         );
@@ -3512,6 +3540,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         const caseFileResults = caseFileTools && caseFileCalls.length > 0
           ? await caseFileTools.runTools(caseFileCalls)
+          : [];
+        const reviewResults = independentReview && reviewCalls.length > 0
+          ? await independentReview.runTools(reviewCalls)
           : [];
         const widgetResults = widgetTools && widgetCalls.length > 0
           ? await widgetTools.runTools(widgetCalls)
@@ -3596,6 +3627,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...corpusResults,
             ...coreLawResults,
             ...caseFileResults,
+            ...reviewResults,
             ...reportResults,
             ...courtResults,
             ...widgetResults,
@@ -3715,6 +3747,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     }
 
+    for (const event of independentReview?.auditEvents() ?? []) {
+      audit.record("gate", "INDEPENDENT_REVIEW", event.error ? "DEGRADED" : "OK", {
+        detail: `round=${event.round};isolation=${event.isolation};verdict=${event.verdict};documents=${event.documents};chars=${event.sourceChars}${event.reasons.length ? `;reasons=${event.reasons.join(",")}` : ""}${event.error ? `;error=${event.error}` : ""}`
+      });
+    }
     for (const event of caseFileTools?.auditEvents() ?? []) {
       audit.record(
         event.tool === "read_case_file" ? "resource_read" : "tool_decision",
