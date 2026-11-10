@@ -72,9 +72,9 @@
    "wcale": 0
   },
   "pt": {
-   "całość": 2,
+   "całość": 87,
    "częściowo": 0,
-   "wcale": 85
+   "wcale": 0
   },
   "nl": {
    "całość": 2,
@@ -247,7 +247,8 @@
     "en": 7,
     "es": 7,
     "fr": 7,
-    "it": 7
+    "it": 7,
+    "pt": 7
    },
    "state": {
     "pl": "całość",
@@ -256,7 +257,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -300,7 +301,8 @@
     "en": 27,
     "es": 27,
     "fr": 27,
-    "it": 27
+    "it": 27,
+    "pt": 27
    },
    "state": {
     "pl": "całość",
@@ -309,7 +311,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -353,7 +355,8 @@
     "en": 21,
     "es": 21,
     "fr": 21,
-    "it": 21
+    "it": 21,
+    "pt": 21
    },
    "state": {
     "pl": "całość",
@@ -362,7 +365,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -406,7 +409,8 @@
     "en": 29,
     "es": 29,
     "fr": 29,
-    "it": 29
+    "it": 29,
+    "pt": 29
    },
    "state": {
     "pl": "całość",
@@ -415,7 +419,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -459,7 +463,8 @@
     "en": 50,
     "es": 50,
     "fr": 50,
-    "it": 50
+    "it": 50,
+    "pt": 50
    },
    "state": {
     "pl": "całość",
@@ -468,7 +473,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -512,7 +517,8 @@
     "en": 0,
     "es": 0,
     "fr": 0,
-    "it": 0
+    "it": 0,
+    "pt": 0
    },
    "state": {
     "pl": "całość",
@@ -565,7 +571,8 @@
     "en": 5,
     "es": 5,
     "fr": 5,
-    "it": 5
+    "it": 5,
+    "pt": 5
    },
    "state": {
     "pl": "całość",
@@ -574,7 +581,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -618,7 +625,8 @@
     "en": 12,
     "es": 12,
     "fr": 12,
-    "it": 12
+    "it": 12,
+    "pt": 12
    },
    "state": {
     "pl": "całość",
@@ -627,7 +635,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -671,7 +679,8 @@
     "en": 3,
     "es": 3,
     "fr": 3,
-    "it": 3
+    "it": 3,
+    "pt": 3
    },
    "state": {
     "pl": "całość",
@@ -680,7 +689,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -724,7 +733,8 @@
     "en": 45,
     "es": 45,
     "fr": 45,
-    "it": 45
+    "it": 45,
+    "pt": 45
    },
    "state": {
     "pl": "całość",
@@ -733,7 +743,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -777,7 +787,8 @@
     "en": 26,
     "es": 26,
     "fr": 26,
-    "it": 26
+    "it": 26,
+    "pt": 26
    },
    "state": {
     "pl": "całość",
@@ -786,7 +797,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -830,7 +841,8 @@
     "en": 108,
     "es": 108,
     "fr": 108,
-    "it": 108
+    "it": 108,
+    "pt": 108
    },
    "state": {
     "pl": "całość",
@@ -839,7 +851,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -883,7 +895,8 @@
     "en": 38,
     "es": 38,
     "fr": 38,
-    "it": 38
+    "it": 38,
+    "pt": 38
    },
    "state": {
     "pl": "całość",
@@ -892,7 +905,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -936,7 +949,8 @@
     "en": 17,
     "es": 17,
     "fr": 17,
-    "it": 17
+    "it": 17,
+    "pt": 17
    },
    "state": {
     "pl": "całość",
@@ -945,7 +959,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -989,7 +1003,8 @@
     "en": 25,
     "es": 25,
     "fr": 25,
-    "it": 25
+    "it": 25,
+    "pt": 25
    },
    "state": {
     "pl": "całość",
@@ -998,7 +1013,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1042,7 +1057,8 @@
     "en": 44,
     "es": 44,
     "fr": 44,
-    "it": 44
+    "it": 44,
+    "pt": 44
    },
    "state": {
     "pl": "całość",
@@ -1051,7 +1067,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1095,7 +1111,8 @@
     "en": 10,
     "es": 10,
     "fr": 10,
-    "it": 10
+    "it": 10,
+    "pt": 10
    },
    "state": {
     "pl": "całość",
@@ -1104,7 +1121,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1148,7 +1165,8 @@
     "en": 9,
     "es": 9,
     "fr": 9,
-    "it": 9
+    "it": 9,
+    "pt": 9
    },
    "state": {
     "pl": "całość",
@@ -1157,7 +1175,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1201,7 +1219,8 @@
     "en": 36,
     "es": 36,
     "fr": 36,
-    "it": 36
+    "it": 36,
+    "pt": 36
    },
    "state": {
     "pl": "całość",
@@ -1210,7 +1229,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1254,7 +1273,8 @@
     "en": 16,
     "es": 16,
     "fr": 16,
-    "it": 16
+    "it": 16,
+    "pt": 16
    },
    "state": {
     "pl": "całość",
@@ -1263,7 +1283,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1307,7 +1327,8 @@
     "en": 85,
     "es": 85,
     "fr": 85,
-    "it": 85
+    "it": 85,
+    "pt": 85
    },
    "state": {
     "pl": "całość",
@@ -1316,7 +1337,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1360,7 +1381,8 @@
     "en": 19,
     "es": 19,
     "fr": 19,
-    "it": 19
+    "it": 19,
+    "pt": 19
    },
    "state": {
     "pl": "całość",
@@ -1369,7 +1391,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1413,7 +1435,8 @@
     "en": 7,
     "es": 7,
     "fr": 7,
-    "it": 7
+    "it": 7,
+    "pt": 7
    },
    "state": {
     "pl": "całość",
@@ -1422,7 +1445,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1466,7 +1489,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -1475,7 +1499,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1519,7 +1543,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -1528,7 +1553,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1572,7 +1597,8 @@
     "en": 16,
     "es": 16,
     "fr": 16,
-    "it": 16
+    "it": 16,
+    "pt": 16
    },
    "state": {
     "pl": "całość",
@@ -1581,7 +1607,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1625,7 +1651,8 @@
     "en": 69,
     "es": 69,
     "fr": 69,
-    "it": 69
+    "it": 69,
+    "pt": 69
    },
    "state": {
     "pl": "całość",
@@ -1634,7 +1661,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1678,7 +1705,8 @@
     "en": 2,
     "es": 2,
     "fr": 2,
-    "it": 2
+    "it": 2,
+    "pt": 2
    },
    "state": {
     "pl": "całość",
@@ -1687,7 +1715,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1731,7 +1759,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -1740,7 +1769,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1784,7 +1813,8 @@
     "en": 35,
     "es": 35,
     "fr": 35,
-    "it": 35
+    "it": 35,
+    "pt": 35
    },
    "state": {
     "pl": "całość",
@@ -1793,7 +1823,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1837,7 +1867,8 @@
     "en": 23,
     "es": 23,
     "fr": 23,
-    "it": 23
+    "it": 23,
+    "pt": 23
    },
    "state": {
     "pl": "całość",
@@ -1846,7 +1877,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1890,7 +1921,8 @@
     "en": 29,
     "es": 29,
     "fr": 29,
-    "it": 29
+    "it": 29,
+    "pt": 29
    },
    "state": {
     "pl": "całość",
@@ -1899,7 +1931,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1943,7 +1975,8 @@
     "en": 61,
     "es": 61,
     "fr": 61,
-    "it": 61
+    "it": 61,
+    "pt": 61
    },
    "state": {
     "pl": "całość",
@@ -1952,7 +1985,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -1996,7 +2029,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -2005,7 +2039,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2049,7 +2083,8 @@
     "en": 14,
     "es": 14,
     "fr": 14,
-    "it": 14
+    "it": 14,
+    "pt": 14
    },
    "state": {
     "pl": "całość",
@@ -2058,7 +2093,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2102,7 +2137,8 @@
     "en": 22,
     "es": 22,
     "fr": 22,
-    "it": 22
+    "it": 22,
+    "pt": 22
    },
    "state": {
     "pl": "całość",
@@ -2111,7 +2147,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2155,7 +2191,8 @@
     "en": 8,
     "es": 8,
     "fr": 8,
-    "it": 8
+    "it": 8,
+    "pt": 8
    },
    "state": {
     "pl": "całość",
@@ -2164,7 +2201,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2208,7 +2245,8 @@
     "en": 38,
     "es": 38,
     "fr": 38,
-    "it": 38
+    "it": 38,
+    "pt": 38
    },
    "state": {
     "pl": "całość",
@@ -2217,7 +2255,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2261,7 +2299,8 @@
     "en": 20,
     "es": 20,
     "fr": 20,
-    "it": 20
+    "it": 20,
+    "pt": 20
    },
    "state": {
     "pl": "całość",
@@ -2270,7 +2309,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2314,7 +2353,8 @@
     "en": 1,
     "es": 1,
     "fr": 1,
-    "it": 1
+    "it": 1,
+    "pt": 1
    },
    "state": {
     "pl": "całość",
@@ -2323,7 +2363,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2367,7 +2407,8 @@
     "en": 4,
     "es": 4,
     "fr": 4,
-    "it": 4
+    "it": 4,
+    "pt": 4
    },
    "state": {
     "pl": "całość",
@@ -2376,7 +2417,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2420,7 +2461,8 @@
     "en": 15,
     "es": 15,
     "fr": 15,
-    "it": 15
+    "it": 15,
+    "pt": 15
    },
    "state": {
     "pl": "całość",
@@ -2429,7 +2471,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2473,7 +2515,8 @@
     "en": 66,
     "es": 66,
     "fr": 66,
-    "it": 66
+    "it": 66,
+    "pt": 66
    },
    "state": {
     "pl": "całość",
@@ -2482,7 +2525,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2526,7 +2569,8 @@
     "en": 87,
     "es": 87,
     "fr": 87,
-    "it": 87
+    "it": 87,
+    "pt": 87
    },
    "state": {
     "pl": "całość",
@@ -2535,7 +2579,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2579,7 +2623,8 @@
     "en": 20,
     "es": 20,
     "fr": 20,
-    "it": 20
+    "it": 20,
+    "pt": 20
    },
    "state": {
     "pl": "całość",
@@ -2588,7 +2633,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2632,7 +2677,8 @@
     "en": 1,
     "es": 1,
     "fr": 1,
-    "it": 1
+    "it": 1,
+    "pt": 1
    },
    "state": {
     "pl": "całość",
@@ -2641,7 +2687,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2685,7 +2731,8 @@
     "en": 8,
     "es": 8,
     "fr": 8,
-    "it": 8
+    "it": 8,
+    "pt": 8
    },
    "state": {
     "pl": "całość",
@@ -2694,7 +2741,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2738,7 +2785,8 @@
     "en": 7,
     "es": 7,
     "fr": 7,
-    "it": 7
+    "it": 7,
+    "pt": 7
    },
    "state": {
     "pl": "całość",
@@ -2747,7 +2795,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2791,7 +2839,8 @@
     "en": 163,
     "es": 163,
     "fr": 163,
-    "it": 163
+    "it": 163,
+    "pt": 163
    },
    "state": {
     "pl": "całość",
@@ -2800,7 +2849,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2844,7 +2893,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -2853,7 +2903,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2897,7 +2947,8 @@
     "en": 63,
     "es": 63,
     "fr": 63,
-    "it": 63
+    "it": 63,
+    "pt": 63
    },
    "state": {
     "pl": "całość",
@@ -2906,7 +2957,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -2950,7 +3001,8 @@
     "en": 10,
     "es": 10,
     "fr": 10,
-    "it": 10
+    "it": 10,
+    "pt": 10
    },
    "state": {
     "pl": "całość",
@@ -2959,7 +3011,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3003,7 +3055,8 @@
     "en": 2,
     "es": 2,
     "fr": 2,
-    "it": 2
+    "it": 2,
+    "pt": 2
    },
    "state": {
     "pl": "całość",
@@ -3012,7 +3065,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3056,7 +3109,8 @@
     "en": 624,
     "es": 624,
     "fr": 624,
-    "it": 624
+    "it": 624,
+    "pt": 624
    },
    "state": {
     "pl": "całość",
@@ -3065,7 +3119,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3109,7 +3163,8 @@
     "en": 44,
     "es": 44,
     "fr": 44,
-    "it": 44
+    "it": 44,
+    "pt": 44
    },
    "state": {
     "pl": "całość",
@@ -3118,7 +3173,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3162,7 +3217,8 @@
     "en": 46,
     "es": 46,
     "fr": 46,
-    "it": 46
+    "it": 46,
+    "pt": 46
    },
    "state": {
     "pl": "całość",
@@ -3171,7 +3227,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3215,7 +3271,8 @@
     "en": 34,
     "es": 34,
     "fr": 34,
-    "it": 34
+    "it": 34,
+    "pt": 34
    },
    "state": {
     "pl": "całość",
@@ -3224,7 +3281,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3268,7 +3325,8 @@
     "en": 9,
     "es": 9,
     "fr": 9,
-    "it": 9
+    "it": 9,
+    "pt": 9
    },
    "state": {
     "pl": "całość",
@@ -3277,7 +3335,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3321,7 +3379,8 @@
     "en": 9,
     "es": 9,
     "fr": 9,
-    "it": 9
+    "it": 9,
+    "pt": 9
    },
    "state": {
     "pl": "całość",
@@ -3330,7 +3389,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3374,7 +3433,8 @@
     "en": 16,
     "es": 16,
     "fr": 16,
-    "it": 16
+    "it": 16,
+    "pt": 16
    },
    "state": {
     "pl": "całość",
@@ -3383,7 +3443,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3427,7 +3487,8 @@
     "en": 8,
     "es": 8,
     "fr": 8,
-    "it": 8
+    "it": 8,
+    "pt": 8
    },
    "state": {
     "pl": "całość",
@@ -3436,7 +3497,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3480,7 +3541,8 @@
     "en": 32,
     "es": 32,
     "fr": 32,
-    "it": 32
+    "it": 32,
+    "pt": 32
    },
    "state": {
     "pl": "całość",
@@ -3489,7 +3551,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3533,7 +3595,8 @@
     "en": 69,
     "es": 69,
     "fr": 69,
-    "it": 69
+    "it": 69,
+    "pt": 69
    },
    "state": {
     "pl": "całość",
@@ -3542,7 +3605,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3586,7 +3649,8 @@
     "en": 71,
     "es": 71,
     "fr": 71,
-    "it": 71
+    "it": 71,
+    "pt": 71
    },
    "state": {
     "pl": "całość",
@@ -3595,7 +3659,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3639,7 +3703,8 @@
     "en": 6,
     "es": 6,
     "fr": 6,
-    "it": 6
+    "it": 6,
+    "pt": 6
    },
    "state": {
     "pl": "całość",
@@ -3648,7 +3713,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3692,7 +3757,8 @@
     "en": 16,
     "es": 16,
     "fr": 16,
-    "it": 16
+    "it": 16,
+    "pt": 16
    },
    "state": {
     "pl": "całość",
@@ -3701,7 +3767,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3745,7 +3811,8 @@
     "en": 1,
     "es": 1,
     "fr": 1,
-    "it": 1
+    "it": 1,
+    "pt": 1
    },
    "state": {
     "pl": "całość",
@@ -3754,7 +3821,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3798,7 +3865,8 @@
     "en": 26,
     "es": 26,
     "fr": 26,
-    "it": 26
+    "it": 26,
+    "pt": 26
    },
    "state": {
     "pl": "całość",
@@ -3807,7 +3875,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3851,7 +3919,8 @@
     "en": 3,
     "es": 3,
     "fr": 3,
-    "it": 3
+    "it": 3,
+    "pt": 3
    },
    "state": {
     "pl": "całość",
@@ -3860,7 +3929,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3904,7 +3973,8 @@
     "en": 110,
     "es": 110,
     "fr": 110,
-    "it": 110
+    "it": 110,
+    "pt": 110
    },
    "state": {
     "pl": "całość",
@@ -3913,7 +3983,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -3957,7 +4027,8 @@
     "en": 34,
     "es": 34,
     "fr": 34,
-    "it": 34
+    "it": 34,
+    "pt": 34
    },
    "state": {
     "pl": "całość",
@@ -3966,7 +4037,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4010,7 +4081,8 @@
     "en": 23,
     "es": 23,
     "fr": 23,
-    "it": 23
+    "it": 23,
+    "pt": 23
    },
    "state": {
     "pl": "całość",
@@ -4019,7 +4091,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4063,7 +4135,8 @@
     "en": 39,
     "es": 39,
     "fr": 39,
-    "it": 39
+    "it": 39,
+    "pt": 39
    },
    "state": {
     "pl": "całość",
@@ -4072,7 +4145,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4116,7 +4189,8 @@
     "en": 1,
     "es": 1,
     "fr": 1,
-    "it": 1
+    "it": 1,
+    "pt": 1
    },
    "state": {
     "pl": "całość",
@@ -4125,7 +4199,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4169,7 +4243,8 @@
     "en": 5,
     "es": 5,
     "fr": 5,
-    "it": 5
+    "it": 5,
+    "pt": 5
    },
    "state": {
     "pl": "całość",
@@ -4178,7 +4253,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4222,7 +4297,8 @@
     "en": 38,
     "es": 38,
     "fr": 38,
-    "it": 38
+    "it": 38,
+    "pt": 38
    },
    "state": {
     "pl": "całość",
@@ -4231,7 +4307,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4275,7 +4351,8 @@
     "en": 17,
     "es": 17,
     "fr": 17,
-    "it": 17
+    "it": 17,
+    "pt": 17
    },
    "state": {
     "pl": "całość",
@@ -4284,7 +4361,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4328,7 +4405,8 @@
     "en": 10,
     "es": 10,
     "fr": 10,
-    "it": 10
+    "it": 10,
+    "pt": 10
    },
    "state": {
     "pl": "całość",
@@ -4337,7 +4415,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4381,7 +4459,8 @@
     "en": 25,
     "es": 25,
     "fr": 25,
-    "it": 25
+    "it": 25,
+    "pt": 25
    },
    "state": {
     "pl": "całość",
@@ -4390,7 +4469,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4434,7 +4513,8 @@
     "en": 48,
     "es": 48,
     "fr": 48,
-    "it": 48
+    "it": 48,
+    "pt": 48
    },
    "state": {
     "pl": "całość",
@@ -4443,7 +4523,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4487,7 +4567,8 @@
     "en": 23,
     "es": 23,
     "fr": 23,
-    "it": 23
+    "it": 23,
+    "pt": 23
    },
    "state": {
     "pl": "całość",
@@ -4496,7 +4577,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4540,7 +4621,8 @@
     "en": 24,
     "es": 24,
     "fr": 24,
-    "it": 24
+    "it": 24,
+    "pt": 24
    },
    "state": {
     "pl": "całość",
@@ -4549,7 +4631,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4593,7 +4675,8 @@
     "en": 9,
     "es": 9,
     "fr": 9,
-    "it": 9
+    "it": 9,
+    "pt": 9
    },
    "state": {
     "pl": "całość",
@@ -4602,7 +4685,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4646,7 +4729,8 @@
     "en": 130,
     "es": 130,
     "fr": 130,
-    "it": 130
+    "it": 130,
+    "pt": 130
    },
    "state": {
     "pl": "całość",
@@ -4655,7 +4739,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4699,7 +4783,8 @@
     "en": 11,
     "es": 11,
     "fr": 11,
-    "it": 11
+    "it": 11,
+    "pt": 11
    },
    "state": {
     "pl": "całość",
@@ -4708,7 +4793,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4752,7 +4837,8 @@
     "en": 9,
     "es": 9,
     "fr": 9,
-    "it": 9
+    "it": 9,
+    "pt": 9
    },
    "state": {
     "pl": "całość",
@@ -4761,7 +4847,7 @@
     "fr": "całość",
     "it": "całość",
     "es": "całość",
-    "pt": "wcale",
+    "pt": "całość",
     "nl": "wcale",
     "ca": "wcale",
     "lb": "wcale",
@@ -4805,7 +4891,8 @@
     "en": 0,
     "es": 0,
     "fr": 0,
-    "it": 0
+    "it": 0,
+    "pt": 0
    },
    "state": {
     "pl": "całość",
