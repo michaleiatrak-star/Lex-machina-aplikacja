@@ -1,4 +1,4 @@
-import { t } from "./i18n";
+import { currentLocale, N_, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -67,19 +67,46 @@ export function assignableCases(cases: CaseAccessOverviewItem[]): CaseAccessOver
     .sort((a, b) => (a.displayName ?? a.caseId).localeCompare(b.displayName ?? b.caseId, "pl"));
 }
 
-export type CaseSort = "name-asc" | "name-desc" | "created-desc" | "created-asc";
+export type CaseSort = "name-asc" | "name-desc" | "created-desc" | "created-asc" | "updated-desc" | "updated-asc" | "members-desc";
 
 export const CASE_SORT_LABELS: Record<CaseSort, string> = {
-  "name-asc": "Nazwa A–Z",
-  "name-desc": "Nazwa Z–A",
-  "created-desc": "Utworzone: najnowsze",
-  "created-asc": "Utworzone: najstarsze"
+  "name-asc": N_("Nazwa A–Z"),
+  "name-desc": N_("Nazwa Z–A"),
+  "created-desc": N_("Data utworzenia: najnowsze"),
+  "created-asc": N_("Data utworzenia: najstarsze"),
+  "updated-desc": N_("Ostatnia zmiana: najnowsze"),
+  "updated-asc": N_("Ostatnia zmiana: najstarsze"),
+  "members-desc": N_("Liczba osób z dostępem")
 };
+
+export type CaseRangePreset = "all" | "7d" | "30d" | "90d" | "year" | "custom";
+
+export const CASE_RANGE_PRESETS: Array<[CaseRangePreset, string]> = [
+  ["all", N_("Wszystkie")],
+  ["7d", N_("7 dni")],
+  ["30d", N_("30 dni")],
+  ["90d", N_("90 dni")],
+  ["year", N_("Ten rok")],
+  ["custom", N_("Własny zakres")]
+];
+
+/** The days a preset covers, ending today (custom keeps the fields as they are). */
+export function rangeForPreset(preset: CaseRangePreset, today: Date, current: CaseDateRange): CaseDateRange {
+  const field = current.field ?? "created";
+  if (preset === "custom") return current;
+  if (preset === "all") return { from: "", to: "", field };
+  const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  if (preset === "year") return { from: `${today.getFullYear()}-01-01`, to: day(today), field };
+  const days = preset === "7d" ? 7 : preset === "30d" ? 30 : 90;
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1));
+  return { from: day(start), to: day(today), field };
+}
 
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pl");
 
 /** Cases matching the search (name, case id, a member's name or login), in the chosen order. */
-export type CaseDateRange = { from: string; to: string };
+// Which date the range applies to: when the case was created, or its last change.
+export type CaseDateRange = { from: string; to: string; field?: "created" | "updated" };
 
 // The day of an ISO time on this computer (yyyy-mm-dd), as the date fields show it.
 function localDay(iso: string): string {
@@ -98,7 +125,8 @@ export function searchAndSortCases(
   const name = (item: CaseAccessOverviewItem) => item.displayName || item.caseId;
   const matches = cases.filter((item) => {
     if (range.from || range.to) {
-      const day = item.createdAt ? localDay(item.createdAt) : "";
+      const when = range.field === "updated" ? item.updatedAt : item.createdAt;
+      const day = when ? localDay(when) : "";
       if (!day || (range.from && day < range.from) || (range.to && day > range.to)) return false;
     }
     if (!words.length) return true;
@@ -106,6 +134,8 @@ export function searchAndSortCases(
     return words.every((word) => haystack.includes(word));
   });
   const created = (item: CaseAccessOverviewItem) => item.createdAt ?? "";
+  const updated = (item: CaseAccessOverviewItem) => item.updatedAt ?? "";
+  const people = (item: CaseAccessOverviewItem) => item.members.filter((member) => member.role !== "OWNER").length;
   return matches.sort((a, b) => {
     switch (sort) {
       case "name-asc":
@@ -116,6 +146,12 @@ export function searchAndSortCases(
         return created(a).localeCompare(created(b)) || name(a).localeCompare(name(b), "pl");
       case "created-desc":
         return created(b).localeCompare(created(a)) || name(a).localeCompare(name(b), "pl");
+      case "updated-asc":
+        return updated(a).localeCompare(updated(b)) || name(a).localeCompare(name(b), "pl");
+      case "updated-desc":
+        return updated(b).localeCompare(updated(a)) || name(a).localeCompare(name(b), "pl");
+      case "members-desc":
+        return people(b) - people(a) || name(a).localeCompare(name(b), "pl", { sensitivity: "base", numeric: true });
     }
   });
 }
@@ -191,7 +227,8 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   const [userFilter, setUserFilter] = useState("");
   const [caseQuery, setCaseQuery] = useState("");
   const [caseSort, setCaseSort] = useState<CaseSort>("name-asc");
-  const [caseRange, setCaseRange] = useState<CaseDateRange>({ from: "", to: "" });
+  const [caseRange, setCaseRange] = useState<CaseDateRange>({ from: "", to: "", field: "created" });
+  const [rangePreset, setRangePreset] = useState<CaseRangePreset>("all");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -231,6 +268,19 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
     if (!userFilter) return { member: shown, other: [] as CaseAccessOverviewItem[] };
     return splitCasesForUser(shown, userFilter);
   }, [shown, userFilter]);
+
+  const listed = userFilter ? [...visible.member, ...visible.other] : shown;
+  const manageable = listed.filter((item) => item.canManage && !item.archivedAt);
+  const selectedVisible = manageable.filter((item) => bulkSelected.has(item.caseId)).length;
+  // A bulk change applies only to cases in view: narrowing the search or range drops the others.
+  const manageableKey = manageable.map((item) => item.caseId).join("|");
+  useEffect(() => {
+    const inView = new Set(manageableKey ? manageableKey.split("|") : []);
+    setBulkSelected((current) => {
+      const next = new Set([...current].filter((caseId) => inView.has(caseId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [manageableKey]);
 
   async function run(key: string, action: () => Promise<unknown>, done: string) {
     setBusy(key);
@@ -576,36 +626,105 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => ` ${ROLE_HELP[role]}`).join("")}
         </InfoTip>
       </p>
-      <div className="case-access-admin-search">
-        <label>
-          {t("Szukaj sprawy")}
-          <input
-            type="search"
-            value={caseQuery}
-            placeholder={t("Nazwa sprawy, osoba lub login")}
-            onChange={(event) => setCaseQuery(event.target.value)}
-          />
-        </label>
-        <label>
-          {t("Utworzone od")}
-          <input type="date" value={caseRange.from} max={caseRange.to || undefined} onChange={(event) => setCaseRange({ ...caseRange, from: event.target.value })} />
-        </label>
-        <label>
-          {t("do")}
-          <input type="date" value={caseRange.to} min={caseRange.from || undefined} onChange={(event) => setCaseRange({ ...caseRange, to: event.target.value })} />
-        </label>
-        <label>
-          {t("Sortowanie")}
-          <select value={caseSort} onChange={(event) => setCaseSort(event.target.value as CaseSort)}>
-            {(Object.keys(CASE_SORT_LABELS) as CaseSort[]).map((key) => (
-              <option key={key} value={key}>
-                {CASE_SORT_LABELS[key]}
-              </option>
-            ))}
+      <div className="case-access-filters" role="search">
+        <div className="case-access-filters-row">
+          <label className="case-access-filter-search">
+            {t("Szukaj sprawy")}
+            <input
+              type="search"
+              value={caseQuery}
+              placeholder={t("Nazwa sprawy, osoba lub login")}
+              onChange={(event) => setCaseQuery(event.target.value)}
+            />
+          </label>
+          <label>
+            {t("Osoba")}
+            <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
+              <option value="">{t("Wszystkie sprawy")}</option>
+              {users.map((user) => (
+                <option key={user.userId} value={user.userId}>
+                  {user.displayName} ({user.loginName}){user.userId === currentUserId ? ` — ${t("Ty")}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t("Sortowanie")}
+            <select value={caseSort} onChange={(event) => setCaseSort(event.target.value as CaseSort)}>
+              {(Object.keys(CASE_SORT_LABELS) as CaseSort[]).map((key) => (
+                <option key={key} value={key}>
+                  {t(CASE_SORT_LABELS[key])}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="case-access-filters-row case-access-range">
+          <span className="case-access-filter-label">{t("Zakres")}</span>
+          <select
+            aria-label={t("Data, której dotyczy zakres")}
+            value={caseRange.field ?? "created"}
+            onChange={(event) => setCaseRange({ ...caseRange, field: event.target.value as "created" | "updated" })}
+          >
+            <option value="created">{t("data utworzenia")}</option>
+            <option value="updated">{t("ostatnia zmiana")}</option>
           </select>
-        </label>
+          <div className="case-access-chips" role="group" aria-label={t("Zakres dat")}>
+            {CASE_RANGE_PRESETS.map(([preset, label]) => (
+              <button
+                key={preset}
+                type="button"
+                className={rangePreset === preset ? "case-access-chip active" : "case-access-chip"}
+                aria-pressed={rangePreset === preset}
+                onClick={() => {
+                  setRangePreset(preset);
+                  setCaseRange(rangeForPreset(preset, new Date(), caseRange));
+                }}
+              >
+                {t(label)}
+              </button>
+            ))}
+          </div>
+          {rangePreset === "custom" ? (
+            <span className="case-access-dates">
+              <label>
+                {t("od")}
+                <input type="date" value={caseRange.from} max={caseRange.to || undefined} onChange={(event) => setCaseRange({ ...caseRange, from: event.target.value })} />
+              </label>
+              <label>
+                {t("do")}
+                <input type="date" value={caseRange.to} min={caseRange.from || undefined} onChange={(event) => setCaseRange({ ...caseRange, to: event.target.value })} />
+              </label>
+            </span>
+          ) : null}
+        </div>
+        <div className="case-access-results">
+          <span>
+            {t("Wyświetlono {shown} z {all} spraw", { shown: listed.length, all: cases.length })}
+            {caseRange.from || caseRange.to
+              ? ` · ${caseRange.from ? new Date(caseRange.from).toLocaleDateString(currentLocale()) : "…"} – ${caseRange.to ? new Date(caseRange.to).toLocaleDateString(currentLocale()) : "…"}`
+              : ""}
+          </span>
+          {caseQuery || userFilter || caseRange.from || caseRange.to || caseSort !== "name-asc" ? (
+            <button
+              type="button"
+              className="case-access-link"
+              onClick={() => {
+                setCaseQuery("");
+                setUserFilter("");
+                setCaseSort("name-asc");
+                setRangePreset("all");
+                setCaseRange({ from: "", to: "", field: caseRange.field ?? "created" });
+              }}
+            >
+              {t("Wyczyść filtry")}
+            </button>
+          ) : null}
+        </div>
       </div>
-      <fieldset className="case-access-admin-quick">
+      <details className="case-access-quick-card">
+        <summary>{t("Przypisz osobę do jednej sprawy")}</summary>
+        <fieldset className="case-access-admin-quick">
         <legend>
           {t("Przypisz osobę do sprawy")}
           <InfoTip>
@@ -687,31 +806,46 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           {busy === "quick" ? "Przypisywanie…" : "Przypisz"}
         </button>
       </fieldset>
-      <fieldset className="case-access-admin-bulk">
-        <legend>
-          {t("Zmiana zbiorcza")}
-          <InfoTip>
-            {t("Zaznacz sprawy na liście poniżej (albo wszystkie widoczne po wyszukiwaniu i filtrach), wybierz osobę i działanie. Zmiana dotyczy tylko spraw, których jesteś właścicielem; właściciel sprawy zachowuje swoją rolę.")}
-          </InfoTip>
-        </legend>
-        <div className="case-access-admin-bulk-row">
-          <span className="case-access-admin-bulk-count">{t("Zaznaczone sprawy:")} {bulkSelected.size}</span>
-          <button
-            type="button"
-            className="chat-secondary-action"
-            disabled={Boolean(busy)}
-            onClick={() => {
-              const list = userFilter ? [...visible.member, ...visible.other] : shown;
-              setBulkSelected(new Set(list.filter((item) => item.canManage).map((item) => item.caseId)));
+      </details>
+      {error ? <div className="alert alert-error">{error}</div> : null}
+      {message ? <div className="alert">{message}</div> : null}
+      <div className={bulkSelected.size ? "case-access-list-head has-selection" : "case-access-list-head"}>
+        <label className="case-access-select-all">
+          <input
+            type="checkbox"
+            ref={(element) => {
+              if (element) element.indeterminate = selectedVisible > 0 && selectedVisible < manageable.length;
             }}
-          >
-            {t("Zaznacz wszystkie widoczne")}
-          </button>
-          <button type="button" className="chat-secondary-action" disabled={Boolean(busy) || bulkSelected.size === 0} onClick={() => setBulkSelected(new Set())}>
+            checked={manageable.length > 0 && selectedVisible === manageable.length}
+            disabled={Boolean(busy) || manageable.length === 0}
+            onChange={(event) => {
+              const on = event.target.checked;
+              setBulkSelected((current) => {
+                const next = new Set(current);
+                for (const item of manageable) {
+                  if (on) next.add(item.caseId);
+                  else next.delete(item.caseId);
+                }
+                return next;
+              });
+            }}
+          />
+          {bulkSelected.size
+            ? t("Zaznaczono {count}", { count: bulkSelected.size })
+            : t("Zaznacz wszystkie widoczne ({count})", { count: manageable.length })}
+          <InfoTip>
+            {t("Zaznaczać można sprawy, których jesteś właścicielem (tylko on ma klucz sprawy). Właściciel sprawy zachowuje swoją rolę.")}
+          </InfoTip>
+        </label>
+        {bulkSelected.size ? (
+          <button type="button" className="case-access-link" disabled={Boolean(busy)} onClick={() => setBulkSelected(new Set())}>
             {t("Odznacz")}
           </button>
-        </div>
-        <div className="case-access-admin-bulk-row">
+        ) : null}
+      </div>
+      {bulkSelected.size ? (
+        <div className="case-access-bulk-bar" aria-label={t("Zmiana zbiorcza")}>
+          <div className="case-access-admin-bulk-row">
           <select
             value={bulk.userId}
             aria-label={t("Osoba (zmiana zbiorcza)")}
@@ -796,20 +930,8 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             {busy === "bulk" ? "Zmieniam…" : `Zastosuj do ${bulkSelected.size} spraw`}
           </button>
         </div>
-      </fieldset>
-      <label>
-        {t("Użytkownik")}
-        <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
-          <option value="">{t("Wszystkie sprawy")}</option>
-          {users.map((user) => (
-            <option key={user.userId} value={user.userId}>
-              {user.displayName} ({user.loginName}){user.userId === currentUserId ? " — Ty" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      {message ? <div className="alert">{message}</div> : null}
+        </div>
+      ) : null}
       {userFilter ? (
         <>
           <h3>{t("Sprawy z dostępem (")}{visible.member.length})</h3>
