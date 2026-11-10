@@ -3,11 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { BENCHMARK_QUERIES, runWebSearchBenchmark, scoreEngine } from "./web-search-benchmark.js";
-import { PublicWebSearch, parseSearxngResults } from "./web-search.js";
+import { PublicWebSearch, parseFirecrawlResults, parseSearxngResults } from "./web-search.js";
 import {
   configureWebSearchSettings,
   effectiveSearchOrder,
   saveWebSearchTest,
+  setFirecrawlApiKey,
   setSearxngUrl,
   webSearchSettings
 } from "./web-search-settings.js";
@@ -120,5 +121,42 @@ describe("SearXNG and the tested order", () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
     configureWebSearchSettings(dir);
     expect(() => setSearxngUrl("file:///etc/passwd")).toThrow("WEB_SEARCH_SEARXNG_URL_INVALID");
+  });
+});
+
+describe("Firecrawl (optional, own key)", () => {
+  let dir = "";
+  afterEach(() => {
+    configureWebSearchSettings(null);
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("seals the key (not in the settings file), reports it configured and searches with it", async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
+    configureWebSearchSettings(dir);
+    expect(effectiveSearchOrder()).toEqual(["duckduckgo"]);
+    setFirecrawlApiKey("fc-test1234567890");
+    expect(fs.readFileSync(path.join(dir, "web-search.json"), "utf8")).not.toContain("fc-test1234567890");
+    expect(webSearchSettings().firecrawlConfigured).toBe(true);
+    expect(effectiveSearchOrder()).toEqual(["duckduckgo", "firecrawl"]);
+    let auth = "";
+    const fakeFetch = (async (_input: string | URL, init?: RequestInit) => {
+      auth = String((init?.headers as Record<string, string>).Authorization);
+      return new Response(JSON.stringify({ success: true, data: { web: [{ url: official.url, title: official.title, description: "art. 278" }] } }), { status: 200 });
+    }) as typeof fetch;
+    const hits = await new PublicWebSearch({}, fakeFetch, 1_000, 0).searchEngine("firecrawl", "kradzież", 5);
+    expect(auth).toBe("Bearer fc-test1234567890");
+    expect(hits[0]!.url).toBe(official.url);
+    setFirecrawlApiKey("");
+    expect(webSearchSettings().firecrawlConfigured).toBe(false);
+  });
+
+  it("names a used-up free plan and rejects a malformed key", async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
+    configureWebSearchSettings(dir);
+    expect(() => setFirecrawlApiKey("not-a-key")).toThrow("WEB_SEARCH_FIRECRAWL_KEY_INVALID");
+    const fakeFetch = (async () => new Response("{}", { status: 402 })) as typeof fetch;
+    await expect(new PublicWebSearch({ FIRECRAWL_API_KEY: "fc-x12345678" }, fakeFetch, 1_000, 0).searchEngine("firecrawl", "q", 5)).rejects.toThrow("CREDITS_EXHAUSTED");
+    expect(parseFirecrawlResults({ data: [{ url: "https://a.pl", title: "A" }] }, 5)).toHaveLength(1);
   });
 });

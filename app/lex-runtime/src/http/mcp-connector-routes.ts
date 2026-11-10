@@ -8,7 +8,9 @@ import {
   SEARCH_ENGINES,
   effectiveSearchOrder,
   saveWebSearchTest,
+  firecrawlKeyForced,
   searxngUrlForced,
+  setFirecrawlApiKey,
   setSearxngUrl,
   webSearchSettings
 } from "../web-search-settings.js";
@@ -601,6 +603,7 @@ export function registerMcpConnectorRoutes(
       effectiveOrder: effectiveSearchOrder(settings),
       engines: SEARCH_ENGINES,
       searxngUrlForced: searxngUrlForced(),
+      firecrawlKeyForced: firecrawlKeyForced(),
       providerForced: provider !== "auto" ? provider : null
     };
   };
@@ -611,7 +614,8 @@ export function registerMcpConnectorRoutes(
   app.put("/api/settings/web-search", (req, res) => {
     if (!requireAdmin(req, res, authService)) return;
     try {
-      setSearxngUrl(req.body?.searxngUrl ?? "");
+      if (req.body && "searxngUrl" in req.body) setSearxngUrl(req.body.searxngUrl ?? "");
+      if (req.body && "firecrawlApiKey" in req.body) setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
       return;

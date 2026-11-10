@@ -4,6 +4,7 @@ import {
   ApiError,
   getWebSearchSettings,
   runWebSearchTest,
+  setFirecrawlApiKey,
   setSearxngUrl,
   type SearchEngineName,
   type WebSearchSettings
@@ -13,10 +14,12 @@ import { InlineEdit } from "./InlineEdit";
 import { PencilIcon } from "./CaseAccessAdminPanel";
 
 const SEARXNG_EXAMPLE = "http://localhost:8888";
+const FIRECRAWL_EXAMPLE = "fc-…";
 
 const ENGINE_LABELS: Record<SearchEngineName, string> = {
   searxng: "SearXNG",
-  duckduckgo: "DuckDuckGo"
+  duckduckgo: "DuckDuckGo",
+  firecrawl: "Firecrawl"
 };
 
 function number(value: number): string {
@@ -33,6 +36,10 @@ function errorText(code: string | undefined): string {
       return t("serwer wymaga weryfikacji przeglądarki");
     case "JSON_FORMAT_DISABLED":
       return t("serwer nie udostępnia wyników w formacie JSON");
+    case "CREDITS_EXHAUSTED":
+      return t("wyczerpany miesięczny limit planu darmowego");
+    case "KEY_REJECTED":
+      return t("klucz odrzucony");
     default:
       return code ?? "";
   }
@@ -45,6 +52,7 @@ function errorText(code: string | undefined): string {
 export function WebSearchSection({ admin }: { admin: boolean }) {
   const [settings, setSettings] = useState<WebSearchSettings | null>(null);
   const [editing, setEditing] = useState(false);
+  const [editingKey, setEditingKey] = useState(false);
   const [busy, setBusy] = useState<"" | "test" | "save">("");
   const [error, setError] = useState("");
 
@@ -59,6 +67,21 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     try {
       setSettings(await setSearxngUrl(next));
       setEditing(false);
+      setError("");
+      return true;
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveKey(next: string): Promise<boolean> {
+    setBusy("save");
+    try {
+      setSettings(await setFirecrawlApiKey(next));
+      setEditingKey(false);
       setError("");
       return true;
     } catch (failure) {
@@ -132,6 +155,44 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
         )}
         <InfoTip>
           {t("Publiczne serwery SearXNG zwykle odrzucają zapytania aplikacji (limit, weryfikacja przeglądarki). Pewnie działa własny SearXNG na tym komputerze lub w kancelarii, z włączonym formatem JSON (search.formats: json w settings.yml).")}
+        </InfoTip>
+      </div>
+
+      <div className="web-search-url">
+        <span>{t("Klucz Firecrawl:")}</span>
+        {editingKey ? (
+          <InlineEdit
+            value=""
+            label={t("Klucz Firecrawl")}
+            placeholder={FIRECRAWL_EXAMPLE}
+            maxLength={220}
+            onCancel={() => setEditingKey(false)}
+            onSave={saveKey}
+          />
+        ) : (
+          <>
+            <code>{settings.firecrawlConfigured ? t("zapisany (zaszyfrowany)") : t("nie ustawiono")}</code>
+            {admin && !settings.firecrawlKeyForced ? (
+              <button
+                type="button"
+                className="matter-title-pencil"
+                title={t("Zmień klucz Firecrawl")}
+                aria-label={t("Zmień klucz Firecrawl")}
+                disabled={Boolean(busy)}
+                onClick={() => setEditingKey(true)}
+              >
+                <PencilIcon />
+              </button>
+            ) : null}
+            {admin && settings.firecrawlConfigured && !settings.firecrawlKeyForced ? (
+              <button type="button" disabled={Boolean(busy)} onClick={() => void saveKey("")}>
+                {t("Usuń klucz")}
+              </button>
+            ) : null}
+          </>
+        )}
+        <InfoTip>
+          {t("Firecrawl to płatna usługa z planem darmowym (1000 kredytów miesięcznie, wyszukiwanie: 2 kredyty za 10 wyników, ok. 500 wyszukiwań). Klucz zakładasz na firecrawl.dev; aplikacja przechowuje go zaszyfrowany i wysyła tylko ogólne frazy, nigdy dane sprawy. Po wyczerpaniu limitu aplikacja korzysta z kolejnej wyszukiwarki.")}
         </InfoTip>
       </div>
 

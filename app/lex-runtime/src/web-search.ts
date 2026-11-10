@@ -6,6 +6,7 @@ import {
 } from "./legal-source-policy.js";
 import {
   effectiveSearchOrder,
+  firecrawlApiKey,
   webSearchSettings,
   type SearchEngineName,
   type WebSearchSettings
@@ -29,7 +30,8 @@ export type WebSearchHit = {
 export type WebSearchProviderName =
   | "brave"
   | "duckduckgo"
-  | "searxng";
+  | "searxng"
+  | "firecrawl";
 
 export type WebSearchResponse = {
   provider: WebSearchProviderName;
@@ -186,6 +188,23 @@ export function parseDuckDuckGoHtml(
   return hits.slice(0, maxResults);
 }
 
+type FirecrawlSearchPayload = {
+  success?: boolean;
+  data?: { web?: Array<{ url?: unknown; title?: unknown; description?: unknown }> } | Array<{ url?: unknown; title?: unknown; description?: unknown }>;
+};
+
+export function parseFirecrawlResults(payload: FirecrawlSearchPayload, maxResults: number): WebSearchHit[] {
+  const items = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.data?.web) ? payload.data.web : [];
+  return items
+    .map((item) => ({
+      title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+      url: typeof item.url === "string" ? item.url.trim() : "",
+      snippet: typeof item.description === "string" ? decodeEntities(item.description) : ""
+    }))
+    .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+    .slice(0, maxResults);
+}
+
 export function parseSearxngResults(
   payload: { results?: Array<{ url?: unknown; title?: unknown; content?: unknown }> },
   maxResults: number
@@ -264,6 +283,8 @@ export class PublicWebSearch implements WebSearchProvider {
         ? effectiveSearchOrder(settings)
         : provider === "searxng"
           ? ["searxng"]
+          : provider === "firecrawl"
+            ? ["firecrawl"]
           : provider === "duckduckgo" || provider === "ddg"
             ? ["duckduckgo"]
             : [];
@@ -295,6 +316,11 @@ export class PublicWebSearch implements WebSearchProvider {
       if (!settings.searxngUrl) throw new Error("NOT_CONFIGURED");
       return this.searchSearxng(query, maxResults, settings.searxngUrl);
     }
+    if (engine === "firecrawl") {
+      const key = this.env.FIRECRAWL_API_KEY?.trim() || (settings.firecrawlConfigured ? firecrawlApiKey() : "");
+      if (!key) throw new Error("NOT_CONFIGURED");
+      return this.searchFirecrawl(query, maxResults, key);
+    }
     // A bot check passes after a short pause more often than not (seen while checking the
     // disciplinary courts' portals): one more try before "refused".
     for (let attempt = 1; ; attempt += 1) {
@@ -309,6 +335,32 @@ export class PublicWebSearch implements WebSearchProvider {
         throw error;
       }
     }
+  }
+
+  /** Firecrawl search API (v2): 2 credits per 10 results; the free plan has a monthly limit. */
+  private async searchFirecrawl(
+    query: string,
+    maxResults: number,
+    apiKey: string
+  ): Promise<WebSearchHit[]> {
+    const response =
+      await this.fetchImpl("https://api.firecrawl.dev/v2/search", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "User-Agent": USER_AGENT
+        },
+        body: JSON.stringify({ query, limit: Math.min(Math.max(maxResults, 1), 10), lang: "pl" }),
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    // 402: credits used up (free plan limit); 429: rate limit; 401: wrong key.
+    if (response.status === 402) throw new Error("CREDITS_EXHAUSTED");
+    if (response.status === 429) throw new Error("RATE_LIMITED");
+    if (response.status === 401 || response.status === 403) throw new Error("KEY_REJECTED");
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    return parseFirecrawlResults(JSON.parse(await readLimitedText(response)) as FirecrawlSearchPayload, maxResults);
   }
 
   private async searchSearxng(
