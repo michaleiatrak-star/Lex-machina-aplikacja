@@ -139,7 +139,7 @@ export function documentProcessingFailureMessage(
       ? failure.reason ?? ""
       : "";
   if (code.startsWith("DESKTOP_RUNTIME_PROXY_FAILED")) {
-    return t("Przetwarzanie dokumentu nie zakończyło się w limicie czasu połączenia z lokalnym runtime. Kod: {code}", { code: code });
+    return t("Przetwarzanie dokumentu nie zakończyło się w limicie czasu połączenia z lokalną usługą aplikacji. Kod: {code}", { code: code });
   }
   if (code !== "STORED_FILE_PROCESSING_FAILED") {
     return code;

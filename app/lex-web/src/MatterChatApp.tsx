@@ -1125,7 +1125,7 @@ function executionMessage(
       : "";
     const contextMeta =
       execution.context?.modelContextTokens
-        ? t(" · runtime {value} tok. · dokumenty ~{value2} tok.{value3}", { value: execution.context.modelContextTokens.toLocaleString(currentLocale()), value2: execution.context.estimatedDocumentTokens.toLocaleString(currentLocale()), value3: execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : "" })
+        ? t(" · model {value} tok. · dokumenty ~{value2} tok.{value3}", { value: execution.context.modelContextTokens.toLocaleString(currentLocale()), value2: execution.context.estimatedDocumentTokens.toLocaleString(currentLocale()), value3: execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : "" })
         : execution.context
           ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString(currentLocale())} tok.`
           : "";
@@ -2914,7 +2914,7 @@ export default function MatterChatApp({
         await resetCaseWorkflow(current.caseId, { kind: "process-pleading" });
         setProcessWorkflowRefresh((value) => value + 1);
       } catch (error) {
-        setExecutionError(t("Nie udało się zamknąć pipeline'u pisma procesowego: ") + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
+        setExecutionError(t("Nie udało się zamknąć procesu pisma procesowego: ") + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
         return;
       }
     }
@@ -4755,6 +4755,7 @@ export default function MatterChatApp({
                               : code.startsWith("ORDERED_WORKFLOW_")
                                 ? t("Proces sprawy zatrzymał wykonanie: {code}", { code })
                                 : code.startsWith(
+                                    // Kept in Polish: the runtime's error text.
                                     "Nie udało się uruchomić lokalnego modelu"
                                   ) ||
                                   code.startsWith(
@@ -5437,7 +5438,7 @@ export default function MatterChatApp({
         <div className="chat-sidebar-card">
           <div className="chat-status-line">
             <span className={runtimeOnline ? "chat-dot online" : "chat-dot offline"} />
-            <strong>{runtimeOnline ? t("Runtime aktywny") : t("Runtime offline")}</strong>
+            <strong>{runtimeOnline ? t("Usługa aplikacji działa") : t("Usługa aplikacji niedostępna")}</strong>
           </div>
           <small>
             {selectedCase?.displayName || t("Nowy wątek utworzy własną sprawę")}
@@ -6620,7 +6621,7 @@ export default function MatterChatApp({
                   <div className="chat-working-meta">
                     <span>
                       {runtimePulse === "OK"
-                        ? developerMode ? t("Runtime odpowiada") : t("Aplikacja pracuje")
+                        ? developerMode ? t("Usługa aplikacji odpowiada") : t("Aplikacja pracuje")
                         : runtimePulse === "LOST"
                           ? developerMode
                             ? t("Brak odpowiedzi usługi aplikacji — operacja nadal oczekuje")

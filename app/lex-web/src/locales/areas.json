@@ -1,43 +1,58 @@
 [
  {
   "area": "Instalator Windows (NSIS)",
-  "state": { "pl": "całość", "en": "częściowo" },
+  "state": {
+   "pl": "całość",
+   "en": "częściowo"
+  },
   "otherLanguages": "wcale",
   "note": "Standardowe ekrany NSIS: polski i angielski (tauri.conf.json). Własne komunikaty (windows/hooks.nsh) i okno postępu pobierania (windows-online-bootstrap.ps1) tylko po polsku."
  },
  {
   "area": "Instalator macOS (.pkg)",
-  "state": { "pl": "całość" },
+  "state": {
+   "pl": "całość"
+  },
   "otherLanguages": "wcale",
   "note": "Ekran powitalny (macos/welcome.html) tylko po polsku; przyciski instalatora w języku systemu (macOS)."
  },
  {
   "area": "Język odpowiedzi modelu",
-  "state": { "pl": "całość" },
-  "otherLanguages": "wcale",
-  "note": "Model odpowiada po polsku niezależnie od języka interfejsu."
+  "state": {
+   "pl": "całość"
+  },
+  "otherLanguages": "całość",
+  "note": "Model odpowiada w języku interfejsu (instrukcja dopisywana przez runtime do każdego zapytania); nazwy instytucji, tytuły aktów i brzmienie przepisów zostają w oryginale. Jakość zależy od modelu, zwłaszcza lokalnego."
  },
  {
   "area": "Teksty aplikacji w odpowiedziach (zastrzeżenie prawne, pytania o brakujące dane, komunikaty bramek)",
-  "state": { "pl": "całość" },
+  "state": {
+   "pl": "całość"
+  },
   "otherLanguages": "wcale",
   "note": "Teksty dopisywane przez runtime tylko po polsku."
  },
  {
   "area": "Komunikaty błędów runtime",
-  "state": { "pl": "całość" },
+  "state": {
+   "pl": "całość"
+  },
   "otherLanguages": "wcale",
   "note": "Kody błędów i opisy po polsku."
  },
  {
   "area": "Skille prawne (korpus)",
-  "state": { "pl": "całość" },
+  "state": {
+   "pl": "całość"
+  },
   "otherLanguages": "wcale",
   "note": "Instrukcje skilli po polsku; nie są tłumaczone (model stosuje je i odpowiada w języku użytkownika)."
  },
  {
   "area": "Pisma i dokumenty .docx",
-  "state": { "pl": "całość" },
+  "state": {
+   "pl": "całość"
+  },
   "otherLanguages": "wcale",
   "note": "Poza wybranym zakresem (interfejs i odpowiedzi)."
  }

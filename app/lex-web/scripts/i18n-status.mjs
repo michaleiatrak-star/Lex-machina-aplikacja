@@ -35,6 +35,8 @@ export function measure(file, code) {
   const keys = new Set();
   const untranslated = [];
   const visit = (node) => {
+    // Kept in Polish on purpose (messages the runtime matches, statutory invoice markings).
+    if (ts.getLeadingCommentRanges(code, node.getFullStart())?.some((range) => code.slice(range.pos, range.end).includes("Kept in Polish"))) return;
     if (isTCall(node)) {
       const text = node.arguments[0] && literalText(node.arguments[0]);
       if (text) keys.add(text);
@@ -84,7 +86,7 @@ export function buildStatus() {
         languages.map((code) => {
           if (code === "pl") return [code, "całość"];
           const done = translated[code] ?? 0;
-          if (keys.length === 0) return [code, "wcale"];
+          if (keys.length === 0) return [code, untranslated.length === 0 ? "całość" : "wcale"];
           if (untranslated.length === 0 && done === keys.length) return [code, "całość"];
           return [code, done === 0 ? "wcale" : "częściowo"];
         })

@@ -70,14 +70,14 @@ export function ChatDocumentCard(props: {
   async function useAsPleadingDraft(blocks: EditableBlock[], change: "MINOR" | "SUBSTANTIVE"): Promise<string> {
     if (document.tokenized) {
       throw new Error(
-        "plik zawiera symbole danych osobowych — popraw tekst w panelu pipeline'u („Edytuj projekt”)"
+        t("plik zawiera symbole danych osobowych — popraw tekst w panelu pisma („Edytuj projekt”)")
       );
     }
     const text = blocksToText(blocks).replace(/^PROJEKT – NIE SKŁADAĆ[^\n]*\n+/u, "");
     const current = await getProcessPleadingDraft(caseId);
     await saveProcessPleadingDraft(caseId, { text, change, expectedRevision: current.draft?.revision ?? 0 });
     return change === "SUBSTANTIVE"
-      ? t("Zapisano jako projekt pisma. Zmiana merytoryczna: pipeline wraca do W2 (atak na projekt i kontrole W3).")
+      ? t("Zapisano jako projekt pisma. Zmiana merytoryczna: proces wraca do W2 (atak na projekt i kontrole W3).")
       : t("Zapisano jako projekt pisma (drobna poprawka; zamknięte kontrole zostają).");
   }
 

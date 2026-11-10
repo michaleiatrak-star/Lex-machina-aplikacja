@@ -302,7 +302,7 @@ export function ProcessPleadingWorkflowPanel({
       <div className="process-workflow-heading">
         <div>
           <p className="eyebrow">
-            {developer ? t("Deterministyczny pipeline pisma") : t("Pismo procesowe")}
+            {developer ? t("Pismo w stałym procesie") : t("Pismo procesowe")}
           </p>
           <h3>
             {state
@@ -440,7 +440,7 @@ export function ProcessPleadingWorkflowPanel({
                       {t("Anuluj")}
                     </button>
                   </div>
-                  <small>{t("Krok wróci do wykonania z Twoimi uwagami po kliknięciu „")}{developer ? t("Kontynuuj pipeline") : t("Kontynuuj")}”.</small>
+                  <small>{t("Krok wróci do wykonania z Twoimi uwagami po kliknięciu „")}{developer ? t("Kontynuuj proces") : t("Kontynuuj")}”.</small>
                 </>
               )}
             </div>
@@ -471,7 +471,7 @@ export function ProcessPleadingWorkflowPanel({
                 disabled={locked}
                 onClick={onContinue}
               >
-                {developer ? t("Kontynuuj pipeline") : t("Kontynuuj")}
+                {developer ? t("Kontynuuj proces") : t("Kontynuuj")}
               </button>
             </div>
           )}
