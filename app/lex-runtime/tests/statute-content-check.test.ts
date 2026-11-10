@@ -100,7 +100,7 @@ async function run(model: string, correction: string) {
     capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
     async stream(params: ProviderStreamParams) {
       const last = String(params.messages.at(-1)?.content ?? "");
-      if (params.systemPrompt?.includes("OCENA ZGODNOŚCI")) {
+      if (params.systemPrompt?.includes("OCENA ZGODNOŚCI") || params.systemPrompt?.startsWith("KONTROLA TREŚCI PRZEPISÓW")) {
         calls.push("judge");
         return { fullText: verdict(last.includes("dożywotniego") ? "UNSUPPORTED" : "SUPPORTED") };
       }
@@ -167,5 +167,26 @@ describe("pomocnicze", () => {
       expect(warned.text).toContain("⚠️ [PRZEPIS ODCZYTANY, TEZA NIEPOTWIERDZONA: Nie dożywocie.");
       expect(warned.text).not.toContain("✅");
     });
+  });
+});
+
+describe("zwięzły sędzia przepisów", () => {
+  it("zgodny przepis bez cytatu i uzasadnienia; niezgodny tylko z cytatem z brzmienia", async () => {
+    const { parseStatuteVerdicts, statuteJudgePrompt } = await import("../src/statute-content-check.js");
+    const documents = [
+      { signature: "art. 51 § 1 KW", kind: "statute" as const, claim: WRONG, text: `Kto krzykiem, hałasem, alarmem lub innym wybrykiem zakłóca spokój, ${QUOTE}` },
+      { signature: "art. 415 KC", kind: "statute" as const, claim: "Kto z winy swej wyrządził szkodę, obowiązany jest do jej naprawienia.", text: "Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia." }
+    ];
+    expect(statuteJudgePrompt(documents)).toContain("PRZEPIS P2: art. 415 KC");
+    const output = JSON.stringify({
+      verdicts: [
+        { signature: "art. 415 KC", claim: "SUPPORTED" },
+        { signature: "art. 51 § 1 KW", claim: "UNSUPPORTED", thesis: "dożywocie", reason: "Brzmienie przewiduje inne kary.", quote: QUOTE },
+        { signature: "art. 51 § 1 KW", claim: "PARTIAL", reason: "cytat spoza brzmienia", quote: "tego zdania nie ma w przepisie" }
+      ]
+    });
+    const check = parseStatuteVerdicts(output, documents);
+    expect(check.verdicts.map((item) => `${item.signature}:${item.claim}`)).toEqual(["art. 415 KC:SUPPORTED", "art. 51 § 1 KW:UNSUPPORTED"]);
+    expect(check.rejected).toEqual(["art. 51 § 1 KW"]);
   });
 });
