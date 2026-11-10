@@ -10,6 +10,8 @@ import {
 import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL, type JurisdictionSettings } from "./api";
 import { LanguagePicker } from "./LanguagePicker";
+import { PencilIcon } from "./CaseAccessAdminPanel";
+import { InlineEdit } from "./InlineEdit";
 import { TranslationStatus } from "./TranslationStatus";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ReplyChoices } from "./ReplyChoices";
@@ -4919,18 +4921,23 @@ export default function MatterChatApp({
     await executeMessage(plain);
   }
 
-  async function saveCaseName(): Promise<void> {
-    if (!selectedCase || !caseNameDraft.trim()) return;
+  const [editingCaseName, setEditingCaseName] = useState(false);
+
+  async function saveCaseName(name = caseNameDraft): Promise<boolean> {
+    if (!selectedCase || !name.trim()) return false;
     setCaseBusy(true);
     setCaseError("");
     try {
-      await renameCase(selectedCase.caseId, caseNameDraft.trim());
+      await renameCase(selectedCase.caseId, name.trim());
+      setCaseNameDraft(name.trim());
       await refreshCases(selectedCase.caseId);
       setWorkspaceRefresh(
         (value) => value + 1
       );
+      return true;
     } catch (error) {
       setCaseError(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setCaseBusy(false);
     }
@@ -7489,7 +7496,39 @@ export default function MatterChatApp({
             {/* Case overview first, as in the UI demo: documents, the next date, the conversation. */}
             <article className="chat-card matter-overview">
               <p className="eyebrow">{t("Przegląd sprawy")}</p>
-              <h2>{selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"}</h2>
+              {selectedCase && editingCaseName ? (
+                <InlineEdit
+                  className="matter-title-edit"
+                  value={selectedCase.displayName ?? ""}
+                  label={t("Nazwa sprawy")}
+                  placeholder={t("np. Kowalski przeciwko ABC — odszkodowanie")}
+                  onCancel={() => setEditingCaseName(false)}
+                  onSave={async (next) => {
+                    const saved = await saveCaseName(next);
+                    if (saved) setEditingCaseName(false);
+                    return saved;
+                  }}
+                />
+              ) : (
+                <h2 className="matter-title">
+                  {selectedCase ? selectedCase.displayName || (individual ? t("Rozmowa") : t("Sprawa bez nazwy")) : individual ? t("Nowa rozmowa") : t("Nowa sprawa")}
+                  {selectedCase && !selectedCase.archivedAt ? (
+                    <button
+                      type="button"
+                      className="matter-title-pencil"
+                      title={t("Zmień nazwę sprawy (sygnatura nie jest wymagana)")}
+                      aria-label={t("Zmień nazwę sprawy")}
+                      disabled={caseBusy}
+                      onClick={() => {
+                        setCaseNameDraft(selectedCase.displayName ?? "");
+                        setEditingCaseName(true);
+                      }}
+                    >
+                      <PencilIcon />
+                    </button>
+                  ) : null}
+                </h2>
+              )}
               {selectedCase ? (
                 <div className="matter-case-meta">
                   <span>{t("ID katalogu:")} {selectedCase.caseId}</span>
@@ -7529,40 +7568,17 @@ export default function MatterChatApp({
                   </button>
                 </div>
               </div>
-              <details className="matter-rename">
-                <summary>
-                  {t("Nazwa sprawy")}
-                  <InfoTip>{t("Sygnatura nie jest wymagana. Nazwa jest niezależna od sygnatury i możesz ją zmienić w każdej chwili.")}</InfoTip>
-                </summary>
-                <div className="chat-form-row">
-                  <input
-                    value={caseNameDraft}
-                    maxLength={160}
-                    disabled={!selectedCase || caseBusy}
-                    placeholder={t("np. Kowalski przeciwko ABC — odszkodowanie")}
-                    onChange={(event) => setCaseNameDraft(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="chat-primary-action"
-                    disabled={!selectedCase || caseBusy || !caseNameDraft.trim()}
-                    onClick={() => void saveCaseName()}
-                  >
-                    {t("Zapisz nazwę")}
-                  </button>
-                </div>
-              </details>
             </article>
 
             <CollapsibleCaseSection
-              eyebrow="Terminarz sprawy"
+              eyebrow={N_("Terminarz sprawy")}
               title={t("Spotkania, posiedzenia i terminy")}
               count={caseSchedule.length}
               loading={caseScheduleLoading}
               error={caseScheduleError}
               resetKey={selectedCase?.caseId ?? null}
-              addLabel="Dodaj termin"
-              hint="Terminy są przypisane do bieżącej sprawy i przechowywane w jej zaszyfrowanych danych. OWNER i EDITOR mogą dopisywać oraz usuwać wpisy."
+              addLabel={N_("Dodaj termin")}
+              hint={N_("Terminy są przypisane do bieżącej sprawy i przechowywane w jej zaszyfrowanych danych. OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.")}
               addForm={
                 <div className="matter-schedule-form">
                   <div className="chat-form-row">
@@ -7742,30 +7758,30 @@ export default function MatterChatApp({
             />
 
             <article
-              className="chat-card chat-file-drop-card"
+              className="chat-card matter-compact-row chat-file-drop-card"
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
               }}
               onDrop={handleDrop}
             >
-              <div>
-                <p className="eyebrow">{t("Dokumenty sprawy")}</p>
-                <h2>
-                  {t("Kliknij lub przeciągnij pliki")}
-                  <InfoTip>
-                    {t("Pliki trafiają do zaszyfrowanego magazynu sprawy. OCR i decyzja o danych osobowych odbywają się w czacie, plik po pliku.")}
-                  </InfoTip>
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="chat-primary-action"
-                disabled={Boolean(selectedCase?.archivedAt)}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {t("Otwórz eksplorator")}
-              </button>
+              <span className="matter-compact-heading">
+                <strong>{t("Dokumenty sprawy")}</strong>
+                <span className="matter-compact-count">{t("przeciągnij pliki tutaj")}</span>
+                <InfoTip>
+                  {t("Pliki trafiają do zaszyfrowanego magazynu sprawy. OCR i decyzja o danych osobowych odbywają się w czacie, plik po pliku.")}
+                </InfoTip>
+              </span>
+              <span className="matter-compact-actions">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={Boolean(selectedCase?.archivedAt)}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {t("+ Dodaj pliki")}
+                </button>
+              </span>
             </article>
 
             <article className="chat-card">

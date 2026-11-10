@@ -1,3 +1,4 @@
+import { currentLocale } from "./i18n";
 import type { ChatWidget, RestorationMark } from "./workspace-client.js";
 
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
@@ -3289,6 +3290,8 @@ export function executeSession(input: {
     // A local model can answer for longer than the desktop proxy waits in silence.
     headers: {
       "X-Lex-Keep-Alive": "1",
+      // The model answers in the interface language (Polish adds nothing).
+      ...(currentLocale() !== "pl" ? { "X-Lex-Language": currentLocale() } : {}),
       ...(executionId ? { "X-Lex-Execution-Id": executionId } : {})
     },
     body: JSON.stringify({

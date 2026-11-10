@@ -1,4 +1,4 @@
-import { t } from "./i18n";
+import { t, N_ } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   addCaseContact,
@@ -112,17 +112,17 @@ export function CaseContactsCard({
 
   return (
     <CollapsibleCaseSection
-      eyebrow="Osoby i organizacje"
+      eyebrow={N_("Osoby i organizacje")}
       title={t("Kontakty w sprawie")}
       count={contacts.length}
       loading={loading}
       error={error}
       resetKey={caseId}
-      addLabel="Dodaj kontakt"
+      addLabel={N_("Dodaj kontakt")}
       hint={
         caseId
-          ? "Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy."
-          : "Wybierz sprawę, aby zobaczyć kontakty."
+          ? N_("Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.")
+          : N_("Wybierz sprawę, aby zobaczyć kontakty.")
       }
       addForm={
         <div className="matter-schedule-form">

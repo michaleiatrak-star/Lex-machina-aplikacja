@@ -4367,3 +4367,179 @@ mark.restored {
     grid-template-columns: 1fr;
   }
 }
+
+/* Case card: sections as one compact row each; entries and forms open in a window. */
+.chat-card.matter-compact-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 14px;
+}
+
+.matter-compact-heading {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.matter-compact-heading strong {
+  font-size: 14px;
+}
+
+.matter-compact-count {
+  color: var(--lm-t8);
+  font-size: 12.5px;
+}
+
+.matter-compact-count.has-entries {
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgb(var(--lm-t6-rgb) / 0.12);
+  color: var(--lm-t6);
+  font-weight: 700;
+  text-align: center;
+}
+
+.matter-compact-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.matter-compact-actions > button {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.matter-compact-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.chat-card.matter-compact-row.chat-file-drop-card {
+  border-style: dashed;
+  flex-direction: row;
+  align-items: center;
+}
+
+.matter-section-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  margin: 32px auto;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.matter-section-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.matter-section-dialog-head h2 {
+  margin: 0;
+}
+
+.matter-section-dialog-add {
+  justify-self: start;
+}
+
+/* Case name: pencil beside the title, edited in place. */
+.matter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.matter-title-pencil {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--lm-t8);
+  cursor: pointer;
+}
+
+.matter-title-pencil:hover,
+.matter-title-pencil:focus-visible {
+  border-color: var(--lm-l3);
+  color: var(--lm-t6);
+}
+
+.matter-title-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.matter-title-edit input {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Edit in place: the field with confirm and cancel beside it. */
+.inline-edit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.inline-edit input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--lm-t6);
+  border-radius: 8px;
+  background: var(--lm-s1);
+  color: inherit;
+  font: inherit;
+}
+
+.inline-edit-confirm,
+.inline-edit-cancel {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--lm-l3);
+  border-radius: 8px;
+  background: var(--lm-s1);
+  color: var(--lm-t2);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.inline-edit-confirm {
+  border-color: var(--lm-t6);
+  background: var(--lm-t6);
+  color: var(--lm-t1);
+}
+
+.inline-edit-confirm:disabled,
+.inline-edit-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

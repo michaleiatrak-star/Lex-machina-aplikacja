@@ -1,3 +1,4 @@
+import { InlineEdit } from "./InlineEdit";
 import { currentLocale, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { CASE_ROLE_LABEL } from "./api";
@@ -67,25 +68,6 @@ export function HomeDashboard({
   const [error, setError] = useState("");
   const [rename, setRename] = useState<{ caseId: string; value: string; error: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
-
-  async function saveRename(): Promise<void> {
-    if (!rename || !onRenameCase) return;
-    const value = rename.value.trim();
-    const current = cases.find((item) => item.caseId === rename.caseId);
-    if (!value || value === current?.displayName) {
-      setRename(null);
-      return;
-    }
-    setRenaming(true);
-    try {
-      await onRenameCase(rename.caseId, value);
-      setRename(null);
-    } catch (failure) {
-      setRename({ ...rename, error: failure instanceof Error ? failure.message : String(failure) });
-    } finally {
-      setRenaming(false);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -204,35 +186,28 @@ export function HomeDashboard({
             <div className="matter-schedule-list">
               {recent.map((item) =>
                 rename?.caseId === item.caseId ? (
-                  <form
-                    key={item.caseId}
-                    className="matter-thread-rename"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void saveRename();
-                    }}
-                  >
-                    <input
-                      autoFocus
-                      value={rename.value}
-                      maxLength={160}
-                      disabled={renaming}
-                      aria-label={t("Nowa nazwa sprawy")}
-                      onChange={(event) => setRename({ ...rename, value: event.target.value, error: "" })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") setRename(null);
+                  <div key={item.caseId} className="matter-thread-rename">
+                    <InlineEdit
+                      value={item.displayName ?? ""}
+                      label={t("Nowa nazwa sprawy")}
+                      onCancel={() => setRename(null)}
+                      onSave={async (next) => {
+                        if (!onRenameCase) return false;
+                        setRenaming(true);
+                        try {
+                          await onRenameCase(item.caseId, next);
+                          setRename(null);
+                          return true;
+                        } catch (failure) {
+                          setRename({ caseId: item.caseId, value: next, error: failure instanceof Error ? failure.message : String(failure) });
+                          return false;
+                        } finally {
+                          setRenaming(false);
+                        }
                       }}
                     />
-                    <div className="matter-thread-rename-actions">
-                      <button type="submit" disabled={renaming || !rename.value.trim()}>
-                        {t("Zapisz")}
-                      </button>
-                      <button type="button" disabled={renaming} onClick={() => setRename(null)}>
-                        {t("Anuluj")}
-                      </button>
-                    </div>
                     {rename.error ? <small className="matter-thread-rename-error">{rename.error}</small> : null}
-                  </form>
+                  </div>
                 ) : (
                   <div key={item.caseId} className="matter-thread-row">
                     <button

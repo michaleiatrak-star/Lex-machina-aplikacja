@@ -1,5 +1,6 @@
 import { currentLocale, N_, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
+import { InlineEdit } from "./InlineEdit";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -191,7 +192,7 @@ export function bulkAccessPlan(
   return { apply, skipped };
 }
 
-function PencilIcon() {
+export function PencilIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
       <path
@@ -359,16 +360,13 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         <div className="case-access-admin-body">
           <div className="case-access-admin-toolbar">
             {renaming?.caseId === item.caseId ? (
-              <form
+              <InlineEdit
                 className="case-access-admin-rename"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const next = renaming.name.trim();
-                  if (!next || next === item.displayName) {
-                    setRenaming(null);
-                    return;
-                  }
-                  void run(
+                value={item.displayName ?? ""}
+                label={t("Nowa nazwa sprawy")}
+                onCancel={() => setRenaming(null)}
+                onSave={async (next) => {
+                  await run(
                     `rename:${item.caseId}`,
                     async () => {
                       await renameCase(item.caseId, next);
@@ -376,23 +374,9 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                     },
                     "Nazwa sprawy zmieniona."
                   );
+                  return true;
                 }}
-              >
-                <input
-                  value={renaming.name}
-                  maxLength={160}
-                  aria-label={t("Nowa nazwa sprawy")}
-                  autoFocus
-                  disabled={Boolean(busy)}
-                  onChange={(event) => setRenaming({ caseId: item.caseId, name: event.target.value })}
-                />
-                <button type="submit" className="primary-button" disabled={Boolean(busy) || !renaming.name.trim()}>
-                  {t("Zapisz")}
-                </button>
-                <button type="button" disabled={Boolean(busy)} onClick={() => setRenaming(null)}>
-                  {t("Anuluj")}
-                </button>
-              </form>
+              />
             ) : (
               <button
                 type="button"

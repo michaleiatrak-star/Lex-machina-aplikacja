@@ -20,3 +20,11 @@ When creating or updating markdown documentation files:
 - **Delete verbose explanations** - if it takes more than 3 sentences, it's probably too long
 
 Default to 1-2 sentence explanations. Only expand when complexity absolutely requires it.
+## Interface (lex-web)
+
+Before a UI change is done, check it against these rules. If unsure, consult expert sources (NN/g, Atlassian/Carbon design systems, WAI-ARIA APG), never memory.
+- Edit in place, no duplicate form blocks: pencil next to the value, then `InlineEdit` (field + ✓ save + ✕ cancel; Enter or blur saves, Esc cancels).
+- Case card sections (schedule, contacts, documents): one compact row each (name, count, "Pokaż", "+ Dodaj"); the list and the add form open in a modal (`CollapsibleCaseSection`).
+- Lists: filters in one block (search, person, sort, date-range presets + custom), result count, "select all visible" with a partial state, bulk actions only while something is selected, selection limited to visible items.
+- Polish UI text only (no English jargon: runtime, backend, pipeline, checkpoint, chunk, provider). Every shown text goes through `t()`/`N_()`; run `node scripts/i18n-status.mjs`.
+- Verify visually (Playwright screenshot with mocked API) before reporting done.
