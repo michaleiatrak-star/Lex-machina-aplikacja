@@ -29,6 +29,7 @@ import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { WidgetToolRuntime, widgetsFromAnswer } from "./widget-runtime.js";
 import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
+import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
 import { astTextLines } from "./ast-text-lines.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
@@ -100,7 +101,7 @@ import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } fr
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
-import { STATUTE_JUDGE_BATCH, claimsWithWording, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
+import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
@@ -963,7 +964,7 @@ export class SafeSessionExecutor {
      */
     async summarizeThread(request) {
         const vault = new PseudonymizationVault(request.privacySeed);
-        const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
+        const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms(request.model));
         const transcript = [
             ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
             "[WIADOMOŚCI DO STRESZCZENIA]",
@@ -992,7 +993,11 @@ export class SafeSessionExecutor {
     // not also wait for local-model PII detection before answering.
     // One register cache per executor: a NIP/KRS is looked up once, not per message.
     registryEnrichment = null;
-    registryForms() {
+    // Offline turn of a local model (local-offline-mode.ts): no register lookup (KRS, VAT white
+    // list) either; those go to external services.
+    registryForms(model) {
+        if (offlineTurn(model))
+            return undefined;
         if (this.registryEnrichment === null)
             this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
         return this.registryEnrichment;
@@ -1035,7 +1040,7 @@ export class SafeSessionExecutor {
     async resolveAutoRouting(request) {
         request = nfcRequest(request);
         const vault = new PseudonymizationVault(request.privacySeed);
-        const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
+        const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms(request.model));
         let protectedQuery;
         try {
             protectedQuery =
@@ -1126,7 +1131,7 @@ export class SafeSessionExecutor {
             mode: request.mode
         });
         const chatPrivacyVault = new PseudonymizationVault(request.privacySeed);
-        const chatPseudonymizer = new LocalPolishPseudonymizer(chatPrivacyVault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
+        const chatPseudonymizer = new LocalPolishPseudonymizer(chatPrivacyVault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms(request.model));
         let protectedQuery;
         let protectedProcessContext = request.processWorkflowContext;
         let protectedAuxiliaryText;
@@ -1444,6 +1449,27 @@ export class SafeSessionExecutor {
                     : {})
             })
             : undefined;
+        // Independent review in an isolated call (LEGAL GAUNTLET v3 II.4): with the matter's files,
+        // for the models that get the case-file tools.
+        const independentReview = caseFileTools && request.caseFiles
+            ? new IndependentReviewToolRuntime({
+                gateway: this.providers,
+                provider: request.provider,
+                model: request.model,
+                caseFiles: request.caseFiles,
+                aliasText: (documentId, text) => request.caseFiles.sharedKey(documentId) ? text : namespaceChunkTokens(text, aliasRegistry.prefixFor(documentId)),
+                marker: newAuthorMarker(),
+                reviewerInstructions: reviewerInstructions((resource) => {
+                    const resolved = this.registry.resolveResource("shared", resource);
+                    try {
+                        return resolved ? fs.readFileSync(resolved, "utf8") : null;
+                    }
+                    catch {
+                        return null;
+                    }
+                })
+            })
+            : undefined;
         // Local 11-12B models call tools unreliably: they get the most relevant
         // core law articles in the prompt (retrieval, not training).
         const coreLawRag = this.coreLawIndex && request.model.startsWith("local/")
@@ -1485,6 +1511,7 @@ export class SafeSessionExecutor {
                 ? coreLawTools.schemas()
                 : []),
             ...(caseFileTools ? caseFileTools.schemas() : []),
+            ...(independentReview ? independentReview.schemas() : []),
             ...reportTools.schemas(),
             ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
@@ -1624,7 +1651,7 @@ export class SafeSessionExecutor {
         // the KRS and NIP of both parties belonged to other firms, the app did not). The registers
         // are the ones that answer for these numbers; nothing else of the case goes out.
         if (legalTurn) {
-            const registry = this.registryForms();
+            const registry = this.registryForms(request.model);
             const material = [
                 chatPrivacyVault.deanonymize(request.query),
                 ...attachments
@@ -2080,6 +2107,8 @@ export class SafeSessionExecutor {
         ].join("\n\n");
         const toolPromptTurn = [
             ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+            // Per turn (a new marker each time), so the stable prompt stays cached.
+            ...(independentReview ? [independentReview.systemPromptAppendix()] : []),
             ...[stageTailPrompt(stageTail.sections)].filter((block) => Boolean(block)),
             ...pathSections.filter((section) => !stablePath(section)),
             ...(evidencePrompt ? [evidencePrompt] : []),
@@ -2377,6 +2406,7 @@ export class SafeSessionExecutor {
                 const reportCalls = calls.filter((call) => reportTools.handles(call.name));
                 const courtCalls = calls.filter((call) => courtTools?.handles(call.name) ?? false);
                 const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
+                const reviewCalls = calls.filter((call) => independentReview?.handles(call.name) ?? false);
                 const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
                 const federationCalls = calls.filter((call) => federationTools?.handles(call.name) ?? false);
                 const coreLawCalls = calls.filter((call) => coreLawTools?.handles(call.name) ?? false);
@@ -2385,6 +2415,7 @@ export class SafeSessionExecutor {
                     !reportTools.handles(call.name) &&
                     !(courtTools?.handles(call.name) ?? false) &&
                     !(caseFileTools?.handles(call.name) ?? false) &&
+                    !(independentReview?.handles(call.name) ?? false) &&
                     !(widgetTools?.handles(call.name) ?? false) &&
                     !(federationTools?.handles(call.name) ?? false));
                 const corpusResults = corpusCalls.length > 0
@@ -2409,6 +2440,9 @@ export class SafeSessionExecutor {
                 }
                 const caseFileResults = caseFileTools && caseFileCalls.length > 0
                     ? await caseFileTools.runTools(caseFileCalls)
+                    : [];
+                const reviewResults = independentReview && reviewCalls.length > 0
+                    ? await independentReview.runTools(reviewCalls)
                     : [];
                 const widgetResults = widgetTools && widgetCalls.length > 0
                     ? await widgetTools.runTools(widgetCalls)
@@ -2469,6 +2503,7 @@ export class SafeSessionExecutor {
                     ...corpusResults,
                     ...coreLawResults,
                     ...caseFileResults,
+                    ...reviewResults,
                     ...reportResults,
                     ...courtResults,
                     ...widgetResults,
@@ -2568,6 +2603,11 @@ export class SafeSessionExecutor {
                 role: "primary-domain",
                 selection: "model-auto-selection",
                 domainSkills: selection.domainSkills
+            });
+        }
+        for (const event of independentReview?.auditEvents() ?? []) {
+            audit.record("gate", "INDEPENDENT_REVIEW", event.error ? "DEGRADED" : "OK", {
+                detail: `round=${event.round};isolation=${event.isolation};verdict=${event.verdict};documents=${event.documents};chars=${event.sourceChars}${event.reasons.length ? `;reasons=${event.reasons.join(",")}` : ""}${event.error ? `;error=${event.error}` : ""}`
             });
         }
         for (const event of caseFileTools?.auditEvents() ?? []) {
@@ -3079,27 +3119,32 @@ export class SafeSessionExecutor {
         const statuteWarnings = new Map();
         if (legalTurn && !request.documentAstOutput && !astLines && verificationTools && !waitsForUser(modelOutput)) {
             const alreadyJudged = claimsWithWording(caseSourceTexts);
-            const statuteQuestion = judgedQuestion(protectedQuery);
+            // A local model takes its provisions in one call (one request at a time anyway); a cloud
+            // model's batches run side by side.
+            const statuteBatch = request.model.startsWith("local/") ? STATUTE_JUDGE_BATCH_LOCAL : STATUTE_JUDGE_BATCH;
             const judgeStatutes = async (answer) => {
                 const items = statuteItems(answer, ledger.all(), alreadyJudged);
-                const problems = [];
-                for (let start = 0; start < items.length; start += STATUTE_JUDGE_BATCH) {
-                    const batch = items.slice(start, start + STATUTE_JUDGE_BATCH).map((item) => item.document);
+                const batches = [];
+                for (let start = 0; start < items.length; start += statuteBatch)
+                    batches.push(items.slice(start, start + statuteBatch));
+                const judged = await Promise.all(batches.map(async (group) => {
+                    const batch = group.map((item) => item.document);
                     try {
                         const verdict = await this.providers.stream(request.provider, {
                             model: request.model,
-                            systemPrompt: JUDGE_SYSTEM,
-                            messages: [{ role: "user", content: semanticJudgePrompt(statuteQuestion, batch) }],
+                            systemPrompt: STATUTE_JUDGE_SYSTEM,
+                            messages: [{ role: "user", content: statuteJudgePrompt(batch) }],
                             accountContinuity: "none",
                             reasoning: "none"
                         });
-                        problems.push(...statuteProblems(parseSemanticVerdicts(verdict.fullText, batch)));
+                        return statuteProblems(parseStatuteVerdicts(verdict.fullText, batch));
                     }
                     catch {
                         // no verdict: the provision keeps its ✅ for existence and wording
+                        return [];
                     }
-                }
-                return { items, problems };
+                }));
+                return { items, problems: judged.flat() };
             };
             const first = await judgeStatutes(releasedDraft.text);
             let remaining = first;

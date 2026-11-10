@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { t } from "./i18n";
 
 /**
- * Case-card section that only shows existing entries.
- * Open while it has entries (or an error), collapsed to its header when empty;
- * the add form stays behind its own toggle until there is nothing to list.
+ * Case-card section as one compact row: its name, how many entries it has, and buttons that open
+ * the entries or the add form in a window above the page (the case card stays short).
  */
 export function CollapsibleCaseSection({
   eyebrow,
@@ -29,70 +29,86 @@ export function CollapsibleCaseSection({
   children: ReactNode;
 }) {
   const hasEntries = count > 0;
-  const [open, setOpen] = useState(hasEntries);
-  const [addOpen, setAddOpen] = useState(false);
+  const [view, setView] = useState<"" | "list" | "add">("");
+  const titleId = useId();
 
   useEffect(() => {
-    setOpen(hasEntries);
-  }, [resetKey, hasEntries]);
-
-  useEffect(() => {
-    setAddOpen(false);
+    setView("");
   }, [resetKey]);
 
   useEffect(() => {
-    if (error) setOpen(true);
-  }, [error]);
+    if (!view) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setView("");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view]);
 
-  const countLabel = loading
-    ? "ładowanie…"
-    : hasEntries
-      ? String(count)
-      : "brak wpisów";
-
-  const addBody = (
-    <>
-      {hint ? <p className="matter-collapsible-hint">{hint}</p> : null}
-      {addForm}
-    </>
-  );
+  const countLabel = loading ? t("ładowanie…") : hasEntries ? String(count) : t("brak wpisów");
 
   return (
-    <details
-      className="chat-card matter-schedule-card matter-collapsible"
-      open={open}
-      onToggle={(event) => {
-        if (event.target === event.currentTarget) setOpen(event.currentTarget.open);
-      }}
-    >
-      <summary className="matter-collapsible-summary">
-        <span className="matter-collapsible-heading">
-          <span className="eyebrow">{eyebrow}</span>
-          <span className="matter-collapsible-title">{title}</span>
-        </span>
-        <span className="matter-collapsible-count">{countLabel}</span>
-      </summary>
-
-      {error ? <p className="chat-error">{error}</p> : null}
-
-      {hasEntries ? <div className="matter-schedule-list">{children}</div> : null}
-
-      {addForm ? (
-        hasEntries ? (
-          <details
-            className="matter-add-entry"
-            open={addOpen}
-            onToggle={(event) => {
-              if (event.target === event.currentTarget) setAddOpen(event.currentTarget.open);
-            }}
-          >
-            <summary>{addLabel}</summary>
-            {addBody}
-          </details>
-        ) : (
-          <div className="matter-add-entry">{addBody}</div>
-        )
+    <div className="chat-card matter-compact-row">
+      <span className="matter-compact-heading" title={t(title)}>
+        <strong>{t(eyebrow)}</strong>
+        <span className={hasEntries ? "matter-compact-count has-entries" : "matter-compact-count"}>{countLabel}</span>
+      </span>
+      <span className="matter-compact-actions">
+        {hasEntries ? (
+          <button type="button" className="chat-secondary-action" onClick={() => setView("list")}>
+            {t("Pokaż")}
+          </button>
+        ) : null}
+        {addForm ? (
+          <button type="button" className="chat-secondary-action" aria-label={t(addLabel)} title={t(addLabel)} onClick={() => setView("add")}>
+            {t("+ Dodaj")}
+          </button>
+        ) : null}
+      </span>
+      {error ? <p className="chat-error matter-compact-error">{error}</p> : null}
+      {view ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setView("");
+          }}
+        >
+          <section className="chat-card matter-section-dialog">
+            <div className="matter-section-dialog-head">
+              <div>
+                <p className="eyebrow">{t(eyebrow)}</p>
+                <h2 id={titleId}>{view === "add" ? t(addLabel) : t(title)}</h2>
+              </div>
+              <button type="button" className="chat-secondary-action" onClick={() => setView("")}>
+                {t("Zamknij")}
+              </button>
+            </div>
+            {view === "list" ? (
+              <>
+                <div className="matter-schedule-list">{children}</div>
+                {addForm ? (
+                  <button type="button" className="chat-secondary-action matter-section-dialog-add" onClick={() => setView("add")}>
+                    {t("+ Dodaj")}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div className="matter-add-entry">
+                {hint ? <p className="matter-collapsible-hint">{typeof hint === "string" ? t(hint) : hint}</p> : null}
+                {addForm}
+                {hasEntries ? (
+                  <button type="button" className="chat-secondary-action matter-section-dialog-add" onClick={() => setView("list")}>
+                    {t("Pokaż wpisy ({count})", { count })}
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
       ) : null}
-    </details>
+    </div>
   );
 }

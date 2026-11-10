@@ -1,3 +1,4 @@
+import { currentLocale, t, N_ } from "./i18n";
 import { FirmKnowledgePicker, type FirmKnowledgeSelection } from "./FirmKnowledgePicker.js";
 import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { CaseCourtCard } from "./CaseCourtCard.js";
@@ -7,7 +8,11 @@ import {
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
 import { casesNewestFirst } from "./case-calendar.js";
-import { CASE_ROLE_LABEL } from "./api";
+import { CASE_ROLE_LABEL, type JurisdictionSettings } from "./api";
+import { LanguagePicker } from "./LanguagePicker";
+import { PencilIcon } from "./CaseAccessAdminPanel";
+import { InlineEdit } from "./InlineEdit";
+import { TranslationStatus } from "./TranslationStatus";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ReplyChoices } from "./ReplyChoices";
 import {
@@ -34,7 +39,7 @@ import { ProvisionPreview } from "./ProvisionPreview.js";
 import { CaseLawPreview, attributedSentence, caseLawDocument, caseLawReferences, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 
-// Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
+// Kept in Polish: the same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
@@ -88,6 +93,7 @@ import {
   getProviderAccountStatus,
   getProviderStatus,
   getRoutes,
+  getJurisdiction,
   isDesktopShell,
   finalizeDocument as finalizeCaseDocument,
   getVisionOcrStatus,
@@ -314,14 +320,14 @@ const WELCOME: CaseChatMessage = {
   id: "welcome",
   role: "system",
   content:
-    "Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze."
+    t("Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze.")
 };
 
 const WELCOME_INDIVIDUAL: CaseChatMessage = {
   id: "welcome",
   role: "system",
   content:
-    "Opisz swoją sprawę albo zadaj pytanie prawne. Możesz dołączyć pismo lub zdjęcie dokumentu. Rozmowa dostanie nazwę od Twojego pierwszego pytania."
+    t("Opisz swoją sprawę albo zadaj pytanie prawne. Możesz dołączyć pismo lub zdjęcie dokumentu. Rozmowa dostanie nazwę od Twojego pierwszego pytania.")
 };
 
 const PROVIDERS: Array<{
@@ -334,49 +340,49 @@ const PROVIDERS: Array<{
     id: "openai",
     label: "OpenAI",
     apiKeyUrl: "https://platform.openai.com/api-keys",
-    accountClientLabel: "Codex CLI"
+    accountClientLabel: t("Codex CLI")
   },
   {
     id: "anthropic",
     label: "Anthropic / Claude",
     apiKeyUrl: "https://platform.claude.com/settings/keys",
-    accountClientLabel: "Claude Code"
+    accountClientLabel: t("Claude Code")
   },
   {
     id: "xai",
     label: "xAI / Grok",
     apiKeyUrl: "https://console.x.ai/",
-    accountClientLabel: "Grok Build"
+    accountClientLabel: t("Grok Build")
   },
   {
     id: "google",
     label: "Google / Gemini",
     apiKeyUrl: "https://aistudio.google.com/apikey",
-    accountClientLabel: "Gemini CLI"
+    accountClientLabel: t("Gemini CLI")
   }
 ];
 
 // Runtime error codes from provisioning the pinned account client.
 export function provisionFailureText(error: string): string {
   if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISIONER_NOT_AVAILABLE")) {
-    return "Nie można pobrać klienta: brak npm w pakiecie aplikacji. Przełącz źródło na API albo zgłoś błąd.";
+    return t("Nie można pobrać klienta: brak npm w pakiecie aplikacji. Przełącz źródło na API albo zgłoś błąd.");
   }
   if (error.startsWith("ACCOUNT_SESSION_COMMAND_TIMEOUT")) {
-    return "Pobieranie klienta przekroczyło 10 minut (wolne łącze lub serwer npm). Spróbuj ponownie.";
+    return t("Pobieranie klienta przekroczyło 10 minut (wolne łącze lub serwer npm). Spróbuj ponownie.");
   }
   if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISION_FAILED")) {
     // ACCOUNT_SESSION_CLI_PROVISION_FAILED:<provider>:<exit code>:<npm error lines>
     const detail = error.split(":").slice(3).join(":").trim();
     const cause = /ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|proxy|certificate|CERT_/i.test(detail)
-      ? "brak połączenia z serwerem npm (sieć, proxy lub certyfikat)"
+      ? t("brak połączenia z serwerem npm (sieć, proxy lub certyfikat)")
       : /not recognized|is not recognized|ENOENT/i.test(detail)
         ? "brak wymaganego programu podczas instalacji"
         : /EPERM|EACCES|EBUSY/i.test(detail)
-          ? "brak dostępu do plików (program antywirusowy lub otwarty plik)"
-          : "błąd instalacji npm";
-    return `Pobieranie klienta nie powiodło się: ${cause}.${detail ? ` Szczegóły: ${detail}` : ""}`;
+          ? t("brak dostępu do plików (program antywirusowy lub otwarty plik)")
+          : t("błąd instalacji npm");
+    return t("Pobieranie klienta nie powiodło się: {cause}.{value}", { cause: cause, value: detail ? ` Szczegóły: ${detail}` : "" });
   }
-  return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
+  return t("Nie udało się przygotować klienta: {value}.", { value: error || t("nieznany błąd") });
 }
 
 // Kolejność w selektorze: modele główne (konto/API) u góry, lokalna AI na dole.
@@ -411,7 +417,7 @@ const PRIMARY_MODEL_SOURCES: Array<{
   {
     id: "google-account",
     // Google odrzuca w Gemini CLI bezpłatny plan „Gemini Code Assist for individuals”.
-    label: "Gemini · konto Google (plan płatny)"
+    label: N_("Gemini · konto Google (plan płatny)")
   },
   {
     id: "google",
@@ -419,7 +425,7 @@ const PRIMARY_MODEL_SOURCES: Array<{
   },
   {
     id: "local",
-    label: "Lokalne"
+    label: t("Lokalne")
   }
 ];
 
@@ -438,8 +444,9 @@ const ACCOUNT_MODEL_LABELS: Record<
 };
 
 // The case summary button's message (the server adds the template and keeps the answer).
+// Kept in Polish: the runtime recognises the request by this prefix (case-overview.ts).
 const CASE_OVERVIEW_REQUEST =
-  "Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.";
+  ("Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.");
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
@@ -464,62 +471,62 @@ const FALLBACK_EXECUTION_SKILLS: PublicSkillDescriptor[] = [
   {
     name: "analiza-sadowa-v6",
     category: "execution",
-    description: "Analiza sądowa i procesowa akt sprawy."
+    description: N_("Analiza sądowa i procesowa akt sprawy.")
   },
   {
     name: "analizator-dowodow-v3",
     category: "execution",
-    description: "Analiza materiału dowodowego, luk i ryzyk."
+    description: N_("Analiza materiału dowodowego, luk i ryzyk.")
   },
   {
     name: "analizator-przepisow-v2",
     category: "execution",
-    description: "Analiza i zestawienie przepisów istotnych dla sprawy."
+    description: N_("Analiza i zestawienie przepisów istotnych dla sprawy.")
   },
   {
     name: "analizator-umow-v1",
     category: "execution",
-    description: "Analiza postanowień umowy, obowiązków i ryzyk."
+    description: N_("Analiza postanowień umowy, obowiązków i ryzyk.")
   },
   {
     name: "chronologia-sprawy-v1",
     category: "execution",
-    description: "Chronologia zdarzeń, terminów i zależności czasowych."
+    description: N_("Chronologia zdarzeń, terminów i zależności czasowych.")
   },
   {
     name: "orzeczenia-sadowe-v2",
     category: "execution",
-    description: "Praca z orzecznictwem i tezami judykatury."
+    description: N_("Praca z orzecznictwem i tezami judykatury.")
   },
   {
     name: "pisma-procesowe-v3",
     category: "execution",
-    description: "Przygotowanie pisma procesowego w checkpointowanym workflow."
+    description: N_("Przygotowanie pisma procesowego etapami, z punktami kontrolnymi.")
   },
   {
     name: "pisma-proste-v2",
     category: "execution",
-    description: "Przygotowanie prostego pisma prawnego lub procesowego."
+    description: N_("Przygotowanie prostego pisma prawnego lub procesowego.")
   },
   {
     name: "przesluchanie-swiadkow-v2-min90",
     category: "execution",
-    description: "Plan przesłuchania świadków i zestaw pytań."
+    description: N_("Plan przesłuchania świadków i zestaw pytań.")
   },
   {
     name: "przewodnik-prawny-v2",
     category: "execution",
-    description: "Przewodnik po dalszych krokach i ścieżkach działania."
+    description: N_("Przewodnik po dalszych krokach i ścieżkach działania.")
   },
   {
     name: "raport-klienta-v1",
     category: "execution",
-    description: "Raport dla klienta."
+    description: N_("Raport dla klienta.")
   },
   {
     name: "raport-sytuacyjny-v2",
     category: "execution",
-    description: "Raport sytuacyjny sprawy, ryzyk i kolejnych działań."
+    description: N_("Raport sytuacyjny sprawy, ryzyk i kolejnych działań.")
   }
 ];
 
@@ -561,7 +568,7 @@ function suggestedCaseName(input: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 72);
-  return clean.length >= 8 ? clean : "Nowa sprawa";
+  return clean.length >= 8 ? clean : t("Nowa sprawa");
 }
 
 type DirectDocumentRequest = {
@@ -789,14 +796,14 @@ export function pendingFileMessage(
   status: "PROCESSING" | "PENDING" | "SAVING" | "FAILED",
   error?: string
 ): string {
-  const file = name ? `Plik ${name}` : "Dodany plik";
+  const file = name ? `Plik ${name}` : t("Dodany plik");
   if (status === "FAILED") {
-    return `${file} nie został odczytany${error ? `: ${error}` : ""}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.`;
+    return t("{file} nie został odczytany{value}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.", { file: file, value: error ? `: ${error}` : "" });
   }
   if (status === "PROCESSING" || status === "SAVING") {
-    return `${file} jest jeszcze przetwarzany. Poczekaj na koniec albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+    return t("{file} jest jeszcze przetwarzany. Poczekaj na koniec albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.", { file: file });
   }
-  return `${file} czeka na Twoją decyzję (przetworzenie albo zapis bez przetwarzania). Wybierz ją albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+  return t("{file} czeka na Twoją decyzję (przetworzenie albo zapis bez przetwarzania). Wybierz ją albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.", { file: file });
 }
 
 export function directDocumentRequest(
@@ -906,19 +913,23 @@ export function localModelFailureMessage(
 ): string {
   switch (reason) {
     case "LOCAL_MODEL_SERVER_UNREACHABLE":
-      return "Profil lokalnego modelu przeszedł przygotowanie, ale serwer llama.cpp przestał odpowiadać przed lub w trakcie generowania. Program uruchomi go ponownie przy następnej wiadomości. Kod: LOCAL_MODEL_SERVER_UNREACHABLE";
+      return t("Profil lokalnego modelu przeszedł przygotowanie, ale serwer llama.cpp przestał odpowiadać przed lub w trakcie generowania. Program uruchomi go ponownie przy następnej wiadomości. Kod: LOCAL_MODEL_SERVER_UNREACHABLE");
     case "LOCAL_MODEL_REQUEST_REJECTED":
-      return "Połączenie z lokalnym serwerem działało, ale llama.cpp odrzucił żądanie inferencji. Kod: LOCAL_MODEL_REQUEST_REJECTED";
+      return t("Połączenie z lokalnym serwerem działało, ale llama.cpp odrzucił żądanie inferencji. Kod: LOCAL_MODEL_REQUEST_REJECTED");
     case "LOCAL_MODEL_SERVER_ERROR":
-      return "Połączenie z lokalnym serwerem działało, ale llama.cpp zwrócił błąd podczas generowania. Kod: LOCAL_MODEL_SERVER_ERROR";
+      return t("Połączenie z lokalnym serwerem działało, ale llama.cpp zwrócił błąd podczas generowania. Kod: LOCAL_MODEL_SERVER_ERROR");
     case "LOCAL_MODEL_CONTEXT_OVERFLOW":
-      return "Lokalny model działa, ale żądanie przekroczyło dostępny kontekst. Zmniejsz zakres rozmowy lub kontekst załączników. Kod: LOCAL_MODEL_CONTEXT_OVERFLOW";
+      return t("Lokalny model działa, ale żądanie przekroczyło dostępny kontekst. Zmniejsz zakres rozmowy lub kontekst załączników. Kod: LOCAL_MODEL_CONTEXT_OVERFLOW");
     case "LOCAL_MODEL_RESOURCE_EXHAUSTED":
-      return "Lokalny model został uruchomiony, ale zabrakło pamięci RAM/VRAM podczas inferencji. Zmniejsz kontekst albo wybierz profil CPU/mniejszy model. Kod: LOCAL_MODEL_RESOURCE_EXHAUSTED";
+      return t("Lokalny model został uruchomiony, ale zabrakło pamięci RAM/VRAM podczas inferencji. Zmniejsz kontekst albo wybierz profil CPU/mniejszy model. Kod: LOCAL_MODEL_RESOURCE_EXHAUSTED");
+    case "LOCAL_MODEL_EMPTY_ANSWER":
+      return t("Lokalny model zakończył generowanie bez treści odpowiedzi, także przy drugiej próbie. To nie jest awaria serwera llama.cpp. Zadaj pytanie ponownie, krócej, albo wybierz inny model. Kod: LOCAL_MODEL_EMPTY_ANSWER");
+    case "LOCAL_MODEL_RESPONSE_TIMEOUT":
+      return t("Lokalny model nie zwrócił odpowiedzi w limicie czasu. Komputer może być obciążony; spróbuj ponownie albo zmniejsz kontekst. Kod: LOCAL_MODEL_RESPONSE_TIMEOUT");
     case "LOCAL_MODEL_INFERENCE_FAILED":
-      return "Połączenie z lokalnym llama.cpp zostało wcześniej potwierdzone przez health-check, ale sama generacja odpowiedzi nie zakończyła się poprawnie. Kod: LOCAL_MODEL_INFERENCE_FAILED";
+      return t("Połączenie z lokalnym llama.cpp zostało wcześniej potwierdzone testem połączenia, ale sama generacja odpowiedzi nie zakończyła się poprawnie. Kod: LOCAL_MODEL_INFERENCE_FAILED");
     default:
-      return `Lokalny model nie mógł wykonać odpowiedzi.${reason ? ` Kod: ${reason}` : ""}`;
+      return t("Lokalny model nie mógł wykonać odpowiedzi.{value}", { value: reason ? ` Kod: ${reason}` : "" });
   }
 }
 
@@ -931,47 +942,47 @@ export function providerFailureMessage(
     provider.startsWith("anthropic")
       ? "Claude"
       : provider.startsWith("xai")
-        ? "Grok"
+        ? t("Grok")
         : provider.startsWith("google")
           ? "Gemini"
           : "ChatGPT/Codex";
   const client =
     provider.startsWith("anthropic")
-      ? "Claude Code"
+      ? t("Claude Code")
       : provider.startsWith("xai")
-        ? "Grok Build"
+        ? t("Grok Build")
         : provider.startsWith("google")
-          ? "Gemini CLI"
-          : "Codex";
+          ? t("Gemini CLI")
+          : t("Codex");
   const base = (() => {
     switch (reason) {
       case "ACCOUNT_SESSION_PLAN_UNSUPPORTED":
         return provider.startsWith("google")
-          ? "Google nie obsługuje już Gemini CLI w bezpłatnym planie konta Google („Gemini Code Assist for individuals”) — ponowne logowanie nie pomoże. Użyj „Google Gemini · API” z kluczem z Google AI Studio (Ustawienia → Modele i AI) albo konta z płatnym planem."
-          : `${name} odrzuca plan Twojego konta dla klienta ${client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.`;
+          ? t("Google nie obsługuje już Gemini CLI w bezpłatnym planie konta Google („Gemini Code Assist for individuals”) — ponowne logowanie nie pomoże. Użyj „Google Gemini · API” z kluczem z Google AI Studio (Ustawienia → Modele i AI) albo konta z płatnym planem.")
+          : t("{name} odrzuca plan Twojego konta dla klienta {client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.", { name: name, client: client });
       case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
-        return `${name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.`;
+        return t("{name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.", { name: name });
       case "ACCOUNT_SESSION_AUTH_EXPIRED":
       case "ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH":
-        return `Sesja ${name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.`;
+        return t("Sesja {name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.", { name: name });
       case "ACCOUNT_SESSION_CAPACITY":
-        return `${name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.`;
+        return t("{name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.", { name: name });
       case "ACCOUNT_SESSION_PROMPT_REJECTED":
-        return `${name} odrzucił bieżące żądanie po stronie usługi.`;
+        return t("{name} odrzucił bieżące żądanie po stronie usługi.", { name: name });
       case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
-        return `Klient ${client} jest niezgodny z kontraktem Lex Machina. Lex Machina używa przypiętej wersji prywatnego klienta; ponów połączenie konta.`;
+        return t("Klient {client} jest niezgodny z kontraktem Lex Machina. Lex Machina używa przypiętej wersji prywatnego klienta; ponów połączenie konta.", { client: client });
       case "ACCOUNT_SESSION_CLI_SPAWN_FAILED":
-        return `Nie udało się uruchomić klienta ${client}. Ponów połączenie konta w Ustawieniach, aby Lex Machina przygotowała przypiętą wersję klienta.`;
+        return t("Nie udało się uruchomić klienta {client}. Ponów połączenie konta w Ustawieniach, aby Lex Machina przygotowała przypiętą wersję klienta.", { client: client });
       case "ACCOUNT_SESSION_CLI_STALLED":
-        return `Klient ${client} nie rozpoczął pracy w ciągu 120 s (brak żadnej odpowiedzi procesu).`;
+        return t("Klient {client} nie rozpoczął pracy w ciągu 120 s (brak żadnej odpowiedzi procesu).", { client: client });
       case "ACCOUNT_SESSION_COMMAND_TIMEOUT":
-        return `Klient ${client} przekroczył limit czasu wykonania.`;
+        return t("Klient {client} przekroczył limit czasu wykonania.", { client: client });
       case "ACCOUNT_SESSION_EMPTY_RESPONSE":
-        return `${name} zakończył wykonanie bez treści odpowiedzi${provider.startsWith("anthropic") ? "" : " także po jednym ponowieniu z prośbą o tekst"}. Zwykle oznacza to, że model zużył limit odpowiedzi na rozumowanie nad długim kontekstem; „reasoning_out” w szczegółach pokazuje, ile. Ponów wiadomość albo zawęź pytanie lub kontekst sprawy.`;
+        return t("{name} zakończył wykonanie bez treści odpowiedzi{value}. Zwykle oznacza to, że model zużył limit odpowiedzi na rozumowanie nad długim kontekstem; „reasoning_out” w szczegółach pokazuje, ile. Ponów wiadomość albo zawęź pytanie lub kontekst sprawy.", { name: name, value: provider.startsWith("anthropic") ? "" : t(" także po jednym ponowieniu z prośbą o tekst") });
       case "ACCOUNT_SESSION_CLI_FAILED":
-        return `Klient ${client} zakończył wykonanie błędem.`;
+        return t("Klient {client} zakończył wykonanie błędem.", { client: client });
       default:
-        return `${name} odrzucił lub przerwał wykonanie.`;
+        return t("{name} odrzucił lub przerwał wykonanie.", { name: name });
     }
   })();
   const code =
@@ -980,7 +991,7 @@ export function providerFailureMessage(
       : "";
   const detail =
     description?.trim()
-      ? ` Szczegóły: ${description.trim().slice(0, 600)}`
+      ? t(" Szczegóły: {value}", { value: description.trim().slice(0, 600) })
       : "";
   return `${base}${code}${detail}`;
 }
@@ -1095,7 +1106,7 @@ export function blockedReasonText(
       ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
       : []),
     ...(references.length
-      ? [`odwołania zablokowane przez G8: ${references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ")}`]
+      ? [t("odwołania zablokowane przez G8: {value}", { value: references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ") })]
       : []),
     ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
   ];
@@ -1118,25 +1129,25 @@ function executionMessage(
       : "";
     const contextMeta =
       execution.context?.modelContextTokens
-        ? ` · runtime ${execution.context.modelContextTokens.toLocaleString("pl-PL")} tok. · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.${execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : ""}`
+        ? t(" · model {value} tok. · dokumenty ~{value2} tok.{value3}", { value: execution.context.modelContextTokens.toLocaleString(currentLocale()), value2: execution.context.estimatedDocumentTokens.toLocaleString(currentLocale()), value3: execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : "" })
         : execution.context
-          ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.`
+          ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString(currentLocale())} tok.`
           : "";
     // Instruction text of the turn (measure for moving skill procedure into the app).
     const instructionMeta = execution.context?.instructionChars
-      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString("pl-PL")} tok.`
+      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())} tok.`
       : "";
     const citationMeta =
       execution.documentCitationFreshness
-        ? ` · cytaty odświeżone: ${execution.documentCitationFreshness.checked}`
+        ? t(" · cytaty odświeżone: {checked}", { checked: execution.documentCitationFreshness.checked })
         : "";
     const workflowMeta =
       execution.processAuto
-        ? ` · AUTO: ${execution.processAuto.steps.length}/${execution.processAuto.maxSteps} kroków · ${execution.processAuto.stopped}`
+        ? t(" · AUTO: {count}/{maxSteps} kroków · {stopped}", { count: execution.processAuto.steps.length, maxSteps: execution.processAuto.maxSteps, stopped: execution.processAuto.stopped })
         : execution.processWorkflow
           ? ` · proces: ${execution.processWorkflow.stage}${execution.processWorkflow.pendingCheckpoint ? ` · czeka: ${execution.processWorkflow.pendingCheckpoint}` : ""}`
           : execution.courtWorkflow
-            ? ` · analiza sądowa: ${execution.courtWorkflow.stage}${execution.courtWorkflow.nextCheckpoint ? ` · następny: ${execution.courtWorkflow.nextCheckpoint}` : ""}`
+            ? t(" · analiza sądowa: {stage}{value}", { stage: execution.courtWorkflow.stage, value: execution.courtWorkflow.nextCheckpoint ? ` · następny: ${execution.courtWorkflow.nextCheckpoint}` : "" })
             : "";
     const modelRoutingMeta = ` · model: ${execution.model}`;
     const verificationDegraded =
@@ -1144,11 +1155,11 @@ function executionMessage(
       execution.gateI?.result === "BLOCKED";
     const verificationWarning =
       verificationDegraded
-        ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
+        ? t("⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n")
         : "";
     // The chronology was kept as the case's timeline: said under the answer.
     const timelineNote = execution.chronologySaved
-      ? "\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._"
+      ? t("\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._")
       : "";
     // The step passed but a tool call was refused on the way: its checkpoint stays open.
     const heldNotice = execution.checkpointHeld
@@ -1203,15 +1214,15 @@ function executionMessage(
         modelRoutingMeta +
         (execution.modeDecision ? ` · tryb ${execution.modeDecision.mode}` : "") +
         (execution.firmTemplateApplied
-          ? ` · wzór kancelarii: ${execution.firmTemplateApplied.filename} (domyślny: ${execution.firmTemplateApplied.kind})`
+          ? t(" · wzór kancelarii: {filename} (domyślny: {kind})", { filename: execution.firmTemplateApplied.filename, kind: execution.firmTemplateApplied.kind })
           : "") +
         (execution.mandatoryPath
-          ? ` · ścieżka ${execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA"} ${execution.mandatoryPath.steps.filter((step) => step.status === "MET").length}/${execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length}`
+          ? t(" · ścieżka {value} {count}/{count2}", { value: execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA", count: execution.mandatoryPath.steps.filter((step) => step.status === "MET").length, count2: execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length })
           : "") +
         ` · VERIFIED ${execution.verification.verified}` +
         ` · SUPPORTED ${execution.verification.supported}` +
         (verificationDegraded
-          ? ` · WERYFIKACJA NIEPEŁNA · UNVERIFIED ${execution.verification.unverified}`
+          ? t(" · WERYFIKACJA NIEPEŁNA · UNVERIFIED {unverified}", { unverified: execution.verification.unverified })
           : "")
     };
   }
@@ -1220,7 +1231,7 @@ function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi." +
+      t("Nie udało się pokazać odpowiedzi z powodu blokady wykonania lub wymaganego procesu. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.") +
       blockedReasonText(execution),
     evidence: execution.evidence,
     ...(execution.auxiliarySources?.length
@@ -1248,39 +1259,39 @@ function verifiedSources(evidence: EvidenceItem[]): SourceClaim[] {
 function accountLoginFailureText(code: string): string {
   switch (code) {
     case "ACCOUNT_SESSION_SUBSCRIPTION_LOGIN_REQUIRED":
-      return "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API.";
+      return t("Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API.");
     case "ACCOUNT_SESSION_CLI_NOT_INSTALLED":
-      return "Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API.";
+      return t("Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API.");
     case "ACCOUNT_SESSION_LOGIN_FAILED":
-      return "Klient dostawcy nie potwierdził logowania (okno zamknięte przed końcem albo upłynął czas). Kliknij „Połącz konto” i dokończ logowanie w oknie klienta.";
+      return t("Klient dostawcy nie potwierdził logowania (okno zamknięte przed końcem albo upłynął czas). Kliknij „Połącz konto” i dokończ logowanie w oknie klienta.");
     case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
-      return "Zainstalowana wersja klienta dostawcy nie jest obsługiwana. Usuń ją albo przełącz źródło na API.";
+      return t("Zainstalowana wersja klienta dostawcy nie jest obsługiwana. Usuń ją albo przełącz źródło na API.");
     case "ACCOUNT_SESSION_AUTH_EXPIRED":
-      return "Sesja klienta dostawcy wygasła. Zaloguj się ponownie.";
+      return t("Sesja klienta dostawcy wygasła. Zaloguj się ponownie.");
     default:
-      return `Logowanie nie powiodło się (kod: ${code}).`;
+      return t("Logowanie nie powiodło się (kod: {code}).", { code: code });
   }
 }
 
 const EXPORT_REFERENCE_STATUS: Record<string, string> = {
-  UNVERIFIED_MARKED: "niezweryfikowany w źródle",
+  UNVERIFIED_MARKED: t("niezweryfikowany w źródle"),
   UNVERIFIED_NOT_MARKED: "niezweryfikowany",
   MISSING_LEDGER_RECORD: "bez weryfikacji",
-  MISSING_VERIFICATION_MARKER: "niespójny ślad weryfikacji",
-  VERIFICATION_MARKER_MISMATCH: "niespójny ślad weryfikacji"
+  MISSING_VERIFICATION_MARKER: t("niespójny ślad weryfikacji"),
+  VERIFICATION_MARKER_MISMATCH: t("niespójny ślad weryfikacji")
 };
 
 /** What to check in a generated file before using it (empty when nothing). */
 export function documentWarningsText(warnings: string[] | undefined): string {
-  return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
+  return warnings?.length ? t(" Sprawdź przed użyciem: {value}.", { value: warnings.join("; ") }) : "";
 }
 
 // Whether the firm's letterhead (header, footer, page setup of its DOCX template) is in the file.
 export function letterheadText(letterhead: GeneratedDocumentResponse["letterhead"]): string {
   if (!letterhead) return "";
   return letterhead.applied
-    ? ` Pismo wstawione do wzoru kancelarii (nagłówek: ${letterhead.headers}, stopka: ${letterhead.footers}, grafiki: ${letterhead.images}; marginesy ze wzoru).`
-    : ` Wzoru kancelarii nie wstawiono do pliku (${letterhead.reason}); plik ma układ Lex.`;
+    ? t(" Pismo wstawione do wzoru kancelarii (nagłówek: {headers}, stopka: {footers}, grafiki: {images}; marginesy ze wzoru).", { headers: letterhead.headers, footers: letterhead.footers, images: letterhead.images })
+    : t(" Wzoru kancelarii nie wstawiono do pliku ({reason}); plik ma układ Lex.", { reason: letterhead.reason });
 }
 
 type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
@@ -1295,6 +1306,7 @@ const OWN_DOCUMENT_NOUN: Record<string, string> = {
   "pisma-proste-v2": "pismo"
 };
 
+// Kept in Polish: messages the runtime and the model read as instructions (task-routing.ts).
 export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; own?: true; reason?: string }): string {
   // A long letter in parts: the next part, or the same part again with its problems.
   const part = choice.kind === "CONTINUE" ? /^(Popraw )?część (\d{1,2}) z (\d{1,2})/iu.exec(choice.reason ?? "") : null;
@@ -1316,8 +1328,8 @@ type StepSummary = NonNullable<NonNullable<PipelineNext["choices"]>[number]["ste
 export function stepSummaryText(steps: StepSummary): string {
   const skipped = steps.skipped.map((entry) => `${entry.checkpoint} (${entry.reason ?? "bez podanego powodu"})`);
   return [
-    `Kroki pisma: wykonane ${steps.done} z ${steps.total}`,
-    skipped.length ? `pominięte: ${skipped.join("; ")}` : "",
+    t("Kroki pisma: wykonane {done} z {total}", { done: steps.done, total: steps.total }),
+    skipped.length ? t("pominięte: {value}", { value: skipped.join("; ") }) : "",
     steps.open.length ? `otwarte: ${steps.open.join(", ")}` : ""
   ]
     .filter(Boolean)
@@ -1326,7 +1338,7 @@ export function stepSummaryText(steps: StepSummary): string {
 
 /** A file over open or unexplained steps is only a draft (ZAKAZ-14: DRAFT — NIEWERYFIKOWANY). */
 export function documentChoiceLabel(steps: StepSummary | undefined): string {
-  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : "Generuj dokument";
+  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : t("Generuj dokument");
 }
 
 /**
@@ -1362,12 +1374,12 @@ export function PipelineChoices({
     return (
       <div className="chat-pipeline-next" role="note">
         <button type="button" className="primary-button" disabled={disabled} onClick={() => onLongDocument(id)}>
-          Generuj dokument
+          {t("Generuj dokument")}
         </button>
         <InfoTip>
           {developer
-            ? `Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości (${longFile.reason}) po walidacji HYBRID-VAL.`
-            : "Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości po końcowej kontroli."}
+            ? t("Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości ({reason}) po walidacji HYBRID-VAL.", { reason: longFile.reason })
+            : t("Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości po końcowej kontroli.")}
         </InfoTip>
       </div>
     );
@@ -1379,12 +1391,12 @@ export function PipelineChoices({
     return (
       <div className="chat-pipeline-next" role="note">
         <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(resume))}>
-          Kontynuuj
+          {t("Kontynuuj")}
         </button>
         <InfoTip>
           {resumesPart
-            ? `Długie pismo powstaje w częściach (${resume.reason}). „Kontynuuj” prosi o tę część; aplikacja sprawdza ją z planem i poprzednimi częściami.`
-            : "Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia."}
+            ? t("Długie pismo powstaje w częściach ({reason}). „Kontynuuj” prosi o tę część; aplikacja sprawdza ją z planem i poprzednimi częściami.", { reason: resume.reason })
+            : t("Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia.")}
         </InfoTip>
       </div>
     );
@@ -1402,11 +1414,11 @@ export function PipelineChoices({
         {ownDocument?.steps ? <small className="field-help">{plainStepLabel(stepSummaryText(ownDocument.steps), developer)}</small> : null}
         {others.length ? (
           <span>
-            Dalej możliwe: {others.map((choice) => skillLabel(choice.skill, developer)).join(", ")}.
+            {t("Dalej możliwe:")} {others.map((choice) => skillLabel(choice.skill, developer)).join(", ")}.
             <InfoTip>
               {developer
-                ? "Ten wątek jest przypięty do swojego skilla. Inny skill wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim."
-                : "Ten wątek jest przypięty do swojego rodzaju pracy. Inną pracę wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim."}
+                ? t("Ten wątek jest przypięty do swojego skilla. Inny skill wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim.")
+                : t("Ten wątek jest przypięty do swojego rodzaju pracy. Inną pracę wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim.")}
             </InfoTip>
           </span>
         ) : null}
@@ -1414,18 +1426,18 @@ export function PipelineChoices({
     );
   }
   return (
-    <div className="chat-pipeline-next" role="group" aria-label="Co dalej">
+    <div className="chat-pipeline-next" role="group" aria-label={t("Co dalej")}>
       <span>
-        Co dalej? Wybierz jedną opcję; nic nie uruchomi się bez Twojej decyzji.
+        {t("Co dalej? Wybierz jedną opcję; nic nie uruchomi się bez Twojej decyzji.")}
         {choices.some((choice) => choice.kind === "DOCUMENT") ? (
           <InfoTip>
             {!developer
-              ? "„Generuj dokument” tworzy plik .docx z tego wyniku po końcowej kontroli pisma."
+              ? t("„Generuj dokument” tworzy plik .docx z tego wyniku po końcowej kontroli pisma.")
               : ownDocument
-              ? "„Generuj dokument” tworzy plik z tego wyniku po walidacji HYBRID-VAL."
+              ? t("„Generuj dokument” tworzy plik z tego wyniku po walidacji HYBRID-VAL.")
               : onDocument
-                ? "„Generuj dokument” tworzy plik .docx z pisma powyżej (format kancelaryjny, pola do uzupełnienia) po walidacji HYBRID-VAL."
-                : `„Generuj dokument” tworzy plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
+                ? t("„Generuj dokument” tworzy plik .docx z pisma powyżej (format kancelaryjny, pola do uzupełnienia) po walidacji HYBRID-VAL.")
+                : t("„Generuj dokument” tworzy plik po walidacji HYBRID-VAL ({skill}).", { skill: choices.find((choice) => choice.kind === "DOCUMENT")!.skill })}
           </InfoTip>
         ) : null}
       </span>
@@ -1442,7 +1454,7 @@ export function PipelineChoices({
             }
           >
             {choice.kind === "CONTINUE"
-              ? "Kontynuuj"
+              ? t("Kontynuuj")
               : choice.kind === "DOCUMENT"
                 ? documentChoiceLabel(choice.steps)
                 : `Dalsza analiza: ${skillLabel(choice.skill, developer)}`}
@@ -1456,54 +1468,52 @@ export function PipelineChoices({
 
 /** A workflow step whose checkpoint was not closed: which refused steps, and what to do. */
 export function checkpointHeldNotice(steps: string[]): string {
-  return `Etap nie został zamknięty: w tej turze odmówiono kroku (${steps.join("; ")}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.`;
+  return t("Etap nie został zamknięty: w tej turze odmówiono kroku ({value}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.", { value: steps.join("; ") });
 }
 
 // HYBRID-VAL (document-generation-validation.ts) before the .docx, in words.
 const HYBRID_REASON: Record<string, string> = {
-  EMPTY_DOCUMENT: "dokument jest pusty",
-  OPEN_PLACEHOLDER: "zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)",
+  EMPTY_DOCUMENT: t("dokument jest pusty"),
+  OPEN_PLACEHOLDER: t("zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)"),
   DRAFT_UNVERIFIED: "dokument ma oznaczenie DRAFT — NIEWERYFIKOWANY",
-  PRIVACY_TOKEN_REMAINS: "zostały symbole anonimizacji",
-  CONTROL_CHARACTER: "tekst zawiera znaki sterujące",
-  SOURCE_SESSION_BLOCKED_EVENT: "w rozmowie, z której powstaje dokument, był zablokowany krok",
-  SOURCE_DOCUMENT_AUDIT_MISSING: "brak śladu odczytu dokumentu źródłowego sprawy"
+  PRIVACY_TOKEN_REMAINS: t("zostały symbole anonimizacji"),
+  CONTROL_CHARACTER: t("tekst zawiera znaki sterujące"),
+  SOURCE_SESSION_BLOCKED_EVENT: t("w rozmowie, z której powstaje dokument, był zablokowany krok"),
+  SOURCE_DOCUMENT_AUDIT_MISSING: t("brak śladu odczytu dokumentu źródłowego sprawy")
 };
 
 /** A refused export in words: which provisions or judgments stopped the file. */
 export function exportBlockedMessage(error: unknown): string | null {
   // A letter the model's answer cut short: no file of a shortened letter.
   if (error instanceof ApiError && /^(?:LETTER_MARKUP_TRUNCATED|DOCUMENT_OUTPUT_TRUNCATED)$/.test(error.code)) {
-    return "Plik nie został zapisany: pismo urywa się przed końcem (odpowiedź modelu ucięta na limicie długości). Długie pismo powstanie w częściach: poproś o nie ponownie albo kliknij Kontynuuj przy ostatniej części.";
+    return t("Plik nie został zapisany: pismo urywa się przed końcem (odpowiedź modelu ucięta na limicie długości). Długie pismo powstanie w częściach: poproś o nie ponownie albo kliknij Kontynuuj przy ostatniej części.");
   }
   if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
     const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
-    return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
+    return t("Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że {value}. Popraw treść w rozmowie i wygeneruj dokument ponownie.", { value: reasons
       .map((reason) => HYBRID_REASON[reason] ?? reason)
-      .join("; ")}. Popraw treść w rozmowie i wygeneruj dokument ponownie.`;
+      .join("; ") });
   }
   if (error instanceof ApiError && /^TOKENIZED_DOCUMENT_VALIDATION_FAILED/.test(error.code)) {
     const reason = error.code.split(":").slice(1).join(":");
-    return `Plik nie został zapisany: ${
-      reason === "EMPTY_DOCUMENT"
-        ? "z odpowiedzi nie powstała treść pisma (sama odpowiedź nie zawiera pisma: najpierw poproś o jego treść)"
+    return t("Plik nie został zapisany: {value}. Spróbuj ponownie; jeśli się powtórzy, zgłoś kod: {code}.", { value: reason === "EMPTY_DOCUMENT"
+        ? t("z odpowiedzi nie powstała treść pisma (sama odpowiedź nie zawiera pisma: najpierw poproś o jego treść)")
         : reason === "RENDERED_TEXT_MISMATCH"
-          ? "tekst zapisanego pliku różni się od przygotowanej treści (kontrola zgodności pliku)"
+          ? t("tekst zapisanego pliku różni się od przygotowanej treści (kontrola zgodności pliku)")
           : reason.startsWith("ALIAS_MISSING")
-            ? "w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)"
-            : "kontrola zgodności pliku nie przeszła"
-    }. Spróbuj ponownie; jeśli się powtórzy, zgłoś kod: ${error.code}.`;
+            ? t("w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)")
+            : t("kontrola zgodności pliku nie przeszła"), code: error.code });
   }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
   const listed = references
     .slice(0, 12)
-    .map((reference) => `${reference.claim} (${EXPORT_REFERENCE_STATUS[reference.status] ?? "orzeczenie: cytat lub teza niepotwierdzone"})`);
-  const more = references.length > listed.length ? ` i ${references.length - listed.length} innych` : "";
+    .map((reference) => t("{claim} ({value})", { claim: reference.claim, value: EXPORT_REFERENCE_STATUS[reference.status] ?? t("orzeczenie: cytat lub teza niepotwierdzone") }));
+  const more = references.length > listed.length ? t(" i {count} innych", { count: references.length - listed.length }) : "";
   return listed.length
-    ? `Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: ${listed.join("; ")}${more}.` +
-        (error.draftAvailable ? " Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku." : " Popraw lub usuń te powołania i spróbuj ponownie.")
-    : `Pismo nie zostało zapisane: bramka eksportu (${error.code}).`;
+    ? t("Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: {value}{more}.", { value: listed.join("; "), more: more }) +
+        (error.draftAvailable ? t(" Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku.") : t(" Popraw lub usuń te powołania i spróbuj ponownie."))
+    : t("Pismo nie zostało zapisane: bramka eksportu ({code}).", { code: error.code });
 }
 
 export default function MatterChatApp({
@@ -1736,7 +1746,7 @@ export default function MatterChatApp({
     noModelRedirected.current = true;
     setActiveTab("settings");
     setSettingsSection("models");
-    setProviderAccountMessage("Nie ma jeszcze połączonego modelu. Wybierz dostawcę i połącz konto, wklej klucz API albo zainstaluj model lokalny, a potem wróć do rozmowy.");
+    setProviderAccountMessage(t("Nie ma jeszcze połączonego modelu. Wybierz dostawcę i połącz konto, wklej klucz API albo zainstaluj model lokalny, a potem wróć do rozmowy."));
   }, [serverMode, providerConfiguration, providerAccounts, localModelInstalled]);
 
   const [localStartBusy, setLocalStartBusy] =
@@ -1785,6 +1795,8 @@ export default function MatterChatApp({
   >(null);
 
   const [routes, setRoutes] = useState<string[]>([]);
+  // The legal system chosen in Settings: its national package (if any) is the third core skill.
+  const [jurisdiction, setJurisdictionView] = useState<JurisdictionSettings | null>(null);
   const [skills, setSkills] = useState<PublicSkillDescriptor[]>(
     FALLBACK_EXECUTION_SKILLS
   );
@@ -1860,7 +1872,7 @@ export default function MatterChatApp({
     useState<ExecutionDiagnostic | null>(null);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepsSnapshot | null>(null);
   const [executionStage, setExecutionStage] =
-    useState("Przygotowanie sesji");
+    useState(t("Przygotowanie sesji"));
   const [draftText, setDraftText] =
     useState("");
   const [executionElapsedSeconds, setExecutionElapsedSeconds] =
@@ -2026,9 +2038,9 @@ export default function MatterChatApp({
     const taken = fresh.slice(0, Math.max(0, documentLimit - selectedFileCount));
     setPickerNotice(
       taken.length < fresh.length
-        ? `Limit ${documentLimit} plików w jednej wiadomości` +
-            (localModelSelected ? " dla modelu lokalnego" : "") +
-            `: dodano ${taken.length} z ${fresh.length}. Odznacz inne pliki albo wyślij pozostałe w kolejnej wiadomości.`
+        ? t("Limit {documentLimit} plików w jednej wiadomości", { documentLimit: documentLimit }) +
+            (localModelSelected ? t(" dla modelu lokalnego") : "") +
+            t(": dodano {count} z {count2}. Odznacz inne pliki albo wyślij pozostałe w kolejnej wiadomości.", { count: taken.length, count2: fresh.length })
         : ""
     );
     const documents = taken.flatMap((pick) => (pick.kind === "document" ? [pick] : []));
@@ -2198,9 +2210,10 @@ export default function MatterChatApp({
           !MANDATORY_SKILLS.includes(
             item.name as (typeof MANDATORY_SKILLS)[number]
           ) &&
-          item.name !== "prawo-polskie-v2"
+          item.name !== "prawo-polskie-v2" &&
+          item.name !== jurisdiction?.active
       ),
-    [executionSkills]
+    [executionSkills, jurisdiction]
   );
   const manualSkillSelection = useMemo(
     () =>
@@ -2362,6 +2375,15 @@ export default function MatterChatApp({
   // Another legal system chosen in Settings: the national package and its domain skills change at
   // once — the catalog and routes are read again (replaced, not merged: the previous jurisdiction's
   // skills leave the list) and a manual selection keeps only skills the new catalog offers.
+  useEffect(() => {
+    const readJurisdiction = (): void => {
+      void getJurisdiction().then(setJurisdictionView).catch(() => undefined);
+    };
+    readJurisdiction();
+    window.addEventListener("lex:jurisdiction-changed", readJurisdiction);
+    return () => window.removeEventListener("lex:jurisdiction-changed", readJurisdiction);
+  }, []);
+
   useEffect(() => {
     const reload = (): void => {
       void Promise.all([getSkills(), getRoutes()])
@@ -2579,7 +2601,7 @@ export default function MatterChatApp({
           const next = sourceModels.find((item) => item.selectable);
           if (current && next) {
             queueMicrotask(() =>
-              setModelNotice(`Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: ${next.displayName}.`)
+              setModelNotice(t("Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: {displayName}.", { displayName: next.displayName }))
             );
           }
           return next?.id ?? "";
@@ -2896,7 +2918,7 @@ export default function MatterChatApp({
         await resetCaseWorkflow(current.caseId, { kind: "process-pleading" });
         setProcessWorkflowRefresh((value) => value + 1);
       } catch (error) {
-        setExecutionError("Nie udało się zamknąć pipeline'u pisma procesowego: " + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
+        setExecutionError(t("Nie udało się zamknąć procesu pisma procesowego: ") + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
         return;
       }
     }
@@ -2981,7 +3003,7 @@ export default function MatterChatApp({
       setActiveTab("chat");
     } catch {
       setExecutionError(
-        "Nie udało się utworzyć aktywnej sprawy dla dodawanych plików."
+        t("Nie udało się utworzyć aktywnej sprawy dla dodawanych plików.")
       );
     }
   }
@@ -2999,7 +3021,7 @@ export default function MatterChatApp({
     if (
       clear.length > 0 &&
       !window.confirm(
-        `${clear.map((item) => `„${item.file.name}”`).join(", ")}: bez anonimizacji - wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
+        t("{value}: bez anonimizacji - wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?", { value: clear.map((item) => `„${item.file.name}”`).join(", ") })
       )
     ) {
       return;
@@ -3023,7 +3045,7 @@ export default function MatterChatApp({
     if (items.some((item) => processingModeOptions(item.mode)?.ocrFix)) {
       const vision = await getVisionOcrStatus().catch(() => null);
       if (!vision?.installed || !vision.engineInstalled) {
-        setExecutionError("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”.");
+        setExecutionError(t("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”."));
         return;
       }
     }
@@ -3118,13 +3140,13 @@ export default function MatterChatApp({
     for (const reference of references) {
       if (reference.kind === "BLOB_WITHOUT_SIGNATURE") {
         notes.push(
-          "Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. " +
-            "Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; " +
-            "możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu."
+          t("Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. ") +
+            t("Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; ") +
+            t("możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu.")
         );
         continue;
       }
-      setPickerNotice(`Pobieram orzeczenie ${reference.kind === "SIGNATURE" ? reference.signature : "z karty"} i dodaję do akt sprawy…`);
+      setPickerNotice(t("Pobieram orzeczenie {value} i dodaję do akt sprawy…", { value: reference.kind === "SIGNATURE" ? reference.signature : t("z karty") }));
       try {
         const copy = await resolveCaseLaw({
           ...(reference.kind === "CARD" ? { cardUrl: reference.cardUrl } : { signature: reference.signature, cardUrl: reference.link }),
@@ -3132,10 +3154,10 @@ export default function MatterChatApp({
         });
         const attachment = await saveCaseLawToCase(caseLawDocument(copy));
         attached.push(attachment);
-        notes.push(`Dodano do akt: ${[copy.court, copy.signature].filter(Boolean).join(" ")} (karta: ${copy.cardUrl}).`);
+        notes.push(t("Dodano do akt: {value} (karta: {cardUrl}).", { value: [copy.court, copy.signature].filter(Boolean).join(" "), cardUrl: copy.cardUrl }));
       } catch (error) {
         const code = error instanceof Error ? error.message : String(error);
-        notes.push(`Nie udało się pobrać orzeczenia (${code}). Model sprawdzi je narzędziem weryfikacji.`);
+        notes.push(t("Nie udało się pobrać orzeczenia ({code}). Model sprawdzi je narzędziem weryfikacji.", { code: code }));
       }
     }
     if (attached.length) pickFiles(attached.map((item) => ({ kind: "document" as const, documentId: item.documentId, chunkIndices: item.chunkIndices })), true, caseId);
@@ -3180,7 +3202,7 @@ export default function MatterChatApp({
   async function sendStagedImagesToModel(ids: string[]): Promise<void> {
     const items = documentStaging.items.filter((entry) => ids.includes(entry.id) && directImageType(entry.file));
     if (directImages.length + items.length > MAX_DIRECT_IMAGES || items.some((item) => item.file.size > MAX_DIRECT_IMAGE_BYTES)) {
-      setExecutionError(`Do jednej wiadomości można dołączyć najwyżej ${MAX_DIRECT_IMAGES} obrazy, każdy do 5 MB.`);
+      setExecutionError(t("Do jednej wiadomości można dołączyć najwyżej {value} obrazy, każdy do 5 MB.", { value: MAX_DIRECT_IMAGES }));
       return;
     }
     for (const item of items) {
@@ -3189,7 +3211,7 @@ export default function MatterChatApp({
         setDirectImages((current) => [...current, image]);
         removeStagedDocuments([item.id]);
       } catch {
-        setExecutionError(`Nie udało się odczytać pliku ${item.file.name}.`);
+        setExecutionError(t("Nie udało się odczytać pliku {name}.", { name: item.file.name }));
       }
     }
   }
@@ -3320,10 +3342,10 @@ export default function MatterChatApp({
     setProviderAccountBusy(true);
     try {
       await logoutProviderAccount(runtimeProvider);
-      setProviderAccountMessage("Wylogowano konto w kliencie dostawcy.");
+      setProviderAccountMessage(t("Wylogowano konto w kliencie dostawcy."));
     } catch {
       setProviderAccountMessage(
-        "Nie udało się wylogować: sesja nadal jest aktywna (np. token ze środowiska albo klient bez polecenia wylogowania). Wyloguj w oficjalnym kliencie dostawcy."
+        t("Nie udało się wylogować: sesja nadal jest aktywna (np. token ze środowiska albo klient bez polecenia wylogowania). Wyloguj w oficjalnym kliencie dostawcy.")
       );
     } finally {
       await refreshProviderAccountStatus().catch(() => undefined);
@@ -3336,7 +3358,7 @@ export default function MatterChatApp({
     const label = providerDefinition?.accountClientLabel ?? "klienta";
     if (
       !window.confirm(
-        `Odinstalować ${label} pobranego przez Lex Machina? Logowanie u dostawcy pozostaje; aby je usunąć, najpierw kliknij „Wyloguj”.`
+        t("Odinstalować {label} pobranego przez Lex Machina? Logowanie u dostawcy pozostaje; aby je usunąć, najpierw kliknij „Wyloguj”.", { label: label })
       )
     ) {
       return;
@@ -3346,14 +3368,14 @@ export default function MatterChatApp({
       const result = await uninstallProviderAccountClient(runtimeProvider);
       setProviderAccountMessage(
         result.status.installed
-          ? `Usunięto klienta Lex Machina, ale nadal działa inny klient (${result.status.command}) spoza katalogu Lex Machina — odinstaluj go w systemie.`
-          : "Klient odinstalowany. „Połącz konto” pobierze go ponownie."
+          ? t("Usunięto klienta Lex Machina, ale nadal działa inny klient ({command}) spoza katalogu Lex Machina — odinstaluj go w systemie.", { command: result.status.command })
+          : t("Klient odinstalowany. „Połącz konto” pobierze go ponownie.")
       );
     } catch (error) {
       setProviderAccountMessage(
         error instanceof Error && error.message.includes("ACCOUNT_CLIENT_UNINSTALL_BUSY")
-          ? "Trwa pobieranie klienta — odinstaluj po jego zakończeniu."
-          : "Nie udało się odinstalować klienta (plik może być używany). Zamknij okna klienta i spróbuj ponownie."
+          ? t("Trwa pobieranie klienta — odinstaluj po jego zakończeniu.")
+          : t("Nie udało się odinstalować klienta (plik może być używany). Zamknij okna klienta i spróbuj ponownie.")
       );
     } finally {
       await refreshProviderAccountStatus().catch(() => undefined);
@@ -3368,7 +3390,7 @@ export default function MatterChatApp({
     setProviderApiKeyInput("");
     setProviderKeyMessage("");
     setProviderAccountMessage(
-      "Przełączono na kanał API. Wklej klucz dostawcy; w aplikacji desktopowej możesz zapisać go w systemowym magazynie poświadczeń."
+      t("Przełączono na kanał API. Wklej klucz dostawcy; w aplikacji desktopowej możesz zapisać go w systemowym magazynie poświadczeń.")
     );
     setActiveTab("settings");
     setSettingsSection("models");
@@ -3435,7 +3457,7 @@ export default function MatterChatApp({
       setAccountConnectPhase({ kind: "login" });
       setProviderAccountMessage(
         isDesktopShell()
-          ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
+          ? t("Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…")
           : "Otwieram oficjalne logowanie dostawcy…"
       );
       const status =
@@ -3456,8 +3478,8 @@ export default function MatterChatApp({
       );
       setProviderAccountMessage(
         status.authenticated
-          ? "Konto połączone. Każda wiadomość idzie w nowej sesji klienta; historię sprawy dołącza Lex Machina."
-          : "Logowanie zakończone, ale klient nie potwierdził aktywnej sesji."
+          ? t("Konto połączone. Każda wiadomość idzie w nowej sesji klienta; historię sprawy dołącza Lex Machina.")
+          : t("Logowanie zakończone, ale klient nie potwierdził aktywnej sesji.")
       );
       return status.authenticated;
     } catch (error) {
@@ -3473,7 +3495,7 @@ export default function MatterChatApp({
       const refreshed = await refreshProviderAccountStatus().catch(() => null);
       setProviderAccountMessage(
         refreshed?.[runtimeProvider]?.authenticated
-          ? "Konto połączone (logowanie dokończone w oknie klienta dostawcy)."
+          ? t("Konto połączone (logowanie dokończone w oknie klienta dostawcy).")
           : accountLoginFailureText(code)
       );
       return false;
@@ -3505,8 +3527,8 @@ export default function MatterChatApp({
       await refreshProviderAccountStatus();
       setClaudeOAuthMessage(
         isDesktopShell()
-          ? "Token OAuth Claude zapisano w systemowym magazynie poświadczeń."
-          : "Token OAuth Claude jest aktywny w pamięci procesu."
+          ? t("Token OAuth Claude zapisano w systemowym magazynie poświadczeń.")
+          : t("Token OAuth Claude jest aktywny w pamięci procesu.")
       );
     } catch (error) {
       setClaudeOAuthMessage(
@@ -3532,7 +3554,7 @@ export default function MatterChatApp({
       await clearClaudeOAuthToken();
       await refreshProviderAccountStatus();
       setClaudeOAuthMessage(
-        "Token OAuth Claude został usunięty."
+        t("Token OAuth Claude został usunięty.")
       );
     } catch (error) {
       setClaudeOAuthMessage(
@@ -3566,8 +3588,8 @@ export default function MatterChatApp({
       await refreshProviderStatus();
       setProviderKeyMessage(
         isDesktopShell()
-          ? "Klucz zapisano w systemowym magazynie poświadczeń."
-          : "Klucz jest aktywny w pamięci procesu."
+          ? t("Klucz zapisano w systemowym magazynie poświadczeń.")
+          : t("Klucz jest aktywny w pamięci procesu.")
       );
     } catch (error) {
       setProviderKeyMessage(error instanceof Error ? error.message : String(error));
@@ -3588,7 +3610,7 @@ export default function MatterChatApp({
     try {
       await clearProviderApiKey(provider);
       await refreshProviderStatus();
-      setProviderKeyMessage("Klucz został usunięty.");
+      setProviderKeyMessage(t("Klucz został usunięty."));
     } catch (error) {
       setProviderKeyMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3631,13 +3653,13 @@ export default function MatterChatApp({
       ) {
         return (
           "Lokalny model wymaga naprawy profilu. " +
-          "Poproś administratora aplikacji o uruchomienie naprawy lokalnej AI. " +
+          t("Poproś administratora aplikacji o uruchomienie naprawy lokalnej AI. ") +
           `Kod: ${codeOf(initialError)}`
         );
       }
 
       setModelError(
-        "Przygotowuję i weryfikuję lokalny model…"
+        t("Przygotowuję i weryfikuję lokalny model…")
       );
 
       try {
@@ -3743,7 +3765,7 @@ export default function MatterChatApp({
           );
         setModelError(code);
         return (
-          "Nie udało się uruchomić lokalnego modelu nawet po automatycznej naprawie profilu. " +
+          t("Nie udało się uruchomić lokalnego modelu nawet po automatycznej naprawie profilu. ") +
           `Kod: ${code}`
         );
       }
@@ -3783,8 +3805,8 @@ export default function MatterChatApp({
             "READY" &&
           snapshot.runtime
             .activeModelId === model
-          ? "Lokalny model działa."
-          : "Runtime odpowiedział, ale model nie osiągnął stanu READY."
+          ? t("Lokalny model działa.")
+          : t("Usługa aplikacji odpowiedziała, ale model nie osiągnął stanu READY.")
       );
     } catch (error) {
       setLocalStartMessage(
@@ -3837,7 +3859,7 @@ export default function MatterChatApp({
       setContractRetry({ text: pending.text, messageId: pending.messageId });
     } catch (error) {
       setExecutionError(
-        "Nie udało się ustawić trybu analizy umowy: " +
+        t("Nie udało się ustawić trybu analizy umowy: ") +
           (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
       );
     } finally {
@@ -3878,7 +3900,7 @@ export default function MatterChatApp({
       setContractRetry({ text: pending.text, messageId: pending.messageId, ...(pending.switchTo ? { switchTo: pending.switchTo } : {}) });
     } catch (error) {
       setExecutionError(
-        "Nie udało się przygotować etapu sprawy: " +
+        t("Nie udało się przygotować etapu sprawy: ") +
           (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
       );
     } finally {
@@ -3956,8 +3978,8 @@ export default function MatterChatApp({
     const stage = plan.stage;
     setExecutionStage(
       stage === "FINAL"
-        ? "Tworzenie gotowego dokumentu"
-        : "Tworzenie szkicu dokumentu"
+        ? t("Tworzenie gotowego dokumentu")
+        : t("Tworzenie szkicu dokumentu")
     );
     try {
       const generated =
@@ -3968,6 +3990,7 @@ export default function MatterChatApp({
               buildSkillSelectionEnvelope(
                 conversationForProvider(
                   context,
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   letterWorkflow === "contract"
                     ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
                     : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
@@ -4017,8 +4040,8 @@ export default function MatterChatApp({
             role: "assistant",
             content:
               (stage === "FINAL"
-                ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
-                : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
+                ? t("Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze.")
+                : t("Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.")) +
               documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
             meta: "dokument: " + generated.artifact.filename,
             generatedDocument: {
@@ -4049,13 +4072,13 @@ export default function MatterChatApp({
             role: "system",
             content:
               exportBlockedMessage(documentError) ??
-              "Nie udało się utworzyć pliku pisma: " +
+              t("Nie udało się utworzyć pliku pisma: ") +
               (documentError instanceof ApiError
                 ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
                 : documentError instanceof Error
                   ? documentError.message
                   : String(documentError)) +
-              ". Możesz poprosić: „wygeneruj to w pliku docx”."
+              t(". Możesz poprosić: „wygeneruj to w pliku docx”.")
           }
         ]);
       }
@@ -4146,7 +4169,7 @@ export default function MatterChatApp({
       !deterministicAction
     ) {
       setExecutionError(
-        "Tryb mechaniczny: wybierz skill wykonawczy albo przełącz na tryb automatyczny."
+        t("Tryb mechaniczny: wybierz skill wykonawczy albo przełącz na tryb automatyczny.")
       );
       return;
     }
@@ -4162,7 +4185,7 @@ export default function MatterChatApp({
           );
     if (!route) {
       setExecutionError(
-        "Nie udało się wybrać dziedziny głównej dla tej wiadomości."
+        t("Nie udało się wybrać dziedziny głównej dla tej wiadomości.")
       );
       return;
     }
@@ -4184,7 +4207,7 @@ export default function MatterChatApp({
                   )
               }
             : options.switchTo
-              ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
+              ? { meta: t("{action} | Przełączono na: {label}", { action: deterministicActionMeta(options.switchTo.action), label: options.switchTo.label }) }
               : {})
       };
     // A message the user sends starts a new chain of automatic steps.
@@ -4203,7 +4226,7 @@ export default function MatterChatApp({
     setExecuting(true);
     setExecutingCaseId(executionCaseId);
     setExecutionStage(
-      "Przygotowanie sesji"
+      t("Przygotowanie sesji")
     );
     setExecutionError("");
     setExecutionDiagnostic(null);
@@ -4240,7 +4263,7 @@ export default function MatterChatApp({
         !readyAccount
       ) {
         setExecutionStage(
-          "Łączenie konta modelu"
+          t("Łączenie konta modelu")
         );
         const connected =
           await connectProviderAccount();
@@ -4271,8 +4294,8 @@ export default function MatterChatApp({
 
       setExecutionStage(
         provider === "local"
-          ? "Przygotowanie modelu lokalnego"
-          : "Sprawdzanie gotowości modelu"
+          ? t("Przygotowanie modelu lokalnego")
+          : t("Sprawdzanie gotowości modelu")
       );
       const localPreparationError =
         await prepareLocalPrimaryModel();
@@ -4291,7 +4314,7 @@ export default function MatterChatApp({
         caseId
       ) {
         setExecutionStage(
-          "Tworzenie dokumentu i weryfikacja źródeł"
+          t("Tworzenie dokumentu i weryfikacja źródeł")
         );
         // A pleading not yet written by the case's pipeline goes to that pipeline
         // (the chat below) instead of a file without HYBRID-VAL.
@@ -4423,18 +4446,18 @@ export default function MatterChatApp({
                     (savedFinal
                       ? "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " z danymi osobowymi zapisano: " +
+                        t(" z danymi osobowymi zapisano: ") +
                         savedFinal +
                         "." +
-                        (toCheck ? ` Formy do sprawdzenia: ${toCheck} - użyj podglądu w karcie.` : "") +
-                        " Karta poniżej: wersja z symbolami (podgląd, edycja, ponowne przywrócenie danych)."
+                        (toCheck ? t(" Formy do sprawdzenia: {toCheck} - użyj podglądu w karcie.", { toCheck: toCheck }) : "") +
+                        t(" Karta poniżej: wersja z symbolami (podgląd, edycja, ponowne przywrócenie danych).")
                       : downloadedFinal
                       ? "Gotowy dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
+                        t(" jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze.")
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy.") +
+                        t(" jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy.")) +
                     documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
                   meta:
                     "dokument: " +
@@ -4457,8 +4480,8 @@ export default function MatterChatApp({
 
       setExecutionStage(
         selectedFileCount > 0
-          ? `Wysyłanie ${selectedFileCount} ${selectedFileCount === 1 ? "pliku" : "plików"} do modelu · analiza prawna i weryfikacja źródeł`
-          : developerMode ? "Analiza prawna, routing i weryfikacja źródeł" : "Analiza prawna i weryfikacja źródeł"
+          ? t("Wysyłanie {selectedFileCount} {value} do modelu · analiza prawna i weryfikacja źródeł", { selectedFileCount: selectedFileCount, value: selectedFileCount === 1 ? "pliku" : "plików" })
+          : developerMode ? t("Analiza prawna, routing i weryfikacja źródeł") : t("Analiza prawna i weryfikacja źródeł")
       );
       setLastDelivery(null);
       const executionId =
@@ -4521,7 +4544,7 @@ export default function MatterChatApp({
       setMemoryRefresh((value) => value + 1);
 
       setExecutionStage(
-        "Finalizacja odpowiedzi"
+        t("Finalizacja odpowiedzi")
       );
       if (result.context?.documents?.length) {
         setLastDelivery({
@@ -4581,7 +4604,8 @@ export default function MatterChatApp({
       if (pleadingPipelineNeeded(result) && canWriteCase(selectedCase)) {
         setWorkflowRecoveryRequest({
           caseId: executionCaseId,
-          text: "Rozpocznij pipeline pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą.",
+          // Kept in Polish: a message the runtime and the model read as an instruction.
+          text: "Rozpocznij proces przygotowania pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą.",
           messageId: `pipeline-${userMessage.id}`,
           recovery: { kind: "process-start", acceptOnly: false }
         });
@@ -4621,7 +4645,7 @@ export default function MatterChatApp({
       if (contractModeSet) {
         setMessages((current) => current.filter((message) => message.id !== userMessage.id));
         setContractRetry({ text: trimmed, messageId: userMessage.id });
-        setGeneratedDocumentMessage("Ustawiono tryb „Analiza umowy” dla tej sprawy; wiadomość wysłana ponownie.");
+        setGeneratedDocumentMessage(t("Ustawiono tryb „Analiza umowy” dla tej sprawy; wiadomość wysłana ponownie."));
         return;
       }
       if (code === "CONTRACT_STATE_REQUIRED") {
@@ -4660,24 +4684,29 @@ export default function MatterChatApp({
         exportBlockedMessage(error) ??
         (code ===
           "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
-          ? "Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API."
+          ? t("Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API.")
         : code ===
             "ACCOUNT_SESSION_LOGIN_NOT_CONFIRMED"
-          ? "Nie udało się potwierdzić logowania do wybranego konta. Zakończ oficjalne logowanie w widocznym terminalu lub przeglądarce i spróbuj ponownie."
+          ? t("Nie udało się potwierdzić logowania do wybranego konta. Zakończ oficjalne logowanie w widocznym terminalu lub przeglądarce i spróbuj ponownie.")
         : code ===
             "ACCOUNT_SESSION_LOGIN_ADMIN_REQUIRED"
-          ? "Wybrane konto dostawcy nie jest zalogowane. Połączenie konta wymaga administratora aplikacji."
+          ? t("Wybrane konto dostawcy nie jest zalogowane. Połączenie konta wymaga administratora aplikacji.")
         : code ===
             "PRIMARY_MODEL_NOT_READY"
-          ? "Wybrany model nie jest jeszcze gotowy do użycia."
+          ? t("Wybrany model nie jest jeszcze gotowy do użycia.")
         : code === "PROVIDER_NOT_CONFIGURED"
-          ? "Brak lokalnego klucza API dla wybranego dostawcy."
+          ? t("Brak lokalnego klucza API dla wybranego dostawcy.")
           : code === "CHAT_PRIVACY_GATE_FAILED"
-            ? "Lokalna pseudonimizacja nie mogła się wykonać, więc zapytanie zostało zatrzymane przed wysłaniem do modelu. Sprawdź lokalny runtime prywatności w panelu Utrzymanie."
+            ? t("Lokalna pseudonimizacja nie mogła się wykonać, więc zapytanie zostało zatrzymane przed wysłaniem do modelu. Sprawdź lokalną usługę prywatności w panelu Utrzymanie.")
           : code === "LOCAL_MODEL_EXECUTION_FAILED"
             ? localModelFailureMessage(
                 reason
-              )
+              ) +
+              (reason === "LOCAL_MODEL_INFERENCE_FAILED" &&
+              error instanceof ApiError &&
+              error.description
+                ? t(" Szczegóły: {value}", { value: error.description.slice(0, 300) })
+                : "")
           : code === "PROVIDER_EXECUTION_FAILED"
             ? provider === "local"
               ? localModelFailureMessage(
@@ -4692,51 +4721,54 @@ export default function MatterChatApp({
                 )
           : code ===
               "AUTO_ROUTING_FAILED"
-            ? `Model nie zwrócił poprawnego wyboru domeny i skilli w trybie AUTO${reason ? ` (kod: ${reason})` : ""}. Lex Machina nie zgaduje routingu zastępczego.`
+            ? t("Model nie zwrócił poprawnego wyboru dziedziny i skilli w trybie automatycznym{reason}. Lex Machina nie zgaduje doboru zastępczego.", { reason: reason ? ` (kod: ${reason})` : "" })
           : code ===
               "LEGAL_WORKFLOW_EXECUTION_FAILED"
-            ? `Deterministyczny workflow prawny zatrzymał wykonanie${
-                reason
-                  ? ` na etapie: ${reason}`
-                  : ""
-              }.`
+            ? reason === "QUICK_LEGAL_UNSOURCED_PROVISION"
+              ? t("Odpowiedź modelu powołuje przepisy, których brzmienia nie pobrano w tej rozmowie z ELI, a runda poprawcza tego nie naprawiła. Aplikacja nie pokazuje prawa podanego z pamięci. Zadaj pytanie ponownie albo wybierz model w chmurze. Kod: QUICK_LEGAL_UNSOURCED_PROVISION")
+              : reason === "CRIMINAL_QUALIFIER"
+                ? t("Odpowiedź w sprawie karnej wymaga zastosowania kwalifikatora karnomaterialnego, a model go nie zastosował. Zadaj pytanie ponownie. Kod: CRIMINAL_QUALIFIER")
+            : reason
+              ? t("Proces prawny zatrzymał wykonanie na etapie: {reason}.", { reason })
+              : t("Proces prawny zatrzymał wykonanie.")
             : code === "DOCUMENT_NOT_REVIEWED"
-              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
+              ? t("Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu.")
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
-              ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
+              ? t("Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu.")
               : code === "CONTRACT_STATE_REQUIRED"
-                ? "Analiza umowy wymaga jednorazowego wyboru trybu dla tej sprawy. Wybierz go poniżej — wiadomość zostanie wysłana ponownie."
+                ? t("Analiza umowy wymaga jednorazowego wyboru trybu dla tej sprawy. Wybierz go poniżej — wiadomość zostanie wysłana ponownie.")
               : code === "CONTRACT_CASE_REQUIRED"
-                ? "Analiza umowy musi być powiązana z jedną aktywną sprawą (dołącz plik ze sprawy)."
+                ? t("Analiza umowy musi być powiązana z jedną aktywną sprawą (dołącz plik ze sprawy).")
               : code === "CONTRACT_ALREADY_COMPLETE"
-                ? "Analiza umowy w tej sprawie została już zakończona. Możesz rozpocząć nowy etap poniżej — wiadomość zostanie wysłana ponownie."
+                ? t("Analiza umowy w tej sprawie została już zakończona. Możesz rozpocząć nowy etap poniżej — wiadomość zostanie wysłana ponownie.")
               : code === "PROCESS_PLEADING_STATE_REQUIRED"
-                ? "Pismo procesowe prowadzi pipeline sprawy (etapy, HYBRID-VAL przed plikiem .docx). Uruchom go poniżej — wiadomość zostanie wysłana ponownie."
+                ? t("Pismo procesowe powstaje w procesie etapowym sprawy (etapy, HYBRID-VAL przed plikiem .docx). Uruchom go poniżej — wiadomość zostanie wysłana ponownie.")
                 : startDeclined
-                  ? "Pisma nie rozpoczynam — tak brzmi Twoja odpowiedź. Napisz, jakie masz wątpliwości albo czego brakuje; start zaakceptujesz odpowiedzią „a” albo „tak”."
+                  ? t("Pisma nie rozpoczynam — tak brzmi Twoja odpowiedź. Napisz, jakie masz wątpliwości albo czego brakuje; start zaakceptujesz odpowiedzią „a” albo „tak”.")
                 : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
-                  ? "Pipeline pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie."
+                  ? t("Proces przygotowania pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie.")
                   : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"
-                    ? "Pismo czeka na potwierdzenie bieżącego etapu: napisz „tak” albo co poprawić, albo użyj przycisku w panelu pisma. Plik powstaje po zamknięciu wszystkich etapów."
+                    ? t("Pismo czeka na potwierdzenie bieżącego etapu: napisz „tak” albo co poprawić, albo użyj przycisku w panelu pisma. Plik powstaje po zamknięciu wszystkich etapów.")
                     : code === "PROCESS_PLEADING_CASE_REQUIRED"
-                      ? "Pismo procesowe musi być powiązane z aktywną sprawą."
+                      ? t("Pismo procesowe musi być powiązane z aktywną sprawą.")
                       : code === "PROCESS_PLEADING_ALREADY_FINAL"
-                        ? "Pismo procesowe tej sprawy ma już status FINAL. Możesz rozpocząć nowe pismo poniżej — wiadomość zostanie wysłana ponownie."
+                        ? t("Pismo procesowe tej sprawy ma już wersję końcową (FINAL). Możesz rozpocząć nowe pismo poniżej — wiadomość zostanie wysłana ponownie.")
                         : code.startsWith("PROCESS_PLEADING_")
-                          ? `Pipeline pisma procesowego zablokował wykonanie: ${code}`
+                          ? t("Proces przygotowania pisma procesowego zatrzymał wykonanie: {code}", { code })
                           : code === "COURT_ANALYSIS_CASE_REQUIRED"
-                            ? "Analiza sądowa musi być powiązana z aktywną sprawą."
+                            ? t("Analiza sądowa musi być powiązana z aktywną sprawą.")
                             : code === "COURT_ANALYSIS_ALREADY_COMPLETE"
-                              ? "Analiza sądowa tej sprawy została już zakończona. Możesz rozpocząć nową poniżej — wiadomość zostanie wysłana ponownie."
+                              ? t("Analiza sądowa tej sprawy została już zakończona. Możesz rozpocząć nową poniżej — wiadomość zostanie wysłana ponownie.")
                               : code.startsWith("COURT_ANALYSIS_")
-                                ? `Pipeline analizy sądowej zablokował wykonanie: ${code}`
+                                ? t("Proces analizy sądowej zatrzymał wykonanie: {code}", { code })
                               : code === "ORDERED_WORKFLOW_ALREADY_COMPLETE"
-                                ? "Ten etap pracy ze sprawą (analiza dowodów lub przesłuchanie) jest już zakończony. Możesz rozpocząć nowy poniżej — wiadomość zostanie wysłana ponownie."
+                                ? t("Ten etap pracy ze sprawą (analiza dowodów lub przesłuchanie) jest już zakończony. Możesz rozpocząć nowy poniżej — wiadomość zostanie wysłana ponownie.")
                               : code === "ORDERED_WORKFLOW_CASE_REQUIRED"
-                                ? "Analiza dowodów musi być powiązana z jedną aktywną sprawą (dołącz pliki ze sprawy)."
+                                ? t("Analiza dowodów musi być powiązana z jedną aktywną sprawą (dołącz pliki ze sprawy).")
                               : code.startsWith("ORDERED_WORKFLOW_")
-                                ? `Pipeline sprawy zablokował wykonanie: ${code}`
+                                ? t("Proces sprawy zatrzymał wykonanie: {code}", { code })
                                 : code.startsWith(
+                                    // Kept in Polish: the runtime's error text.
                                     "Nie udało się uruchomić lokalnego modelu"
                                   ) ||
                                   code.startsWith(
@@ -4837,8 +4869,8 @@ export default function MatterChatApp({
     } catch (error) {
       setExecutionError(
         error instanceof Error
-          ? "Nie udało się przygotować podglądu przywróconych danych: " + error.message
-          : "Nie udało się przygotować podglądu przywróconych danych."
+          ? t("Nie udało się przygotować podglądu przywróconych danych: ") + error.message
+          : t("Nie udało się przygotować podglądu przywróconych danych.")
       );
     } finally {
       setFinalDocumentBusy(false);
@@ -4870,20 +4902,20 @@ export default function MatterChatApp({
       setFinalReview(null);
       setGeneratedDocumentMessage(
         (savedPath
-          ? `Finalny dokument z przywróconymi danymi został zapisany: ${savedPath}.`
-          : "Finalny dokument z przywróconymi danymi został utworzony i pobrany.") +
-          (corrected > 0 ? ` Ręczne poprawki: ${corrected}.` : "")
+          ? t("Finalny dokument z przywróconymi danymi został zapisany: {savedPath}.", { savedPath: savedPath })
+          : t("Finalny dokument z przywróconymi danymi został utworzony i pobrany.")) +
+          (corrected > 0 ? t(" Ręczne poprawki: {corrected}.", { corrected: corrected }) : "")
       );
       setWorkspaceRefresh((value) => value + 1);
     } catch (error) {
       setExecutionError(
         error instanceof Error
-          ? "Nie udało się przywrócić danych do finalnego dokumentu: " +
+          ? t("Nie udało się przywrócić danych do finalnego dokumentu: ") +
             error.message +
             (/REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(error.message)
-              ? ". Podaj hasło ponownie."
+              ? t(". Podaj hasło ponownie.")
               : "")
-          : "Nie udało się przywrócić danych do finalnego dokumentu."
+          : t("Nie udało się przywrócić danych do finalnego dokumentu.")
       );
       if (error instanceof Error && /REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(error.message)) {
         setFinalReview(null);
@@ -4905,18 +4937,23 @@ export default function MatterChatApp({
     await executeMessage(plain);
   }
 
-  async function saveCaseName(): Promise<void> {
-    if (!selectedCase || !caseNameDraft.trim()) return;
+  const [editingCaseName, setEditingCaseName] = useState(false);
+
+  async function saveCaseName(name = caseNameDraft): Promise<boolean> {
+    if (!selectedCase || !name.trim()) return false;
     setCaseBusy(true);
     setCaseError("");
     try {
-      await renameCase(selectedCase.caseId, caseNameDraft.trim());
+      await renameCase(selectedCase.caseId, name.trim());
+      setCaseNameDraft(name.trim());
       await refreshCases(selectedCase.caseId);
       setWorkspaceRefresh(
         (value) => value + 1
       );
+      return true;
     } catch (error) {
       setCaseError(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setCaseBusy(false);
     }
@@ -5163,9 +5200,9 @@ export default function MatterChatApp({
           <div>
             <strong>Lex Machina</strong>
             {individual ? (
-              <small>Rozmowy<InfoTip>Każda rozmowa ma własną historię i pliki; nazwę dostaje od pierwszego pytania.</InfoTip></small>
+              <small>{t("Rozmowy")}<InfoTip>{t("Każda rozmowa ma własną historię i pliki; nazwę dostaje od pierwszego pytania.")}</InfoTip></small>
             ) : (
-              <small>1 wątek = 1 sprawa<InfoTip>Każdy wątek czatu to osobna sprawa z własnymi dokumentami, pamięcią i terminami.</InfoTip></small>
+              <small>{t("1 wątek = 1 sprawa")}<InfoTip>{t("Każdy wątek czatu to osobna sprawa z własnymi dokumentami, pamięcią i terminami.")}</InfoTip></small>
             )}
           </div>
         </div>
@@ -5173,12 +5210,12 @@ export default function MatterChatApp({
         {individual ? (
           <div className="conversation-list">
             <div className="matter-thread-heading">
-              <strong>Rozmowy</strong>
+              <strong>{t("Rozmowy")}</strong>
               <button type="button" disabled={caseBusy || executing} onClick={startNewConversation}>
-                + Nowa rozmowa
+                {t("+ Nowa rozmowa")}
               </button>
             </div>
-            <ul aria-label="Rozmowy">
+            <ul aria-label={t("Rozmowy")}>
               {conversations.map((item) => (
                 <li key={item.caseId}>
                   <button
@@ -5189,7 +5226,7 @@ export default function MatterChatApp({
                     onClick={() => switchToCase(item.caseId)}
                   >
                     {executingCaseId === item.caseId ? (
-                      <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                      <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
                     ) : null}
                     {item.displayName || "Rozmowa"}
                   </button>
@@ -5200,13 +5237,13 @@ export default function MatterChatApp({
         ) : (
         <div className="case-switcher" ref={switcherRef}>
           <div className="matter-thread-heading">
-            <strong>Sprawa</strong>
+            <strong>{t("Sprawa")}</strong>
             <button
               type="button"
               disabled={caseBusy || executing}
               onClick={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa")}
             >
-              + Nowa sprawa
+              {t("+ Nowa sprawa")}
             </button>
           </div>
           <button
@@ -5215,19 +5252,19 @@ export default function MatterChatApp({
             aria-expanded={switcherOpen}
             aria-controls="case-switcher-panel"
             disabled={caseBusy || executing}
-            title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : "Zmień sprawę"}
+            title={executing ? t("Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu") : t("Zmień sprawę")}
             onClick={() => setSwitcherOpen((open) => !open)}
           >
             <span>
               <strong>
                 {/* The case at work stays visible with the panel folded (the list is inside it). */}
                 {executingCaseId && executingCaseId === caseId ? (
-                  <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                  <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
                 ) : null}
-                {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Wybierz albo utwórz sprawę"}
+                {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : t("Wybierz albo utwórz sprawę")}
               </strong>
               {executingCaseId && executingCaseId !== caseId && !switcherOpen ? (
-                <small role="status" aria-label="Trwa przygotowanie odpowiedzi">inna sprawa przygotowuje odpowiedź</small>
+                <small role="status" aria-label={t("Trwa przygotowanie odpowiedzi")}>{t("inna sprawa przygotowuje odpowiedź")}</small>
               ) : null}
               {selectedCase ? (
                 <small>{selectedCase.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[selectedCase.role]}</small>
@@ -5240,7 +5277,7 @@ export default function MatterChatApp({
               id="case-switcher-panel"
               className="case-switcher-panel"
               role="dialog"
-              aria-label="Wybór sprawy"
+              aria-label={t("Wybór sprawy")}
               onKeyDown={(event) => {
                 if (event.key === "Escape") setSwitcherOpen(false);
               }}
@@ -5249,12 +5286,12 @@ export default function MatterChatApp({
                 type="search"
                 autoFocus
                 value={switcherQuery}
-                placeholder="Szukaj sprawy…"
-                aria-label="Szukaj sprawy"
+                placeholder={t("Szukaj sprawy…")}
+                aria-label={t("Szukaj sprawy")}
                 onChange={(event) => setSwitcherQuery(event.target.value)}
               />
               <small className="case-switcher-caption">
-                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : "Ostatnio zmieniane"}
+                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : t("Ostatnio zmieniane")}
               </small>
               <div className="matter-thread-items">
                 {switcherCases.map((item) =>
@@ -5272,7 +5309,7 @@ export default function MatterChatApp({
                         value={sidebarRename.value}
                         maxLength={160}
                         disabled={caseBusy}
-                        aria-label="Nowa nazwa sprawy"
+                        aria-label={t("Nowa nazwa sprawy")}
                         onChange={(event) =>
                           setSidebarRename({ ...sidebarRename, value: event.target.value, error: "" })
                         }
@@ -5282,10 +5319,10 @@ export default function MatterChatApp({
                       />
                       <div className="matter-thread-rename-actions">
                         <button type="submit" disabled={caseBusy || !sidebarRename.value.trim()}>
-                          Zapisz
+                          {t("Zapisz")}
                         </button>
                         <button type="button" disabled={caseBusy} onClick={() => setSidebarRename(null)}>
-                          Anuluj
+                          {t("Anuluj")}
                         </button>
                       </div>
                       {sidebarRename.error ? (
@@ -5297,7 +5334,7 @@ export default function MatterChatApp({
                       <button
                         type="button"
                         disabled={caseBusy || executing}
-                        title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : undefined}
+                        title={executing ? t("Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu") : undefined}
                         aria-busy={item.caseId === executingCaseId}
                         className={[
                           "matter-thread",
@@ -5314,7 +5351,7 @@ export default function MatterChatApp({
                       >
                         <strong>
                           {item.caseId === executingCaseId ? (
-                            <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                            <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
                           ) : null}
                           {item.displayName || "Sprawa bez nazwy"}
                         </strong>
@@ -5327,8 +5364,8 @@ export default function MatterChatApp({
                           type="button"
                           className="matter-thread-edit"
                           disabled={caseBusy}
-                          title="Zmień nazwę sprawy"
-                          aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                          title={t("Zmień nazwę sprawy")}
+                          aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
                           onClick={() =>
                             setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
                           }
@@ -5348,7 +5385,7 @@ export default function MatterChatApp({
                   )
                 )}
               </div>
-              {switcherCases.length === 0 ? <small className="case-switcher-caption">Brak pasujących spraw.</small> : null}
+              {switcherCases.length === 0 ? <small className="case-switcher-caption">{t("Brak pasujących spraw.")}</small> : null}
               <button
                 type="button"
                 className="case-switcher-all"
@@ -5357,7 +5394,7 @@ export default function MatterChatApp({
                   setActiveTab("home");
                 }}
               >
-                Wszystkie sprawy ({matterCases.length}) →
+                {t("Wszystkie sprawy (")}{matterCases.length}) →
               </button>
               <form
                 className="case-switcher-create"
@@ -5370,26 +5407,26 @@ export default function MatterChatApp({
                 <input
                   value={newCaseName}
                   maxLength={160}
-                  placeholder="Nazwa nowej sprawy"
+                  placeholder={t("Nazwa nowej sprawy")}
                   onChange={(event) => setNewCaseName(event.target.value)}
                 />
-                <button type="submit" disabled={caseBusy || executing}>Utwórz</button>
+                <button type="submit" disabled={caseBusy || executing}>{t("Utwórz")}</button>
               </form>
             </div>
           ) : null}
         </div>
         )}
 
-        <nav className="chat-tabs" aria-label="Sekcje aplikacji">
+        <nav className="chat-tabs" aria-label={t("Sekcje aplikacji")}>
           {((individual
-            ? [["", [["chat", "Rozmowa"], ["settings", "Ustawienia"]]]]
+            ? [["", [["chat", N_("Rozmowa")], ["settings", N_("Ustawienia")]]]]
             : [
-                ["Ta sprawa", [["chat", "Rozmowa"], ["case", "Akta i dokumenty"]]],
-                ["Kancelaria", [["home", "Start"], ["calendar", "Kalendarz"], ["firm", "Wzory i wiedza"], ["search", "Wyszukiwanie"], ["invoices", "Faktury"]]],
-                ["", [["settings", "Ustawienia"]]]
+                [N_("Ta sprawa"), [["chat", N_("Rozmowa")], ["case", N_("Akta i dokumenty")]]],
+                [N_("Kancelaria"), [["home", N_("Start")], ["calendar", N_("Kalendarz")], ["firm", N_("Wzory i wiedza")], ["search", N_("Wyszukiwanie")], ["invoices", N_("Faktury")]]],
+                ["", [["settings", N_("Ustawienia")]]]
               ]) as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
-            <div key={group || "app"} className="chat-tab-group" role="group" aria-label={group || "Aplikacja"}>
-              {group ? <small className="chat-tab-group-label">{group}</small> : null}
+            <div key={group || "app"} className="chat-tab-group" role="group" aria-label={t(group || N_("Aplikacja"))}>
+              {group ? <small className="chat-tab-group-label">{t(group)}</small> : null}
               {tabs.map(([id, label]) => (
                 <button
                   key={id}
@@ -5397,9 +5434,9 @@ export default function MatterChatApp({
                   className={activeTab === id ? "chat-tab chat-tab-active" : "chat-tab"}
                   onClick={() => setActiveTab(id)}
                 >
-                  {label}
+                  {t(label)}
                   {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
-                    <span title="Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)">
+                    <span title={t("Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)")}>
                       {documentDropQueue.files.length + documentStaging.items.length}
                     </span>
                   ) : null}
@@ -5414,18 +5451,18 @@ export default function MatterChatApp({
         <div className="chat-sidebar-card">
           <div className="chat-status-line">
             <span className={runtimeOnline ? "chat-dot online" : "chat-dot offline"} />
-            <strong>{runtimeOnline ? "Runtime aktywny" : "Runtime offline"}</strong>
+            <strong>{runtimeOnline ? t("Usługa aplikacji działa") : t("Usługa aplikacji niedostępna")}</strong>
           </div>
           <small>
-            {selectedCase?.displayName || "Nowy wątek utworzy własną sprawę"}
+            {selectedCase?.displayName || t("Nowy wątek utworzy własną sprawę")}
           </small>
         </div>
         ) : null}
 
         {developerMode ? (
           <div className="chat-sidebar-foot">
-            <span>prawny-router-v3 ✓</span>
-            <span>shared ✓</span>
+            <span>{t("prawny-router-v3 ✓")}</span>
+            <span>{t("shared ✓")}</span>
             <span>
               {selectedDeterministicAction
                 ? selectedDeterministicAction.label
@@ -5451,7 +5488,7 @@ export default function MatterChatApp({
               setSettingsSection("security");
             }}
           >
-            Moje konto
+            {t("Moje konto")}
           </button>
           <div className="chat-account-actions">
             <button
@@ -5459,14 +5496,14 @@ export default function MatterChatApp({
               onClick={onLock}
               disabled={!onLock}
             >
-              Zablokuj
+              {t("Zablokuj")}
             </button>
             <button
               type="button"
               onClick={onLogout}
               disabled={!onLogout}
             >
-              Wyloguj
+              {t("Wyloguj")}
             </button>
           </div>
         </div>
@@ -5476,7 +5513,7 @@ export default function MatterChatApp({
         {activeTab === "chat" ? (
           <section
             className="chat-model-dock"
-            aria-label="Aktywny model rozmowy"
+            aria-label={t("Aktywny model rozmowy")}
           >
             <div className="chat-model-dock-status">
               <span
@@ -5502,7 +5539,7 @@ export default function MatterChatApp({
                 <small>
                   {provider === "local"
                     ? localModelReady
-                      ? "lokalny model · działa"
+                      ? t("lokalny model · działa")
                       : localModelStarting
                         ? "lokalny model · uruchamianie"
                         : localRuntimeStatus
@@ -5527,7 +5564,7 @@ export default function MatterChatApp({
             </div>
             <div className="chat-model-dock-controls">
               <select
-                aria-label="Dostawca modelu głównego"
+                aria-label={t("Dostawca modelu głównego")}
                 value={providerGroupOf(provider)}
                 disabled={executing}
                 onChange={(event) => {
@@ -5541,12 +5578,12 @@ export default function MatterChatApp({
               >
                 {providerGroups.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.label}
+                    {t(item.label)}
                   </option>
                 ))}
               </select>
               <select
-                aria-label="Model główny"
+                aria-label={t("Model główny")}
                 value={model}
                 disabled={
                   executing ||
@@ -5563,13 +5600,13 @@ export default function MatterChatApp({
               >
                 {modelCatalogLoading ? (
                   <option value="">
-                    Odświeżam modele…
+                    {t("Odświeżam modele…")}
                   </option>
                 ) : models.length === 0 ? (
                   <option value="">
                     {provider === "local"
-                      ? "Brak zainstalowanego modelu"
-                      : "Brak modeli"}
+                      ? t("Brak zainstalowanego modelu")
+                      : t("Brak modeli")}
                   </option>
                 ) : null}
                 {models.map((item) => (
@@ -5604,8 +5641,8 @@ export default function MatterChatApp({
                   localModelStarting
                     ? "Uruchamianie…"
                     : localModelReady
-                      ? "Model uruchomiony"
-                      : "Uruchom lokalny model"}
+                      ? t("Model uruchomiony")
+                      : t("Uruchom lokalny model")}
                 </button>
               ) : isAccountPrimarySource(
                   provider
@@ -5628,7 +5665,7 @@ export default function MatterChatApp({
                     ? accountConnectPhase?.kind === "provision"
                       ? "Pobieranie klienta…"
                       : "Logowanie…"
-                    : "Połącz konto"}
+                    : t("Połącz konto")}
                 </button>
               ) : null}
               <button
@@ -5643,7 +5680,7 @@ export default function MatterChatApp({
                   );
                 }}
               >
-                Zarządzaj modelami
+                {t("Zarządzaj modelami")}
               </button>
             </div>
             {isAccountPrimarySource(provider) ? (
@@ -5656,7 +5693,7 @@ export default function MatterChatApp({
               <small
                 className={
                   localStartMessage ===
-                  "Lokalny model działa."
+                  t("Lokalny model działa.")
                     ? "chat-model-dock-message ready"
                     : "chat-model-dock-message"
                 }
@@ -5670,25 +5707,25 @@ export default function MatterChatApp({
           <div>
             <p className="eyebrow">
               {activeTab === "chat" || activeTab === "case"
-                ? selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"
-                : "Cała kancelaria"}
+                ? selectedCase ? selectedCase.displayName || (individual ? t("Rozmowa") : t("Sprawa bez nazwy")) : individual ? t("Nowa rozmowa") : t("Nowa sprawa")
+                : t("Cała kancelaria")}
             </p>
             <h1>
               {activeTab === "home"
-                ? "Start"
+                ? t("Start")
                 : activeTab === "calendar"
-                ? "Kalendarz spraw"
+                ? t("Kalendarz spraw")
                 : activeTab === "chat"
-                ? "Rozmowa"
+                ? t("Rozmowa")
                 : activeTab === "case"
-                    ? "Akta i dokumenty"
+                    ? t("Akta i dokumenty")
                     : activeTab === "firm"
-                      ? "Wzory i wiedza kancelarii"
+                      ? t("Wzory i wiedza kancelarii")
                       : activeTab === "search"
-                        ? "Wyszukiwanie w źródłach MCP"
+                        ? t("Wyszukiwanie w źródłach MCP")
                         : activeTab === "invoices"
-                          ? "Faktury"
-                          : "Ustawienia"}
+                          ? t("Faktury")
+                          : t("Ustawienia")}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -5696,12 +5733,12 @@ export default function MatterChatApp({
             {activeTab === "home" ? (
             <div className="chat-case-switcher">
               <label className="chat-case-search">
-                <span>Szukaj spraw</span>
+                <span>{t("Szukaj spraw")}</span>
                 <input
                   type="search"
                   value={caseSearch}
-                  placeholder="Nazwa lub ID sprawy"
-                  aria-label="Szukaj spraw"
+                  placeholder={t("Nazwa lub ID sprawy")}
+                  aria-label={t("Szukaj spraw")}
                   onChange={(event) =>
                     setCaseSearch(
                       event.target.value
@@ -5710,9 +5747,9 @@ export default function MatterChatApp({
                 />
               </label>
               <label className="chat-case-filter">
-                <span>Status</span>
+                <span>{t("Stan")}</span>
                 <select
-                  aria-label="Filtr statusu spraw"
+                  aria-label={t("Filtr statusu spraw")}
                   value={caseStatusFilter}
                   onChange={(event) =>
                     setCaseStatusFilter(
@@ -5722,20 +5759,20 @@ export default function MatterChatApp({
                   }
                 >
                   <option value="ALL">
-                    Wszystkie
+                    {t("Wszystkie")}
                   </option>
                   <option value="ACTIVE">
-                    Aktywne
+                    {t("Aktywne")}
                   </option>
                   <option value="ARCHIVED">
-                    Archiwalne
+                    {t("Archiwalne")}
                   </option>
                 </select>
               </label>
               <label className="chat-case-filter">
-                <span>Rola</span>
+                <span>{t("Rola")}</span>
                 <select
-                  aria-label="Filtr roli w sprawie"
+                  aria-label={t("Filtr roli w sprawie")}
                   value={caseRoleFilter}
                   onChange={(event) =>
                     setCaseRoleFilter(
@@ -5745,26 +5782,26 @@ export default function MatterChatApp({
                   }
                 >
                   <option value="ALL">
-                    Wszystkie
+                    {t("Wszystkie")}
                   </option>
                   <option value="OWNER">
-                    Właściciel
+                    {t("Właściciel")}
                   </option>
                   <option value="EDITOR">
-                    Edycja
+                    {t("Edycja")}
                   </option>
                   <option value="ANALYST">
-                    Analiza
+                    {t("Analiza")}
                   </option>
                   <option value="VIEWER">
-                    Podgląd
+                    {t("Podgląd")}
                   </option>
                 </select>
               </label>
               <label className="chat-case-filter">
-                <span>Sortuj</span>
+                <span>{t("Sortuj")}</span>
                 <select
-                  aria-label="Sortowanie spraw"
+                  aria-label={t("Sortowanie spraw")}
                   value={caseSort}
                   onChange={(event) =>
                     setCaseSort(
@@ -5774,20 +5811,20 @@ export default function MatterChatApp({
                   }
                 >
                   <option value="UPDATED_DESC">
-                    Ostatnio zmieniane
+                    {t("Ostatnio zmieniane")}
                   </option>
                   <option value="CREATED_DESC">
-                    Najnowsze
+                    {t("Najnowsze")}
                   </option>
                   <option value="NAME_ASC">
-                    Nazwa A–Z
+                    {t("Nazwa A–Z")}
                   </option>
                 </select>
               </label>
               <label>
-                <span>Sprawa</span>
+                <span>{t("Sprawa")}</span>
                 <select
-                  aria-label="Wybierz sprawę"
+                  aria-label={t("Wybierz sprawę")}
                   value={caseId}
                   disabled={
                     caseBusy
@@ -5822,9 +5859,9 @@ export default function MatterChatApp({
                 caseStatusFilter !== "ALL" ||
                 caseRoleFilter !== "ALL" ? (
                   <small className="chat-case-search-count">
-                    {caseSearchMatchCount} wyników
+                    {caseSearchMatchCount} {t("wyników")}
                     {matterSearchResult.currentPreserved
-                      ? " · bieżąca sprawa pokazana dodatkowo"
+                      ? t(" · bieżąca sprawa pokazana dodatkowo")
                       : ""}
                   </small>
                 ) : null}
@@ -5849,7 +5886,7 @@ export default function MatterChatApp({
                     );
                   }}
                 >
-                  Wyczyść filtry
+                  {t("Wyczyść filtry")}
                 </button>
               ) : null}
             </div>
@@ -5861,7 +5898,7 @@ export default function MatterChatApp({
                 disabled={Boolean(selectedCase?.archivedAt)}
                 onClick={() => fileInputRef.current?.click()}
               >
-                + Dodaj pliki
+                {t("+ Dodaj pliki")}
               </button>
             ) : null}
             <input
@@ -5886,25 +5923,24 @@ export default function MatterChatApp({
         ).map((error) => (
           <div key={error} className="chat-alert chat-alert-error">
             {error === "CASE_ACCESS_DENIED"
-              ? "Nie udało się otworzyć tej sprawy w bieżącej sesji. Wybierz inną sprawę albo utwórz nową."
+              ? t("Nie udało się otworzyć tej sprawy w bieżącej sesji. Wybierz inną sprawę albo utwórz nową.")
               : error}
           </div>
         ))}
 
         {documentStaging.items.length > 0 ? (
-          <section className="chat-card-stack chat-document-flow" aria-label="Pliki do decyzji">
+          <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
             <article className="chat-card">
-              <p className="eyebrow">Dodane pliki</p>
+              <p className="eyebrow">{t("Dodane pliki")}</p>
               <h2>
-                {documentStaging.items.length} do decyzji
+                {documentStaging.items.length} {t("do decyzji")}
                 <InfoTip>
-                  OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików.
-                  Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.
+                  {t("OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików. Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.")}
                 </InfoTip>
               </h2>
               {documentStaging.rejected > 0 ? (
                 <p className="chat-inline-error">
-                  Pominięto {documentStaging.rejected} plików (puste albo ponad limit {MAX_DOCUMENT_DROP_QUEUE}).
+                  {t("Pominięto")} {documentStaging.rejected} {t("plików (puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE}).
                 </p>
               ) : null}
               <ul className="chat-file-list">
@@ -5916,13 +5952,13 @@ export default function MatterChatApp({
                       {item.status === "SAVING"
                         ? documentProgress[item.id]
                           ? ` · ${progressLabel(documentProgress[item.id]!)}`
-                          : " · zapisuję i przetwarzam…"
+                          : t(" · zapisuję i przetwarzam…")
                         : ""}
-                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? "spróbuj ponownie"}` : ""}
+                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
                     </small>
                     <span className="chat-file-actions">
                       <select
-                        aria-label={`Sposób przetwarzania: ${item.file.name}`}
+                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
                         value={item.mode}
                         disabled={item.status === "SAVING"}
                         title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
@@ -5934,7 +5970,7 @@ export default function MatterChatApp({
                       >
                         {processingModesFor(item.file).map((entry) => (
                           <option key={entry.mode} value={entry.mode} title={entry.title}>
-                            {entry.label}
+                            {t(entry.label)}
                           </option>
                         ))}
                       </select>
@@ -5944,7 +5980,7 @@ export default function MatterChatApp({
                         disabled={item.status === "SAVING" || !caseId}
                         onClick={() => processStagedDocuments([item.id])}
                       >
-                        Przetwórz
+                        {t("Przetwórz")}
                       </button>
                       <button
                         type="button"
@@ -5952,7 +5988,7 @@ export default function MatterChatApp({
                         disabled={item.status === "SAVING" || !caseId}
                         onClick={() => void saveStagedDocuments([item.id])}
                       >
-                        Zapisz bez przetwarzania
+                        {t("Zapisz bez przetwarzania")}
                       </button>
                       <button
                         type="button"
@@ -5960,7 +5996,7 @@ export default function MatterChatApp({
                         disabled={item.status === "SAVING"}
                         onClick={() => removeStagedDocuments([item.id])}
                       >
-                        Usuń
+                        {t("Usuń")}
                       </button>
                     </span>
                   </li>
@@ -5969,7 +6005,7 @@ export default function MatterChatApp({
               {documentStaging.items.length > 1 ? (
                 <span className="chat-file-actions">
                   <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
-                    Przetwórz wszystkie (wybrane sposoby)
+                    {t("Przetwórz wszystkie (wybrane sposoby)")}
                   </button>
                   <button
                     type="button"
@@ -5977,7 +6013,7 @@ export default function MatterChatApp({
                     disabled={!caseId}
                     onClick={() => void saveStagedDocuments()}
                   >
-                    Zapisz wszystkie bez przetwarzania
+                    {t("Zapisz wszystkie bez przetwarzania")}
                   </button>
                 </span>
               ) : null}
@@ -5986,19 +6022,18 @@ export default function MatterChatApp({
         ) : null}
 
         {documentDropQueue.total > 0 ? (
-          <section ref={documentFlowRef} className="chat-card-stack chat-document-flow" aria-label="Odczyt plików i ochrona danych">
+          <section ref={documentFlowRef} className="chat-card-stack chat-document-flow" aria-label={t("Odczyt plików i ochrona danych")}>
             <article className="chat-card">
               <p className="eyebrow">
-                Dodawanie plików
+                {t("Dodawanie plików")}
                 <InfoTip>
-                  Pliki są odczytywane na tym komputerze, po jednym. Przed zapisem w aktach decydujesz, które dane
-                  osobowe ukryć.
+                  {t("Pliki są odczytywane na tym komputerze, po jednym. Przed zapisem w aktach decydujesz, które dane osobowe ukryć.")}
                 </InfoTip>
               </p>
               <h2 aria-live="polite">{documentDropSummary(documentDropQueue)}</h2>
               {documentDropQueue.rejected > 0 ? (
                 <p className="chat-inline-error">
-                  Nie dodano plików: {documentDropQueue.rejected} (puste albo ponad limit {MAX_DOCUMENT_DROP_QUEUE} w kolejce).
+                  {t("Nie dodano plików:")} {documentDropQueue.rejected} {t("(puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE} {t("w kolejce).")}
                 </p>
               ) : null}
               <ul className="chat-file-list">
@@ -6006,12 +6041,12 @@ export default function MatterChatApp({
                   <li key={`${file.name}-${file.lastModified}-${index}`}>
                     <strong>{file.name}</strong>
                     <small>
-                      {index === 0 ? documentStepLabel(file) : "Oczekuje"} · {describeDocumentFile(file)}
+                      {index === 0 ? documentStepLabel(file) : t("Oczekuje")} · {describeDocumentFile(file)}
                     </small>
                   </li>
                 ))}
               </ul>
-              <small>limit kolejki {MAX_DOCUMENT_DROP_QUEUE}</small>
+              <small>{t("limit kolejki")} {MAX_DOCUMENT_DROP_QUEUE}</small>
             </article>
 
             <DocumentPrivacyPanel
@@ -6071,11 +6106,13 @@ export default function MatterChatApp({
               busy={executing || caseBusy}
               onContinue={() => {
                 void executeMessage(
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   "Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem."
                 );
               }}
               onDownloadDraft={() => {
                 void executeMessage(
+                  // Kept in Polish: a message the runtime and the model read as an instruction.
                   "Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy."
                 );
               }}
@@ -6083,31 +6120,31 @@ export default function MatterChatApp({
             {conversationIsNew && !individual ? (
               <section
                 className="chat-pipeline-picker"
-                aria-label="Tryb pracy dla nowej rozmowy"
+                aria-label={t("Tryb pracy dla nowej rozmowy")}
               >
                 <div>
-                  <p className="eyebrow">Tryb pracy</p>
+                  <p className="eyebrow">{t("Tryb pracy")}</p>
                   <h3>
                     {workMode === "AUTO"
-                      ? developerMode ? "Automatyczny — prawny router" : "Automatyczny"
+                      ? developerMode ? "Automatyczny — prawny router" : t("Automatyczny")
                       : selectedDeterministicAction
                         ? `Mechaniczny — ${selectedDeterministicAction.label}`
                         : developerMode ? "Mechaniczny — wybierz skill wykonawczy" : "Mechaniczny — wybierz rodzaj pracy"}
                     <InfoTip>
                       {!developerMode
                         ? workMode === "AUTO"
-                          ? "Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości."
-                          : "Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku."
+                          ? t("Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości.")
+                          : t("Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku.")
                         : workMode === "AUTO"
-                        ? "Router dobiera dziedziny DR, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych."
-                        : "Wybrany skill uruchamia stały pipeline; router nadal dobiera dziedzinę DR. Po pierwszej wiadomości wybór zostaje przypięty do wątku."}
+                        ? t("Program dobiera dziedziny prawa, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych.")
+                        : t("Wybrany skill uruchamia stały proces; program nadal dobiera dziedzinę prawa. Po pierwszej wiadomości wybór zostaje przypięty do wątku.")}
                     </InfoTip>
                   </h3>
                 </div>
                 <div
                   className="chat-work-mode"
                   role="radiogroup"
-                  aria-label="Tryb pracy"
+                  aria-label={t("Tryb pracy")}
                 >
                   <button
                     type="button"
@@ -6123,8 +6160,8 @@ export default function MatterChatApp({
                       setWorkMode("AUTO");
                     }}
                   >
-                    <strong>Automatyczny</strong>
-                    <small>{developerMode ? "Router sam dobiera skille i moduły." : "Aplikacja sama dobiera sposób pracy."}</small>
+                    <strong>{t("Automatyczny")}</strong>
+                    <small>{developerMode ? t("Program sam dobiera skille i moduły.") : t("Aplikacja sama dobiera sposób pracy.")}</small>
                   </button>
                   <button
                     type="button"
@@ -6138,15 +6175,15 @@ export default function MatterChatApp({
                     }
                     onClick={() => setWorkMode("MECHANICAL")}
                   >
-                    <strong>Mechaniczny</strong>
+                    <strong>{t("Mechaniczny")}</strong>
                     <small>
                       {availableActions.length > 0
                         ? developerMode
-                          ? "Ty wybierasz skill wykonawczy i jego pipeline."
+                          ? t("Ty wybierasz skill wykonawczy i jego proces.")
                           : "Ty wybierasz rodzaj pracy (np. pismo, analiza umowy)."
                         : developerMode
-                          ? "Brak skilli wykonawczych w korpusie."
-                          : "Brak dostępnych rodzajów pracy."}
+                          ? t("Brak skilli wykonawczych w korpusie.")
+                          : t("Brak dostępnych rodzajów pracy.")}
                     </small>
                   </button>
                 </div>
@@ -6173,10 +6210,10 @@ export default function MatterChatApp({
                           }
                         >
                           <strong>
-                            {action.label}
+                            {t(action.label)}
                           </strong>
                           <small>
-                            {action.description}
+                            {t(action.description)}
                           </small>
                         </button>
                       );
@@ -6189,7 +6226,7 @@ export default function MatterChatApp({
             <div className="chat-message-list" aria-live="polite">
               {threadLoading ? (
                 <article className="chat-message chat-message-system">
-                  Ładowanie zaszyfrowanego wątku sprawy…
+                  {t("Ładowanie zaszyfrowanego wątku sprawy…")}
                 </article>
               ) : null}
               {messages.map((message, _index, all) => (
@@ -6271,12 +6308,12 @@ export default function MatterChatApp({
                   {message.role === "assistant" && message.answerDocument && caseId && canWriteCase(selectedCase) ? (
                     <div className="chat-pipeline-next" role="note">
                       <button type="button" className="primary-button" disabled={executing} onClick={() => void fileFromAnswer(message, true)}>
-                        Pobierz .docx
+                        {t("Pobierz .docx")}
                       </button>
                       <InfoTip>
                         {developerMode
-                          ? "Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje mechanicznie z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi HYBRID-VAL i bramkę eksportu (przepisy z rejestru weryfikacji tej odpowiedzi); znaczniki weryfikacji nie trafiają do pliku."
-                          : "Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi kontrolę powołanych przepisów; znaczniki weryfikacji nie trafiają do pliku."}
+                          ? t("Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje mechanicznie z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi HYBRID-VAL i bramkę eksportu (przepisy z rejestru weryfikacji tej odpowiedzi); znaczniki weryfikacji nie trafiają do pliku.")
+                          : t("Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi kontrolę powołanych przepisów; znaczniki weryfikacji nie trafiają do pliku.")}
                       </InfoTip>
                     </div>
                   ) : null}
@@ -6296,7 +6333,7 @@ export default function MatterChatApp({
                   ) : null}
                   {message.evidence?.length ? (
                     <details className="chat-evidence">
-                      <summary>Źródła i weryfikacja ({message.evidence.length})</summary>
+                      <summary>{t("Źródła i weryfikacja (")}{message.evidence.length})</summary>
                       <ul>
                         {message.evidence.map((item: EvidenceItem, index: number) => (
                           <li key={`${item.claim}-${index}`}>
@@ -6310,12 +6347,12 @@ export default function MatterChatApp({
                               ) : null}
                               {item.role === "gate" ? (
                                 developerMode ? (
-                                  <span className="chat-evidence-gate" title="Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi">
-                                    pomocniczy — bramka
+                                  <span className="chat-evidence-gate" title={t("Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi")}>
+                                    {t("pomocniczy — bramka")}
                                   </span>
                                 ) : (
-                                  <span className="chat-evidence-gate" title="Przepis sprawdzony pomocniczo, nie jest podstawą odpowiedzi">
-                                    pomocniczy
+                                  <span className="chat-evidence-gate" title={t("Przepis sprawdzony pomocniczo, nie jest podstawą odpowiedzi")}>
+                                    {t("pomocniczy")}
                                   </span>
                                 )
                               ) : null}
@@ -6332,7 +6369,7 @@ export default function MatterChatApp({
                                   void openExternalUrl(item.sourceAnchorUrl ?? item.sourceUrl!);
                                 }}
                               >
-                                Otwórz źródło w przeglądarce ↗
+                                {t("Otwórz źródło w przeglądarce ↗")}
                               </a>
                             ) : null}
                             {item.kind === "statute" ? (
@@ -6345,7 +6382,7 @@ export default function MatterChatApp({
                                     setProvisionPreview((current) => (current === key ? null : key));
                                   }}
                                 >
-                                  {provisionPreview === `${message.id}:${index}` ? "Zwiń podgląd" : "Podgląd z zaznaczeniem"}
+                                  {provisionPreview === `${message.id}:${index}` ? t("Zwiń podgląd") : t("Podgląd z zaznaczeniem")}
                                 </button>
                                 {provisionPreview === `${message.id}:${index}` ? (
                                   <ProvisionPreview claim={item.claim} {...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {})} />
@@ -6361,7 +6398,7 @@ export default function MatterChatApp({
                                     setProvisionPreview((current) => (current === key ? null : key));
                                   }}
                                 >
-                                  {provisionPreview === `${message.id}:${index}` ? "Zwiń pełny tekst" : "Pełny tekst z zaznaczeniem"}
+                                  {provisionPreview === `${message.id}:${index}` ? t("Zwiń pełny tekst") : t("Pełny tekst z zaznaczeniem")}
                                 </button>
                                 {provisionPreview === `${message.id}:${index}` ? (
                                   <CaseLawPreview
@@ -6433,10 +6470,10 @@ export default function MatterChatApp({
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
                       <summary>
-                        Źródła pomocnicze R2B/R3 ({message.auxiliarySources.length})
+                        {t("Źródła pomocnicze R2B/R3 (")}{message.auxiliarySources.length})
                       </summary>
                       <p className="chat-auxiliary-intro">
-                        Materiały pomocnicze nie tworzą znacznika VERIFIED ani samodzielnej podstawy prawnej.
+                        {t("Materiały pomocnicze nie tworzą znacznika VERIFIED ani samodzielnej podstawy prawnej.")}
                       </p>
                       <ul>
                         {message.auxiliarySources.map((item, index) => (
@@ -6449,15 +6486,15 @@ export default function MatterChatApp({
                                 {item.sourceTier}
                               </span>
                               <strong>
-                                {item.claim || "Materiał pomocniczy"}
+                                {item.claim || t("Materiał pomocniczy")}
                               </strong>
                             </div>
                             <small>
-                              Cross-check: {
+                              {t("Kontrola krzyżowa:")} {
                                 item.crossCheckStatus === "CONFIRMED_R1_R2A"
-                                  ? `potwierdzony w ${item.crossCheckTier ?? "R1/2A"}`
+                                  ? t("potwierdzony w {value}", { value: item.crossCheckTier ?? "R1/2A" })
                                   : item.crossCheckStatus === "CONFLICT"
-                                    ? "konflikt ze źródłem wyższego rzędu"
+                                    ? t("konflikt ze źródłem wyższego rzędu")
                                     : item.crossCheckStatus === "UNAVAILABLE"
                                       ? "niedostępny"
                                       : "wymagany / oczekuje"
@@ -6465,12 +6502,12 @@ export default function MatterChatApp({
                             </small>
                             {item.staleOrUndatedWarning ? (
                               <small className="chat-source-warning">
-                                Uwaga: brak aktualnej daty albo materiał starszy niż 24 miesiące.
+                                {t("Uwaga: brak aktualnej daty albo materiał starszy niż 24 miesiące.")}
                               </small>
                             ) : null}
                             {item.conflict ? (
                               <small className="chat-source-warning">
-                                Uwaga: nie buduj wniosku na tym materiale; pierwszeństwo ma R1/2A.
+                                {t("Uwaga: nie buduj wniosku na tym materiale; pierwszeństwo ma R1/2A.")}
                               </small>
                             ) : null}
                             <div className="chat-auxiliary-source-links">
@@ -6484,7 +6521,7 @@ export default function MatterChatApp({
                                   void openExternalUrl(item.sourceUrl);
                                 }}
                               >
-                                Otwórz źródło pomocnicze ↗
+                                {t("Otwórz źródło pomocnicze ↗")}
                               </a>
                               {isCaseLawSource(item.sourceUrl) ? (
                                 <button
@@ -6495,7 +6532,7 @@ export default function MatterChatApp({
                                     setProvisionPreview((current) => (current === key ? null : key));
                                   }}
                                 >
-                                  {provisionPreview === `${message.id}:aux:${index}` ? "Zwiń pełny tekst" : "Pełny tekst z zaznaczeniem"}
+                                  {provisionPreview === `${message.id}:aux:${index}` ? t("Zwiń pełny tekst") : t("Pełny tekst z zaznaczeniem")}
                                 </button>
                               ) : null}
                               {item.crossCheckUrl ? (
@@ -6509,7 +6546,7 @@ export default function MatterChatApp({
                                     void openExternalUrl(item.crossCheckUrl!);
                                   }}
                                 >
-                                  Otwórz cross-check {item.crossCheckTier ?? "R1/2A"} ↗
+                                  {t("Otwórz kontrolę krzyżową")} {item.crossCheckTier ?? "R1/2A"} ↗
                                 </a>
                               ) : null}
                             </div>
@@ -6543,7 +6580,7 @@ export default function MatterChatApp({
                       className="chat-working-spinner"
                       aria-hidden="true"
                     />
-                    <strong>Pracuję</strong>
+                    <strong>{t("Pracuję")}</strong>
                     <span>
                       {executionElapsedSeconds}s
                     </span>
@@ -6558,23 +6595,23 @@ export default function MatterChatApp({
                       onClick={() => {
                         autoStopRef.current = true;
                         setAutoNext(null);
-                        setGeneratedDocumentMessage("Automatyczne kroki zatrzymane po bieżącym kroku. Napisz „Kontynuuj”, aby iść dalej.");
+                        setGeneratedDocumentMessage(t("Automatyczne kroki zatrzymane po bieżącym kroku. Napisz „Kontynuuj”, aby iść dalej."));
                       }}
                     >
-                      Zatrzymaj automatyczne kroki
+                      {t("Zatrzymaj automatyczne kroki")}
                     </button>
                   ) : null}
                   {executionSteps ? (
-                    <ol className="chat-steps" aria-label="Etapy pracy">
+                    <ol className="chat-steps" aria-label={t("Etapy pracy")}>
                       <li className="chat-steps-summary">
-                        Etap {executionSteps.current} z {executionSteps.total} · zakończone:{" "}
-                        {executionSteps.phases.filter((phase) => phase.status === "done").length} · pozostało:{" "}
+                        {t("Etap")} {executionSteps.current} z {executionSteps.total} {t("· zakończone:")}{" "}
+                        {executionSteps.phases.filter((phase) => phase.status === "done").length} {t("· pozostało:")}{" "}
                         {executionSteps.phases.filter((phase) => phase.status !== "done").length}
                       </li>
                       {executionSteps.phases.map((phase) => (
                         <li key={phase.key} className={`chat-step chat-step-${phase.status}`}>
                           <span className="chat-step-status">
-                            {phase.status === "done" ? "zakończono" : phase.status === "active" ? "w toku" : "oczekuje"}
+                            {phase.status === "done" ? "zakończono" : phase.status === "active" ? t("w toku") : "oczekuje"}
                           </span>
                           <strong>{phaseLabel(phase.key, phase.label, developerMode)}</strong>
                           {developerMode && phase.details.length ? (
@@ -6587,7 +6624,7 @@ export default function MatterChatApp({
                   {draftText ? (
                     <div className="chat-draft">
                       <div className="chat-draft-label">
-                        Wersja robocza — odpowiedź powstaje, weryfikacja źródeł jeszcze trwa
+                        {t("Wersja robocza — odpowiedź powstaje, weryfikacja źródeł jeszcze trwa")}
                       </div>
                       <div className="chat-draft-text">
                         {draftDisplayText(draftText, developerMode)}
@@ -6597,15 +6634,15 @@ export default function MatterChatApp({
                   <div className="chat-working-meta">
                     <span>
                       {runtimePulse === "OK"
-                        ? developerMode ? "Runtime odpowiada" : "Aplikacja pracuje"
+                        ? developerMode ? t("Usługa aplikacji odpowiada") : t("Aplikacja pracuje")
                         : runtimePulse === "LOST"
                           ? developerMode
-                            ? "Brak odpowiedzi z runtime — operacja nadal oczekuje"
-                            : "Aplikacja chwilowo nie odpowiada — operacja nadal oczekuje"
-                          : developerMode ? "Sprawdzam runtime…" : "Sprawdzam połączenie…"}
+                            ? t("Brak odpowiedzi usługi aplikacji — operacja nadal oczekuje")
+                            : t("Aplikacja chwilowo nie odpowiada — operacja nadal oczekuje")
+                          : developerMode ? "Sprawdzam runtime…" : t("Sprawdzam połączenie…")}
                     </span>
                     <span>
-                      To okno aktualizuje się podczas oczekiwania na model i źródła.
+                      {t("To okno aktualizuje się podczas oczekiwania na model i źródła.")}
                     </span>
                   </div>
                 </article>
@@ -6616,25 +6653,25 @@ export default function MatterChatApp({
             <div className="chat-composer">
               {dropActive ? (
                 <div className="chat-drop-overlay">
-                  Upuść pliki, aby dodać je do tej sprawy
+                  {t("Upuść pliki, aby dodać je do tej sprawy")}
                 </div>
               ) : null}
               <div className="chat-composer-meta">
-                <span>{individual ? "Rozmowa" : "Sprawa"}: {selectedCase?.displayName || (individual ? "nazwa z pierwszego pytania" : "utworzy się przy pierwszej wiadomości")}</span>
+                <span>{individual ? t("Rozmowa") : t("Sprawa")}: {selectedCase?.displayName || (individual ? t("nazwa z pierwszego pytania") : t("utworzy się przy pierwszej wiadomości"))}</span>
                 {individual ? null : (
                   <span>
-                    Działanie: {selectedDeterministicAction
+                    {t("Działanie:")} {selectedDeterministicAction
                       ? selectedDeterministicAction.label
                       : developerMode ? "AUTO · prawny router" : "automatycznie"}
                   </span>
                 )}
-                <span>Załączniki: {selectedFileCount}</span>
+                <span>{t("Załączniki:")} {selectedFileCount}</span>
                 {directImages.map((image) => (
-                  <span key={image.id} className="chat-direct-image" title="Wysyłany w oryginale: bez OCR i bez anonimizacji">
-                    Obraz do modelu: {image.name}{" "}
+                  <span key={image.id} className="chat-direct-image" title={t("Wysyłany w oryginale: bez OCR i bez anonimizacji")}>
+                    {t("Obraz do modelu:")} {image.name}{" "}
                     <button
                       type="button"
-                      aria-label={`Usuń obraz ${image.name}`}
+                      aria-label={t("Usuń obraz {name}", { name: image.name })}
                       onClick={() => setDirectImages((current) => current.filter((entry) => entry.id !== image.id))}
                     >
                       ×
@@ -6649,20 +6686,20 @@ export default function MatterChatApp({
                       file.processing.anonymized === false
                   )
                 ) ? (
-                  <span className="chat-clear-text-warning">Uwaga: część załączników to tekst jawny</span>
+                  <span className="chat-clear-text-warning">{t("Uwaga: część załączników to tekst jawny")}</span>
                 ) : null}
               </div>
               {documentAttachments.length + firmTemplateIds.length > 0 ? (
-                <ul className="chat-attachment-chips" aria-label="Pliki w tej wiadomości">
+                <ul className="chat-attachment-chips" aria-label={t("Pliki w tej wiadomości")}>
                   {documentAttachments.map((attachment) => (
                     <li key={`${attachment.caseId}:${attachment.documentId}`}>
-                      <button type="button" className="chat-chip-name" title="Pokaż pliki i ich funkcje" onClick={() => openFilePicker(attachment.caseId === firmCaseId ? "firm" : "case")}>
+                      <button type="button" className="chat-chip-name" title={t("Pokaż pliki i ich funkcje")} onClick={() => openFilePicker(attachment.caseId === firmCaseId ? "firm" : "case")}>
                         {fileLabel(attachment.documentId)}
                       </button>
                       <button
                         type="button"
                         className="chat-chip-remove"
-                        aria-label={`Odłącz ${fileLabel(attachment.documentId)}`}
+                        aria-label={t("Odłącz {documentId}", { documentId: fileLabel(attachment.documentId) })}
                         onClick={() => pickFiles([{ kind: "document", documentId: attachment.documentId, chunkIndices: attachment.chunkIndices }], false, attachment.caseId)}
                       >
                         ×
@@ -6671,13 +6708,13 @@ export default function MatterChatApp({
                   ))}
                   {firmTemplateIds.map((id) => (
                     <li key={`template:${id}`}>
-                      <button type="button" className="chat-chip-name" title="Wzór kancelarii" onClick={() => openFilePicker("firm")}>
-                        {firmFileNames[id] ?? "wzór kancelarii"}
+                      <button type="button" className="chat-chip-name" title={t("Wzór kancelarii")} onClick={() => openFilePicker("firm")}>
+                        {firmFileNames[id] ?? t("wzór kancelarii")}
                       </button>
                       <button
                         type="button"
                         className="chat-chip-remove"
-                        aria-label={`Odłącz ${firmFileNames[id] ?? "wzór kancelarii"}`}
+                        aria-label={t("Odłącz {value}", { value: firmFileNames[id] ?? t("wzór kancelarii") })}
                         onClick={() => setFirmTemplateIds((current) => current.filter((item) => item !== id))}
                       >
                         ×
@@ -6688,7 +6725,7 @@ export default function MatterChatApp({
               ) : null}
               {workMode === "MECHANICAL" && selectedDeterministicAction && conversationIsNew ? (
                 <p className="field-help chat-action-result">
-                  <strong>{selectedDeterministicAction.question}</strong> Wynik: {selectedDeterministicAction.result}
+                  <strong>{selectedDeterministicAction.question}</strong> {t("Wynik:")} {selectedDeterministicAction.result}
                 </p>
               ) : null}
               <UnfinishedAnalysis
@@ -6700,41 +6737,41 @@ export default function MatterChatApp({
               {lastDelivery ? (
                 <div className="chat-delivery" role="status">
                   <strong>
-                    Do modelu trafiło w całości:{" "}
+                    {t("Do modelu trafiło w całości:")}{" "}
                     {lastDelivery.documents.filter((document) => document.status === "FULL").length} z{" "}
-                    {lastDelivery.documents.length} plików
+                    {lastDelivery.documents.length} {t("plików")}
                     {lastDelivery.documents.some((document) => document.status !== "FULL")
-                      ? " - reszta skrócona lub pominięta (brak miejsca w oknie modelu)"
+                      ? t(" - reszta skrócona lub pominięta (brak miejsca w oknie modelu)")
                       : ""}
                   </strong>
                   <details>
-                    <summary>Szczegóły wysyłki</summary>
+                    <summary>{t("Szczegóły wysyłki")}</summary>
                     <ul>
                       {lastDelivery.documents.map((document) => (
                         <li key={document.documentId} className={`chat-delivery-${document.status.toLowerCase()}`}>
                           <span>{lastDelivery.names[document.documentId]}</span>
                           <small>
                             {document.sourceScope === "FIRM_TEMPLATE"
-                              ? "wzór kancelarii · "
+                              ? t("wzór kancelarii · ")
                               : document.sourceScope === "FIRM_KNOWLEDGE"
                                 ? "kancelaria · "
                                 : document.sourceScope === "CASE_KNOWLEDGE"
-                                  ? "wyszukane w sprawie · "
+                                  ? t("wyszukane w sprawie · ")
                                   : ""}
                             {document.status === "FULL"
-                              ? `w całości (${document.chunks} ${document.chunks === 1 ? "fragment" : "fragmentów"})`
+                              ? t("w całości ({chunks} {value})", { chunks: document.chunks, value: document.chunks === 1 ? "fragment" : "fragmentów" })
                               : document.status === "PARTIAL"
-                                ? `częściowo: ${document.fullChunks + document.digestChunks} z ${document.chunks} fragmentów`
+                                ? t("częściowo: {digestChunks} z {chunks} fragmentów", { digestChunks: document.fullChunks + document.digestChunks, chunks: document.chunks })
                                 : document.status === "DIGEST"
-                                  ? "tylko streszczenie fragmentów"
-                                  : "pominięty - brak miejsca w oknie modelu"}
+                                  ? t("tylko streszczenie fragmentów")
+                                  : t("pominięty - brak miejsca w oknie modelu")}
                           </small>
                         </li>
                       ))}
                     </ul>
                   </details>
                   <button type="button" className="chat-secondary-action" onClick={() => setLastDelivery(null)}>
-                    Ukryj
+                    {t("Ukryj")}
                   </button>
                 </div>
               ) : null}
@@ -6744,12 +6781,12 @@ export default function MatterChatApp({
                 disabled={Boolean(selectedCase?.archivedAt)}
                 placeholder={
                   selectedCase?.archivedAt
-                    ? "Sprawa archiwalna jest tylko do odczytu."
+                    ? t("Sprawa archiwalna jest tylko do odczytu.")
                     : workMode === "MECHANICAL" && selectedDeterministicAction
                       ? selectedDeterministicAction.question
                       : individual
-                        ? "Opisz swoją sprawę albo zadaj pytanie…"
-                        : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
+                        ? t("Opisz swoją sprawę albo zadaj pytanie…")
+                        : t("Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…")
                 }
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -6761,8 +6798,8 @@ export default function MatterChatApp({
               />
               <div className="chat-composer-actions">
                 <details ref={addMenuRef} className="chat-menu chat-add-menu">
-                  <summary aria-label="Dodaj pliki do wiadomości" title="Dodaj pliki">+</summary>
-                  <div className="chat-menu-panel" role="menu" aria-label="Dodaj">
+                  <summary aria-label={t("Dodaj pliki do wiadomości")} title={t("Dodaj pliki")}>+</summary>
+                  <div className="chat-menu-panel" role="menu" aria-label={t("Dodaj")}>
                     <button
                       type="button"
                       role="menuitem"
@@ -6772,16 +6809,16 @@ export default function MatterChatApp({
                         fileInputRef.current?.click();
                       }}
                     >
-                      <strong>Pliki z komputera</strong>
-                      <small>Trafią do akt tej sprawy i do wiadomości.</small>
+                      <strong>{t("Pliki z komputera")}</strong>
+                      <small>{t("Trafią do akt tej sprawy i do wiadomości.")}</small>
                     </button>
                     <button type="button" role="menuitem" onClick={() => openFilePicker("case")}>
-                      <strong>Dokumenty sprawy</strong>
-                      <small>Wybierz pliki z akt do tej wiadomości.</small>
+                      <strong>{t("Dokumenty sprawy")}</strong>
+                      <small>{t("Wybierz pliki z akt do tej wiadomości.")}</small>
                     </button>
                     <button type="button" role="menuitem" disabled={!firmCaseId} onClick={() => openFilePicker("firm")}>
-                      <strong>Wzory i wiedza kancelarii</strong>
-                      <small>{firmCaseId ? "Wzory pism i know-how kancelarii." : "Biblioteka kancelarii nie jest jeszcze utworzona."}</small>
+                      <strong>{t("Wzory i wiedza kancelarii")}</strong>
+                      <small>{firmCaseId ? t("Wzory pism i know-how kancelarii.") : t("Biblioteka kancelarii nie jest jeszcze utworzona.")}</small>
                     </button>
                   </div>
                 </details>
@@ -6794,7 +6831,7 @@ export default function MatterChatApp({
                       setActiveTab("settings");
                     }}
                   >
-                    ⚙ Skille
+                    {t("⚙ Skille")}
                   </button>
                 ) : null}
                 <span className="chat-composer-spacer" />
@@ -6804,13 +6841,13 @@ export default function MatterChatApp({
                   disabled={!canSend}
                   onClick={() => void sendMessage()}
                 >
-                  {pendingFirstMessage && firstMessageFilesPending ? "Czeka na pliki…" : executing || pendingFirstMessage ? "Wysyłanie…" : "Wyślij"}
+                  {pendingFirstMessage && firstMessageFilesPending ? t("Czeka na pliki…") : executing || pendingFirstMessage ? "Wysyłanie…" : t("Wyślij")}
                 </button>
               </div>
               {caseFilePickerOpen ? (
                 <div
                   className="chat-case-file-picker"
-                  aria-label="Pliki do dołączenia"
+                  aria-label={t("Pliki do dołączenia")}
                 >
                   <div className="chat-file-picker-tabs" role="tablist">
                     <button
@@ -6819,23 +6856,23 @@ export default function MatterChatApp({
                       aria-selected={pickerTab === "case"}
                       onClick={() => setPickerTab("case")}
                     >
-                      Dokumenty sprawy ({documentAttachments.filter((attachment) => attachment.caseId !== firmCaseId).length})
+                      {t("Dokumenty sprawy (")}{documentAttachments.filter((attachment) => attachment.caseId !== firmCaseId).length})
                     </button>
                     <button
                       type="button"
                       role="tab"
                       aria-selected={pickerTab === "firm"}
                       disabled={!firmCaseId}
-                      title={firmCaseId ? undefined : "Biblioteka kancelarii nie jest jeszcze utworzona (zakładka Kancelaria)"}
+                      title={firmCaseId ? undefined : t("Biblioteka kancelarii nie jest jeszcze utworzona (zakładka Kancelaria)")}
                       onClick={() => setPickerTab("firm")}
                     >
-                      Wzory i know-how kancelarii ({selectedFirmKeys.size})
+                      {t("Wzory i know-how kancelarii (")}{selectedFirmKeys.size})
                     </button>
                     <span className="chat-file-picker-count">
-                      {selectedFileCount} z {documentLimit} plików
+                      {selectedFileCount} z {documentLimit} {t("plików")}
                     </span>
                     <button type="button" className="chat-secondary-action" onClick={() => setCaseFilePickerOpen(false)}>
-                      Zamknij
+                      {t("Zamknij")}
                     </button>
                   </div>
                   {pickerNotice ? <p className="chat-inline-error" role="status">{pickerNotice}</p> : null}
@@ -6852,15 +6889,15 @@ export default function MatterChatApp({
                         />
                       </div>
                       <small>
-                        Okno modelu na dokumenty: ~{Math.round(documentFit.estimate.neededTokens / 1000)} tys. z{" "}
-                        {Math.round(documentFit.estimate.budgetTokens / 1000)} tys. tokenów
+                        {t("Okno modelu na dokumenty: ~")}{Math.round(documentFit.estimate.neededTokens / 1000)} {t("tys. z")}{" "}
+                        {Math.round(documentFit.estimate.budgetTokens / 1000)} {t("tys. tokenów")}
                         {documentFit.estimate.fits
                           ? ""
-                          : ` - za dużo; największe: ${[...documentFit.estimate.documents]
+                          : t(" - za dużo; największe: {value}. Odznacz część plików; wysyłka jest zablokowana.", { value: [...documentFit.estimate.documents]
                               .sort((left, right) => right.tokens - left.tokens)
                               .slice(0, 3)
                               .map((document) => `${fileLabel(document.documentId, document.title)} (~${Math.round(document.tokens / 1000)} tys.)`)
-                              .join(", ")}. Odznacz część plików; wysyłka jest zablokowana.`}
+                              .join(", ") })}
                       </small>
                     </div>
                   ) : null}
@@ -6876,10 +6913,9 @@ export default function MatterChatApp({
                   <>
                   <div className="chat-case-file-picker-head">
                     <strong>
-                      Dokumenty sprawy
+                      {t("Dokumenty sprawy")}
                       <InfoTip>
-                        Zaznaczone pliki idą z wiadomością, z numerami stron. Plik zanonimizowany trafia do modelu
-                        tylko w wersji z symbolami, plik bez anonimizacji jako tekst jawny.
+                        {t("Zaznaczone pliki idą z wiadomością, z numerami stron. Plik zanonimizowany trafia do modelu tylko w wersji z symbolami, plik bez anonimizacji jako tekst jawny.")}
                       </InfoTip>
                     </strong>
                     <button
@@ -6887,7 +6923,7 @@ export default function MatterChatApp({
                       className="chat-secondary-action"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      Dodaj pliki do sprawy
+                      {t("Dodaj pliki do sprawy")}
                     </button>
                   </div>
                   {(() => {
@@ -6905,7 +6941,7 @@ export default function MatterChatApp({
                               setCaseFilesReload((value) => value + 1);
                             }}
                           >
-                            Spróbuj ponownie
+                            {t("Spróbuj ponownie")}
                           </button>
                         </p>
                       );
@@ -7007,17 +7043,17 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : "Anonimizuj i zaznacz"}
+                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : t("Anonimizuj i zaznacz")}
                                 </button>
                                 <button
                                   type="button"
                                   className="chat-secondary-action"
                                   disabled={pickerAnonymizing !== null}
-                                  title="Tylko OCR/tekst, bez anonimizacji - plik trafi do modelu z jawnymi danymi"
+                                  title={t("Tylko OCR/tekst, bez anonimizacji - plik trafi do modelu z jawnymi danymi")}
                                   onClick={() => {
                                     if (
                                       !window.confirm(
-                                        `„${item.filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?`
+                                        t("„{filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?", { filename: item.filename })
                                       )
                                     ) {
                                       return;
@@ -7046,7 +7082,7 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  Tylko OCR i zaznacz
+                                  {t("Tylko OCR i zaznacz")}
                                 </button>
                                 </>
                               ) : null}
@@ -7064,8 +7100,8 @@ export default function MatterChatApp({
                 <div className="chat-final-document">
                   <div>
                     <strong>
-                      Finalny dokument z przywróconymi danymi
-                      <InfoTip>Każdy dokument źródłowy ma własny vault; alias D01/D02/… odwraca tylko jego deanonimizator.</InfoTip>
+                      {t("Finalny dokument z przywróconymi danymi")}
+                      <InfoTip>{t("Każdy dokument źródłowy ma własny vault; alias D01/D02/… odwraca tylko jego deanonimizator.")}</InfoTip>
                     </strong>
                   </div>
                   {finalReview ? (
@@ -7119,7 +7155,7 @@ export default function MatterChatApp({
                     >
                       {finalDocumentBusy
                         ? "Przywracam dane…"
-                        : "Przywróć dane i sprawdź przed zapisem"}
+                        : t("Przywróć dane i sprawdź przed zapisem")}
                     </button>
                     <button
                       type="button"
@@ -7149,7 +7185,7 @@ export default function MatterChatApp({
                         }
                       }}
                     >
-                      Pobierz wersję tokenizowaną
+                      {t("Pobierz wersję z oznaczeniami zamiast danych")}
                     </button>
                   </div>
                   </>
@@ -7162,10 +7198,10 @@ export default function MatterChatApp({
                 </p>
               ) : null}
               {contractModeRequest && contractModeRequest.caseId === caseId ? (
-                <div className="chat-contract-mode" role="group" aria-label="Tryb analizy umowy">
+                <div className="chat-contract-mode" role="group" aria-label={t("Tryb analizy umowy")}>
                   <strong>
-                    Wybierz tryb pracy z umową
-                    <InfoTip>Tryb ustawia się raz dla sprawy. Po wyborze wiadomość zostanie wysłana ponownie.</InfoTip>
+                    {t("Wybierz tryb pracy z umową")}
+                    <InfoTip>{t("Tryb ustawia się raz dla sprawy. Po wyborze wiadomość zostanie wysłana ponownie.")}</InfoTip>
                   </strong>
                   <div className="chat-contract-mode-options">
                     {CONTRACT_MODES.map((option) => (
@@ -7177,7 +7213,7 @@ export default function MatterChatApp({
                         onClick={() => void chooseContractMode(option.mode)}
                         title={option.hint}
                       >
-                        {option.label}
+                        {t(option.label)}
                         {option.mode === contractModeRequest.suggested ? " (sugerowany)" : ""}
                       </button>
                     ))}
@@ -7185,57 +7221,57 @@ export default function MatterChatApp({
                 </div>
               ) : null}
               {unverifiedDraftRequest && unverifiedDraftRequest.caseId === caseId ? (
-                <div className="chat-contract-mode" role="group" aria-label="Projekt z niezweryfikowanymi powołaniami">
+                <div className="chat-contract-mode" role="group" aria-label={t("Projekt z niezweryfikowanymi powołaniami")}>
                   <strong>
-                    Zapisać pismo jako projekt?
-                    <InfoTip>Decyzja trafia do audytu sesji; wiadomość zostanie wysłana ponownie.</InfoTip>
+                    {t("Zapisać pismo jako projekt?")}
+                    <InfoTip>{t("Decyzja trafia do audytu sesji; wiadomość zostanie wysłana ponownie.")}</InfoTip>
                   </strong>
                   <div className="chat-contract-mode-options">
                     <button type="button" className="chat-primary-action" disabled={executing} onClick={saveUnverifiedDraft}>
-                      Zapisz jako projekt
+                      {t("Zapisz jako projekt")}
                     </button>
                     <button type="button" className="chat-secondary-action" onClick={() => setUnverifiedDraftRequest(null)}>
-                      Nie zapisuj
+                      {t("Nie zapisuj")}
                     </button>
                   </div>
-                  <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą niezweryfikowanych powołań.</small>
+                  <small>{t("Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą niezweryfikowanych powołań.")}</small>
                 </div>
               ) : null}
               {skillSwitchOffer && skillSwitchOffer.caseId === caseId && !executing ? (
-                <div className="chat-contract-mode" role="group" aria-label="Zmiana rodzaju pisma">
+                <div className="chat-contract-mode" role="group" aria-label={t("Zmiana rodzaju pisma")}>
                   <strong>
                     {switchTitle(skillSwitchOffer.offer)}
                     <InfoTip>
                       {skillSwitchOffer.offer.direction === "ESCALATION"
                         ? developerMode
-                          ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
-                          : "Pismo procesowe powstaje etapami; przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
+                          ? t("Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku.")
+                          : t("Pismo procesowe powstaje etapami; przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku.")
                         : developerMode
-                          ? "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."
-                          : "Rozpoczęte pismo procesowe tej sprawy zostanie zamknięte; rozmowa zostaje w wątku."}
+                          ? t("Proces przygotowania pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku.")
+                          : t("Rozpoczęte pismo procesowe tej sprawy zostanie zamknięte; rozmowa zostaje w wątku.")}
                     </InfoTip>
                   </strong>
                   {skillSwitchOffer.offer.reason ? <small>{skillSwitchOffer.offer.reason}</small> : null}
                   <div className="chat-contract-mode-options">
                     <button type="button" className="chat-primary-action" onClick={() => void acceptSkillSwitch()}>
-                      {skillSwitchOffer.offer.direction === "ESCALATION" ? "Przełącz na pismo procesowe" : "Przełącz na pismo proste"}
+                      {skillSwitchOffer.offer.direction === "ESCALATION" ? t("Przełącz na pismo procesowe") : t("Przełącz na pismo proste")}
                     </button>
                     <button type="button" className="chat-secondary-action" onClick={() => setSkillSwitchOffer(null)}>
-                      Zostań przy obecnym
+                      {t("Zostań przy obecnym")}
                     </button>
                   </div>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (
-                <div className="chat-contract-mode" role="group" aria-label="Etap sprawy">
+                <div className="chat-contract-mode" role="group" aria-label={t("Etap sprawy")}>
                   {workflowRecoveryRequest.recovery.kind === "process-start" ? (
                     <>
                       <strong>
-                        {developerMode ? "Uruchomić pipeline pisma procesowego?" : "Przygotować pismo procesowe etapami?"}
+                        {developerMode ? t("Uruchomić proces przygotowania pisma procesowego?") : t("Przygotować pismo procesowe etapami?")}
                         <InfoTip>
                           {developerMode
-                            ? "Etapy: W1 rama, W2 projekt, W3 weryfikacja. Plik .docx powstaje sam (szkic po W2, gotowe pismo po W3); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie."
-                            : "Etapy: rama, projekt, weryfikacja. Plik .docx powstaje sam (szkic po projekcie, gotowe pismo po weryfikacji); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie."}
+                            ? t("Etapy: W1 rama, W2 projekt, W3 weryfikacja. Plik .docx powstaje sam (szkic po W2, gotowe pismo po W3); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie.")
+                            : t("Etapy: rama, projekt, weryfikacja. Plik .docx powstaje sam (szkic po projekcie, gotowe pismo po weryfikacji); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie.")}
                         </InfoTip>
                       </strong>
                       <div className="chat-contract-mode-options">
@@ -7246,7 +7282,7 @@ export default function MatterChatApp({
                             disabled={workflowRecoveryBusy}
                             onClick={() => void recoverWorkflow()}
                           >
-                            Akceptuję start
+                            {t("Akceptuję start")}
                           </button>
                         ) : (
                           <>
@@ -7255,18 +7291,18 @@ export default function MatterChatApp({
                               className="chat-primary-action"
                               disabled={workflowRecoveryBusy}
                               onClick={() => void recoverWorkflow("CHECKPOINT")}
-                              title="po każdym etapie potwierdzasz wynik"
+                              title={t("po każdym etapie potwierdzasz wynik")}
                             >
-                              Z potwierdzaniem etapów
+                              {t("Z potwierdzaniem etapów")}
                             </button>
                             <button
                               type="button"
                               className="chat-secondary-action"
                               disabled={workflowRecoveryBusy}
                               onClick={() => void recoverWorkflow("AUTO")}
-                              title={developerMode ? "etapy przechodzą bez pytania; HYBRID-VAL przed plikiem nadal obowiązuje" : "etapy przechodzą bez pytania; kontrola końcowa przed plikiem nadal obowiązuje"}
+                              title={developerMode ? t("etapy przechodzą bez pytania; HYBRID-VAL przed plikiem nadal obowiązuje") : t("etapy przechodzą bez pytania; kontrola końcowa przed plikiem nadal obowiązuje")}
                             >
-                              Automatycznie
+                              {t("Automatycznie")}
                             </button>
                           </>
                         )}
@@ -7276,7 +7312,7 @@ export default function MatterChatApp({
                     <>
                       <strong>
                         {workflowRecoveryRequest.recovery.title}
-                        <InfoTip>Dotychczasowy przebieg zostaje w historii czatu; wiadomość zostanie wysłana ponownie.</InfoTip>
+                        <InfoTip>{t("Dotychczasowy przebieg zostaje w historii czatu; wiadomość zostanie wysłana ponownie.")}</InfoTip>
                       </strong>
                       <div className="chat-contract-mode-options">
                         <button
@@ -7285,7 +7321,7 @@ export default function MatterChatApp({
                           disabled={workflowRecoveryBusy}
                           onClick={() => void recoverWorkflow()}
                         >
-                          Rozpocznij nowy etap
+                          {t("Rozpocznij nowy etap")}
                         </button>
                         <button
                           type="button"
@@ -7293,7 +7329,7 @@ export default function MatterChatApp({
                           disabled={workflowRecoveryBusy}
                           onClick={() => setWorkflowRecoveryRequest(null)}
                         >
-                          Anuluj
+                          {t("Anuluj")}
                         </button>
                       </div>
                     </>
@@ -7310,11 +7346,11 @@ export default function MatterChatApp({
                   {developerMode && executionDiagnostic ? (
                     <details>
                       <summary>
-                        Pełne informacje diagnostyczne
+                        {t("Pełne informacje diagnostyczne")}
                       </summary>
                       <dl>
                         <div>
-                          <dt>Kod</dt>
+                          <dt>{t("Kod")}</dt>
                           <dd>
                             <code>
                               {executionDiagnostic.code}
@@ -7331,7 +7367,7 @@ export default function MatterChatApp({
                         ) : null}
                         {executionDiagnostic.stage ? (
                           <div>
-                            <dt>Etap</dt>
+                            <dt>{t("Etap")}</dt>
                             <dd>
                               <code>
                                 {executionDiagnostic.stage}
@@ -7341,7 +7377,7 @@ export default function MatterChatApp({
                         ) : null}
                         {executionDiagnostic.reason ? (
                           <div>
-                            <dt>Powód</dt>
+                            <dt>{t("Powód")}</dt>
                             <dd>
                               <code>
                                 {executionDiagnostic.reason}
@@ -7352,7 +7388,7 @@ export default function MatterChatApp({
                       </dl>
                       {executionDiagnostic.description ? (
                         <pre>
-                          {executionDiagnostic.description}
+                          {t(executionDiagnostic.description)}
                         </pre>
                       ) : null}
                       {executionDiagnostic.trace &&
@@ -7416,7 +7452,7 @@ export default function MatterChatApp({
               (PRIMARY_MODEL_SOURCES.find((item) => item.id === provider)?.label ?? provider) +
               (provider === "local"
                 ? localModelReady
-                  ? " · działa"
+                  ? t(" · działa")
                   : localModelStarting || localStartBusy
                     ? " · uruchamianie"
                     : localRuntimeStatus
@@ -7477,23 +7513,55 @@ export default function MatterChatApp({
           <section className="chat-card-stack" hidden={activeTab !== "case"} style={activeTab !== "case" ? { display: "none" } : undefined}>
             {/* Case overview first, as in the UI demo: documents, the next date, the conversation. */}
             <article className="chat-card matter-overview">
-              <p className="eyebrow">Przegląd sprawy</p>
-              <h2>{selectedCase ? selectedCase.displayName || (individual ? "Rozmowa" : "Sprawa bez nazwy") : individual ? "Nowa rozmowa" : "Nowa sprawa"}</h2>
+              <p className="eyebrow">{t("Przegląd sprawy")}</p>
+              {selectedCase && editingCaseName ? (
+                <InlineEdit
+                  className="matter-title-edit"
+                  value={selectedCase.displayName ?? ""}
+                  label={t("Nazwa sprawy")}
+                  placeholder={t("np. Kowalski przeciwko ABC — odszkodowanie")}
+                  onCancel={() => setEditingCaseName(false)}
+                  onSave={async (next) => {
+                    const saved = await saveCaseName(next);
+                    if (saved) setEditingCaseName(false);
+                    return saved;
+                  }}
+                />
+              ) : (
+                <h2 className="matter-title">
+                  {selectedCase ? selectedCase.displayName || (individual ? t("Rozmowa") : t("Sprawa bez nazwy")) : individual ? t("Nowa rozmowa") : t("Nowa sprawa")}
+                  {selectedCase && !selectedCase.archivedAt ? (
+                    <button
+                      type="button"
+                      className="matter-title-pencil"
+                      title={t("Zmień nazwę sprawy (sygnatura nie jest wymagana)")}
+                      aria-label={t("Zmień nazwę sprawy")}
+                      disabled={caseBusy}
+                      onClick={() => {
+                        setCaseNameDraft(selectedCase.displayName ?? "");
+                        setEditingCaseName(true);
+                      }}
+                    >
+                      <PencilIcon />
+                    </button>
+                  ) : null}
+                </h2>
+              )}
               {selectedCase ? (
                 <div className="matter-case-meta">
-                  <span>ID katalogu: {selectedCase.caseId}</span>
-                  <span>Rola: {CASE_ROLE_LABEL[selectedCase.role]}</span>
+                  <span>{t("ID katalogu:")} {selectedCase.caseId}</span>
+                  <span>{t("Rola:")} {CASE_ROLE_LABEL[selectedCase.role]}</span>
                   <span>{selectedCase.archivedAt ? "ARCHIWALNA (tylko odczyt)" : "AKTYWNA"}</span>
                 </div>
               ) : null}
               <div className="matter-overview-tiles">
                 <div>
-                  <small>Dokumenty</small>
+                  <small>{t("Dokumenty")}</small>
                   <strong>{caseFiles.length}</strong>
-                  <span>{caseFiles.slice(0, 3).map((file) => file.filename).join(", ") || "brak plików"}</span>
+                  <span>{caseFiles.slice(0, 3).map((file) => file.filename).join(", ") || t("brak plików")}</span>
                 </div>
                 <div>
-                  <small>Najbliższy termin</small>
+                  <small>{t("Najbliższy termin")}</small>
                   {(() => {
                     const next = [...caseSchedule]
                       .filter((item) => Date.parse(item.startsAt) >= Date.now())
@@ -7506,57 +7574,34 @@ export default function MatterChatApp({
                     ) : (
                       <>
                         <strong>—</strong>
-                        <span>brak zaplanowanych terminów</span>
+                        <span>{t("brak zaplanowanych terminów")}</span>
                       </>
                     );
                   })()}
                 </div>
                 <div>
-                  <small>Rozmowa</small>
+                  <small>{t("Rozmowa")}</small>
                   <button type="button" className="chat-secondary-action" onClick={() => setActiveTab("chat")}>
-                    Otwórz rozmowę
+                    {t("Otwórz rozmowę")}
                   </button>
                 </div>
               </div>
-              <details className="matter-rename">
-                <summary>
-                  Nazwa sprawy
-                  <InfoTip>Sygnatura nie jest wymagana. Nazwa jest niezależna od sygnatury i możesz ją zmienić w każdej chwili.</InfoTip>
-                </summary>
-                <div className="chat-form-row">
-                  <input
-                    value={caseNameDraft}
-                    maxLength={160}
-                    disabled={!selectedCase || caseBusy}
-                    placeholder="np. Kowalski przeciwko ABC — odszkodowanie"
-                    onChange={(event) => setCaseNameDraft(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="chat-primary-action"
-                    disabled={!selectedCase || caseBusy || !caseNameDraft.trim()}
-                    onClick={() => void saveCaseName()}
-                  >
-                    Zapisz nazwę
-                  </button>
-                </div>
-              </details>
             </article>
 
             <CollapsibleCaseSection
-              eyebrow="Terminarz sprawy"
-              title="Spotkania, posiedzenia i terminy"
+              eyebrow={N_("Terminarz sprawy")}
+              title={t("Spotkania, posiedzenia i terminy")}
               count={caseSchedule.length}
               loading={caseScheduleLoading}
               error={caseScheduleError}
               resetKey={selectedCase?.caseId ?? null}
-              addLabel="Dodaj termin"
-              hint="Terminy są przypisane do bieżącej sprawy i przechowywane w jej zaszyfrowanych danych. OWNER i EDITOR mogą dopisywać oraz usuwać wpisy."
+              addLabel={N_("Dodaj termin")}
+              hint={N_("Terminy są przypisane do bieżącej sprawy i przechowywane w jej zaszyfrowanych danych. OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.")}
               addForm={
                 <div className="matter-schedule-form">
                   <div className="chat-form-row">
                     <select
-                      aria-label="Rodzaj terminu"
+                      aria-label={t("Rodzaj terminu")}
                       value={scheduleKind}
                       disabled={
                         !canWriteCase(
@@ -7571,21 +7616,21 @@ export default function MatterChatApp({
                       }
                     >
                       <option value="CLIENT_MEETING">
-                        Spotkanie z klientem
+                        {t("Spotkanie z klientem")}
                       </option>
                       <option value="COURT_HEARING">
-                        Posiedzenie sądu
+                        {t("Posiedzenie sądu")}
                       </option>
                       <option value="DEADLINE">
-                        Termin
+                        {t("Termin")}
                       </option>
                       <option value="OTHER">
-                        Inne
+                        {t("Inne")}
                       </option>
                     </select>
                     <input
                       type="datetime-local"
-                      aria-label="Data i godzina terminu"
+                      aria-label={t("Data i godzina terminu")}
                       value={scheduleStartsAt}
                       disabled={
                         !canWriteCase(
@@ -7610,7 +7655,7 @@ export default function MatterChatApp({
                       ) ||
                       caseScheduleBusy
                     }
-                    placeholder="Opis, np. rozprawa apelacyjna"
+                    placeholder={t("Opis, np. rozprawa apelacyjna")}
                     onChange={(event) =>
                       setScheduleTitle(
                         event.target.value
@@ -7628,7 +7673,7 @@ export default function MatterChatApp({
                         ) ||
                         caseScheduleBusy
                       }
-                      placeholder="Miejsce / sala / adres (opcjonalnie)"
+                      placeholder={t("Miejsce / sala / adres (opcjonalnie)")}
                       onChange={(event) =>
                         setScheduleLocation(
                           event.target.value
@@ -7650,7 +7695,7 @@ export default function MatterChatApp({
                         void saveCaseScheduleEvent()
                       }
                     >
-                      Dodaj termin
+                      {t("Dodaj termin")}
                     </button>
                   </div>
 
@@ -7663,7 +7708,7 @@ export default function MatterChatApp({
                       ) ||
                       caseScheduleBusy
                     }
-                    placeholder="Notatka do terminu (opcjonalnie)"
+                    placeholder={t("Notatka do terminu (opcjonalnie)")}
                     onChange={(event) =>
                       setScheduleNotes(
                         event.target.value
@@ -7718,7 +7763,7 @@ export default function MatterChatApp({
                         )
                       }
                     >
-                      Usuń
+                      {t("Usuń")}
                     </button>
                   </div>
                 )
@@ -7731,36 +7776,35 @@ export default function MatterChatApp({
             />
 
             <article
-              className="chat-card chat-file-drop-card"
+              className="chat-card matter-compact-row chat-file-drop-card"
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
               }}
               onDrop={handleDrop}
             >
-              <div>
-                <p className="eyebrow">Dokumenty sprawy</p>
-                <h2>
-                  Kliknij lub przeciągnij pliki
-                  <InfoTip>
-                    Pliki trafiają do zaszyfrowanego magazynu sprawy. OCR i decyzja o danych osobowych odbywają się w
-                    czacie, plik po pliku.
-                  </InfoTip>
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="chat-primary-action"
-                disabled={Boolean(selectedCase?.archivedAt)}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Otwórz eksplorator
-              </button>
+              <span className="matter-compact-heading">
+                <strong>{t("Dokumenty sprawy")}</strong>
+                <span className="matter-compact-count">{t("przeciągnij pliki tutaj")}</span>
+                <InfoTip>
+                  {t("Pliki trafiają do zaszyfrowanego magazynu sprawy. OCR i decyzja o danych osobowych odbywają się w czacie, plik po pliku.")}
+                </InfoTip>
+              </span>
+              <span className="matter-compact-actions">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={Boolean(selectedCase?.archivedAt)}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {t("+ Dodaj pliki")}
+                </button>
+              </span>
             </article>
 
             <article className="chat-card">
-              <p className="eyebrow">Wiedza w sesji</p>
-              <h2>Co model dostaje w rozmowie</h2>
+              <p className="eyebrow">{t("Wiedza w sesji")}</p>
+              <h2>{t("Co model dostaje w rozmowie")}</h2>
               <div className="session-knowledge">
                 <label className="session-knowledge-option">
                   <input
@@ -7770,13 +7814,13 @@ export default function MatterChatApp({
                     onChange={(event) => setIncludeCaseKnowledge(event.target.checked)}
                   />
                   <span>
-                    <strong>Dokumenty tej sprawy</strong>
+                    <strong>{t("Dokumenty tej sprawy")}</strong>
                     <small>
                       {!selectedCase
-                        ? "Niedostępne: wybierz sprawę."
+                        ? t("Niedostępne: wybierz sprawę.")
                         : selectedCase.archivedAt
-                          ? "Niedostępne: sprawa jest zarchiwizowana."
-                          : "Fragmenty akt pasujące do pytania trafiają do kontekstu. Model w chmurze może też sam czytać całe akta (tekst po pseudonimizacji)."}
+                          ? t("Niedostępne: sprawa jest zarchiwizowana.")
+                          : t("Fragmenty akt pasujące do pytania trafiają do kontekstu. Model w chmurze może też sam czytać całe akta (tekst po pseudonimizacji).")}
                     </small>
                   </span>
                 </label>
@@ -7788,11 +7832,11 @@ export default function MatterChatApp({
                     onChange={(event) => setIncludeFirmKnowledge(event.target.checked)}
                   />
                   <span>
-                    <strong>Know-how kancelarii</strong>
+                    <strong>{t("Know-how kancelarii")}</strong>
                     <small>
                       {firmKnowledgeWorkspace
-                        ? "Tylko pliki i foldery wybrane poniżej oraz foldery, które kancelaria oznaczyła jako domyślne w rozmowie — nie cała baza."
-                        : "Niedostępne: kancelaria nie ma jeszcze bazy know-how — dodaj materiały w module Wzory i wiedza."}
+                        ? t("Tylko pliki i foldery wybrane poniżej oraz foldery, które kancelaria oznaczyła jako domyślne w rozmowie — nie cała baza.")
+                        : t("Niedostępne: kancelaria nie ma jeszcze bazy know-how — dodaj materiały w module Wzory i wiedza.")}
                     </small>
                   </span>
                 </label>
@@ -7811,10 +7855,9 @@ export default function MatterChatApp({
                     onChange={(event) => setImagesWithText(event.target.checked)}
                   />
                   <span>
-                    <strong>Obrazy stron z tekstem</strong>
+                    <strong>{t("Obrazy stron z tekstem")}</strong>
                     <small>
-                      Model w chmurze dostaje też obraz strony (dane osobowe zamaskowane) — pomaga przy tabelach, pieczęciach i odręcznych
-                      dopiskach. Zdjęcia bez tekstu idą jako obraz zawsze; modele lokalne czytają tylko tekst.
+                      {t("Model w chmurze dostaje też obraz strony (dane osobowe zamaskowane) — pomaga przy tabelach, pieczęciach i odręcznych dopiskach. Zdjęcia bez tekstu idą jako obraz zawsze; modele lokalne czytają tylko tekst.")}
                     </small>
                   </span>
                 </label>
@@ -7853,32 +7896,32 @@ export default function MatterChatApp({
 
             {selectedCase ? (
               <article className="chat-card">
-                <p className="eyebrow">Cykl życia</p>
-                <h2>Zarządzanie sprawą</h2>
+                <p className="eyebrow">{t("Cykl życia")}</p>
+                <h2>{t("Zarządzanie sprawą")}</h2>
                 <button
                   type="button"
                   className="chat-secondary-action"
                   disabled={caseBusy}
                   onClick={() => void toggleArchive()}
                 >
-                  {selectedCase.archivedAt ? "Przywróć z archiwum" : "Archiwizuj sprawę"}
+                  {selectedCase.archivedAt ? t("Przywróć z archiwum") : t("Archiwizuj sprawę")}
                 </button>
 
                 {selectedCase.role === "OWNER" && user.appRole === "ADMIN" ? (
                   <details className="matter-danger-zone">
-                    <summary>Trwałe usunięcie sprawy</summary>
-                    <p>Wpisz USUŃ i podaj aktualne hasło.</p>
+                    <summary>{t("Trwałe usunięcie sprawy")}</summary>
+                    <p>{t("Wpisz USUŃ i podaj aktualne hasło.")}</p>
                     <div className="chat-form-row">
                       <input
                         value={deletePhrase}
-                        placeholder="Wpisz USUŃ"
+                        placeholder={t("Wpisz USUŃ")}
                         onChange={(event) => setDeletePhrase(event.target.value)}
                       />
                       <input
                         type="password"
                         value={deletePassword}
                         autoComplete="current-password"
-                        placeholder="Aktualne hasło"
+                        placeholder={t("Aktualne hasło")}
                         onChange={(event) => setDeletePassword(event.target.value)}
                       />
                       <button
@@ -7891,7 +7934,7 @@ export default function MatterChatApp({
                         }
                         onClick={() => void permanentlyDeleteCase()}
                       >
-                        Usuń sprawę trwale
+                        {t("Usuń sprawę trwale")}
                       </button>
                     </div>
                   </details>
@@ -7913,7 +7956,7 @@ export default function MatterChatApp({
             {firmKnowledgeWorkspace ? (
               <WorkspaceManager
                 caseId={firmKnowledgeWorkspace.caseId}
-                title="Know-how i wzory kancelarii"
+                title={t("Know-how i wzory kancelarii")}
                 canWrite={
                   user.appRole === "ADMIN" &&
                   !firmKnowledgeWorkspace.archivedAt
@@ -7928,20 +7971,20 @@ export default function MatterChatApp({
           <section className="chat-settings-hub">
             <nav
               className="chat-settings-nav"
-              aria-label="Sekcje ustawień"
+              aria-label={t("Sekcje ustawień")}
             >
               {([
-                ["Konto", "security", "Hasło i bezpieczeństwo"],
-                ["Konto", "display", "Wygląd i czytelność"],
-                ...(settingsPanels?.account ? [["Konto", "account", "Plan i klucze API"]] : []),
-                ["Asystent AI", "models", "Modele i AI"],
-                ["Asystent AI", "skills", "Skille i routing"],
-                ["Kancelaria", "users", "Użytkownicy i uprawnienia"],
-                ["Kancelaria", "invoices", "Faktury i KSeF"],
-                ...(settingsPanels?.server ? [["Kancelaria", "server", "Tryb serwerowy"]] : []),
-                ["Źródła i integracje", "mcp", "Integracje i konektory"],
-                ["Źródła i integracje", "courts", "Wokandy sądów"],
-                ["Aplikacja", "maintenance", "Aplikacja i utrzymanie"]
+                [t("Konto"), "security", t("Hasło i bezpieczeństwo")],
+                [t("Konto"), "display", t("Wygląd i czytelność")],
+                ...(settingsPanels?.account ? [[t("Konto"), "account", t("Plan i klucze API")]] : []),
+                [t("Asystent AI"), "models", t("Modele i AI")],
+                [t("Asystent AI"), "skills", t("Skille i routing")],
+                [t("Kancelaria"), "users", t("Użytkownicy i uprawnienia")],
+                [t("Kancelaria"), "invoices", t("Faktury i KSeF")],
+                ...(settingsPanels?.server ? [[t("Kancelaria"), "server", t("Tryb serwerowy")]] : []),
+                [t("Źródła i integracje"), "mcp", t("Integracje i konektory")],
+                [t("Źródła i integracje"), "courts", t("Wokandy sądów")],
+                [t("Aplikacja"), "maintenance", t("Aplikacja i utrzymanie")]
               ] as Array<
                 [string, SettingsSection, string]
               >)
@@ -7982,16 +8025,16 @@ export default function MatterChatApp({
               {settingsSection === "models" ? (
                 <div className="chat-settings-grid">
             <article className="chat-card chat-settings-primary">
-              <p className="eyebrow">Model główny</p>
+              <p className="eyebrow">{t("Model główny")}</p>
               <h2>
                 {selectedModel?.displayName ??
                   (provider === "local"
-                    ? "Lokalny model główny"
-                    : "Wybierz źródło i model")}
+                    ? t("Lokalny model główny")
+                    : t("Wybierz źródło i model"))}
               </h2>
               <div className="chat-settings-field-grid">
               <label>
-                Dostawca
+                {t("Dostawca")}
                 <select
                   value={providerGroupOf(provider)}
                   onChange={(event) => {
@@ -8003,14 +8046,14 @@ export default function MatterChatApp({
                 >
                   {providerGroups.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.label}
+                      {t(item.label)}
                     </option>
                   ))}
                 </select>
               </label>
               {provider !== "local" ? (
                 <fieldset className="chat-settings-channel">
-                  <legend>Połączenie</legend>
+                  <legend>{t("Połączenie")}</legend>
                   {(serverMode ? (["api"] as const) : (["account", "api"] as const)).map((channel) => {
                     const group = providerGroupOf(provider) as ProviderId;
                     const account = providerAccounts[group];
@@ -8043,14 +8086,14 @@ export default function MatterChatApp({
                             setProviderAccountMessage("");
                           }}
                         />
-                        {channel === "account" ? "Konto (logowanie, OAuth)" : "Klucz API"} · {status}
+                        {channel === "account" ? "Konto (logowanie, OAuth)" : t("Klucz API")} · {status}
                       </label>
                     );
                   })}
                 </fieldset>
               ) : null}
               <label>
-                Model
+                {t("Model")}
                 <select
                   value={model}
                   disabled={
@@ -8066,13 +8109,13 @@ export default function MatterChatApp({
                 >
                   {modelCatalogLoading ? (
                     <option value="">
-                      Odświeżam listę modeli…
+                      {t("Odświeżam listę modeli…")}
                     </option>
                   ) : models.length === 0 ? (
                     <option value="">
                       {provider === "local"
-                        ? "Brak zainstalowanych modeli lokalnych"
-                        : "Brak dostępnych modeli"}
+                        ? t("Brak zainstalowanych modeli lokalnych")
+                        : t("Brak dostępnych modeli")}
                     </option>
                   ) : null}
                   {models.map((item) => (
@@ -8085,7 +8128,7 @@ export default function MatterChatApp({
                       {!item.selectable
                         ? isAccountPrimarySource(provider)
                           ? " · wymaga logowania"
-                          : " · nieobsługiwany"
+                          : t(" · nieobsługiwany")
                         : ""}
                     </option>
                   ))}
@@ -8096,7 +8139,7 @@ export default function MatterChatApp({
                 <div className="chat-settings-status-row">
                   <span className="chat-settings-status ready">
                     {modelCatalogLoading
-                      ? "Odświeżam lokalny katalog…"
+                      ? t("Odświeżam lokalny katalog…")
                       : `Wykryto modeli lokalnych: ${models.length}`}
                   </span>
                 </div>
@@ -8110,8 +8153,8 @@ export default function MatterChatApp({
                     }
                   >
                     {accountAuthenticated
-                      ? "Konto połączone"
-                      : "Konto wymaga połączenia"}
+                      ? t("Konto połączone")
+                      : t("Konto wymaga połączenia")}
                   </span>
                 </div>
               ) : (
@@ -8124,27 +8167,27 @@ export default function MatterChatApp({
                     }
                   >
                     {providerConfigured
-                      ? "Klucz API aktywny"
-                      : "Brak aktywnego klucza API"}
+                      ? t("Klucz API aktywny")
+                      : t("Brak aktywnego klucza API")}
                   </span>
                 </div>
               )}
               {modelError ? (
                 <p className="chat-inline-error">
                   {modelError === "PROVIDER_NOT_CONFIGURED"
-                    ? "Najpierw dodaj klucz API dla tego dostawcy."
+                    ? t("Najpierw dodaj klucz API dla tego dostawcy.")
                     : modelError === "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
-                      ? "Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj go z instrukcji poniżej albo wybierz kanał API."
+                      ? t("Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj go z instrukcji poniżej albo wybierz kanał API.")
                       : modelError === "ACCOUNT_SESSION_NOT_AUTHENTICATED"
-                        ? "Najpierw połącz konto użytkownika."
+                        ? t("Najpierw połącz konto użytkownika.")
                         : modelError}
                 </p>
               ) : null}
               {selectedModel?.contextWindow ? (
                 <small>
-                  Aktywne okno runtime: {selectedModel.contextWindow.toLocaleString("pl-PL")} tokenów
+                  {t("Aktywne okno kontekstu:")} {selectedModel.contextWindow.toLocaleString(currentLocale())} {t("tokenów")}
                   {selectedModel.nativeContextWindow
-                    ? ` · natywne: ${selectedModel.nativeContextWindow.toLocaleString("pl-PL")}`
+                    ? ` · natywne: ${selectedModel.nativeContextWindow.toLocaleString(currentLocale())}`
                     : ""}
                   {selectedModel.contextMode === "YARN_EXTENDED"
                     ? " · rozszerzone YaRN"
@@ -8160,8 +8203,8 @@ export default function MatterChatApp({
                   onClick={() => void openExternalUrl(providerDefinition.apiKeyUrl)}
                 >
                   {model
-                    ? `Klucz API dla ${providerDefinition.label} — otwórz w przeglądarce ↗`
-                    : `Utwórz / pobierz klucz ${providerDefinition.label} — otwórz w przeglądarce ↗`}
+                    ? t("Klucz API dla {label} — otwórz w przeglądarce ↗", { label: providerDefinition.label })
+                    : t("Utwórz / pobierz klucz {label} — otwórz w przeglądarce ↗", { label: providerDefinition.label })}
                 </button>
               ) : null}
             </article>
@@ -8169,31 +8212,30 @@ export default function MatterChatApp({
             <article className="chat-card chat-settings-auth">
               <p className="eyebrow">
                 {provider === "local"
-                  ? "Lokalne AI"
+                  ? t("Lokalne AI")
                   : isAccountPrimarySource(provider)
-                    ? "Konto użytkownika"
-                    : "Klucz API"}
+                    ? t("Konto użytkownika")
+                    : t("Klucz API")}
               </p>
               <h2>
                 {provider === "local"
-                  ? "Konfiguracja lokalna"
+                  ? t("Konfiguracja lokalna")
                   : isAccountPrimarySource(provider)
-                    ? "Połączenie z kontem"
-                    : "Konfiguracja API"}
+                    ? t("Połączenie z kontem")
+                    : t("Konfiguracja API")}
                 {provider === "local" ? (
-                  <InfoTip>Modele lokalne działają przez llama.cpp, bez klucza API i bez logowania do konta.</InfoTip>
+                  <InfoTip>{t("Modele lokalne działają przez llama.cpp, bez klucza API i bez logowania do konta.")}</InfoTip>
                 ) : isAccountPrimarySource(provider) ? (
                   <InfoTip>
-                    Lex Machina otwiera okno terminala z oficjalnym klientem
+                    {t("Lex Machina otwiera okno terminala z oficjalnym klientem")}
                     {runtimeProvider === "openai"
                       ? " Codex CLI"
                       : runtimeProvider === "anthropic"
                         ? " Claude Code"
                         : runtimeProvider === "google"
-                          ? " Gemini CLI (po zalogowaniu kontem Google wpisz /quit)"
+                          ? t(" Gemini CLI (po zalogowaniu kontem Google wpisz /quit)")
                           : " Grok Build"}
-                    , który prowadzi logowanie w przeglądarce. Token OAuth zostaje w kliencie i nie trafia do Lex
-                    Machina.
+                    {t(", który prowadzi logowanie w przeglądarce. Token OAuth zostaje w kliencie i nie trafia do Lex Machina.")}
                   </InfoTip>
                 ) : null}
               </h2>
@@ -8202,7 +8244,7 @@ export default function MatterChatApp({
                   <div className="chat-local-inventory">
                     <strong>
                       {modelCatalogLoading
-                        ? "Odświeżam lokalny katalog…"
+                        ? t("Odświeżam lokalny katalog…")
                         : `Zainstalowane modele: ${models.length}`}
                     </strong>
                     {models.length > 0 ? (
@@ -8215,7 +8257,7 @@ export default function MatterChatApp({
                       </div>
                     ) : (
                       <small>
-                        Nie wykryto zainstalowanego modelu GGUF. Lista odświeży się sama po instalacji.
+                        {t("Nie wykryto zainstalowanego modelu GGUF. Lista odświeży się sama po instalacji.")}
                       </small>
                     )}
                     <button
@@ -8230,7 +8272,7 @@ export default function MatterChatApp({
                     >
                       {modelCatalogLoading
                         ? "Odświeżanie…"
-                        : "Odśwież modele lokalne"}
+                        : t("Odśwież modele lokalne")}
                     </button>
                   </div>
                 </>
@@ -8241,11 +8283,10 @@ export default function MatterChatApp({
                       <small>
                         {accountSession?.oauthTokenConfigured
                           ? "OAuth setup-token: skonfigurowany"
-                          : "OAuth setup-token: nie skonfigurowany"}
+                          : t("Token OAuth (claude setup-token): nie ustawiono")}
                         <InfoTip>
-                          Token z <code>claude setup-token</code> Lex Machina przekaże do Claude Code jako
-                          <code> CLAUDE_CODE_OAUTH_TOKEN</code>; w aplikacji desktopowej trafia do systemowego magazynu
-                          poświadczeń. W środowisku zarządzanym działa też <code>CLAUDE_CODE_OAUTH_REFRESH_TOKEN</code> z
+                          {t("Token z")} <code>{t("claude setup-token")}</code> {t("Lex Machina przekaże do Claude Code jako")}
+                          <code> CLAUDE_CODE_OAUTH_TOKEN</code>{t("; w aplikacji desktopowej trafia do systemowego magazynu poświadczeń. W środowisku zarządzanym działa też")} <code>CLAUDE_CODE_OAUTH_REFRESH_TOKEN</code> z
                           <code> CLAUDE_CODE_OAUTH_SCOPES</code>.
                         </InfoTip>
                       </small>
@@ -8255,7 +8296,7 @@ export default function MatterChatApp({
                             type="password"
                             autoComplete="off"
                             value={claudeOAuthToken}
-                            placeholder="Wklej token z: claude setup-token"
+                            placeholder={t("Wklej token z: claude setup-token")}
                             onChange={(event) =>
                               setClaudeOAuthTokenInput(
                                 event.target.value
@@ -8277,8 +8318,8 @@ export default function MatterChatApp({
                               {claudeOAuthBusy
                                 ? "Zapisywanie…"
                                 : isDesktopShell()
-                                  ? "Zapisz token w systemie"
-                                  : "Użyj tokenu w sesji"}
+                                  ? t("Zapisz token w systemie")
+                                  : t("Użyj tokenu w sesji")}
                             </button>
                             <button
                               type="button"
@@ -8288,7 +8329,7 @@ export default function MatterChatApp({
                                 void removeClaudeOAuthToken()
                               }
                             >
-                              Usuń token OAuth
+                              {t("Usuń token OAuth")}
                             </button>
                           </div>
                           {claudeOAuthMessage ? (
@@ -8301,7 +8342,7 @@ export default function MatterChatApp({
                     </>
                   ) : null}
                   <small>
-                    Bez instalowania klienta CLI: wybierz kanał API.
+                    {t("Bez instalowania klienta CLI: wybierz kanał API.")}
                   </small>
                   <p
                     className={`chat-provider-account-status ${
@@ -8319,10 +8360,10 @@ export default function MatterChatApp({
                     {accountSession
                       ? accountSession.installed
                         ? accountSession.authenticated
-                          ? `Połączone · ${accountSession.command}`
+                          ? t("Połączone · {command}", { command: accountSession.command })
                           : `Klient zainstalowany, brak aktywnej sesji · ${accountSession.command}`
                         : `Brak klienta · ${accountSession.command}`
-                      : "Sprawdzanie klienta i sesji…"}
+                      : t("Sprawdzanie klienta i sesji…")}
                   </p>
                   {accountSession && !accountSession.installed && accountSession.installHint ? (
                     <small className="chat-account-note">{accountSession.installHint}</small>
@@ -8343,7 +8384,7 @@ export default function MatterChatApp({
                             ? accountConnectPhase?.kind === "provision"
                               ? "Pobieranie klienta…"
                               : "Logowanie…"
-                            : "Połącz konto"}
+                            : t("Połącz konto")}
                         </button>
                       ) : null}
                       <button
@@ -8355,7 +8396,7 @@ export default function MatterChatApp({
                           void refreshProviderAccountStatus();
                         }}
                       >
-                        Sprawdź ponownie
+                        {t("Sprawdź ponownie")}
                       </button>
                       {accountSession?.authenticated ? (
                         <button
@@ -8364,7 +8405,7 @@ export default function MatterChatApp({
                           disabled={providerAccountBusy}
                           onClick={() => void disconnectProviderAccount()}
                         >
-                          Wyloguj
+                          {t("Wyloguj")}
                         </button>
                       ) : null}
                       {accountSession?.managedClientInstalled ? (
@@ -8374,7 +8415,7 @@ export default function MatterChatApp({
                           disabled={providerAccountBusy}
                           onClick={() => void uninstallProviderAccount()}
                         >
-                          Odinstaluj klienta
+                          {t("Odinstaluj klienta")}
                         </button>
                       ) : null}
                       <button
@@ -8383,17 +8424,17 @@ export default function MatterChatApp({
                         disabled={providerAccountBusy}
                         onClick={switchAccountToApi}
                       >
-                        Przejdź na API
+                        {t("Przejdź na API")}
                       </button>
                     </div>
                   ) : (
                     <p>
-                      Konto dostawcy może połączyć administrator aplikacji.
+                      {t("Konto dostawcy może połączyć administrator aplikacji.")}
                     </p>
                   )}
                   {accountSession?.authenticated ? (
                     <small className="chat-account-note">
-                      Aby zmienić konto, kliknij „Wyloguj”, a potem „Połącz konto”.
+                      {t("Aby zmienić konto, kliknij „Wyloguj”, a potem „Połącz konto”.")}
                     </small>
                   ) : null}
                   <AccountConnectProgress
@@ -8405,19 +8446,19 @@ export default function MatterChatApp({
                   ) : null}
                 </>
               ) : serverMode ? (
-                <p>W trybie serwerowym klucze API dla wszystkich kont ustawia administrator w zakładce „Tryb serwerowy”.</p>
+                <p>{t("W trybie serwerowym klucze API dla wszystkich kont ustawia administrator w zakładce „Tryb serwerowy”.")}</p>
               ) : user.appRole === "ADMIN" ? (
                 <>
                   {runtimeProvider === "anthropic" ? (
                     <p className="chat-inline-warning">
-                      Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth zaznacz wyżej „Połączenie: Konto (logowanie, OAuth)”.
+                      {t("Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth zaznacz wyżej „Połączenie: Konto (logowanie, OAuth)”.")}
                     </p>
                   ) : null}
                   <input
                     type="password"
                     autoComplete="off"
                     value={providerApiKey}
-                    placeholder="Wklej klucz API"
+                    placeholder={t("Wklej klucz API")}
                     onChange={(event) => setProviderApiKeyInput(event.target.value)}
                   />
                   <div className="chat-form-row compact">
@@ -8427,7 +8468,7 @@ export default function MatterChatApp({
                       disabled={providerKeyBusy || !providerApiKey.trim()}
                       onClick={() => void saveApiKey()}
                     >
-                      {isDesktopShell() ? "Zapisz w systemie" : "Użyj w sesji"}
+                      {isDesktopShell() ? t("Zapisz w systemie") : t("Użyj w sesji")}
                     </button>
                     <button
                       type="button"
@@ -8435,13 +8476,13 @@ export default function MatterChatApp({
                       disabled={providerKeyBusy}
                       onClick={() => void removeApiKey()}
                     >
-                      Usuń klucz
+                      {t("Usuń klucz")}
                     </button>
                   </div>
                   {providerKeyMessage ? <small>{providerKeyMessage}</small> : null}
                 </>
               ) : (
-                <p>Klucz API może zmieniać administrator aplikacji.</p>
+                <p>{t("Klucz API może zmieniać administrator aplikacji.")}</p>
               )}
             </article>
                 {settingsPanels?.localAi ? (
@@ -8457,24 +8498,24 @@ export default function MatterChatApp({
                     : (
                       <article className="chat-card">
                         <p className="eyebrow">
-                          Konto aplikacji
+                          {t("Konto aplikacji")}
                         </p>
                         <h2>
-                          Użytkownicy globalni
+                          {t("Użytkownicy globalni")}
                         </h2>
                         <p>
-                          Kontami aplikacji zarządza administrator. Uprawnienia do bieżącej sprawy są poniżej.
+                          {t("Kontami aplikacji zarządza administrator. Uprawnienia do bieżącej sprawy są poniżej.")}
                         </p>
                       </article>
                     )}
                   {caseId ? (
                     <article className="chat-card chat-settings-case-access">
                       <p className="eyebrow">
-                        Bieżąca sprawa
+                        {t("Bieżąca sprawa")}
                       </p>
                       <h2>
-                        Uprawnienia do sprawy
-                        <InfoTip>Role OWNER, EDITOR, ANALYST i VIEWER dotyczą tylko wybranej sprawy.</InfoTip>
+                        {t("Uprawnienia do sprawy")}
+                        <InfoTip>{t("Role OWNER, EDITOR, ANALYST i VIEWER dotyczą tylko wybranej sprawy.")}</InfoTip>
                       </h2>
                       <CaseCollaborationPanel
                         caseId={caseId}
@@ -8488,9 +8529,11 @@ export default function MatterChatApp({
               ) : settingsSection === "display" ? (
                 <div className="chat-settings-section-stack">
                   <article className="chat-card">
-                    <h2>Wygląd i czytelność</h2>
+                    <h2>{t("Wygląd i czytelność")}</h2>
+                    <LanguagePicker />
+                    <TranslationStatus />
                     <label>
-                      Rozmiar tekstu rozmowy
+                      {t("Rozmiar tekstu rozmowy")}
                       <select
                         value={chatTextSize}
                         onChange={(event) => {
@@ -8500,12 +8543,12 @@ export default function MatterChatApp({
                         }}
                       >
                         {CHAT_TEXT_SIZES.map((option) => (
-                          <option key={option.size} value={option.size}>{option.label}</option>
+                          <option key={option.size} value={option.size}>{t(option.label)}</option>
                         ))}
                       </select>
                     </label>
                     <label>
-                      Motyw kolorów
+                      {t("Motyw kolorów")}
                       <select
                         value={theme}
                         onChange={(event) => {
@@ -8515,11 +8558,11 @@ export default function MatterChatApp({
                         }}
                       >
                         {THEMES.map((option) => (
-                          <option key={option.theme} value={option.theme}>{option.label}</option>
+                          <option key={option.theme} value={option.theme}>{t(option.label)}</option>
                         ))}
                       </select>
                     </label>
-                    <p className="field-help">Rozmiar zmienia tekst wiadomości i pola pisania. Ustawienia zostają w tej przeglądarce.</p>
+                    <p className="field-help">{t("Rozmiar zmienia tekst wiadomości i pola pisania. Ustawienia zostają w tej przeglądarce.")}</p>
                   </article>
                 </div>
               ) : settingsSection === "security" ? (
@@ -8534,10 +8577,10 @@ export default function MatterChatApp({
                     : (
                       <article className="chat-card">
                         <p className="eyebrow">
-                          Konektory MCP
+                          {t("Konektory MCP")}
                         </p>
                         <p>
-                          Instalacją konektorów MCP i kluczem CEIDG zarządza administrator aplikacji.
+                          {t("Instalacją konektorów MCP i kluczem CEIDG zarządza administrator aplikacji.")}
                         </p>
                       </article>
                     )}
@@ -8559,14 +8602,13 @@ export default function MatterChatApp({
               ) : settingsSection === "skills" && developerMode ? (
                 <section className="chat-card-stack">
             <article className="chat-card">
-              <p className="eyebrow">Sterowanie wykonaniem</p>
+              <p className="eyebrow">{t("Sterowanie wykonaniem")}</p>
               <h2>
                 {selectedDeterministicAction
                   ? selectedDeterministicAction.label
                   : "AUTO · prawny-router-v3"}
                 <InfoTip>
-                  Tryb pracy wybierasz nad polem pierwszej wiadomości; bez wyboru router sam dobiera dziedziny DR i
-                  skille. Po pierwszej wiadomości tryb jest przypięty do wątku.
+                  {t("Tryb pracy wybierasz nad polem pierwszej wiadomości; bez wyboru program sam dobiera dziedziny prawa i skille. Po pierwszej wiadomości tryb jest przypięty do wątku.")}
                 </InfoTip>
               </h2>
               <div className="chat-model-select-row">
@@ -8582,7 +8624,7 @@ export default function MatterChatApp({
                     selectAllSkills
                   }
                 >
-                  Zaznacz wszystkie skille
+                  {t("Zaznacz wszystkie skille")}
                 </button>
                 <button
                   type="button"
@@ -8595,38 +8637,55 @@ export default function MatterChatApp({
                     clearAllSkills
                   }
                 >
-                  Odznacz wszystkie opcjonalne
+                  {t("Odznacz wszystkie opcjonalne")}
                 </button>
               </div>
             </article>
 
             <article className="chat-card">
-              <p className="eyebrow">Obowiązkowy rdzeń</p>
+              <p className="eyebrow">{t("Obowiązkowy rdzeń")}</p>
               <div className="chat-mandatory-grid">
                 <div>
-                  <strong>✓ prawny-router-v3</strong>
-                  <small>zawsze aktywny</small>
+                  <strong>{t("✓ prawny-router-v3")}</strong>
+                  <small>{t("zawsze aktywny")}</small>
                 </div>
                 <div>
-                  <strong>✓ shared</strong>
-                  <small>zawsze aktywny</small>
+                  <strong>{t("✓ shared")}</strong>
+                  <small>{t("zawsze aktywny")}</small>
                 </div>
-                <div>
-                  <strong>✓ prawo-polskie-v2</strong>
-                  <small>zawsze aktywny dla zapytań prawnych PL</small>
-                </div>
+                {jurisdiction ? (
+                  jurisdiction.active ? (
+                    <div>
+                      <strong>✓ {jurisdiction.active}</strong>
+                      <small>
+                        {t("zawsze aktywny dla zapytań prawnych: {country}", {
+                          country: jurisdiction.countries.find((entry) => entry.code === jurisdiction.country)?.name ?? jurisdiction.country
+                        })}
+                      </small>
+                    </div>
+                  ) : (
+                    <div>
+                      <strong>{t("Brak pakietu prawa krajowego")}</strong>
+                      <small>
+                        {t("{country}: działają skille metod, bez dziedzin prawa tego kraju", {
+                          country: jurisdiction.countries.find((entry) => entry.code === jurisdiction.country)?.name ?? jurisdiction.country
+                        })}
+                      </small>
+                    </div>
+                  )
+                ) : null}
               </div>
             </article>
 
             <article className="chat-card">
               <div className="chat-card-heading">
                 <div>
-                  <p className="eyebrow">Dziedziny prawa</p>
+                  <p className="eyebrow">{t("Dziedziny prawa")}</p>
                   <h2>
                     {domainSelection.length === routes.length
-                      ? `Wszystkie moduły DR (${routes.length})`
-                      : `${domainSelection.length} z ${routes.length} modułów DR`}
-                    <InfoTip>Odznaczenie ogranicza dziedziny, z których router korzysta w tej rozmowie. Pełny zestaw nie nakłada ograniczeń.</InfoTip>
+                      ? t("Wszystkie dziedziny prawa ({count})", { count: routes.length })
+                      : t("{selected} z {count} dziedzin prawa", { selected: domainSelection.length, count: routes.length })}
+                    <InfoTip>{t("Odznaczenie ogranicza dziedziny, z których program korzysta w tej rozmowie. Pełny zestaw nie nakłada ograniczeń.")}</InfoTip>
                   </h2>
                 </div>
                 <div className="chat-model-select-row">
@@ -8641,7 +8700,7 @@ export default function MatterChatApp({
                       selectAllDomainSkills
                     }
                   >
-                    Zaznacz wszystkie
+                    {t("Zaznacz wszystkie")}
                   </button>
                   <button
                     type="button"
@@ -8653,7 +8712,7 @@ export default function MatterChatApp({
                       clearDomainSkills
                     }
                   >
-                    Odznacz wszystkie
+                    {t("Odznacz wszystkie")}
                   </button>
                 </div>
               </div>
@@ -8673,7 +8732,7 @@ export default function MatterChatApp({
                       />
                       <span>
                         <strong>{labelForSkill(name)}</strong>
-                        <small>dziedzina prawa</small>
+                        <small>{t("dziedzina prawa")}</small>
                       </span>
                     </label>
                   );
@@ -8684,10 +8743,10 @@ export default function MatterChatApp({
             <article className="chat-card">
               <div className="chat-card-heading">
                 <div>
-                  <p className="eyebrow">Skille wykonawcze</p>
+                  <p className="eyebrow">{t("Skille wykonawcze")}</p>
                   <h2>
-                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
-                    <InfoTip>Domyślnie zaznaczone są wszystkie. Moduły DR (dziedziny prawa) wybierasz w sekcji powyżej.</InfoTip>
+                    {t("Dodatkowe skille wykonawcze ·")} {manualSkillSelection.length} z {selectableExecutionSkills.length} {t("zaznaczonych")}
+                    <InfoTip>{t("Domyślnie zaznaczone są wszystkie. Dziedziny prawa wybierasz w sekcji powyżej.")}</InfoTip>
                   </h2>
                 </div>
                 <div className="chat-model-select-row">
@@ -8702,7 +8761,7 @@ export default function MatterChatApp({
                       selectAllManualSkills
                     }
                   >
-                    Zaznacz wszystkie
+                    {t("Zaznacz wszystkie")}
                   </button>
                   <button
                     type="button"
@@ -8714,12 +8773,12 @@ export default function MatterChatApp({
                       clearManualSkills
                     }
                   >
-                    Odznacz wszystkie
+                    {t("Odznacz wszystkie")}
                   </button>
                   <input
                     className="chat-search"
                     value={skillFilter}
-                    placeholder="Filtruj skille…"
+                    placeholder={t("Filtruj skille…")}
                     onChange={(event) =>
                       setSkillFilter(
                         event.target.value
@@ -8746,7 +8805,7 @@ export default function MatterChatApp({
                       />
                       <span>
                         <strong>{labelForSkill(skill.name)}</strong>
-                        <small>{skill.description || skill.type || "skill"}</small>
+                        <small>{skill.description ? t(skill.description) : skill.type || "skill"}</small>
                       </span>
                     </label>
                   );
@@ -8757,8 +8816,8 @@ export default function MatterChatApp({
               ) : (
                 <div className="chat-settings-section-stack">
                   <article className="chat-card developer-mode-card">
-                    <p className="eyebrow">Widok odpowiedzi</p>
-                    <h2>Informacje techniczne</h2>
+                    <p className="eyebrow">{t("Widok odpowiedzi")}</p>
+                    <h2>{t("Informacje techniczne")}</h2>
                     <label className="developer-mode-toggle">
                       <input
                         type="checkbox"
@@ -8766,10 +8825,9 @@ export default function MatterChatApp({
                         onChange={(event) => setDeveloperMode(event.target.checked)}
                       />
                       <span>
-                        <strong>Tryb dewelopera</strong>
+                        <strong>{t("Tryb dewelopera")}</strong>
                         <small>
-                          Pokazuje dziennik wykonania, skille i moduły użyte w odpowiedzi, bramki, kody błędów
-                          i inne informacje techniczne. Wyłączony: widok dla prawnika.
+                          {t("Pokazuje dziennik wykonania, skille i moduły użyte w odpowiedzi, bramki, kody błędów i inne informacje techniczne. Wyłączony: widok dla prawnika.")}
                         </small>
                       </span>
                     </label>

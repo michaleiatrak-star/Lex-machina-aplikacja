@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
@@ -18,17 +19,17 @@ import { InfoTip } from "./InfoTip";
 
 const STATE_LABEL: Record<CoreLawActStatus["state"], string> = {
   CURRENT: "aktualny",
-  UPDATE_AVAILABLE: "jest aktualizacja",
-  CHECK_DUE: "do sprawdzenia",
+  UPDATE_AVAILABLE: t("jest aktualizacja"),
+  CHECK_DUE: t("do sprawdzenia"),
   MISSING: "niepobrany",
-  ERROR: "błąd pobierania",
-  UNAVAILABLE: "brak tekstu w ELI"
+  ERROR: t("błąd pobierania"),
+  UNAVAILABLE: t("brak tekstu w ELI")
 };
 
 export function coreLawProgressText(progress: CoreLawProgress): string {
   switch (progress.phase) {
     case "download":
-      return "pobieranie PDF z ELI…";
+      return t("pobieranie PDF z ELI…");
     case "extract":
       return "odczyt tekstu PDF…";
     case "ocr":
@@ -48,25 +49,25 @@ const CHANGE_LABEL: Record<CoreLawStatus["recent"][number]["kind"], string> = {
   CONSOLIDATED: "nowy tekst jednolity",
   AMENDMENT: "dodana nowelizacja",
   ADDED: "dodany akt",
-  REMOVED: "usunięty akt"
+  REMOVED: t("usunięty akt")
 };
 
 export function coreLawActErrorText(code: string): string {
   switch (code) {
     case "CORE_LAW_ACT_REFERENCE_INVALID":
-      return "Nie rozpoznano aktu. Podaj adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”.";
+      return t("Nie rozpoznano aktu. Podaj adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”.");
     case "CORE_LAW_ACT_NOT_FOUND":
-      return "Sejm ELI nie ma aktu o tym oznaczeniu.";
+      return t("Sejm ELI nie ma aktu o tym oznaczeniu.");
     case "CORE_LAW_ACT_NOT_IN_FORCE":
-      return "Według Sejm ELI akt nie obowiązuje; kopia przepisów zawiera tylko akty obowiązujące.";
+      return t("Według Sejm ELI akt nie obowiązuje; kopia przepisów zawiera tylko akty obowiązujące.");
     case "CORE_LAW_ACT_TEXT_UNAVAILABLE":
-      return "Sejm ELI nie udostępnia tekstu tego aktu (ani HTML, ani PDF).";
+      return t("Sejm ELI nie udostępnia tekstu tego aktu (ani HTML, ani PDF).");
     case "CORE_LAW_ACT_SOURCE_UNAVAILABLE":
-      return "Sejm ELI jest niedostępne. Spróbuj ponownie za chwilę.";
+      return t("Sejm ELI jest niedostępne. Spróbuj ponownie za chwilę.");
     case "CORE_LAW_ACT_ALREADY_PRESENT":
-      return "Ten akt jest już w kopii przepisów.";
+      return t("Ten akt jest już w kopii przepisów.");
     case "CORE_LAW_USER_ACT_NOT_FOUND":
-      return "Akt nie jest na liście dodanych przez użytkowników.";
+      return t("Akt nie jest na liście dodanych przez użytkowników.");
     default:
       return code;
   }
@@ -144,15 +145,14 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
       <div className="maintenance-heading">
         <div>
           <strong>
-            Przepisy prawne
+            {t("Przepisy prawne")}
             <InfoTip>
-              Kopia aktów z Dziennika Ustaw na tym komputerze. Nowszy tekst jednolity zastępuje tekst aktu w RAG, a nowelizacja
-              ogłoszona po nim trafia do RAG jako osobny dokument.
+              {t("Kopia aktów z Dziennika Ustaw na tym komputerze. Nowszy tekst jednolity zastępuje tekst aktu w RAG, a nowelizacja ogłoszona po nim trafia do RAG jako osobny dokument.")}
             </InfoTip>
           </strong>
           <small>
-            ostatnie sprawdzenie: {day(status?.lastCheckAt)}
-            {status?.refreshing ? " · sprawdzanie w toku…" : ""}
+            {t("ostatnie sprawdzenie:")} {day(status?.lastCheckAt)}
+            {status?.refreshing ? t(" · sprawdzanie w toku…") : ""}
             {status?.progress ? ` · ${status.progress.eli}: ${coreLawProgressText(status.progress)}` : ""}
           </small>
         </div>
@@ -162,7 +162,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
             : status.refreshing
               ? "sprawdzanie…"
               : groups.needsUpdate.length
-                ? `do aktualizacji: ${groups.needsUpdate.length}`
+                ? t("do aktualizacji: {count}", { count: groups.needsUpdate.length })
                 : "aktualne"}
         </span>
       </div>
@@ -171,24 +171,23 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
         <>
           <ul className="core-law-counts">
             <li>
-              <strong>{status.counts.consolidated}</strong> tekstów jednolitych
+              <strong>{status.counts.consolidated}</strong> {t("tekstów jednolitych")}
             </li>
             <li>
-              <strong>{status.counts.amendments}</strong> nowelizacji po t.j.
+              <strong>{status.counts.amendments}</strong> {t("nowelizacji po t.j.")}
             </li>
             <li>
-              <strong>{status.counts.other}</strong> pozostałych aktów
+              <strong>{status.counts.other}</strong> {t("pozostałych aktów")}
             </li>
             <li>
-              <strong>{status.counts.articles}</strong> artykułów
+              <strong>{status.counts.articles}</strong> {t("artykułów")}
             </li>
           </ul>
 
           {pendingTotal ? (
             <small className="maintenance-trust-warning">
-              Nowe w ELI, jeszcze niezastosowane: {status.pending.consolidated} nowszych tekstów jednolitych,{" "}
-              {status.pending.amendments} nowelizacji. Do czasu zastosowania weryfikacja tych aktów korzysta
-              bezpośrednio z ELI, nie z kopii.
+              {t("Nowe w ELI, jeszcze niezastosowane:")} {status.pending.consolidated} {t("nowszych tekstów jednolitych,")}{" "}
+              {status.pending.amendments} {t("nowelizacji. Do czasu zastosowania weryfikacja tych aktów korzysta bezpośrednio z ELI, nie z kopii.")}
             </small>
           ) : null}
 
@@ -203,32 +202,31 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                     void run("auto", () => setCoreLawAutoApply(event.target.checked))
                   }
                 />
-                Aktualizuj automatycznie (sprawdzenie raz dziennie)
+                {t("Aktualizuj automatycznie (sprawdzenie raz dziennie)")}
               </label>
               <div className="maintenance-actions">
                 <button type="button" disabled={disabled} onClick={() => void run("check", checkCoreLawUpdates)}>
-                  {busy === "check" ? "Sprawdzanie…" : "Sprawdź teraz"}
+                  {busy === "check" ? "Sprawdzanie…" : t("Sprawdź teraz")}
                 </button>
                 <button
                   type="button"
                   disabled={disabled || !pendingTotal}
                   onClick={() => void run("apply", () => applyCoreLawUpdates())}
                 >
-                  Zastosuj wszystkie aktualizacje ({pendingTotal})
+                  {t("Zastosuj wszystkie aktualizacje (")}{pendingTotal})
                 </button>
               </div>
             </>
           ) : (
-            <small>Aktualizacje kopii przepisów uruchamia administrator.</small>
+            <small>{t("Aktualizacje kopii przepisów uruchamia administrator.")}</small>
           )}
 
           {admin ? (
             <div className="core-law-add">
               <strong>
-                Dodaj akt prawny
+                {t("Dodaj akt prawny")}
                 <InfoTip>
-                  Adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”. Do RAG trafia najnowszy
-                  tekst jednolity z Sejm ELI.
+                  {t("Adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”. Do RAG trafia najnowszy tekst jednolity z Sejm ELI.")}
                 </InfoTip>
               </strong>
               <form
@@ -245,8 +243,8 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                 <input
                   type="text"
                   value={reference}
-                  aria-label="Akt prawny: adres ISAP, ELI albo Dz.U."
-                  placeholder="https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU…"
+                  aria-label={t("Akt prawny: adres ISAP, ELI albo Dz.U.")}
+                  placeholder={t("https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU…")}
                   disabled={Boolean(busy)}
                   onChange={(event) => {
                     setReference(event.target.value);
@@ -254,7 +252,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   }}
                 />
                 <button type="submit" disabled={Boolean(busy) || !reference.trim()}>
-                  {busy === "lookup" ? "Sprawdzanie w ELI…" : "Sprawdź w ELI"}
+                  {busy === "lookup" ? t("Sprawdzanie w ELI…") : t("Sprawdź w ELI")}
                 </button>
               </form>
               {found ? (
@@ -263,24 +261,23 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   <small>
                     {found.act.type ?? "akt"} · {found.act.baseEli}
                     {found.act.status ? ` · ${found.act.status}` : ""}
-                    {found.act.promulgation ? ` · ogłoszony ${day(found.act.promulgation)}` : ""}
+                    {found.act.promulgation ? t(" · ogłoszony {promulgation}", { promulgation: day(found.act.promulgation) }) : ""}
                   </small>
                   <small>
                     {found.act.consolidated
-                      ? `Do RAG: tekst jednolity ${found.act.currentEli}.`
-                      : `Do RAG: tekst aktu ${found.act.currentEli} (brak tekstu jednolitego w ELI).`}
+                      ? t("Do RAG: tekst jednolity {currentEli}.", { currentEli: found.act.currentEli })
+                      : t("Do RAG: tekst aktu {currentEli} (brak tekstu jednolitego w ELI).", { currentEli: found.act.currentEli })}
                     {found.act.inputEli !== found.act.currentEli && found.act.inputEli !== found.act.baseEli
-                      ? ` Podano ${found.act.inputEli}; w ELI jest nowszy tekst jednolity.`
+                      ? t(" Podano {inputEli}; w ELI jest nowszy tekst jednolity.", { inputEli: found.act.inputEli })
                       : ""}
                   </small>
                   {found.act.amendmentsAfter ? (
                     <small className="maintenance-trust-warning">
-                      Nowelizacje po tym tekście: {found.act.amendmentsAfter}. Do czasu nowego tekstu jednolitego przepisy
-                      tego aktu są weryfikowane bezpośrednio w ELI.
+                      {t("Nowelizacje po tym tekście:")} {found.act.amendmentsAfter}{t(". Do czasu nowego tekstu jednolitego przepisy tego aktu są weryfikowane bezpośrednio w ELI.")}
                     </small>
                   ) : null}
                   {found.presentAs ? (
-                    <small>Ten akt jest już w kopii przepisów ({found.presentAs}).</small>
+                    <small>{t("Ten akt jest już w kopii przepisów (")}{found.presentAs}).</small>
                   ) : (
                     <button
                       type="button"
@@ -294,7 +291,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         })
                       }
                     >
-                      {busy === "add" ? "Dodawanie…" : "Dodaj do RAG"}
+                      {busy === "add" ? "Dodawanie…" : t("Dodaj do RAG")}
                     </button>
                   )}
                 </div>
@@ -304,7 +301,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
 
           {userActs.length ? (
             <details className="core-law-list" open>
-              <summary>Dodane przez użytkowników ({userActs.length})</summary>
+              <summary>{t("Dodane przez użytkowników (")}{userActs.length})</summary>
               <ul>
                 {userActs.map((act) => (
                   <li key={act.eli}>
@@ -313,8 +310,8 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                       <span className="security-pill">{STATE_LABEL[act.state]}</span>
                     </div>
                     <small>
-                      dodał {act.addedBy ?? "—"} {day(act.addedAt)} · {act.articleCount} art.
-                      {act.fetchedAt ? ` · pobrano ${day(act.fetchedAt)}` : " · pobieranie w toku"}
+                      {t("dodał")} {act.addedBy ?? "—"} {day(act.addedAt)} · {act.articleCount} {t("art.")}
+                      {act.fetchedAt ? ` · pobrano ${day(act.fetchedAt)}` : t(" · pobieranie w toku")}
                     </small>
                     {admin ? (
                       <button
@@ -322,12 +319,12 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         className="danger-button"
                         disabled={disabled}
                         onClick={() => {
-                          if (window.confirm(`Usunąć z kopii przepisów „${actName(act)}”?`)) {
+                          if (window.confirm(t("Usunąć z kopii przepisów „{act}”?", { act: actName(act) }))) {
                             void run(`remove:${act.eli}`, () => removeCoreLawAct(act.eli));
                           }
                         }}
                       >
-                        Usuń z RAG
+                        {t("Usuń z RAG")}
                       </button>
                     ) : null}
                   </li>
@@ -337,7 +334,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
           ) : null}
 
           <details className="core-law-list" open={groups.needsUpdate.length > 0 && groups.needsUpdate.length <= 10}>
-            <summary>Wymagające aktualizacji ({groups.needsUpdate.length})</summary>
+            <summary>{t("Wymagające aktualizacji (")}{groups.needsUpdate.length})</summary>
             {groups.needsUpdate.length ? (
               <ul>
                 {groups.needsUpdate.map((act) => (
@@ -348,25 +345,25 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                     </div>
                     {act.pendingConsolidated ? (
                       <small>
-                        Nowszy tekst jednolity {act.pendingConsolidated.eli}
-                        {act.pendingConsolidated.promulgation ? ` z ${day(act.pendingConsolidated.promulgation)}` : ""}{" "}
-                        zastąpi tekst w RAG.
+                        {t("Nowszy tekst jednolity")} {act.pendingConsolidated.eli}
+                        {act.pendingConsolidated.promulgation ? t(" z {promulgation}", { promulgation: day(act.pendingConsolidated.promulgation) }) : ""}{" "}
+                        {t("zastąpi tekst w RAG.")}
                       </small>
                     ) : null}
                     {act.pendingAmendments.map((amendment) => (
                       <small key={amendment.eli}>
-                        Nowelizacja {amendment.eli}
+                        {t("Nowelizacja")} {amendment.eli}
                         {amendment.title ? ` „${amendment.title}”` : ""}
-                        {amendment.promulgation ? ` z ${day(amendment.promulgation)}` : ""} zostanie dodana do RAG.
+                        {amendment.promulgation ? t(" z {promulgation}", { promulgation: day(amendment.promulgation) }) : ""} {t("zostanie dodana do RAG.")}
                       </small>
                     ))}
                     {status.progress?.eli === act.currentEli || status.progress?.eli === act.eli ? (
-                      <small>W toku: {coreLawProgressText(status.progress)}</small>
+                      <small>{t("W toku:")} {coreLawProgressText(status.progress)}</small>
                     ) : act.lastError ? (
-                      <small className="maintenance-error">Ostatni błąd: {act.lastError}</small>
+                      <small className="maintenance-error">{t("Ostatni błąd:")} {act.lastError}</small>
                     ) : null}
                     {act.state === "CHECK_DUE" ? (
-                      <small>Ostatnie sprawdzenie w ELI: {day(act.relationsCheckedAt)}</small>
+                      <small>{t("Ostatnie sprawdzenie w ELI:")} {day(act.relationsCheckedAt)}</small>
                     ) : null}
                     {admin ? (
                       <button
@@ -374,22 +371,22 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         disabled={disabled}
                         onClick={() => void run(`act:${act.eli}`, () => applyCoreLawUpdates([act.eli]))}
                       >
-                        {act.state === "UPDATE_AVAILABLE" ? "Zastosuj" : "Sprawdź i zaktualizuj"}
+                        {act.state === "UPDATE_AVAILABLE" ? t("Zastosuj") : t("Sprawdź i zaktualizuj")}
                       </button>
                     ) : null}
                   </li>
                 ))}
               </ul>
             ) : (
-              <small>Brak.</small>
+              <small>{t("Brak.")}</small>
             )}
           </details>
 
           {groups.unavailable.length ? (
             <details className="core-law-list">
               <summary>
-                Bez tekstu w ELI ({groups.unavailable.length})
-                <InfoTip>Sejm ELI nie publikuje tekstu tych aktów, więc nie ma ich w lokalnej kopii. ELI jest sprawdzane ponownie raz na dobę.</InfoTip>
+                {t("Bez tekstu w ELI (")}{groups.unavailable.length})
+                <InfoTip>{t("Sejm ELI nie publikuje tekstu tych aktów, więc nie ma ich w lokalnej kopii. ELI jest sprawdzane ponownie raz na dobę.")}</InfoTip>
               </summary>
               <ul>
                 {groups.unavailable.map((act) => (
@@ -406,7 +403,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
           ) : null}
 
           <details className="core-law-list">
-            <summary>Aktualne ({groups.current.length})</summary>
+            <summary>{t("Aktualne (")}{groups.current.length})</summary>
             <ul>
               {groups.current.map((act) => (
                 <li key={act.eli}>
@@ -415,13 +412,13 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                     {act.consolidated ? <span className="security-pill">t.j.</span> : null}
                   </div>
                   <small>
-                    pobrano {day(act.fetchedAt)} · {act.articleCount} art.
-                    {act.consolidated ? ` · sprawdzono w ELI ${day(act.relationsCheckedAt)}` : ""}
+                    {t("pobrano")} {day(act.fetchedAt)} · {act.articleCount} {t("art.")}
+                    {act.consolidated ? t(" · sprawdzono w ELI {relationsCheckedAt}", { relationsCheckedAt: day(act.relationsCheckedAt) }) : ""}
                   </small>
                   {act.amendmentsAfter.map((amendment) => (
                     <small key={amendment.eli}>
-                      + nowelizacja {amendment.eli}
-                      {amendment.title ? ` „${amendment.title}”` : ""} (osobny dokument w RAG)
+                      {t("+ nowelizacja")} {amendment.eli}
+                      {amendment.title ? ` „${amendment.title}”` : ""} {t("(osobny dokument w RAG)")}
                     </small>
                   ))}
                 </li>
@@ -431,7 +428,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
 
           {status.recent.length ? (
             <details className="core-law-list">
-              <summary>Ostatnie zmiany w RAG ({status.recent.length})</summary>
+              <summary>{t("Ostatnie zmiany w RAG (")}{status.recent.length})</summary>
               <ul>
                 {status.recent.map((change) => (
                   <li key={`${change.at}:${change.eli}`}>

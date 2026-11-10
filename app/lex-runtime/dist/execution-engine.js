@@ -1007,6 +1007,9 @@ export class LexExecutionEngine {
             if (missing.length > 0) {
                 // One correcting round: fetch the text or drop the provision.
                 emit("gate", "QUICK_LEGAL_SOURCES", "OK", `correction=${missing.join("|")}`);
+                // A failed correcting round keeps the first answer for the source gate below; it no
+                // longer drops the whole turn (Bielik: the answer was on screen, then the turn failed
+                // as LOCAL_MODEL_INFERENCE_FAILED when this second call came back empty).
                 const corrected = await quickRequest([
                     question,
                     { role: "assistant", content: response.fullText },
@@ -1016,8 +1019,11 @@ export class LexExecutionEngine {
                             "Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
                             CORRECTED_ANSWER_ONLY
                     }
-                ]);
-                if (corrected.fullText.trim()) {
+                ]).catch((error) => {
+                    emit("gate", "QUICK_LEGAL_SOURCES", "OK", `correction_failed=${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
+                    return null;
+                });
+                if (corrected?.fullText.trim()) {
                     response.fullText = withoutCorrectionPreface(corrected.fullText);
                 }
                 missing = sources.unsourced(response.fullText);
@@ -1673,8 +1679,12 @@ export class LexExecutionEngine {
                 runTools: args.runTools,
                 nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) },
                 reasoning: "none"
+            }).catch((error) => {
+                // A failed round keeps the first answer; the qualifier gate below still decides.
+                emit("gate", "CRIMINAL_QUALIFIER", "OK", `correction_failed=${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
+                return null;
             });
-            if (corrected.fullText.trim())
+            if (corrected?.fullText.trim())
                 response.fullText = withoutCorrectionPreface(corrected.fullText);
             if (native.missingQualifier()) {
                 emit("gate", "CRIMINAL_QUALIFIER", "BLOCKED", "QUALIFIER_NOT_READ");

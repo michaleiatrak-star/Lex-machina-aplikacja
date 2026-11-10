@@ -3,13 +3,18 @@ export const LAW_SOURCES_WITH_CHECK = [
     { host: "nmonesource.com", code: "US-NM", url: "https://nmonesource.com/nmos/nmsa/en/nav_date.do", label: "NMOneSource (New Mexico Statutes Annotated)" },
     { host: "leginfo.legislature.ca.gov", code: "US-CA", url: "https://leginfo.legislature.ca.gov/faces/codes.xhtml", label: "California Legislative Information (kodeksy Kalifornii)" },
     { host: "www.oscn.net", code: "US-OK", url: "https://www.oscn.net/applications/oscn/index.asp?ftdb=STOKST", label: "OSCN (Oklahoma Statutes)" },
-    { host: "www.capitol.hawaii.gov", code: "US-HI", url: "https://www.capitol.hawaii.gov/docs/HRS.htm", label: "Hawaii State Legislature (Hawaii Revised Statutes)" }
+    { host: "www.capitol.hawaii.gov", code: "US-HI", url: "https://www.capitol.hawaii.gov/docs/HRS.htm", label: "Hawaii State Legislature (Hawaii Revised Statutes)" },
+    // Not a law source: Google search on the user's own session (Ustawienia > Wyszukiwarka
+    // internetowa, off by default). The user passes Google's consent page and captcha; results
+    // are leads only, verified at the official source.
+    { host: "www.google.com", code: "SEARCH", url: "https://www.google.com/search?q=kodeks+karny&hl=pl", label: "Google (wyszukiwanie na Twojej sesji)" }
 ];
 export const LAW_SOURCE_VERIFICATION_REQUIRED = "LAW_SOURCE_VERIFICATION_REQUIRED";
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 const sessions = new Map();
 // The check's own page, not the source's (Cloudflare "Just a moment…", DataDome's captcha frame).
-const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare/iu;
+// Google: its "unusual traffic" page (/sorry/, reCAPTCHA) and the consent page before the first search.
+const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare|google\.com\/sorry\/|unusual traffic from your computer|nietypowy ruch|g-recaptcha|consent\.google\.com|Zanim przejdziesz do Google|Before you continue to Google/iu;
 export function lawSourceWithCheck(host) {
     const name = host.toLowerCase();
     return LAW_SOURCES_WITH_CHECK.find((item) => item.host === name || item.host === `www.${name}` || `www.${item.host}` === name);

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { getWorkspace, type WorkspaceResponse } from "./workspace-client.js";
 
@@ -73,16 +74,16 @@ export function FirmKnowledgePicker({
   const toggle = (list: "folderIds" | "itemIds", id: string, on: boolean) =>
     onChange({ ...selection, [list]: on ? [...new Set([...selection[list], id])] : selection[list].filter((value) => value !== id) });
 
-  if (error) return <small className="firm-picker-note">Nie udało się wczytać bazy know-how ({error}).</small>;
-  if (!workspace) return <small className="firm-picker-note">Wczytywanie bazy know-how…</small>;
+  if (error) return <small className="firm-picker-note">{t("Nie udało się wczytać bazy know-how (")}{error}).</small>;
+  if (!workspace) return <small className="firm-picker-note">{t("Wczytywanie bazy know-how…")}</small>;
 
   return (
     <details className="firm-picker">
       <summary>
-        Materiały do tej rozmowy: {coveredFiles} z {files.length} plików
-        {defaults ? ` · domyślne foldery kancelarii: ${defaults}` : ""}
+        {t("Materiały do tej rozmowy:")} {coveredFiles} z {files.length} {t("plików")}
+        {defaults ? t(" · domyślne foldery kancelarii: {defaults}", { defaults: defaults }) : ""}
       </summary>
-      {folders.length === 0 && files.length === 0 ? <small className="firm-picker-note">Baza know-how jest pusta.</small> : null}
+      {folders.length === 0 && files.length === 0 ? <small className="firm-picker-note">{t("Baza know-how jest pusta.")}</small> : null}
       <ul className="firm-picker-list">
         {folders.map((folder) => {
           const fixed = folder.chatDefault === true;
@@ -97,7 +98,7 @@ export function FirmKnowledgePicker({
                   onChange={(event) => toggle("folderIds", folder.folderId, event.target.checked)}
                 />
                 <span>📁 {folder.name}</span>
-                {fixed ? <small>domyślny kancelarii</small> : inherited ? <small>w wybranym folderze</small> : null}
+                {fixed ? <small>{t("domyślny kancelarii")}</small> : inherited ? <small>{t("w wybranym folderze")}</small> : null}
               </label>
             </li>
           );

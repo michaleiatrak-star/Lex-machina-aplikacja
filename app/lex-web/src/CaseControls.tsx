@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useMemo,
@@ -168,16 +169,16 @@ export default function CaseControls({
   }
 
   return (
-    <section className="case-controls" aria-label="Typ i sterowanie sprawą">
+    <section className="case-controls" aria-label={t("Typ i sterowanie sprawą")}>
       <div className="case-controls-primary">
-        <div className="case-type-picker" aria-label="Typ sprawy według skilli wykonawczych">
+        <div className="case-type-picker" aria-label={t("Typ sprawy według skilli wykonawczych")}>
           <button
             type="button"
             className={automaticCaseType ? "case-type-auto selected" : "case-type-auto"}
             onClick={() => setCaseTypeSkills([])}
             aria-pressed={automaticCaseType}
           >
-            Automatyczny
+            {t("Automatyczny")}
           </button>
           <div className="case-type-chips">
             {executionSkills.map((skill) => {
@@ -200,8 +201,8 @@ export default function CaseControls({
         </div>
         <small>
           {automaticCaseType
-            ? "Automatyczny: system dobiera równolegle potrzebne skille wykonawcze i wszystkie pasujące dziedziny prawa dla każdej wiadomości."
-            : `Priorytetowe skille (${caseTypeSkills.length}): ${caseTypeSkills.map(labelForSkill).join(", ")}. Automatyczny routing może nadal dołożyć kolejne skille i dodatkowe domeny DR.`}
+            ? t("Automatyczny: system dobiera równolegle potrzebne skille wykonawcze i wszystkie pasujące dziedziny prawa dla każdej wiadomości.")
+            : t("Priorytetowe skille ({count}): {value}. Automatyczny routing może nadal dołożyć kolejne skille i dodatkowe domeny DR.", { count: caseTypeSkills.length, value: caseTypeSkills.map(labelForSkill).join(", ") })}
         </small>
       </div>
 
@@ -211,19 +212,19 @@ export default function CaseControls({
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
       >
-        {expanded ? "Ukryj sterowanie sprawą" : "Sterowanie sprawą"}
+        {expanded ? t("Ukryj sterowanie sprawą") : t("Sterowanie sprawą")}
       </button>
 
       {expanded ? (
         <div className="case-controls-panel">
           <div className="case-controls-row">
             <label>
-              Wybierz sprawę
+              {t("Wybierz sprawę")}
               <select
                 value={selectedCaseId}
                 onChange={(event) => setSelectedCaseId(event.target.value)}
               >
-                <option value="">— Wybierz sprawę —</option>
+                <option value="">{t("— Wybierz sprawę —")}</option>
                 {matterCases.map((item) => (
                   <option key={item.caseId} value={item.caseId}>
                     {item.displayName || item.caseId}
@@ -233,11 +234,11 @@ export default function CaseControls({
               </select>
             </label>
             <label>
-              Nowa sprawa
+              {t("Nowa sprawa")}
               <input
                 value={newCaseName}
                 maxLength={160}
-                placeholder="Nazwa sprawy"
+                placeholder={t("Nazwa sprawy")}
                 onChange={(event) => setNewCaseName(event.target.value)}
               />
             </label>
@@ -251,11 +252,11 @@ export default function CaseControls({
                     setNewCaseName("");
                     setSelectedCaseId(created.caseId);
                   },
-                  "Utworzono sprawę."
+                  t("Utworzono sprawę.")
                 )
               }
             >
-              Utwórz sprawę
+              {t("Utwórz sprawę")}
             </button>
           </div>
 
@@ -263,7 +264,7 @@ export default function CaseControls({
             <>
               <div className="case-controls-row">
                 <label>
-                  Nazwa sprawy
+                  {t("Nazwa sprawy")}
                   <input
                     value={renameValue}
                     maxLength={160}
@@ -281,11 +282,11 @@ export default function CaseControls({
                   onClick={() =>
                     void runCaseAction(
                       () => renameCase(selectedCase.caseId, renameValue.trim()),
-                      "Zmieniono nazwę sprawy."
+                      t("Zmieniono nazwę sprawy.")
                     )
                   }
                 >
-                  Zmień nazwę
+                  {t("Zmień nazwę")}
                 </button>
                 {selectedCase.archivedAt ? (
                   <button
@@ -294,11 +295,11 @@ export default function CaseControls({
                     onClick={() =>
                       void runCaseAction(
                         () => unarchiveCase(selectedCase.caseId),
-                        "Przywrócono sprawę z archiwum."
+                        t("Przywrócono sprawę z archiwum.")
                       )
                     }
                   >
-                    Przywróć z archiwum
+                    {t("Przywróć z archiwum")}
                   </button>
                 ) : (
                   <button
@@ -307,31 +308,31 @@ export default function CaseControls({
                     onClick={() =>
                       void runCaseAction(
                         () => archiveCase(selectedCase.caseId),
-                        "Zarchiwizowano sprawę."
+                        t("Zarchiwizowano sprawę.")
                       )
                     }
                   >
-                    Archiwizuj sprawę
+                    {t("Archiwizuj sprawę")}
                   </button>
                 )}
               </div>
 
               {selectedCase.role === "OWNER" && user.appRole === "ADMIN" ? (
                 <details className="case-controls-danger">
-                  <summary>Trwałe usunięcie sprawy</summary>
+                  <summary>{t("Trwałe usunięcie sprawy")}</summary>
                   <p>
-                    Wpisz USUŃ i podaj aktualne hasło, aby odblokować operację.
+                    {t("Wpisz USUŃ i podaj aktualne hasło, aby odblokować operację.")}
                   </p>
                   <div className="case-controls-row">
                     <input
                       value={deletePhrase}
-                      placeholder="Wpisz USUŃ"
+                      placeholder={t("Wpisz USUŃ")}
                       onChange={(event) => setDeletePhrase(event.target.value)}
                     />
                     <input
                       type="password"
                       value={deletePassword}
-                      placeholder="Aktualne hasło"
+                      placeholder={t("Aktualne hasło")}
                       autoComplete="current-password"
                       onChange={(event) => setDeletePassword(event.target.value)}
                     />
@@ -346,11 +347,11 @@ export default function CaseControls({
                       onClick={() =>
                         void runCaseAction(
                           () => deleteCase(selectedCase.caseId, deletePassword),
-                          "Usunięto sprawę trwale."
+                          t("Usunięto sprawę trwale.")
                         )
                       }
                     >
-                      Usuń sprawę trwale
+                      {t("Usuń sprawę trwale")}
                     </button>
                   </div>
                 </details>

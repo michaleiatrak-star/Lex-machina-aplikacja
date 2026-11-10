@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ApiError,
@@ -19,11 +20,11 @@ import { modelExportFilename, modelExportText } from "./model-export.js";
 import { downloadBlob } from "./download-file.js";
 
 const DOCX_ERRORS: Record<string, string> = {
-  DOCX_ANONYMIZED_SOURCE_CHANGED: "Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx.",
-  DOCX_ANONYMIZED_ALIGNMENT_FAILED: "Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie.",
-  DOCX_ANONYMIZED_TEXT_MISMATCH: "Kontrola zgodności nie przeszła - plik nie został wydany.",
-  DOCX_ANONYMIZED_LEAK: "Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany.",
-  DOCX_ANONYMIZED_UNSUPPORTED: "Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny."
+  DOCX_ANONYMIZED_SOURCE_CHANGED: t("Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx."),
+  DOCX_ANONYMIZED_ALIGNMENT_FAILED: t("Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie."),
+  DOCX_ANONYMIZED_TEXT_MISMATCH: t("Kontrola zgodności nie przeszła - plik nie został wydany."),
+  DOCX_ANONYMIZED_LEAK: t("Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany."),
+  DOCX_ANONYMIZED_UNSUPPORTED: t("Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny.")
 };
 
 function docxErrorText(error: unknown): string {
@@ -41,10 +42,10 @@ function withPages(text: string, totalPages: number, key: string): ReactNode[] {
   let cursor = 0;
   for (const match of text.matchAll(PAGE_HEADER)) {
     if (match.index! > cursor) out.push(<span key={`${key}-${cursor}`}>{text.slice(cursor, match.index)}</span>);
-    const part = match[2] && match[2] !== "1" ? " (ciąg dalszy)" : "";
+    const part = match[2] && match[2] !== "1" ? t(" (ciąg dalszy)") : "";
     out.push(
       <span key={`${key}-p${match.index}`} className="anonymized-page">
-        Strona {match[1]} z {totalPages}{part}
+        {t("Strona")} {match[1]} z {totalPages}{part}
       </span>
     );
     cursor = match.index! + match[0].length;
@@ -60,7 +61,7 @@ function renderProtected(text: string, totalPages: number, onToken: (token: stri
         key={index}
         type="button"
         className="anonymized-token"
-        title="Pokaż w kluczu"
+        title={t("Pokaż w kluczu")}
         onClick={() => onToken(part.replace(/\|[A-Z]{2,4}\]$/, "]"))}
       >
         {part}
@@ -148,7 +149,7 @@ export function AnonymizedDocumentView(props: {
         if (!cancelled) setVersion(next);
       })
       .catch((failure) => {
-        if (!cancelled) setStatus(`Nie udało się wczytać: ${failure instanceof Error ? failure.message : String(failure)}`);
+        if (!cancelled) setStatus(t("Nie udało się wczytać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       });
     return () => {
       cancelled = true;
@@ -167,10 +168,10 @@ export function AnonymizedDocumentView(props: {
       const code = failure instanceof Error ? failure.message : String(failure);
       setStatus(
         code === "PRIVACY_EDIT_TEXT_NOT_FOUND"
-          ? "Tego tekstu nie ma w wersji zanonimizowanej (może już jest zastąpiony symbolem)."
+          ? t("Tego tekstu nie ma w wersji zanonimizowanej (może już jest zastąpiony symbolem).")
           : code === "PRIVACY_EDIT_UNKNOWN_TOKEN"
-            ? "Poprawka zawiera symbol, którego nie ma w kluczu tego dokumentu (np. zmieniony numer). Przywróć symbol w pierwotnej postaci."
-          : `Nie udało się zapisać: ${code}`
+            ? t("Poprawka zawiera symbol, którego nie ma w kluczu tego dokumentu (np. zmieniony numer). Przywróć symbol w pierwotnej postaci.")
+          : t("Nie udało się zapisać: {code}", { code: code })
       );
     } finally {
       setBusy(false);
@@ -195,18 +196,18 @@ export function AnonymizedDocumentView(props: {
         const added = next as AnonymizedVersion & { token: string; replaced: number };
         setSelection("");
         setHighlight(added.token);
-        return `Zanonimizowano jako ${added.token} (wystąpienia: ${added.replaced}). Klucz zaktualizowano.`;
+        return t("Zanonimizowano jako {token} (wystąpienia: {replaced}). Klucz zaktualizowano.", { token: added.token, replaced: added.replaced });
       }
     );
   }
 
   function remove(entry: PrivacyKeyEntry): void {
-    if (!window.confirm(`Przywrócić jawną wartość w miejsce ${entry.token} i usunąć symbol z klucza?`)) return;
+    if (!window.confirm(t("Przywrócić jawną wartość w miejsce {token} i usunąć symbol z klucza?", { token: entry.token }))) return;
     void apply(
       () => removeFromAnonymization(props.caseId, props.documentId, entry.token),
       (next) =>
-        `Przywrócono jawną wartość (wystąpienia: ${(next as AnonymizedVersion & { restored: number }).restored})` +
-        (entry.forms ? " w mianowniku - sprawdź odmianę w tekście." : ".")
+        t("Przywrócono jawną wartość (wystąpienia: {restored})", { restored: (next as AnonymizedVersion & { restored: number }).restored }) +
+        (entry.forms ? t(" w mianowniku - sprawdź odmianę w tekście.") : ".")
     );
   }
 
@@ -214,46 +215,46 @@ export function AnonymizedDocumentView(props: {
     if (!Object.keys(forms).length) return;
     void apply(
       () => updateAnonymizationForms(props.caseId, props.documentId, entry.token, forms),
-      () => `Zapisano formy dla ${entry.token}; będą użyte przy przywracaniu danych.`
+      () => t("Zapisano formy dla {token}; będą użyte przy przywracaniu danych.", { token: entry.token })
     );
   }
 
   function saveGrammar(entry: PrivacyKeyEntry, grammar: KeyGrammar): void {
     void apply(
       () => updateAnonymizationGrammar(props.caseId, props.documentId, entry.token, grammar),
-      () => `Zapisano, kim jest ${entry.token}; model dostanie to w kluczu, a odmiana przy przywracaniu się zmieniła.`
+      () => t("Zapisano, kim jest {token}; model dostanie to w kluczu, a odmiana przy przywracaniu się zmieniła.", { token: entry.token })
     );
   }
 
   return (
-    <section className="workspace-preview anonymized-view" aria-label="Wersja zanonimizowana">
+    <section className="workspace-preview anonymized-view" aria-label={t("Wersja zanonimizowana")}>
       <div className="workspace-preview-head">
         <div>
-          <strong>Wersja zanonimizowana: {props.filename}</strong>
-          <InfoTip>Powiązana z oryginałem i kluczem anonimizacji. Tylko tę wersję widzą modele.</InfoTip>
+          <strong>{t("Wersja zanonimizowana:")} {props.filename}</strong>
+          <InfoTip>{t("Powiązana z oryginałem i kluczem anonimizacji. Tylko tę wersję widzą modele.")}</InfoTip>
           <small>{props.documentId}</small>
         </div>
         <div>
-          <div className="text-editor-modes" role="group" aria-label="Widok">
-            <button type="button" aria-pressed={tab === "marked"} onClick={() => setTab("marked")}>Zaznaczenia w tekście</button>
-            <button type="button" aria-pressed={tab === "text"} onClick={() => setTab("text")}>Wersja dla modelu</button>
+          <div className="text-editor-modes" role="group" aria-label={t("Widok")}>
+            <button type="button" aria-pressed={tab === "marked"} onClick={() => setTab("marked")}>{t("Zaznaczenia w tekście")}</button>
+            <button type="button" aria-pressed={tab === "text"} onClick={() => setTab("text")}>{t("Wersja dla modelu")}</button>
             <button type="button" aria-pressed={tab === "key"} onClick={() => setTab("key")}>
-              Klucz ({version?.entries.length ?? 0})
+              {t("Klucz (")}{version?.entries.length ?? 0})
             </button>
           </div>
           {version ? (
             <>
               <button
                 type="button"
-                title="Legenda, klucz symboli i tekst ze stronami - do wklejenia w zewnętrzny czat, bez danych osobowych"
+                title={t("Legenda, klucz symboli i tekst ze stronami - do wklejenia w zewnętrzny czat, bez danych osobowych")}
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(exportText())
-                    .then(() => setStatus("Skopiowano wersję dla modelu z legendą i kluczem."))
-                    .catch(() => setStatus("Nie udało się skopiować - użyj „Pobierz .txt”."));
+                    .then(() => setStatus(t("Skopiowano wersję dla modelu z legendą i kluczem.")))
+                    .catch(() => setStatus(t("Nie udało się skopiować - użyj „Pobierz .txt”.")));
                 }}
               >
-                Kopiuj dla modelu (z kluczem)
+                {t("Kopiuj dla modelu (z kluczem)")}
               </button>
               <button
                 type="button"
@@ -266,16 +267,16 @@ export function AnonymizedDocumentView(props: {
                       if (savedPath) setStatus(`Zapisano: ${savedPath}`);
                     })
                     .catch((error) =>
-                      setStatus(`Nie udało się zapisać pliku: ${error instanceof Error ? error.message : String(error)}`)
+                      setStatus(t("Nie udało się zapisać pliku: {error}", { error: error instanceof Error ? error.message : String(error) }))
                     );
                 }}
               >
-                Pobierz .txt dla modelu
+                {t("Pobierz .txt dla modelu")}
               </button>
               {props.uploadId && /\.docx$/i.test(props.filename) ? (
                 <button
                   type="button"
-                  title="Oryginalny plik Word z symbolami zamiast danych: formatowanie, przypisy, komentarze, nagłówki i stopki zachowane; autorzy i metadane usunięte"
+                  title={t("Oryginalny plik Word z symbolami zamiast danych: formatowanie, przypisy, komentarze, nagłówki i stopki zachowane; autorzy i metadane usunięte")}
                   disabled={busy}
                   onClick={() => {
                     setBusy(true);
@@ -287,7 +288,7 @@ export function AnonymizedDocumentView(props: {
                         setStatus(
                           [
                             savedPath ? `Zapisano: ${savedPath}` : "Pobrano zanonimizowany .docx.",
-                            media ? `Uwaga: obrazy i osadzone obiekty (${media.split(":")[1]}) nie są anonimizowane - sprawdź je przed wysłaniem.` : ""
+                            media ? t("Uwaga: obrazy i osadzone obiekty ({value}) nie są anonimizowane - sprawdź je przed wysłaniem.", { value: media.split(":")[1] }) : ""
                           ].filter(Boolean).join(" ")
                         );
                       })
@@ -295,20 +296,20 @@ export function AnonymizedDocumentView(props: {
                       .finally(() => setBusy(false));
                   }}
                 >
-                  Pobierz zanonimizowany .docx
+                  {t("Pobierz zanonimizowany .docx")}
                 </button>
               ) : null}
             </>
           ) : null}
-          <button type="button" onClick={props.onClose}>Zamknij</button>
+          <button type="button" onClick={props.onClose}>{t("Zamknij")}</button>
         </div>
       </div>
 
       {version?.reviewed === false ? (
         <div className="privacy-preview-todo" role="status">
-          <strong>Dokument nie jest zatwierdzony</strong>
+          <strong>{t("Dokument nie jest zatwierdzony")}</strong>
           <small>
-            Przetworzono go bez podglądu. Do zatwierdzenia nie trafi do modelu spoza tego komputera.
+            {t("Przetworzono go bez podglądu. Do zatwierdzenia nie trafi do modelu spoza tego komputera.")}
           </small>
           {props.readOnly ? null : (
             <div>
@@ -319,11 +320,11 @@ export function AnonymizedDocumentView(props: {
                 onClick={() =>
                   void apply(
                     () => approveAnonymizedVersion(props.caseId, props.documentId),
-                    () => "Zatwierdzono. Dokument może trafić do wybranego modelu."
+                    () => t("Zatwierdzono. Dokument może trafić do wybranego modelu.")
                   )
                 }
               >
-                Zatwierdzam po sprawdzeniu
+                {t("Zatwierdzam po sprawdzeniu")}
               </button>
             </div>
           )}
@@ -336,18 +337,18 @@ export function AnonymizedDocumentView(props: {
           {props.readOnly ? null : (
             <div className="text-editor-toolbar anonymized-toolbar">
               <input
-                aria-label="Tekst do anonimizacji"
-                placeholder="Zaznacz tekst poniżej albo wpisz go tutaj"
+                aria-label={t("Tekst do anonimizacji")}
+                placeholder={t("Zaznacz tekst poniżej albo wpisz go tutaj")}
                 value={selection}
                 onChange={(event) => setSelection(event.target.value)}
               />
-              <select aria-label="Rodzaj danych" value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
+              <select aria-label={t("Rodzaj danych")} value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
                 {Object.entries(KIND_LABEL).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
               <button type="button" disabled={busy || !selection.trim()} onClick={protect}>
-                Anonimizuj wszystkie wystąpienia
+                {t("Anonimizuj wszystkie wystąpienia")}
               </button>
             </div>
           )}
@@ -355,8 +356,8 @@ export function AnonymizedDocumentView(props: {
             {tab === "marked" ? (
               <>
                 <p className="anonymized-legend">
-                  Zaznaczone słowa model widzi jako symbole.
-                  <InfoTip>Najedź na słowo, aby zobaczyć symbol, kliknij, aby przejść do klucza. Zaznacz inny fragment, aby go zanonimizować.</InfoTip>
+                  {t("Zaznaczone słowa model widzi jako symbole.")}
+                  <InfoTip>{t("Najedź na słowo, aby zobaczyć symbol, kliknij, aby przejść do klucza. Zaznacz inny fragment, aby go zanonimizować.")}</InfoTip>
                 </p>
                 {version.highlighted.map((chunk) => (
                   <article key={chunk.index}>
@@ -380,10 +381,10 @@ export function AnonymizedDocumentView(props: {
                     <button
                       type="button"
                       className="anonymized-edit-button"
-                      title="Popraw błąd odczytu albo zakryj ręcznie dane, których wykrywanie nie znalazło; symbole zostaw bez zmian"
+                      title={t("Popraw błąd odczytu albo zakryj ręcznie dane, których wykrywanie nie znalazło; symbole zostaw bez zmian")}
                       onClick={() => setEditingChunk({ index: chunk.index, text: chunk.text })}
                     >
-                      Popraw tekst
+                      {t("Popraw tekst")}
                     </button>
                   )}
                 </small>
@@ -405,15 +406,15 @@ export function AnonymizedDocumentView(props: {
                             () => editAnonymizedText(props.caseId, props.documentId, chunk.index, editingChunk.text),
                             () => {
                               setEditingChunk(null);
-                              return "Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.";
+                              return t("Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.");
                             }
                           )
                         }
                       >
-                        Zapisz poprawkę
+                        {t("Zapisz poprawkę")}
                       </button>
                       <button type="button" onClick={() => setEditingChunk(null)}>
-                        Anuluj
+                        {t("Anuluj")}
                       </button>
                     </div>
                   </div>

@@ -301,6 +301,7 @@ export function classifyLocalInferenceFailure(
   | "LOCAL_MODEL_CONTEXT_OVERFLOW"
   | "LOCAL_MODEL_RESOURCE_EXHAUSTED"
   | "LOCAL_MODEL_RESPONSE_TIMEOUT"
+  | "LOCAL_MODEL_EMPTY_ANSWER"
   | "LOCAL_MODEL_INFERENCE_FAILED" {
   const lower =
     detail.toLowerCase();
@@ -367,6 +368,26 @@ export function classifyLocalInferenceFailure(
     ) {
       return "LOCAL_MODEL_SERVER_ERROR";
     }
+  }
+
+  // The server finished without text, or the text was only model reasoning
+  // that Lex removes. Not a llama.cpp failure: the model said nothing usable.
+  if (
+    /local_model_http_empty_response|local_model_empty_answer|empty (?:deterministic-workflow )?(?:result|answer)/i.test(
+      lower
+    )
+  ) {
+    return "LOCAL_MODEL_EMPTY_ANSWER";
+  }
+
+  // A reply llama-server sent but Lex could not read (broken stream frame,
+  // error frame, invalid JSON body).
+  if (
+    /local_model_http_(?:invalid_sse_json|invalid_json|stream_error)|local_model_sse_read_failed/i.test(
+      lower
+    )
+  ) {
+    return "LOCAL_MODEL_SERVER_ERROR";
   }
 
   return "LOCAL_MODEL_INFERENCE_FAILED";
@@ -1596,7 +1617,7 @@ async function streamLocalChatCompletion(
   }
 }
 
-async function streamLocalModel(
+export async function streamLocalModel(
   endpoint: string,
   modelId: string,
   contextTokens: number,
@@ -1638,6 +1659,9 @@ async function streamLocalModel(
       )
     );
 
+  // One more attempt when the model returns no usable text (an empty stream,
+  // or only reasoning that Lex strips): a second sample usually answers.
+  let emptyRetries = 0;
   for (
     let iteration = 0;
     iteration <
@@ -1688,6 +1712,15 @@ async function streamLocalModel(
         classifyLocalInferenceFailure(
           detail
         );
+      if (
+        reason === "LOCAL_MODEL_EMPTY_ANSWER" &&
+        emptyRetries === 0 &&
+        !localParams.abortSignal?.aborted
+      ) {
+        emptyRetries += 1;
+        iteration -= 1;
+        continue;
+      }
       throw new Error(
         `${reason}:${detail
           .replace(/[\r\n]+/g, " ")
@@ -1695,6 +1728,8 @@ async function streamLocalModel(
       );
     }
 
+    const rawChars =
+      result.fullText.trim().length;
     result = {
       ...result,
       fullText:
@@ -1702,6 +1737,19 @@ async function streamLocalModel(
           result.fullText
         )
     };
+    if (!result.fullText.trim()) {
+      if (
+        emptyRetries === 0 &&
+        !localParams.abortSignal?.aborted
+      ) {
+        emptyRetries += 1;
+        iteration -= 1;
+        continue;
+      }
+      throw new Error(
+        `LOCAL_MODEL_EMPTY_ANSWER:raw_chars=${rawChars}`
+      );
+    }
     const calls =
       parseLocalToolCalls(
         result.fullText

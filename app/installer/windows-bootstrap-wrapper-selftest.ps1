@@ -10,10 +10,18 @@ try {
   . (Join-Path $PSScriptRoot 'bootstrap-progress.ps1')
   Set-BootstrapProgress 'Test' 1 2
   $window = Join-Path $PSScriptRoot 'bootstrap-progress-window.ps1'
-  $process = Start-Process $powershell -PassThru -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"'+$window+'"'), '-StatusPath', ('"'+$status+'"'), '-OwnerPid', $PID)
+  # Started hidden, as bootstrap-run.ps1 starts it under the installer: the form must still show.
+  $process = Start-Process $powershell -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"'+$window+'"'), '-StatusPath', ('"'+$status+'"'), '-OwnerPid', $PID)
   $null = $process.Handle
-  Start-Sleep -Seconds 2
-  if ($process.HasExited) { throw 'Progress window exited before completion' }
+  Add-Type -Name LexSelftestWindow -Namespace LexInstaller -MemberDefinition '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);'
+  $visible = $false
+  for ($i = 0; $i -lt 40 -and -not $visible; $i++) {
+    Start-Sleep -Milliseconds 250
+    if ($process.HasExited) { throw 'Progress window exited before completion' }
+    $process.Refresh()
+    $visible = $process.MainWindowHandle -ne [IntPtr]::Zero -and [LexInstaller.LexSelftestWindow]::IsWindowVisible($process.MainWindowHandle) -and $process.MainWindowTitle -eq 'Instalacja Lex Machina'
+  }
+  if (-not $visible) { throw 'Progress window is not visible when started hidden' }
   Set-BootstrapProgress 'Done' 0 0 $true
   if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) { throw 'Progress window did not close cleanly' }
   $process = $null

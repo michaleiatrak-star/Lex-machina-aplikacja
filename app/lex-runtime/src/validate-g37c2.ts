@@ -114,7 +114,7 @@ const checks = {
       '"OS_KEYRING"'
     ) &&
     normalizedWebApp.includes(
-      'isDesktopShell() ? "Zapisz w systemie" : "Użyj w sesji"'
+      'isDesktopShell() ? t("Zapisz w systemie") : t("Użyj w sesji")'
     ) &&
     normalizedWebApp.includes(
       'isDesktopShell() ? "OS_KEYRING" : "PROCESS_MEMORY"'

@@ -1,3 +1,4 @@
+import { t, N_ } from "./i18n";
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   applyFormat,
@@ -13,18 +14,18 @@ import {
 
 const TOOLBAR: Array<{ action: FormatAction; label: string; title: string }> = [
   { action: "bold", label: "B", title: "Pogrubienie (Ctrl+B)" },
-  { action: "italic", label: "I", title: "Kursywa (Ctrl+I)" },
-  { action: "underline", label: "U", title: "Podkreślenie (Ctrl+U)" },
-  { action: "strike", label: "S", title: "Przekreślenie" },
-  { action: "h1", label: "H1", title: "Nagłówek 1" },
-  { action: "h2", label: "H2", title: "Nagłówek 2" },
-  { action: "h3", label: "H3", title: "Nagłówek 3" },
-  { action: "bullet", label: "• Lista", title: "Lista punktowana" },
-  { action: "numbered", label: "1. Lista", title: "Lista numerowana" },
-  { action: "quote", label: "Cytat", title: "Cytat" },
+  { action: "italic", label: "I", title: N_("Kursywa (Ctrl+I)") },
+  { action: "underline", label: "U", title: N_("Podkreślenie (Ctrl+U)") },
+  { action: "strike", label: "S", title: t("Przekreślenie") },
+  { action: "h1", label: "H1", title: N_("Nagłówek 1") },
+  { action: "h2", label: "H2", title: N_("Nagłówek 2") },
+  { action: "h3", label: "H3", title: N_("Nagłówek 3") },
+  { action: "bullet", label: "• Lista", title: t("Lista punktowana") },
+  { action: "numbered", label: "1. Lista", title: t("Lista numerowana") },
+  { action: "quote", label: t("Cytat"), title: t("Cytat") },
   { action: "code", label: "</>", title: "Kod / sygnatura" },
-  { action: "link", label: "Link", title: "Odnośnik" },
-  { action: "rule", label: "―", title: "Linia pozioma" }
+  { action: "link", label: t("Link"), title: t("Odnośnik") },
+  { action: "rule", label: "―", title: t("Linia pozioma") }
 ];
 
 const SHORTCUTS: Record<string, FormatAction> = { b: "bold", i: "italic", u: "underline" };
@@ -149,7 +150,7 @@ export function TextFileEditor(props: {
     const target = area.current;
     const match = findNext(text, needle, target ? target.selectionEnd : 0, matchCase);
     if (!match || !target) {
-      setStatus(needle ? "Brak wyników." : "");
+      setStatus(needle ? t("Brak wyników.") : "");
       return;
     }
     target.focus();
@@ -190,10 +191,10 @@ export function TextFileEditor(props: {
     try {
       await props.onSave(name, text);
       setSavedText(text);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }
@@ -234,36 +235,36 @@ export function TextFileEditor(props: {
 
   return (
     <div className="text-editor">
-      <div className="text-editor-toolbar" role="toolbar" aria-label="Formatowanie tekstu">
+      <div className="text-editor-toolbar" role="toolbar" aria-label={t("Formatowanie tekstu")}>
         {mode !== "view" && !props.readOnly
           ? TOOLBAR.map((button) => (
               <button
                 key={button.action}
                 type="button"
-                title={button.title}
+                title={t(button.title)}
                 className={`text-editor-${button.action}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => format(button.action)}
               >
-                {button.label}
+                {t(button.label)}
               </button>
             ))
           : null}
         {mode !== "view" ? (
           <>
-            <button type="button" title="Cofnij (Ctrl+Z)" disabled={!history.past.length} onClick={undo}>Cofnij</button>
-            <button type="button" title="Ponów (Ctrl+Y)" disabled={!history.future.length} onClick={redo}>Ponów</button>
-            <button type="button" title="Znajdź i zamień (Ctrl+F)" onClick={() => setFindOpen((open) => !open)}>
-              Znajdź
+            <button type="button" title={t("Cofnij (Ctrl+Z)")} disabled={!history.past.length} onClick={undo}>{t("Cofnij")}</button>
+            <button type="button" title={t("Ponów (Ctrl+Y)")} disabled={!history.future.length} onClick={redo}>{t("Ponów")}</button>
+            <button type="button" title={t("Znajdź i zamień (Ctrl+F)")} onClick={() => setFindOpen((open) => !open)}>
+              {t("Znajdź")}
             </button>
           </>
         ) : null}
         <span className="text-editor-spacer" />
-        <div className="text-editor-modes" role="group" aria-label="Widok">
-          <button type="button" aria-pressed={mode === "view"} onClick={() => setMode("view")}>Podgląd</button>
-          <button type="button" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edycja</button>
+        <div className="text-editor-modes" role="group" aria-label={t("Widok")}>
+          <button type="button" aria-pressed={mode === "view"} onClick={() => setMode("view")}>{t("Podgląd")}</button>
+          <button type="button" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>{t("Edycja")}</button>
           {markdown ? (
-            <button type="button" aria-pressed={mode === "split"} onClick={() => setMode("split")}>Obok siebie</button>
+            <button type="button" aria-pressed={mode === "split"} onClick={() => setMode("split")}>{t("Obok siebie")}</button>
           ) : null}
         </div>
       </div>
@@ -271,7 +272,7 @@ export function TextFileEditor(props: {
       {findOpen && mode !== "view" ? (
         <div className="text-editor-find">
           <input
-            placeholder="Szukaj"
+            placeholder={t("Szukaj")}
             value={needle}
             onChange={(event) => setNeedle(event.target.value)}
             onKeyDown={(event) => {
@@ -279,19 +280,19 @@ export function TextFileEditor(props: {
             }}
           />
           <input
-            placeholder="Zamień na"
+            placeholder={t("Zamień na")}
             value={replacement}
             readOnly={props.readOnly}
             onChange={(event) => setReplacement(event.target.value)}
           />
           <label>
             <input type="checkbox" checked={matchCase} onChange={(event) => setMatchCase(event.target.checked)} />
-            Aa
+            {t("Aa")}
           </label>
           <small>{needle ? `${countOccurrences(text, needle, matchCase)} wyst.` : ""}</small>
-          <button type="button" onClick={find}>Następne</button>
-          <button type="button" disabled={props.readOnly} onClick={replaceOne}>Zamień</button>
-          <button type="button" disabled={props.readOnly} onClick={replaceEvery}>Zamień wszystkie</button>
+          <button type="button" onClick={find}>{t("Następne")}</button>
+          <button type="button" disabled={props.readOnly} onClick={replaceOne}>{t("Zamień")}</button>
+          <button type="button" disabled={props.readOnly} onClick={replaceEvery}>{t("Zamień wszystkie")}</button>
         </div>
       ) : null}
 
@@ -310,20 +311,20 @@ export function TextFileEditor(props: {
 
       <div className="text-editor-footer">
         <small>
-          {stats.words} słów · {stats.characters} znaków · {stats.lines} wierszy · {props.encoding.toUpperCase()}
+          {stats.words} {t("słów ·")} {stats.characters} {t("znaków ·")} {stats.lines} {t("wierszy ·")} {props.encoding.toUpperCase()}
           {dirty ? " · niezapisane zmiany" : ""}
         </small>
         {props.readOnly ? (
-          <small>Sprawa tylko do odczytu.</small>
+          <small>{t("Sprawa tylko do odczytu.")}</small>
         ) : (
           <div className="text-editor-save">
             <input
-              aria-label="Nazwa zapisywanego pliku"
+              aria-label={t("Nazwa zapisywanego pliku")}
               value={saveAs}
               onChange={(event) => setSaveAs(event.target.value)}
             />
             <button type="button" disabled={!dirty || saving || !saveAs.trim()} onClick={() => void save()}>
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
           </div>
         )}

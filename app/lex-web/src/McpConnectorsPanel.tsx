@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import {
   useEffect,
   useState
@@ -18,24 +19,24 @@ import { INTEGRITY_TEXT } from "./McpSearchPanel.js";
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
-  CEIDG_KEY_NOT_JWT: "To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token.",
-  CEIDG_KEY_REJECTED: "CEIDG odrzucił token (HTTP 401/403) — jest nieprawidłowy albo wygasł. Wygeneruj nowy w Hurtowni danych CEIDG.",
-  CEIDG_KEY_REQUIRED: "CEIDG wymaga klucza API. Najpierw wklej i zatwierdź klucz poniżej.",
-  CLAUDE_DESKTOP_NOT_INSTALLED: "Na tym komputerze nie znaleziono Claude Desktop — odznacz synchronizację.",
-  CLAUDE_DESKTOP_CONFIG_INVALID: "Plik claude_desktop_config.json jest uszkodzony (niepoprawny JSON) — popraw go ręcznie.",
-  LEX_MCP_PACKAGE_MISSING: "Brak pakietu serwerów MCP wybranej jurysdykcji (prawo polskie: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli.",
-  LEX_MCP_PROBE_TIMEOUT: "Serwer MCP nie odpowiedział w 30 s — instalacja przerwana.",
-  LEX_MCP_PROBE_NO_TOOLS: "Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana.",
-  AUTHORIZATION_DENIED: "Konektorami MCP zarządza administrator aplikacji."
+  CEIDG_KEY_NOT_JWT: t("To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token."),
+  CEIDG_KEY_REJECTED: t("CEIDG odrzucił token (HTTP 401/403) — jest nieprawidłowy albo wygasł. Wygeneruj nowy w Hurtowni danych CEIDG."),
+  CEIDG_KEY_REQUIRED: t("CEIDG wymaga klucza API. Najpierw wklej i zatwierdź klucz poniżej."),
+  CLAUDE_DESKTOP_NOT_INSTALLED: t("Na tym komputerze nie znaleziono Claude Desktop — odznacz synchronizację."),
+  CLAUDE_DESKTOP_CONFIG_INVALID: t("Plik claude_desktop_config.json jest uszkodzony (niepoprawny JSON) — popraw go ręcznie."),
+  LEX_MCP_PACKAGE_MISSING: t("Brak pakietu serwerów MCP wybranej jurysdykcji (prawo polskie: prawo-polskie-v2/mcp-servers/dist/lex-mcp.mjs) w korpusie skilli."),
+  LEX_MCP_PROBE_TIMEOUT: t("Serwer MCP nie odpowiedział w 30 s — instalacja przerwana."),
+  LEX_MCP_PROBE_NO_TOOLS: t("Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana."),
+  AUTHORIZATION_DENIED: t("Konektorami MCP zarządza administrator aplikacji.")
 };
 
 function checkText(server: McpServerStatus): string {
   const check = server.lastCheck;
   if (!check) return "";
-  const at = new Date(check.at).toLocaleString("pl-PL");
+  const at = new Date(check.at).toLocaleString(currentLocale());
   return check.ok
-    ? ` · działa (sprawdzono ${at})`
-    : ` · nie działa: ${ERRORS[check.error ?? ""] ?? check.error} (sprawdzono ${at})`;
+    ? t(" · działa (sprawdzono {at})", { at: at })
+    : t(" · nie działa: {error} (sprawdzono {at})", { error: ERRORS[check.error ?? ""] ?? check.error, at: at });
 }
 
 function failureText(error: unknown): string {
@@ -137,8 +138,8 @@ export function McpConnectorsPanel() {
       (result) => {
         const { check: outcome } = result as { check: { ok: boolean; tools?: string[]; error?: string } };
         return outcome.ok
-          ? `${server.id} działa: ${outcome.tools?.join(", ")}.`
-          : `${server.id} nie działa: ${ERRORS[outcome.error ?? ""] ?? outcome.error}.`;
+          ? t("{id} działa: {value}.", { id: server.id, value: outcome.tools?.join(", ") })
+          : t("{id} nie działa: {error}.", { id: server.id, error: ERRORS[outcome.error ?? ""] ?? outcome.error });
       }
     );
   }
@@ -165,13 +166,13 @@ export function McpConnectorsPanel() {
         };
         const verdict =
           verification === "VERIFIED"
-            ? "Klucz CEIDG zatwierdzony — API przyjęło token."
+            ? t("Klucz CEIDG zatwierdzony — API przyjęło token.")
             : verification === "RATE_LIMITED"
-              ? "Klucz zapisany; CEIDG zwrócił limit zapytań (429), więc nie sprawdzono go teraz — nie ponawiaj od razu."
-              : "Klucz zapisany, ale API CEIDG było nieosiągalne — sprawdzenie nastąpi przy pierwszym zapytaniu.";
+              ? t("Klucz zapisany; CEIDG zwrócił limit zapytań (429), więc nie sprawdzono go teraz — nie ponawiaj od razu.")
+              : t("Klucz zapisany, ale API CEIDG było nieosiągalne — sprawdzenie nastąpi przy pierwszym zapytaniu.");
         return verdict +
-          " Teraz możesz zainstalować CEIDG." +
-          (containsPersonalData ? " Token zawiera Twoje dane osobowe (PESEL) — nie udostępniaj go." : "");
+          t(" Teraz możesz zainstalować CEIDG.") +
+          (containsPersonalData ? t(" Token zawiera Twoje dane osobowe (PESEL) — nie udostępniaj go.") : "");
       }
     );
   }
@@ -180,20 +181,19 @@ export function McpConnectorsPanel() {
     void run(
       "ceidg-key",
       () => clearCeidgApiKey(),
-      () => "Klucz CEIDG usunięty. CEIDG nie będzie uruchamiany do czasu podania nowego klucza."
+      () => t("Klucz CEIDG usunięty. CEIDG nie będzie uruchamiany do czasu podania nowego klucza.")
     );
   }
 
   return (
     <article className="chat-card">
       <p className="eyebrow">
-        Audyt systemu · FAZA 0E
+        {t("Audyt systemu · FAZA 0E")}
       </p>
       <h2>
-        Konektory MCP Lex Machina
+        {t("Konektory MCP Lex Machina")}
         <InfoTip>
-          Serwery wybranej jurysdykcji (prawo polskie: <code>prawo-polskie-v2/mcp-servers</code>). Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane
-          źródła są dostępne w czacie.
+          {t("Serwery wybranej jurysdykcji (prawo polskie:")} <code>{t("prawo-polskie-v2/mcp-servers")}</code>{t("). Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane źródła są dostępne w czacie.")}
         </InfoTip>
       </h2>
 
@@ -202,14 +202,14 @@ export function McpConnectorsPanel() {
 
       {status?.packageAvailable ? (
         <p className={status.package.integrity === "MATCH" ? "field-help" : "alert alert-error"}>
-          Pakiet serwerów{status.package.version ? ` ${status.package.version}` : ""}
+          {t("Pakiet serwerów")}{status.package.version ? ` ${status.package.version}` : ""}
           {status.package.skillVersion ? ` (pakiet jurysdykcji ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
         </p>
       ) : null}
 
       {status && !status.packageAvailable ? (
         <div className="alert alert-error">
-          Brak pakietu <code>{status.packagePath}</code> — zaktualizuj skille.
+          {t("Brak pakietu")} <code>{status.packagePath}</code> {t("— zaktualizuj skille.")}
         </div>
       ) : null}
 
@@ -223,13 +223,13 @@ export function McpConnectorsPanel() {
               onChange={(event) => setSyncDesktop(event.target.checked)}
             />
             <span>
-              Instaluj i odinstalowuj także w Claude Desktop
+              {t("Instaluj i odinstalowuj także w Claude Desktop")}
               {status.desktop.available ? (
                 <InfoTip>
-                  Zmienia <code>{status.desktop.configPath}</code>; przed każdą zmianą powstaje kopia zapasowa.
+                  {t("Zmienia")} <code>{status.desktop.configPath}</code>{t("; przed każdą zmianą powstaje kopia zapasowa.")}
                 </InfoTip>
               ) : (
-                " — nie wykryto Claude Desktop na tym komputerze"
+                t(" — nie wykryto Claude Desktop na tym komputerze")
               )}
             </span>
           </label>
@@ -247,7 +247,7 @@ export function McpConnectorsPanel() {
                         {server.installed
                           ? server.ready
                             ? "zainstalowany"
-                            : "zainstalowany, czeka na klucz"
+                            : t("zainstalowany, czeka na klucz")
                           : "niezainstalowany"}
                         {server.desktopInstalled ? " · Claude Desktop" : ""}
                         {checkText(server)}
@@ -261,7 +261,7 @@ export function McpConnectorsPanel() {
                           disabled={Boolean(busy) || !status.packageAvailable}
                           onClick={() => check(server)}
                         >
-                          {busy === `check-${server.id}` ? "Sprawdzam…" : "Sprawdź"}
+                          {busy === `check-${server.id}` ? "Sprawdzam…" : t("Sprawdź")}
                         </button>
                         <button
                           type="button"
@@ -269,7 +269,7 @@ export function McpConnectorsPanel() {
                           disabled={Boolean(busy)}
                           onClick={() => uninstall(server)}
                         >
-                          {busy === server.id ? "Odinstalowuję…" : "Odinstaluj"}
+                          {busy === server.id ? "Odinstalowuję…" : t("Odinstaluj")}
                         </button>
                       </span>
                     ) : (
@@ -283,7 +283,7 @@ export function McpConnectorsPanel() {
                         }
                         onClick={() => install(server)}
                       >
-                        {busy === server.id ? "Instaluję…" : "Zainstaluj"}
+                        {busy === server.id ? "Instaluję…" : t("Zainstaluj")}
                       </button>
                     )}
                   </li>
@@ -294,14 +294,13 @@ export function McpConnectorsPanel() {
 
           <section>
             <h3>
-              Klucz API CEIDG
+              {t("Klucz API CEIDG")}
               <InfoTip>
-                Token wydaje Hurtownia danych CEIDG w Biznes.gov.pl (wniosek, logowanie Profilem Zaufanym). Klucz jest zapisywany
-                lokalnie, tylko dla Twojego konta.
+                {t("Token wydaje Hurtownia danych CEIDG w Biznes.gov.pl (wniosek, logowanie Profilem Zaufanym). Klucz jest zapisywany lokalnie, tylko dla Twojego konta.")}
               </InfoTip>
             </h3>
             <p className="field-help">
-              Stan: {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}.{" "}
+              {t("Stan:")} {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}.{" "}
               <a
                 href={status.ceidg.keyUrl}
                 target="_blank"
@@ -311,17 +310,17 @@ export function McpConnectorsPanel() {
                   void openExternalUrl(status.ceidg.keyUrl);
                 }}
               >
-                Uzyskaj klucz CEIDG
+                {t("Uzyskaj klucz CEIDG")}
               </a>
             </p>
             <label>
-              Token CEIDG
+              {t("Token CEIDG")}
               <input
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
                 value={ceidgKey}
-                placeholder="eyJ…"
+                placeholder={t("eyJ…")}
                 onChange={(event) => setCeidgKey(event.target.value)}
               />
             </label>
@@ -332,7 +331,7 @@ export function McpConnectorsPanel() {
                 disabled={Boolean(busy) || !ceidgKey.trim()}
                 onClick={saveCeidgKey}
               >
-                {busy === "ceidg-key" ? "Sprawdzam…" : "Zatwierdź klucz"}
+                {busy === "ceidg-key" ? "Sprawdzam…" : t("Zatwierdź klucz")}
               </button>
               <button
                 type="button"
@@ -340,13 +339,13 @@ export function McpConnectorsPanel() {
                 disabled={Boolean(busy) || !status.ceidg.keyConfigured}
                 onClick={removeCeidgKey}
               >
-                Usuń klucz
+                {t("Usuń klucz")}
               </button>
             </div>
           </section>
         </>
       ) : !error ? (
-        <p>Wczytywanie konektorów…</p>
+        <p>{t("Wczytywanie konektorów…")}</p>
       ) : null}
     </article>
   );

@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { MarkdownContent } from "./MarkdownContent.js";
 import { useDeveloperMode } from "./developer-mode.js";
@@ -9,7 +10,7 @@ import {
   type CaseMemory
 } from "./api.js";
 
-const date = (value: string | null) => (value ? new Date(value).toLocaleDateString("pl-PL") : "—");
+const date = (value: string | null) => (value ? new Date(value).toLocaleDateString(currentLocale()) : "—");
 
 /**
  * What the next answers in this matter start from: the summary of older
@@ -46,7 +47,7 @@ export function CaseMemoryCard({
         setEditing(false);
       })
       .catch((error: unknown) => {
-        if (active) setMessage(`Pamięć sprawy niedostępna: ${error instanceof Error ? error.message : String(error)}`);
+        if (active) setMessage(t("Pamięć sprawy niedostępna: {error}", { error: error instanceof Error ? error.message : String(error) }));
       });
     return () => {
       active = false;
@@ -78,26 +79,25 @@ export function CaseMemoryCard({
     <article className="chat-card">
       <details>
         <summary>
-          <span className="eyebrow">Pamięć sprawy</span>
+          <span className="eyebrow">{t("Pamięć sprawy")}</span>
           <InfoTip>
-            Kolejne odpowiedzi w sprawie zaczynają od tych ustaleń. Przepis jest użyty bez ponownej weryfikacji tylko, gdy w Sejm ELI nie ma nowszego tekstu jednolitego ani nowelizacji.
+            {t("Kolejne odpowiedzi w sprawie zaczynają od tych ustaleń. Przepis jest użyty bez ponownej weryfikacji tylko, gdy w Sejm ELI nie ma nowszego tekstu jednolitego ani nowelizacji.")}
           </InfoTip>{" "}
-          {provisions.length ? `${provisions.length} przepisów` : "bez przepisów"}
-          {summary ? `, streszczenie ${summary.coveredMessages} wiadomości` : ""}
+          {provisions.length ? t("{count} przepisów", { count: provisions.length }) : t("bez przepisów")}
+          {summary ? t(", streszczenie {coveredMessages} wiadomości", { coveredMessages: summary.coveredMessages }) : ""}
           {overview ? ", podsumowanie" : ""}
-          {chronology ? ", oś czasu" : ""}
-          {work.length ? `, prace: ${work.filter((item) => item.status === "DONE").length} zamkniętych, ${work.filter((item) => item.status === "OPEN").length} otwartych` : ""}
+          {chronology ? t(", oś czasu") : ""}
+          {work.length ? t(", prace: {count} zamkniętych, {count2} otwartych", { count: work.filter((item) => item.status === "DONE").length, count2: work.filter((item) => item.status === "OPEN").length }) : ""}
         </summary>
         <h3>
-          Podsumowanie sprawy
+          {t("Podsumowanie sprawy")}
           <InfoTip>
-            Metryka, dokumenty, podmioty, oś czasu, kwoty, fakty kluczowe, spory i braki z dokumentów sprawy. Kolejne odpowiedzi
-            zaczynają od niego; nowe podsumowanie zastępuje poprzednie.
+            {t("Metryka, dokumenty, podmioty, oś czasu, kwoty, fakty kluczowe, spory i braki z dokumentów sprawy. Kolejne odpowiedzi zaczynają od niego; nowe podsumowanie zastępuje poprzednie.")}
           </InfoTip>
         </h3>
         {overview ? (
           <>
-            <p className="field-help">Stan z {date(overview.updatedAt)}.</p>
+            <p className="field-help">{t("Stan z")} {date(overview.updatedAt)}.</p>
             <div className="case-overview">
               {overviewSections.map((part, index) => (
                 <details key={`${index}-${part.title}`} open={index === 0}>
@@ -108,23 +108,23 @@ export function CaseMemoryCard({
             </div>
           </>
         ) : (
-          <p className="field-help">Brak. Utwórz je z dokumentów sprawy.</p>
+          <p className="field-help">{t("Brak. Utwórz je z dokumentów sprawy.")}</p>
         )}
         {canWrite && onRequestOverview ? (
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={onRequestOverview}>
-            {overview ? "Odśwież podsumowanie sprawy" : "Utwórz podsumowanie sprawy"}
+            {overview ? t("Odśwież podsumowanie sprawy") : t("Utwórz podsumowanie sprawy")}
           </button>
         ) : null}
 
         <h3>
-          Streszczenie wcześniejszej części rozmowy
-          <InfoTip>Zastępuje najstarsze wiadomości, które nie mieszczą się w oknie modelu.</InfoTip>
+          {t("Streszczenie wcześniejszej części rozmowy")}
+          <InfoTip>{t("Zastępuje najstarsze wiadomości, które nie mieszczą się w oknie modelu.")}</InfoTip>
         </h3>
         {summary ? (
           <>
             <p className="field-help">
-              {summary.coveredMessages} wiadomości, stan z {date(summary.updatedAt)}
-              {summary.editedByUser ? ", poprawione ręcznie" : ""}.
+              {summary.coveredMessages} {t("wiadomości, stan z")} {date(summary.updatedAt)}
+              {summary.editedByUser ? t(", poprawione ręcznie") : ""}.
             </p>
             {editing ? (
               <>
@@ -142,10 +142,10 @@ export function CaseMemoryCard({
                       }, "Streszczenie zapisane.")
                     }
                   >
-                    Zapisz streszczenie
+                    {t("Zapisz streszczenie")}
                   </button>
                   <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing(false)}>
-                    Anuluj
+                    {t("Anuluj")}
                   </button>
                 </div>
               </>
@@ -154,19 +154,19 @@ export function CaseMemoryCard({
                 <pre className="case-memory-summary">{summary.text}</pre>
                 {canWrite ? (
                   <button type="button" className="chat-secondary-action" onClick={() => setEditing(true)}>
-                    Popraw streszczenie
+                    {t("Popraw streszczenie")}
                   </button>
                 ) : null}
               </>
             )}
           </>
         ) : (
-          <p className="field-help">Brak: cała rozmowa mieści się w oknie modelu.</p>
+          <p className="field-help">{t("Brak: cała rozmowa mieści się w oknie modelu.")}</p>
         )}
 
         <h3>
-          Prace w sprawie
-          <InfoTip>Kolejne odpowiedzi korzystają z wyników zamkniętych prac zamiast wykonywać je od nowa; otwarte dokańczają.</InfoTip>
+          {t("Prace w sprawie")}
+          <InfoTip>{t("Kolejne odpowiedzi korzystają z wyników zamkniętych prac zamiast wykonywać je od nowa; otwarte dokańczają.")}</InfoTip>
         </h3>
         {work.length ? (
           <ul className="case-memory-list">
@@ -175,25 +175,25 @@ export function CaseMemoryCard({
             ))}
           </ul>
         ) : (
-          <p className="field-help">Brak zapisanych prac.</p>
+          <p className="field-help">{t("Brak zapisanych prac.")}</p>
         )}
 
         <h3>
-          Oś czasu sprawy
-          <InfoTip>Zapisuje się po chronologii sprawy. Kolejne prace (także w nowym wątku) dostają ją jako materiał; nowa chronologia ją zastępuje.</InfoTip>
+          {t("Oś czasu sprawy")}
+          <InfoTip>{t("Zapisuje się po chronologii sprawy. Kolejne prace (także w nowym wątku) dostają ją jako materiał; nowa chronologia ją zastępuje.")}</InfoTip>
         </h3>
         {chronology ? (
           <>
             <p className="field-help">
-              Z chronologii z {date(chronology.updatedAt)}.
+              {t("Z chronologii z")} {date(chronology.updatedAt)}.
             </p>
             <pre className="case-memory-summary">{chronology.text}</pre>
           </>
         ) : (
-          <p className="field-help">Brak.</p>
+          <p className="field-help">{t("Brak.")}</p>
         )}
 
-        <h3>Przepisy ustalone wcześniej</h3>
+        <h3>{t("Przepisy ustalone wcześniej")}</h3>
         {provisions.length ? (
           <ul className="case-memory-list">
             {provisions.map((provision) => (
@@ -205,16 +205,16 @@ export function CaseMemoryCard({
                 ) : (
                   provision.claim
                 )}{" "}
-                — {provision.status}, t.j. {provision.consolidatedText ?? "—"}, pobrano {date(provision.fetchedAt)}
-                {provision.freshnessCheckedAt ? `, aktualność sprawdzona ${date(provision.freshnessCheckedAt)}` : ""}
+                — {provision.status}, t.j. {provision.consolidatedText ?? "—"}{t(", pobrano")} {date(provision.fetchedAt)}
+                {provision.freshnessCheckedAt ? t(", aktualność sprawdzona {freshnessCheckedAt}", { freshnessCheckedAt: date(provision.freshnessCheckedAt) }) : ""}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="field-help">Brak.</p>
+          <p className="field-help">{t("Brak.")}</p>
         )}
         {developer && memory?.evidence?.skills.length ? (
-          <p className="field-help">Skille użyte w sprawie: {memory.evidence.skills.join(", ")}</p>
+          <p className="field-help">{t("Skille użyte w sprawie:")} {memory.evidence.skills.join(", ")}</p>
         ) : null}
 
         {canWrite && (summary || provisions.length || chronology || overview || work.length) ? (
@@ -227,10 +227,10 @@ export function CaseMemoryCard({
                 await clearCaseMemory(caseId);
                 setMemory({ summary: null, evidence: null, chronology: null, overview: null, work: [] });
                 setDraft("");
-              }, "Pamięć sprawy wyczyszczona.")
+              }, t("Pamięć sprawy wyczyszczona."))
             }
           >
-            Wyczyść pamięć sprawy
+            {t("Wyczyść pamięć sprawy")}
           </button>
         ) : null}
         {message ? <p className="field-help">{message}</p> : null}
@@ -242,7 +242,7 @@ export function CaseMemoryCard({
 /** The summary split at its "## " headings (text before the first one goes under "Podsumowanie"). */
 export function overviewParts(text: string): Array<{ title: string; body: string }> {
   const parts: Array<{ title: string; body: string }> = [];
-  let current = { title: "Podsumowanie", body: "" };
+  let current = { title: t("Podsumowanie"), body: "" };
   for (const line of text.split("\n")) {
     const heading = /^##\s+(.+?)\s*$/u.exec(line);
     if (heading) {

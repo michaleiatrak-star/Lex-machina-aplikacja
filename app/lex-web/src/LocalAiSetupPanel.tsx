@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { useDeveloperMode } from "./developer-mode.js";
 import {
   useEffect,
@@ -197,7 +198,7 @@ async function request<T>(
 }
 
 function formatTokens(value: number): string {
-  return value.toLocaleString("pl-PL");
+  return value.toLocaleString(currentLocale());
 }
 
 function formatBytes(value: number): string {
@@ -220,19 +221,19 @@ function progressLabel(
 ): string {
   switch (phase) {
     case "STARTING":
-      return "Przygotowanie";
+      return t("Przygotowanie");
     case "DOWNLOAD":
-      return "Pobieranie";
+      return t("Pobieranie");
     case "CACHE_HIT":
-      return "Zweryfikowany cache";
+      return t("Zweryfikowany cache");
     case "VERIFIED":
       return "SHA-256 zweryfikowane";
     case "VALIDATING_RUNTIME":
-      return "Test uruchomienia";
+      return t("Test uruchomienia");
     case "READY":
-      return "Gotowe";
+      return t("Gotowe");
     case "FAILED":
-      return "Błąd";
+      return t("Błąd");
   }
 }
 
@@ -242,20 +243,20 @@ function modelPackBlockLabel(
 ): string {
   switch (reason) {
     case "SIGNED_INDEX_MISSING":
-      return "brak podpisu indeksu model-pack w trybie wymagającym podpisu";
+      return t("brak podpisu indeksu model-pack w trybie wymagającym podpisu");
     case "SIGNER_POLICY_MISSING":
       return "brak skonfigurowanego zaufanego klucza Ed25519";
     case "APP_INCOMPATIBLE":
-      return "pakiet nie jest zgodny z tą wersją aplikacji";
+      return t("pakiet nie jest zgodny z tą wersją aplikacji");
     case "MODEL_NOT_IN_INDEX":
-      return "zainstalowanego modelu nie ma w indeksie aktualizacji";
+      return t("zainstalowanego modelu nie ma w indeksie aktualizacji");
     case "PACK_VERSION_ROLLBACK":
-      return "wykryto próbę cofnięcia do starszego pakietu";
+      return t("wykryto próbę cofnięcia do starszego pakietu");
     case "PACK_VERSION_HASH_CONFLICT":
-      return "ta sama wersja pakietu ma inny hash modelu";
+      return t("ta sama wersja pakietu ma inny hash modelu");
     case "INDEX_INVALID":
     case undefined:
-      return "indeks aktualizacji jest nieprawidłowy";
+      return t("indeks aktualizacji jest nieprawidłowy");
   }
 }
 
@@ -265,7 +266,7 @@ function contextLabel(
 ): string {
   return tokens > nativeContext
     ? `${formatTokens(tokens)} · rozszerzony YaRN`
-    : `${formatTokens(tokens)} · w granicach natywnych`;
+    : t("{tokens} · w granicach natywnych", { tokens: formatTokens(tokens) });
 }
 
 function backendLabel(
@@ -274,11 +275,11 @@ function backendLabel(
 ): string {
   switch (value) {
     case "AUTO":
-      return mac ? "Auto · karta graficzna Apple (Metal)" : "Auto · spróbuj Vulkan, w razie błędu użyj CPU";
+      return mac ? "Auto · karta graficzna Apple (Metal)" : t("Automatycznie: najpierw karta graficzna (Vulkan), przy błędzie procesor");
     case "VULKAN_X64":
       return "Vulkan GPU · bez automatycznego fallbacku";
     case "CPU_X64_PORTABLE":
-      return "CPU · maksymalna zgodność";
+      return t("CPU · maksymalna zgodność");
     case "METAL_ARM64":
       return "Metal · karta graficzna Apple";
   }
@@ -336,8 +337,8 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   if (!status.available) {
     return (
       <div className="local-ai-facts">
-        <strong>Odczyt wątpliwych linii skanu</strong>
-        <small>Ta wersja aplikacji nie zawiera modelu wizyjnego w manifeście.</small>
+        <strong>{t("Odczyt wątpliwych linii skanu")}</strong>
+        <small>{t("Ta wersja aplikacji nie zawiera modelu wizyjnego w manifeście.")}</small>
       </div>
     );
   }
@@ -345,10 +346,9 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   return (
     <div className="local-ai-facts">
       <strong>
-        Odczyt wątpliwych linii skanu
+        {t("Odczyt wątpliwych linii skanu")}
         <InfoTip>
-          Działa w trybie z korektą AI: czyta ponownie tylko niepewne linie, a zmianę zatwierdza słownik (bez dopisywania dat,
-          nazwisk i liczb). Pliki są weryfikowane SHA-256.
+          {t("Działa w trybie z korektą AI: czyta ponownie tylko niepewne linie, a zmianę zatwierdza słownik (bez dopisywania dat, nazwisk i liczb). Pliki są weryfikowane SHA-256.")}
         </InfoTip>
       </strong>
       <small>
@@ -357,7 +357,7 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>{progress ? progressLabel(progress.phase) : "Przygotowanie"}</strong>
+            <strong>{progress ? progressLabel(progress.phase) : t("Przygotowanie")}</strong>
             {progress ? <small>{progress.label}</small> : null}
           </div>
           {progress?.percent !== null && progress?.percent !== undefined ? (
@@ -374,11 +374,11 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
           ) : null}
         </div>
       ) : status.installed ? (
-        <small>Zainstalowany{status.engineInstalled ? "." : ", ale brak silnika lokalnej AI: najpierw zainstaluj lokalną AI."}</small>
+        <small>{t("Zainstalowany")}{status.engineInstalled ? "." : t(", ale brak silnika lokalnej AI: najpierw zainstaluj lokalną AI.")}</small>
       ) : (
-        <small>Nie zainstalowany.</small>
+        <small>{t("Nie zainstalowany.")}</small>
       )}
-      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
+      {status.state === "FAILED" && status.error ? <small className="local-ai-error">{t("Pobieranie nie powiodło się:")} {status.error}</small> : null}
       {admin ? (
         <div className="local-ai-actions">
           <button
@@ -386,7 +386,7 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
             disabled={status.installed || status.state === "DOWNLOADING"}
             onClick={() => void act("install")}
           >
-            Pobierz model wizyjny
+            {t("Pobierz model wizyjny")}
           </button>
           <button
             type="button"
@@ -394,7 +394,7 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
             disabled={!status.installed || status.state === "DOWNLOADING"}
             onClick={() => void act("remove")}
           >
-            Usuń model wizyjny
+            {t("Usuń model wizyjny")}
           </button>
         </div>
       ) : null}
@@ -438,48 +438,48 @@ type OcrAccelStatus = {
 
 /** One sentence for anyone: what OCR uses now and why, without settings to think about. */
 export function ocrAccelHeadline(status: Pick<OcrAccelStatus, "active" | "installed" | "benchmark" | "state" | "auto" | "provider">): string {
-  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return "Trwa jednorazowe ustawianie OCR na tym komputerze (w tle).";
-  if (status.active) return "OCR korzysta z karty graficznej: na tym komputerze jest szybsza (wybrane automatycznie).";
+  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return t("Trwa jednorazowe ustawianie OCR na tym komputerze (w tle).");
+  if (status.active) return t("OCR korzysta z karty graficznej: na tym komputerze jest szybsza (wybrane automatycznie).");
   if (status.benchmark) {
     return status.benchmark.reason === "NOT_FASTER"
-      ? "OCR korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie)."
-      : "OCR korzysta z procesora: karta graficzna nie dała tu pewnego wyniku (wybrane automatycznie).";
+      ? t("OCR korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie).")
+      : t("OCR korzysta z procesora: karta graficzna nie dała tu pewnego wyniku (wybrane automatycznie).");
   }
   return status.auto
-    ? "OCR korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę graficzną."
-    : "OCR korzysta z procesora.";
+    ? t("OCR korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę graficzną.")
+    : t("OCR korzysta z procesora.");
 }
 
 /** "Ostatni OCR: 3 str., 12,4 s/str. (wczytanie modeli 6,1 s), procesor: oneDNN, 28 wątków". */
 export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): string {
-  const number = (value: number) => value.toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const number = (value: number) => value.toLocaleString(currentLocale(), { maximumFractionDigits: 1 });
   const pages = run.pageSeconds.length;
   const average = pages ? run.pageSeconds.reduce((sum, value) => sum + value, 0) / pages : 0;
-  const engine = run.accel ? `karta (${run.accel.replace("ExecutionProvider", "")})` : `procesor${run.mkldnn ? " z oneDNN" : " BEZ oneDNN (wolny tryb)"}`;
+  const engine = run.accel ? `karta (${run.accel.replace("ExecutionProvider", "")})` : `procesor${run.mkldnn ? t(" z oneDNN") : " BEZ oneDNN (wolny tryb)"}`;
   // The whole document: what the user waited per page; per process it is longer when several
   // processes read pages at once.
   if (run.pages && run.wallSeconds) {
     return (
-      `Ostatni OCR: ${run.pages} str. w ${number(run.wallSeconds)} s, ${number(run.wallSeconds / run.pages)} s/str. dokumentu` +
-      (run.workers > 1 ? ` (${run.workers} procesy naraz, w każdym ${number(average)} s/str.)` : "") +
-      ` (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}${run.threads ? `, ${run.threads} wątków` : ""}` +
-      (run.accel && run.textModelResident ? ", model tekstowy w pamięci karty" : "") +
+      t("Ostatni OCR: {pages} str. w {wallSeconds} s, {pages2} s/str. dokumentu", { pages: run.pages, wallSeconds: number(run.wallSeconds), pages2: number(run.wallSeconds / run.pages) }) +
+      (run.workers > 1 ? t(" ({workers} procesy naraz, w każdym {average} s/str.)", { workers: run.workers, average: number(average) }) : "") +
+      t(" (wczytanie modeli {loadSeconds} s), {engine}{value}", { loadSeconds: number(run.loadSeconds), engine: engine, value: run.threads ? `, ${run.threads} wątków` : "" }) +
+      (run.accel && run.textModelResident ? t(", model tekstowy w pamięci karty") : "") +
       "." +
-      (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
+      (!run.accel && !run.mkldnn && run.mkldnnError ? t(" Powód wolnego trybu: {mkldnnError}", { mkldnnError: run.mkldnnError }) : "")
     );
   }
   return (
     `Ostatni OCR: ${pages} str., ${number(average)} s/str. (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}` +
-    `${run.threads ? `, ${run.threads} wątków` : ""}${run.workers > 1 ? `, ${run.workers} procesy` : ""}.` +
-    (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
+    `${run.threads ? t(", {threads} wątków", { threads: run.threads }) : ""}${run.workers > 1 ? `, ${run.workers} procesy` : ""}.` +
+    (!run.accel && !run.mkldnn && run.mkldnnError ? t(" Powód wolnego trybu: {mkldnnError}", { mkldnnError: run.mkldnnError }) : "")
   );
 }
 
 const OCR_ACCEL_REASONS: Record<NonNullable<OcrAccelStatus["benchmark"]>["reason"], string> = {
-  FASTER_SAME_TEXT: "karta szybsza, ten sam tekst: OCR korzysta z karty",
-  NOT_FASTER: "karta nie była wyraźnie szybsza od procesora: OCR zostaje na procesorze",
-  TEXT_DIFFERS: "karta odczytała tekst inaczej niż procesor: OCR zostaje na procesorze",
-  ACCEL_NOT_USED: "nie udało się uruchomić OCR na karcie: OCR zostaje na procesorze"
+  FASTER_SAME_TEXT: t("karta szybsza, ten sam tekst: OCR korzysta z karty"),
+  NOT_FASTER: t("karta nie była wyraźnie szybsza od procesora: OCR zostaje na procesorze"),
+  TEXT_DIFFERS: t("karta odczytała tekst inaczej niż procesor: OCR zostaje na procesorze"),
+  ACCEL_NOT_USED: t("nie udało się uruchomić OCR na karcie: OCR zostaje na procesorze")
 };
 
 /**
@@ -527,18 +527,16 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
   return (
     <div className="local-ai-facts">
       <strong>
-        OCR: procesor czy karta graficzna
+        {t("OCR: procesor czy karta graficzna")}
         <InfoTip>
-          Aplikacja raz, sama i w tle, sprawdza, czy rozpoznawanie tekstu ze skanów jest szybsze na karcie graficznej
-          ({status.provider === "dml" ? "DirectML: NVIDIA, AMD, Intel" : "CoreML: układ graficzny i Neural Engine Apple"}) czy na procesorze,
-          i zostawia szybsze rozwiązanie, jeśli daje ten sam tekst. Nic nie trzeba ustawiać.
+          {t("Aplikacja raz, sama i w tle, sprawdza, czy rozpoznawanie tekstu ze skanów jest szybsze na karcie graficznej (")}{status.provider === "dml" ? "DirectML: NVIDIA, AMD, Intel" : t("CoreML: układ graficzny i Neural Engine Apple")}{t(") czy na procesorze, i zostawia szybsze rozwiązanie, jeśli daje ten sam tekst. Nic nie trzeba ustawiać.")}
         </InfoTip>
       </strong>
       <small>{ocrAccelHeadline(status)}</small>
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Pobieranie modeli OCR dla karty ({formatBytes(status.bytes)})</strong>
+            <strong>{t("Pobieranie modeli OCR dla karty (")}{formatBytes(status.bytes)})</strong>
             {progress ? <small>{progress.file}</small> : null}
           </div>
           {progress ? <progress max={100} value={progress.percent} /> : <progress />}
@@ -546,31 +544,31 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
       ) : status.state === "MEASURING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)</strong>
+            <strong>{t("Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)")}</strong>
           </div>
           <progress />
         </div>
       ) : null}
       {developer ? (
       <details className="local-ai-details">
-        <summary>Szczegóły</summary>
+        <summary>{t("Szczegóły")}</summary>
         {bench ? (
           <small>
-            Pomiar: procesor {bench.cpuSeconds} s, karta {bench.accelSeconds} s (4 strony), zgodne linie {bench.sameLines}/{bench.lines}: {OCR_ACCEL_REASONS[bench.reason]}.
+            {t("Pomiar: procesor")} {bench.cpuSeconds} {t("s, karta")} {bench.accelSeconds} {t("s (4 strony), zgodne linie")} {bench.sameLines}/{bench.lines}: {OCR_ACCEL_REASONS[bench.reason]}.
           </small>
         ) : null}
         {status.lastRun ? <small>{ocrRunSummary(status.lastRun)}</small> : null}
-        {status.state === "FAILED" && status.error ? <small className="local-ai-error">Ostatnia próba: {status.error}</small> : null}
+        {status.state === "FAILED" && status.error ? <small className="local-ai-error">{t("Ostatnia próba:")} {status.error}</small> : null}
         {admin ? (
           <div className="local-ai-actions">
             <button type="button" disabled={status.installed || working} onClick={() => void act("install")}>
-              Pobierz i zmierz teraz
+              {t("Pobierz i zmierz teraz")}
             </button>
-            <button type="button" disabled={!status.installed || working} title="Po wymianie karty graficznej" onClick={() => void act("measure")}>
-              Zmierz ponownie
+            <button type="button" disabled={!status.installed || working} title={t("Po wymianie karty graficznej")} onClick={() => void act("measure")}>
+              {t("Zmierz ponownie")}
             </button>
             <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
-              Usuń modele karty
+              {t("Usuń modele karty")}
             </button>
           </div>
         ) : null}
@@ -604,37 +602,37 @@ type SttAccelStatus = {
 
 /** One sentence for anyone: what transcription uses now, without settings to think about. */
 export function sttAccelHeadline(status: Pick<SttAccelStatus, "active" | "benchmark" | "state" | "auto">, modelInstalled: boolean): string {
-  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return "Trwa jednorazowe ustawianie transkrypcji na karcie NVIDIA (w tle).";
-  if (status.active) return "Transkrypcja korzysta z karty NVIDIA: na tym komputerze jest szybsza (wybrane automatycznie).";
+  if (status.state === "DOWNLOADING" || status.state === "MEASURING") return t("Trwa jednorazowe ustawianie transkrypcji na karcie NVIDIA (w tle).");
+  if (status.active) return t("Transkrypcja korzysta z karty NVIDIA: na tym komputerze jest szybsza (wybrane automatycznie).");
   if (status.benchmark) {
     return status.benchmark.reason === "NOT_FASTER"
-      ? "Transkrypcja korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie)."
-      : "Transkrypcja korzysta z procesora: karta NVIDIA nie dała tu pewnego wyniku (wybrane automatycznie).";
+      ? t("Transkrypcja korzysta z procesora: na tym komputerze jest szybszy od karty (wybrane automatycznie).")
+      : t("Transkrypcja korzysta z procesora: karta NVIDIA nie dała tu pewnego wyniku (wybrane automatycznie).");
   }
-  if (!modelInstalled) return "Po zainstalowaniu modelu transkrypcji aplikacja sama, jednorazowo sprawdzi kartę NVIDIA.";
+  if (!modelInstalled) return t("Po zainstalowaniu modelu transkrypcji aplikacja sama, jednorazowo sprawdzi kartę NVIDIA.");
   return status.auto
-    ? "Transkrypcja korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę NVIDIA."
-    : "Transkrypcja korzysta z procesora.";
+    ? t("Transkrypcja korzysta z procesora. Kilka minut po uruchomieniu aplikacja sama, jednorazowo sprawdzi kartę NVIDIA.")
+    : t("Transkrypcja korzysta z procesora.");
 }
 
 /** "Ostatnia transkrypcja: 12:30 nagrania w 41 s (18x szybciej niż czas nagrania), karta NVIDIA." */
 export function sttRunSummary(run: NonNullable<SttAccelStatus["lastRun"]>): string {
-  const number = (value: number) => value.toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const number = (value: number) => value.toLocaleString(currentLocale(), { maximumFractionDigits: 1 });
   const minutes = Math.floor(run.audioSeconds / 60);
   const seconds = Math.round(run.audioSeconds % 60);
   const speed = run.seconds > 0 ? run.audioSeconds / run.seconds : 0;
   return (
-    `Ostatnia transkrypcja: ${minutes}:${String(seconds).padStart(2, "0")} nagrania w ${number(run.seconds)} s` +
+    t("Ostatnia transkrypcja: {minutes}:{value} nagrania w {seconds} s", { minutes: minutes, value: String(seconds).padStart(2, "0"), seconds: number(run.seconds) }) +
     `${speed ? ` (${number(speed)}x czasu nagrania)` : ""}, ${run.device === "cuda" ? "karta NVIDIA" : "procesor"}.` +
-    (run.cudaError ? ` Karta nie zadziałała: ${run.cudaError}` : "")
+    (run.cudaError ? t(" Karta nie zadziałała: {cudaError}", { cudaError: run.cudaError }) : "")
   );
 }
 
 const STT_ACCEL_REASONS: Record<NonNullable<SttAccelStatus["benchmark"]>["reason"], string> = {
-  FASTER_SAME_TEXT: "karta szybsza, te same słowa: transkrypcja korzysta z karty",
-  NOT_FASTER: "karta nie była wyraźnie szybsza od procesora: transkrypcja zostaje na procesorze",
-  TEXT_DIFFERS: "karta napisała inny tekst niż procesor: transkrypcja zostaje na procesorze",
-  CUDA_NOT_USED: "nie udało się uruchomić transkrypcji na karcie: transkrypcja zostaje na procesorze"
+  FASTER_SAME_TEXT: t("karta szybsza, te same słowa: transkrypcja korzysta z karty"),
+  NOT_FASTER: t("karta nie była wyraźnie szybsza od procesora: transkrypcja zostaje na procesorze"),
+  TEXT_DIFFERS: t("karta napisała inny tekst niż procesor: transkrypcja zostaje na procesorze"),
+  CUDA_NOT_USED: t("nie udało się uruchomić transkrypcji na karcie: transkrypcja zostaje na procesorze")
 };
 
 /**
@@ -680,18 +678,17 @@ function TranscriptionAccelerationSection({ admin, modelInstalled }: { admin: bo
   return (
     <div className="local-ai-facts">
       <strong>
-        Transkrypcja: procesor czy karta NVIDIA
+        {t("Transkrypcja: procesor czy karta NVIDIA")}
         <InfoTip>
-          Na komputerze z kartą NVIDIA aplikacja raz, sama i w tle, pobiera biblioteki NVIDIA (cuBLAS, cuDNN; około{" "}
-          {formatBytes(status.bytes)}, każda sprawdzona SHA-256), zamienia to samo nagranie na tekst na procesorze i na karcie
-          i zostawia szybsze rozwiązanie, jeśli daje te same słowa. Nic nie trzeba ustawiać.
+          {t("Na komputerze z kartą NVIDIA aplikacja raz, sama i w tle, pobiera biblioteki NVIDIA (cuBLAS, cuDNN; około")}{" "}
+          {formatBytes(status.bytes)}{t(", każda sprawdzona SHA-256), zamienia to samo nagranie na tekst na procesorze i na karcie i zostawia szybsze rozwiązanie, jeśli daje te same słowa. Nic nie trzeba ustawiać.")}
         </InfoTip>
       </strong>
       <small>{sttAccelHeadline(status, modelInstalled)}</small>
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Pobieranie bibliotek NVIDIA ({formatBytes(status.bytes)})</strong>
+            <strong>{t("Pobieranie bibliotek NVIDIA (")}{formatBytes(status.bytes)})</strong>
             {progress ? <small>{progress.file}</small> : null}
           </div>
           {progress ? <progress max={100} value={progress.percent} /> : <progress />}
@@ -699,32 +696,32 @@ function TranscriptionAccelerationSection({ admin, modelInstalled }: { admin: bo
       ) : status.state === "MEASURING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)</strong>
+            <strong>{t("Jednorazowy pomiar: procesor i karta (w tle, wstrzymuje się, gdy pracujesz)")}</strong>
           </div>
           <progress />
         </div>
       ) : null}
       {developer ? (
         <details className="local-ai-details">
-          <summary>Szczegóły</summary>
+          <summary>{t("Szczegóły")}</summary>
           {bench ? (
             <small>
-              Pomiar (90 s nagrania): procesor {bench.cpuSeconds} s, karta {bench.cudaSeconds} s, zgodne słowa {bench.sameWords}/{bench.words}:{" "}
-              {STT_ACCEL_REASONS[bench.reason]}.{bench.cudaError ? ` Błąd karty: ${bench.cudaError}` : ""}
+              {t("Pomiar (90 s nagrania): procesor")} {bench.cpuSeconds} {t("s, karta")} {bench.cudaSeconds} {t("s, zgodne słowa")} {bench.sameWords}/{bench.words}:{" "}
+              {STT_ACCEL_REASONS[bench.reason]}.{bench.cudaError ? t(" Błąd karty: {cudaError}", { cudaError: bench.cudaError }) : ""}
             </small>
           ) : null}
           {status.lastRun ? <small>{sttRunSummary(status.lastRun)}</small> : null}
-          {status.state === "FAILED" && status.error ? <small className="local-ai-error">Ostatnia próba: {status.error}</small> : null}
+          {status.state === "FAILED" && status.error ? <small className="local-ai-error">{t("Ostatnia próba:")} {status.error}</small> : null}
           {admin ? (
             <div className="local-ai-actions">
               <button type="button" disabled={status.installed || working || !modelInstalled} onClick={() => void act("install")}>
-                Pobierz i zmierz teraz
+                {t("Pobierz i zmierz teraz")}
               </button>
-              <button type="button" disabled={!status.installed || working || !modelInstalled} title="Po wymianie karty lub sterownika" onClick={() => void act("measure")}>
-                Zmierz ponownie
+              <button type="button" disabled={!status.installed || working || !modelInstalled} title={t("Po wymianie karty lub sterownika")} onClick={() => void act("measure")}>
+                {t("Zmierz ponownie")}
               </button>
               <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
-                Usuń biblioteki NVIDIA
+                {t("Usuń biblioteki NVIDIA")}
               </button>
             </div>
           ) : null}
@@ -762,7 +759,7 @@ const PHASE_SHORT: Record<string, string> = {
 
 /** "local · pisma-procesowe-v3: 12 tur, mediana 41 s, 95% do 78 s, błędy 1 (model 36 s, anonimizacja 3 s)". */
 export function chatPathLine(row: ChatTurnsSummary["paths"][number]): string {
-  const sec = (ms: number) => (ms / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const sec = (ms: number) => (ms / 1000).toLocaleString(currentLocale(), { maximumFractionDigits: 1 });
   const kind = row.modelKind === "local" ? "lokalny" : row.modelKind === "account" ? "konto" : "API";
   const phases = Object.entries(row.phasesP50Ms)
     .filter(([, ms]) => (ms ?? 0) >= 500)
@@ -770,8 +767,8 @@ export function chatPathLine(row: ChatTurnsSummary["paths"][number]): string {
     .map(([phase, ms]) => `${PHASE_SHORT[phase] ?? phase} ${sec(ms ?? 0)} s`)
     .join(", ");
   return (
-    `${kind} · ${row.path}: ${row.turns} tur, mediana ${sec(row.p50Ms)} s, 95% do ${sec(row.p95Ms)} s` +
-    (row.errors ? `, błędy ${row.errors}` : "") +
+    t("{kind} · {path}: {turns} tur, mediana {p50Ms} s, 95% do {p95Ms} s", { kind: kind, path: row.path, turns: row.turns, p50Ms: sec(row.p50Ms), p95Ms: sec(row.p95Ms) }) +
+    (row.errors ? t(", błędy {errors}", { errors: row.errors }) : "") +
     (row.blocked ? `, zablokowane ${row.blocked}` : "") +
     (phases ? ` (${phases})` : "")
   );
@@ -789,10 +786,10 @@ function ChatTurnsSection() {
   return (
     <div className="local-ai-facts">
       <strong>
-        Czas czatu na tym komputerze
-        <InfoTip>Ostatnie {data.turns} tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik: {data.file}</InfoTip>
+        {t("Czas czatu na tym komputerze")}
+        <InfoTip>{t("Ostatnie")} {data.turns} {t("tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik:")} {data.file}</InfoTip>
       </strong>
-      {data.paths.length === 0 ? <small>Brak zapisanych tur.</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
+      {data.paths.length === 0 ? <small>{t("Brak zapisanych tur.")}</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
     </div>
   );
 }
@@ -862,19 +859,18 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
     <>
     <div className="local-ai-facts">
       <strong>
-        Transkrypcja nagrań
+        {t("Transkrypcja nagrań")}
         <InfoTip>
-          Nagrania audio i wideo (MP3, M4A, WAV, MP4, MOV i inne) wgrane do sprawy zamieniają się w tekst z oznaczeniem czasu,
-          na tym komputerze: nagranie nigdzie nie jest wysyłane. Potem tekst przechodzi anonimizację jak każdy dokument.
+          {t("Nagrania audio i wideo (MP3, M4A, WAV, MP4, MOV i inne) wgrane do sprawy zamieniają się w tekst z oznaczeniem czasu, na tym komputerze: nagranie nigdzie nie jest wysyłane. Potem tekst przechodzi anonimizację jak każdy dokument.")}
         </InfoTip>
       </strong>
       <small>
-        {status.label}, {formatBytes(status.bytes)}, licencja {status.license}
+        {status.label}, {formatBytes(status.bytes)}{t(", licencja")} {status.license}
       </small>
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>
-            <strong>Pobieranie i sprawdzanie SHA-256</strong>
+            <strong>{t("Pobieranie i sprawdzanie SHA-256")}</strong>
             {progress ? <small>{progress.file}</small> : null}
           </div>
           {progress ? <progress max={100} value={progress.percent} /> : <progress />}
@@ -886,31 +882,31 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
         </div>
       ) : status.installed ? (
         <>
-          <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst ze znacznikami czasu.</small>
+          <small>{t("Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst ze znacznikami czasu.")}</small>
           {status.speakers ? (
             <small>
-              Rozpoznawanie rozmówców:{" "}
+              {t("Rozpoznawanie rozmówców:")}{" "}
               {status.speakers.installed
-                ? "gotowe (transkrypcja dzieli tekst na osoby, nazwy zmienisz w podglądzie dokumentu)."
-                : `modele (${Math.round(status.speakers.bytes / 1_000_000)} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+                ? t("gotowe (transkrypcja dzieli tekst na osoby, nazwy zmienisz w podglądzie dokumentu).")
+                : t("modele ({value} MB) pobiorą się same w tle albo przyciskiem „Pobierz model transkrypcji”.", { value: Math.round(status.speakers.bytes / 1_000_000) })}
             </small>
           ) : null}
           {status.gpu ? (
             <small>
-              Karta graficzna Apple:{" "}
+              {t("Karta graficzna Apple:")}{" "}
               {status.gpu.installed
-                ? "model gotowy; przy pierwszym nagraniu aplikacja zmierzy, czy karta jest szybsza od procesora, i wtedy jej użyje."
-                : `model (${Math.round(status.gpu.bytes / 1_000_000)} MB) pobierze się sam w tle albo przyciskiem „Pobierz model transkrypcji”.`}
+                ? t("model gotowy; przy pierwszym nagraniu aplikacja zmierzy, czy karta jest szybsza od procesora, i wtedy jej użyje.")
+                : t("model ({value} MB) pobierze się sam w tle albo przyciskiem „Pobierz model transkrypcji”.", { value: Math.round(status.gpu.bytes / 1_000_000) })}
             </small>
           ) : null}
           {status.speakers?.installed && admin ? (
             <label className="local-ai-inline-select">
-              Liczba rozmówców w nagraniach
-              <InfoTip>Znana liczba osób (np. 3 na rozprawie: sąd i dwie strony) daje dokładniejszy podział niż ocena automatyczna.</InfoTip>
+              {t("Liczba rozmówców w nagraniach")}
+              <InfoTip>{t("Znana liczba osób (np. 3 na rozprawie: sąd i dwie strony) daje dokładniejszy podział niż ocena automatyczna.")}</InfoTip>
               <select value={status.speakers.count ?? 0} onChange={(event) => void setSpeakers(Number(event.target.value))}>
-                <option value={0}>automatycznie</option>
+                <option value={0}>{t("automatycznie")}</option>
                 <option value={2}>2</option>
-                <option value={3}>3 (np. rozprawa)</option>
+                <option value={3}>{t("3 (np. rozprawa)")}</option>
                 {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((count) => (
                   <option key={count} value={count}>
                     {count}
@@ -921,9 +917,9 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
           ) : null}
         </>
       ) : (
-        <small>Nie zainstalowany.</small>
+        <small>{t("Nie zainstalowany.")}</small>
       )}
-      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
+      {status.state === "FAILED" && status.error ? <small className="local-ai-error">{t("Pobieranie nie powiodło się:")} {status.error}</small> : null}
       {admin ? (
         <div className="local-ai-actions">
           <button
@@ -931,7 +927,7 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
             disabled={(status.installed && (status.speakers?.installed ?? true) && (status.gpu?.installed ?? true)) || status.state === "DOWNLOADING"}
             onClick={() => void act("install")}
           >
-            Pobierz model transkrypcji
+            {t("Pobierz model transkrypcji")}
           </button>
           <button
             type="button"
@@ -939,11 +935,11 @@ function TranscriptionSection({ admin }: { admin: boolean }) {
             disabled={!status.installed || status.state === "DOWNLOADING"}
             onClick={() => void act("remove")}
           >
-            Usuń model transkrypcji
+            {t("Usuń model transkrypcji")}
           </button>
         </div>
       ) : (
-        <small>Model pobiera administrator.</small>
+        <small>{t("Model pobiera administrator.")}</small>
       )}
       {error ? <small className="local-ai-error">{error}</small> : null}
     </div>
@@ -1151,7 +1147,7 @@ export function LocalAiSetupPanel({
     setBusy(true);
     setError("");
     setMessage(
-      "Pobieram zweryfikowany silnik i wybrany model. Aplikacja pozostaje zainstalowana niezależnie od tej operacji."
+      t("Pobieram zweryfikowany silnik i wybrany model. Aplikacja pozostaje zainstalowana niezależnie od tej operacji.")
     );
     const polling =
       startProvisioningPolling();
@@ -1175,7 +1171,7 @@ export function LocalAiSetupPanel({
         )
       } : current);
       setMessage(
-        `Lokalna AI gotowa: ${result.model.displayName}, kontekst ${formatTokens(result.contextTokens)}. Przeładowuję interfejs.`
+        t("Lokalna AI gotowa: {displayName}, kontekst {contextTokens}. Przeładowuję interfejs.", { displayName: result.model.displayName, contextTokens: formatTokens(result.contextTokens) })
       );
       window.setTimeout(() => window.location.reload(), 350);
     } catch (problem) {
@@ -1206,8 +1202,8 @@ export function LocalAiSetupPanel({
     setError("");
     setMessage(
       modelUpdate.signatureMode === "UNSIGNED_ALLOWED"
-        ? "Pobieram aktualizację modelu do stagingu. Tryb przejściowy dopuszcza brak podpisu, ale SHA-256, indeks, zgodność i rollback pozostają obowiązkowe."
-        : "Pobieram podpisaną aktualizację modelu do stagingu. Stary GGUF pozostaje rollbackiem do czasu udanego testu /health."
+        ? t("Pobieram aktualizację modelu do stagingu. Tryb przejściowy dopuszcza brak podpisu, ale SHA-256, indeks, zgodność i rollback pozostają obowiązkowe.")
+        : t("Pobieram podpisaną aktualizację modelu do stagingu. Stary GGUF pozostaje rollbackiem do czasu udanego testu /health.")
     );
     const polling =
       startProvisioningPolling();
@@ -1253,8 +1249,8 @@ export function LocalAiSetupPanel({
         );
       setMessage(
         result.receipt.signerKeyId === "UNSIGNED_ALLOWED"
-          ? `Model ${result.model.displayName} zaktualizowano z pakietu ${result.receipt.packVersion}. Tryb unsigned: SHA-256 + indeks + walidacja runtime PASS. Profil ${formatTokens(result.contextTokens)} tokenów przeszedł ponowną walidację.${preservedOtherActive ? " Poprzednio aktywny model pozostał aktywny." : ""}`
-          : `Model ${result.model.displayName} zaktualizowano z podpisanego pakietu ${result.receipt.packVersion}. Podpis: ${result.receipt.signerKeyId}. Profil ${formatTokens(result.contextTokens)} tokenów przeszedł ponowną walidację.${preservedOtherActive ? " Poprzednio aktywny model pozostał aktywny." : ""}`
+          ? t("Model {displayName} zaktualizowano z pakietu {packVersion}. Pakiet bez podpisu: sprawdzono SHA-256, indeks i działanie modelu (PASS). Profil {contextTokens} tokenów przeszedł ponowną walidację.{value}", { displayName: result.model.displayName, packVersion: result.receipt.packVersion, contextTokens: formatTokens(result.contextTokens), value: preservedOtherActive ? t(" Poprzednio aktywny model pozostał aktywny.") : "" })
+          : t("Model {displayName} zaktualizowano z podpisanego pakietu {packVersion}. Podpis: {signerKeyId}. Profil {contextTokens} tokenów przeszedł ponowną walidację.{value}", { displayName: result.model.displayName, packVersion: result.receipt.packVersion, signerKeyId: result.receipt.signerKeyId, contextTokens: formatTokens(result.contextTokens), value: preservedOtherActive ? t(" Poprzednio aktywny model pozostał aktywny.") : "" })
       );
     } catch (problem) {
       setError(
@@ -1283,7 +1279,7 @@ export function LocalAiSetupPanel({
     setBusy(true);
     setError("");
     setMessage(
-      "Weryfikuję zapisany model, silnik i kontekst oraz wykonuję test uruchomienia."
+      t("Weryfikuję zapisany model, silnik i kontekst oraz wykonuję test uruchomienia.")
     );
     const polling =
       startProvisioningPolling();
@@ -1300,7 +1296,7 @@ export function LocalAiSetupPanel({
         )
       } : current);
       setMessage(
-        `Naprawa zakończona: ${result.model.displayName}, ${formatTokens(result.contextTokens)} tokenów.`
+        t("Naprawa zakończona: {displayName}, {contextTokens} tokenów.", { displayName: result.model.displayName, contextTokens: formatTokens(result.contextTokens) })
       );
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
@@ -1336,7 +1332,7 @@ export function LocalAiSetupPanel({
         ...current,
         runtime: result.runtime
       } : current);
-      setMessage("Lokalny model został uruchomiony.");
+      setMessage(t("Lokalny model został uruchomiony."));
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
     } finally {
@@ -1359,7 +1355,7 @@ export function LocalAiSetupPanel({
         ...current,
         runtime: result.runtime
       } : current);
-      setMessage("Lokalny model został zatrzymany.");
+      setMessage(t("Lokalny model został zatrzymany."));
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
     } finally {
@@ -1377,7 +1373,7 @@ export function LocalAiSetupPanel({
     }
     if (
       !window.confirm(
-        `Usunąć model „${selected.displayName}” z dysku (plik modelu i jego kopię w pamięci podręcznej instalatora)? Ponowne użycie będzie wymagało ponownego pobrania.`
+        t("Usunąć model „{displayName}” z dysku (plik modelu i jego kopię w pamięci podręcznej instalatora)? Ponowne użycie będzie wymagało ponownego pobrania.", { displayName: selected.displayName })
       )
     ) {
       return;
@@ -1400,7 +1396,7 @@ export function LocalAiSetupPanel({
           })
         }
       );
-      setMessage("Model został usunięty. Odświeżam konfigurację.");
+      setMessage(t("Model został usunięty. Odświeżam konfigurację."));
       window.setTimeout(() => window.location.reload(), 350);
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : String(problem));
@@ -1420,8 +1416,8 @@ export function LocalAiSetupPanel({
       >
         <span
           className="floating-drag-handle"
-          title="Przeciągnij panel"
-          aria-label="Przeciągnij panel lokalnej AI"
+          title={t("Przeciągnij panel")}
+          aria-label={t("Przeciągnij panel lokalnej AI")}
           {...floatingDrag.handleProps}
         >
           ⋮⋮
@@ -1429,7 +1425,7 @@ export function LocalAiSetupPanel({
         <button
           type="button"
           className="floating-icon-button"
-          aria-label="Rozwiń panel lokalnej AI"
+          aria-label={t("Rozwiń panel lokalnej AI")}
           title={
             configured
               ? "Lokalna AI · gotowa"
@@ -1444,7 +1440,7 @@ export function LocalAiSetupPanel({
         {configured ? (
           <span
             className="local-ai-ready-dot"
-            aria-label="Lokalna AI gotowa"
+            aria-label={t("Lokalna AI gotowa")}
           />
         ) : null}
       </div>
@@ -1476,8 +1472,8 @@ export function LocalAiSetupPanel({
         {!embedded ? (
           <span
             className="floating-drag-handle"
-            title="Przeciągnij panel"
-            aria-label="Przeciągnij panel lokalnej AI"
+            title={t("Przeciągnij panel")}
+            aria-label={t("Przeciągnij panel lokalnej AI")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1488,11 +1484,11 @@ export function LocalAiSetupPanel({
           </span>
         ) : null}
         <span className="local-ai-title">
-          <strong>Lokalna AI</strong>
+          <strong>{t("Lokalna AI")}</strong>
           <small>
             {configured
-              ? `gotowa · ${formatTokens(data?.runtime.configuredContextTokens ?? 0)} tokenów`
-              : "opcjonalna · instalowana dopiero na żądanie"}
+              ? t("gotowa · {value} tokenów", { value: formatTokens(data?.runtime.configuredContextTokens ?? 0) })
+              : t("opcjonalna · instalowana dopiero na żądanie")}
           </small>
         </span>
         <span className={configured ? "local-ai-badge ready" : "local-ai-badge"}>
@@ -1502,8 +1498,8 @@ export function LocalAiSetupPanel({
           <button
             type="button"
             className="floating-minimize-button"
-            aria-label="Zminimalizuj panel lokalnej AI"
-            title="Zminimalizuj do ikony"
+            aria-label={t("Zminimalizuj panel lokalnej AI")}
+            title={t("Zminimalizuj do ikony")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1518,19 +1514,17 @@ export function LocalAiSetupPanel({
       <div className="local-ai-body">
         {provisioningSupported ? null : (
           <p className="local-ai-error" role="note">
-            Instalacja modelu lokalnego jest dostępna w Windows i na Macach z procesorem Apple. W tym systemie korzystaj z modeli
-            przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
+            {t("Instalacja modelu lokalnego jest dostępna w Windows i na Macach z procesorem Apple. W tym systemie korzystaj z modeli przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).")}
           </p>
         )}
 
         {data ? (
           <>
             <label>
-              Model lokalny
+              {t("Model lokalny")}
               {provisioningSupported ? (
                 <InfoTip>
-                  Program działa też bez niego. Instalacja pobiera silnik i jeden wybrany model, który potem działa wyłącznie na
-                  tym komputerze.
+                  {t("Program działa też bez niego. Instalacja pobiera silnik i jeden wybrany model, który potem działa wyłącznie na tym komputerze.")}
                 </InfoTip>
               ) : null}
               <select
@@ -1550,7 +1544,7 @@ export function LocalAiSetupPanel({
             {selected && policy ? (
               <>
                 <label>
-                  Backend obliczeniowy
+                  {t("Sposób obliczeń")}
                   <select
                     value={backendPreference}
                     disabled={busy || user.appRole !== "ADMIN"}
@@ -1569,7 +1563,7 @@ export function LocalAiSetupPanel({
                 </label>
 
                 <label>
-                  Kontekst
+                  {t("Kontekst")}
                   <select
                     value={contextTokens}
                     disabled={busy || user.appRole !== "ADMIN"}
@@ -1584,7 +1578,7 @@ export function LocalAiSetupPanel({
                 </label>
 
                 <label>
-                  Dokładna wartość: {formatTokens(contextTokens)} tokenów
+                  {t("Dokładna wartość:")} {formatTokens(contextTokens)} {t("tokenów")}
                   <input
                     type="range"
                     min={selected.minimumContextWindow}
@@ -1597,45 +1591,45 @@ export function LocalAiSetupPanel({
                 </label>
 
                 <div className="local-ai-facts">
-                  <span>Natywny kontekst: {formatTokens(selected.nativeContextWindow)}</span>
-                  <span>Dozwolony profil: {formatTokens(selected.minimumContextWindow)}–{formatTokens(selected.maximumContextWindow)}</span>
+                  <span>{t("Natywny kontekst:")} {formatTokens(selected.nativeContextWindow)}</span>
+                  <span>{t("Dozwolony profil:")} {formatTokens(selected.minimumContextWindow)}–{formatTokens(selected.maximumContextWindow)}</span>
                   <span>{extended ? "Tryb: YaRN — rozszerzenie ponad natywne okno" : "Tryb: natywny / zredukowany"}</span>
                   <span>
-                    Sprzęt: {formatBytes(data.runtime.hardware.totalMemoryBytes)} RAM
-                    {" · "}{data.runtime.hardware.logicalCpuCount} wątków logicznych
+                    {t("Sprzęt:")} {formatBytes(data.runtime.hardware.totalMemoryBytes)} RAM
+                    {" · "}{data.runtime.hardware.logicalCpuCount} {t("wątków logicznych")}
                     {data.runtime.hardware.cpuModel
                       ? ` · ${data.runtime.hardware.cpuModel}`
                       : ""}
                   </span>
                   <span>
-                    Backend aktywny: {data.runtime.hardware.configuredBackend ?? "nie skonfigurowano"}
-                    {" · "}tryb wyboru: {data.runtime.hardware.backendSelectionMode ?? backendPreference}
+                    {t("Aktywny sposób obliczeń:")} {data.runtime.hardware.configuredBackend ?? t("nie skonfigurowano")}
+                    {" · "}{t("tryb wyboru:")} {data.runtime.hardware.backendSelectionMode ?? backendPreference}
                     {data.runtime.hardware.accelerators.length > 0
-                      ? ` · urządzenia graficzne: ${data.runtime.hardware.accelerators.map((item) => item.name).join(", ")}`
-                      : " · brak wykrytego urządzenia graficznego"}
+                      ? t(" · urządzenia graficzne: {value}", { value: data.runtime.hardware.accelerators.map((item) => item.name).join(", ") })
+                      : t(" · brak wykrytego urządzenia graficznego")}
                     {data.runtime.hardware.gpuOffloadEnabled
                       ? " · GPU offload potwierdzony"
                       : data.runtime.hardware.gpuCandidateDetected
                         ? " · GPU wykryte, ale niepotwierdzone jako aktywne"
                         : ""}
                     {!data.runtime.hardware.gpuOffloadEnabled && data.runtime.hardware.gpuFailure
-                      ? ` · ostatni start na karcie (wersja ${data.runtime.hardware.gpuFailure.appVersion}) nie powiódł się: ${data.runtime.hardware.gpuFailure.error}; kolejna próba po aktualizacji aplikacji`
+                      ? t(" · ostatni start na karcie (wersja {appVersion}) nie powiódł się: {error}; kolejna próba po aktualizacji aplikacji", { appVersion: data.runtime.hardware.gpuFailure.appVersion, error: data.runtime.hardware.gpuFailure.error })
                       : ""}
                   </span>
                   {data.runtime.qualification &&
                   data.runtime.qualification.modelId === selected.id ? (
                     <span>
-                      Walidacja sprzętowa: PASS · {formatTokens(data.runtime.qualification.contextTokens)} tokenów
-                      {" · "}backend {data.runtime.qualification.backend ?? data.runtime.hardware.configuredBackend ?? "CPU_X64_PORTABLE"}
-                      {" · "}start {data.runtime.qualification.startupMs.toLocaleString("pl-PL")} ms
-                      {" · "}{new Date(data.runtime.qualification.validatedAt).toLocaleString("pl-PL")}
+                      {t("Walidacja sprzętowa: PASS ·")} {formatTokens(data.runtime.qualification.contextTokens)} {t("tokenów")}
+                      {" · "}{t("obliczenia")} {data.runtime.qualification.backend ?? data.runtime.hardware.configuredBackend ?? "CPU_X64_PORTABLE"}
+                      {" · "}{t("start")} {data.runtime.qualification.startupMs.toLocaleString(currentLocale())} {t("ms")}
+                      {" · "}{new Date(data.runtime.qualification.validatedAt).toLocaleString(currentLocale())}
                     </span>
                   ) : (
-                    <span>Walidacja sprzętowa: brak potwierdzonego profilu dla tego modelu.</span>
+                    <span>{t("Walidacja sprzętowa: brak potwierdzonego profilu dla tego modelu.")}</span>
                   )}
                   {user.appRole === "ADMIN" && modelUpdate ? (
                     <span>
-                      Kanał aktualizacji{" "}
+                      {t("Kanał aktualizacji")}{" "}
                       {modelUpdate.modelFamily === "BIELIK"
                         ? "Bielik"
                         : modelUpdate.modelFamily === "MISTRAL"
@@ -1643,13 +1637,13 @@ export function LocalAiSetupPanel({
                           : "modelu"}:{" "}
                       {modelUpdate.status === "UP_TO_DATE"
                         ? modelUpdate.packPublished === false
-                          ? "aktualny (model z instalatora; nowsza paczka modelu nie została opublikowana)"
+                          ? t("aktualny (model z instalatora; nowsza paczka modelu nie została opublikowana)")
                           : "aktualny"
                         : modelUpdate.status === "AVAILABLE"
                           ? [
                               modelUpdate.signatureMode === "SIGNED_REQUIRED"
-                                ? `dostępna podpisana paczka ${modelUpdate.latestPackVersion ?? ""}`
-                                : `dostępna paczka ${modelUpdate.latestPackVersion ?? ""} · podpis tymczasowo opcjonalny`,
+                                ? t("dostępna podpisana paczka {value}", { value: modelUpdate.latestPackVersion ?? "" })
+                                : t("dostępna paczka {value} · podpis tymczasowo opcjonalny", { value: modelUpdate.latestPackVersion ?? "" }),
                               modelUpdate.targetDisplayName
                                 ? `→ ${modelUpdate.targetDisplayName}`
                                 : "",
@@ -1658,9 +1652,9 @@ export function LocalAiSetupPanel({
                                 : ""
                             ].filter(Boolean).join(" ")
                           : modelUpdate.status === "NOT_CONFIGURED"
-                            ? "model nie jest jeszcze skonfigurowany"
+                            ? t("model nie jest jeszcze skonfigurowany")
                             : modelUpdate.status === "UNAVAILABLE"
-                              ? "sprawdzenie niedostępne"
+                              ? t("sprawdzenie niedostępne")
                               : `zablokowany bezpiecznie: ${modelPackBlockLabel(modelUpdate.blockedReason)}`}
                     </span>
                   ) : null}
@@ -1668,14 +1662,13 @@ export function LocalAiSetupPanel({
 
                 {modelUpdate?.signatureMode === "UNSIGNED_ALLOWED" ? (
                   <p className="local-ai-warning">
-                    Tryb przejściowy: podpis Ed25519 indeksu modeli jest opcjonalny. HTTPS, zgodność wersji i SHA-256
-                    modelu są nadal sprawdzane.
+                    {t("Tryb przejściowy: podpis Ed25519 indeksu modeli jest opcjonalny. HTTPS, zgodność wersji i SHA-256 modelu są nadal sprawdzane.")}
                   </p>
                 ) : null}
 
                 {extended ? (
                   <p className="local-ai-warning">
-                    Wartość przekracza natywne okno modelu (YaRN): więcej pamięci, jakość może być niższa.
+                    {t("Wartość przekracza natywne okno modelu (YaRN): więcej pamięci, jakość może być niższa.")}
                   </p>
                 ) : null}
               </>
@@ -1720,10 +1713,10 @@ export function LocalAiSetupPanel({
                   onClick={() => void provision()}
                 >
                   {busy || data.runtime.provisioning
-                    ? "Operacja w toku…"
+                    ? t("Operacja w toku…")
                     : configured
-                      ? "Zmień model / kontekst / backend"
-                      : "Pobierz i skonfiguruj lokalną AI"}
+                      ? t("Zmień model, kontekst lub sposób obliczeń")
+                      : t("Pobierz i skonfiguruj lokalną AI")}
                 </button>
 
                 {configured ? (
@@ -1733,21 +1726,21 @@ export function LocalAiSetupPanel({
                       disabled={busy || data.runtime.state === "READY"}
                       onClick={() => void startLocal()}
                     >
-                      Uruchom
+                      {t("Uruchom")}
                     </button>
                     <button
                       type="button"
                       disabled={busy || data.runtime.state === "STOPPED"}
                       onClick={() => void stopLocal()}
                     >
-                      Zatrzymaj
+                      {t("Zatrzymaj")}
                     </button>
                     <button
                       type="button"
                       disabled={busy || data.runtime.provisioning}
                       onClick={() => void repair()}
                     >
-                      Napraw
+                      {t("Napraw")}
                     </button>
                     <button
                       type="button"
@@ -1761,7 +1754,7 @@ export function LocalAiSetupPanel({
                       }
                       onClick={() => void applyModelUpdate()}
                     >
-                      Aktualizuj model
+                      {t("Aktualizuj model")}
                     </button>
                     <button
                       type="button"
@@ -1769,13 +1762,13 @@ export function LocalAiSetupPanel({
                       disabled={busy || !selected?.installed}
                       onClick={() => void removeSelected()}
                     >
-                      Usuń model
+                      {t("Usuń model")}
                     </button>
                   </div>
                 ) : null}
               </>
             ) : (
-              <small>Zmiany modelu lokalnego wykonuje administrator.</small>
+              <small>{t("Zmiany modelu lokalnego wykonuje administrator.")}</small>
             )}
           </>
         ) : null}
@@ -1794,7 +1787,7 @@ export function LocalAiSetupPanel({
         {error ? (
           <p className="local-ai-error">
             {error.includes("PLATFORM_UNSUPPORTED")
-              ? "Ta operacja lokalnego AI nie jest jeszcze dostępna w tym systemie (działa w Windows)."
+              ? t("Ta operacja lokalnego AI nie jest jeszcze dostępna w tym systemie (działa w Windows).")
               : error}
           </p>
         ) : null}

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useId, useState, type ReactNode } from "react";
 
 /**
@@ -6,7 +7,7 @@ import { useId, useState, type ReactNode } from "react";
  * aria-describedby). For what matters but need not be read every time; warnings and errors
  * stay visible in the view.
  */
-export function InfoTip({ children, label = "Więcej informacji" }: { children: ReactNode; label?: string }) {
+export function InfoTip({ children, label = t("Więcej informacji") }: { children: ReactNode; label?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   return (

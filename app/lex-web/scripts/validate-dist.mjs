@@ -54,15 +54,15 @@ const required = [
   "Zablokuj",
   "Wyloguj",
   "Hasło i bezpieczeństwo",
-  "Odzyskaj konto kodem recovery",
-  "Zapisz nowy kod recovery",
-  "Wygeneruj nowy kod recovery",
+  "Odzyskaj konto kodem odzyskiwania",
+  "Zapisz nowy kod odzyskiwania",
+  "Wygeneruj nowy kod odzyskiwania",
   "Zmień hasło",
   "1 wątek = 1 sprawa",
   "Sprawy",
   "+ Nowa sprawa",
   "Nazwa sprawy",
-  "Sygnatura nie jest wymagana",
+  "sygnatura nie jest wymagana",
   "ID katalogu:",
   "Tryb pracy",
   "Automatyczny — prawny router",
@@ -77,7 +77,7 @@ const required = [
   "Wpisz USUŃ",
   "Usuń sprawę trwale",
   "ARCHIWALNA (tylko odczyt)",
-  "Kliknij lub przeciągnij pliki",
+  "przeciągnij pliki tutaj",
   "Otwórz eksplorator",
   "Struktura katalogów",
   "Główny katalog",
@@ -104,7 +104,7 @@ const required = [
   "Końcowa decyzja dla pliku",
   "Zatwierdź decyzje dla",
   "Mapy reidentyfikacji są osobne dla każdego pliku",
-  "Chunki do analizy AI",
+  "Fragmenty do analizy AI",
   "Cytowany fragment dokumentu",
   "Przejdź do cytowanego fragmentu",
   "Dokładny cytat zaznaczony w źródle",
@@ -129,7 +129,8 @@ const required = [
 // aktualizacji (lex.update.detected, lex.update.skipped, src/update-prompt.ts) i rozmiar tekstu
 // rozmowy (lex.chatTextSize, src/text-size.ts). Każdy inny plik źródłowy
 // z localStorage albo bundle bez tych kluczy blokuje bramkę.
-const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts"]);
+// Język interfejsu (lex.language, src/i18n.ts): wybór na tym komputerze, bez danych sprawy.
+const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts", "i18n.ts"]);
 const sourceRoot = path.resolve(process.cwd(), "src");
 const localStorageSources = collect(sourceRoot)
   .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))

@@ -1,22 +1,23 @@
+import { currentLocale, t, N_ } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { InfoTip } from "./InfoTip";
 import { WOKANDA_STATUS_LABEL } from "./CaseCourtCard.js";
 import { listWokandaCourts, recheckWokandaCourts, type WokandaCourtInfo, type WokandaStatus } from "./api.js";
 
 const GROUPS: Array<{ status: WokandaStatus; title: string; help: string }> = [
-  { status: "PORTAL", title: "Dostępne", help: "Portal sądu z wyszukiwarką po sygnaturze: aplikacja odczytuje terminy sprawy na żądanie." },
-  { status: "BROWSER", title: "Brak dostępu dla aplikacji", help: "Wokanda jest, ale otwiera ją tylko przeglądarka (weryfikacja przeglądarki, reCAPTCHA albo inny system). Aplikacja podaje jej adres." },
-  { status: "NONE", title: "Sąd nie ma wokandy na stronie", help: "Strona sądu nie wskazuje wokandy." },
-  { status: "UNREACHABLE", title: "Strona sądu nie odpowiada", help: "Brak połączenia albo błąd strony przy ostatnim sprawdzeniu." }
+  { status: "PORTAL", title: N_("Dostępne"), help: N_("Portal sądu z wyszukiwarką po sygnaturze: aplikacja odczytuje terminy sprawy na żądanie.") },
+  { status: "BROWSER", title: N_("Brak dostępu dla aplikacji"), help: N_("Wokanda jest, ale otwiera ją tylko przeglądarka (weryfikacja przeglądarki, reCAPTCHA albo inny system). Aplikacja podaje jej adres.") },
+  { status: "NONE", title: N_("Sąd nie ma wokandy na stronie"), help: N_("Strona sądu nie wskazuje wokandy.") },
+  { status: "UNREACHABLE", title: N_("Strona sądu nie odpowiada"), help: N_("Brak połączenia albo błąd strony przy ostatnim sprawdzeniu.") }
 ];
 
 const SYSTEM_LABEL: Record<NonNullable<WokandaCourtInfo["system"]>, string> = {
-  MS_PORTAL: "portal sądów (wyszukiwarka po sygnaturze)",
-  CMS_FORM: "e-Wokanda BIP (formularz)",
-  GET_FORM: "wyszukiwarka po sygnaturze",
-  POST_FORM: "wyszukiwarka po sygnaturze",
-  DRUPAL_VIEW: "e-Wokanda okręgu (widok z filtrem sygnatury)",
-  LIST: "jedna lista bez wyszukiwarki"
+  MS_PORTAL: N_("portal sądów (wyszukiwarka po sygnaturze)"),
+  CMS_FORM: N_("e-Wokanda BIP (formularz)"),
+  GET_FORM: N_("wyszukiwarka po sygnaturze"),
+  POST_FORM: N_("wyszukiwarka po sygnaturze"),
+  DRUPAL_VIEW: N_("e-Wokanda okręgu (widok z filtrem sygnatury)"),
+  LIST: N_("jedna lista bez wyszukiwarki")
 };
 
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -69,23 +70,22 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
     <section className="chat-card-stack">
       <article className="chat-card">
         <p className="eyebrow">
-          Wokandy sądów powszechnych
+          {t("Wokandy sądów powszechnych")}
           <InfoTip>
-            Rejestr z wydania aplikacji (sprawdzony {checkedAt || "—"}); „Sprawdź ponownie” sprawdza z tego komputera, jedno zapytanie na sąd. Strona, która blokuje jedną
-            sieć, może odpowiadać innej.
+            {t("Rejestr z wydania aplikacji (sprawdzony")} {checkedAt || "—"}{t("); „Sprawdź ponownie” sprawdza z tego komputera, jedno zapytanie na sąd. Strona, która blokuje jedną sieć, może odpowiadać innej.")}
           </InfoTip>
         </p>
         <h2>
-          {courts.length} sądów: {GROUPS.map((group) => `${group.title.toLowerCase()} ${counts[group.status] ?? 0}`).join(", ")}
+          {courts.length} {t("sądów:")} {GROUPS.map((group) => `${t(group.title).toLowerCase()} ${counts[group.status] ?? 0}`).join(", ")}
         </h2>
         <div className="case-access-admin-search">
           <label>
-            Szukaj sądu
-            <input type="search" value={query} placeholder="Nazwa sądu lub domena" onChange={(event) => setQuery(event.target.value)} />
+            {t("Szukaj sądu")}
+            <input type="search" value={query} placeholder={t("Nazwa sądu lub domena")} onChange={(event) => setQuery(event.target.value)} />
           </label>
           {admin ? (
             <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void recheck()}>
-              {busy === "all" ? "Sprawdzanie wszystkich sądów…" : "Sprawdź wszystkie ponownie"}
+              {busy === "all" ? t("Sprawdzanie wszystkich sądów…") : t("Sprawdź wszystkie ponownie")}
             </button>
           ) : null}
         </div>
@@ -97,9 +97,9 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
           <details key={group.status} className="chat-card wokanda-group" open={group.status !== "PORTAL" && Boolean(query)}>
             <summary>
               <strong>
-                {group.title} ({rows.length})
+                {t(group.title)} ({rows.length})
               </strong>
-              <InfoTip>{group.help}</InfoTip>
+              <InfoTip>{t(group.help)}</InfoTip>
             </summary>
             <ul className="wokanda-courts">
               {rows.map((court) => (
@@ -107,7 +107,7 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
                   <span>
                     <strong>{court.nazwa}</strong>
                     <small>
-                      {[WOKANDA_STATUS_LABEL[court.status], court.system ? SYSTEM_LABEL[court.system] : "", court.powod, court.zrodlo === "TEN_KOMPUTER" ? `sprawdzono z tego komputera ${court.sprawdzono ? new Date(court.sprawdzono).toLocaleString("pl-PL") : ""}` : "stan z wydania"]
+                      {[WOKANDA_STATUS_LABEL[court.status], court.system ? t(SYSTEM_LABEL[court.system]) : "", court.powod, court.zrodlo === "TEN_KOMPUTER" ? t("sprawdzono z tego komputera {time}", { time: court.sprawdzono ? new Date(court.sprawdzono).toLocaleString(currentLocale()) : "" }) : t("stan z wydania")]
                         .filter(Boolean)
                         .join(" · ")}
                     </small>
@@ -122,7 +122,7 @@ export function WokandaRegisterPanel({ admin }: { admin: boolean }) {
                     )}
                     {admin ? (
                       <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void recheck([court.nazwa])}>
-                        {busy === court.nazwa ? "Sprawdzanie…" : "Sprawdź"}
+                        {busy === court.nazwa ? "Sprawdzanie…" : t("Sprawdź")}
                       </button>
                     ) : null}
                   </span>

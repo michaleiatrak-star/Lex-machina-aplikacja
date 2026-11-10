@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -49,8 +50,8 @@ import "./invoices.css";
 const SORTS: Array<[InvoiceSort, string]> = [
   ["date-desc", "Data: najnowsze"],
   ["date-asc", "Data: najstarsze"],
-  ["client-asc", "Klient: A–Z"],
-  ["client-desc", "Klient: Z–A"]
+  ["client-asc", t("Klient: A–Z")],
+  ["client-desc", t("Klient: Z–A")]
 ];
 
 type Editing = { invoiceId: string | null; draft: InvoiceDraft };
@@ -82,11 +83,11 @@ function PartyFields({
       <legend>{title}</legend>
       <CompanyNipField party={party} onChange={onChange} onFound={onFound} />
       <label>
-        Nazwa
+        {t("Nazwa")}
         <input value={party.name} onChange={(event) => onChange({ ...party, name: event.target.value })} />
       </label>
       <label>
-        Adres
+        {t("Adres")}
         <input value={party.address} onChange={(event) => onChange({ ...party, address: event.target.value })} />
       </label>
     </fieldset>
@@ -94,6 +95,7 @@ function PartyFields({
 }
 
 // Treść oznaczeń jak w polu faktury; brzmienie wymogu sprawdza „Zweryfikuj przez ELI”.
+// Kept in Polish: statutory markings of a Polish VAT invoice (art. 106e ustawy o VAT).
 function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] {
   if (!annotations) return [];
   return [
@@ -105,6 +107,7 @@ function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] 
   ].filter(Boolean);
 }
 
+// Kept in Polish: statutory markings of a Polish VAT invoice.
 const ANNOTATION_FLAGS: Array<[keyof Omit<InvoiceAnnotations, "exemptionBasis">, string]> = [
   ["cashMethod", "metoda kasowa"],
   ["selfBilling", "samofakturowanie"],
@@ -134,27 +137,27 @@ function InvoiceDocument({
           <img alt="" src={`data:${settings.logo.mediaType};base64,${settings.logo.base64}`} />
         ) : <span />}
         <div className="invoice-document-title">
-          <h3>Faktura {invoice.number}</h3>
-          <div>Data wystawienia: {invoice.issueDate}{invoice.placeOfIssue ? `, ${invoice.placeOfIssue}` : ""}</div>
-          {invoice.saleDate ? <div>Data sprzedaży / wykonania usługi: {invoice.saleDate}</div> : null}
+          <h3>{t("Faktura")} {invoice.number}</h3>
+          <div>{t("Data wystawienia:")} {invoice.issueDate}{invoice.placeOfIssue ? `, ${invoice.placeOfIssue}` : ""}</div>
+          {invoice.saleDate ? <div>{t("Data sprzedaży / wykonania usługi:")} {invoice.saleDate}</div> : null}
           {invoice.status === "DRAFT" ? <div className="invoice-draft-mark">SZKIC</div> : null}
         </div>
       </header>
       <div className="invoice-document-parties">
-        {party("Sprzedawca", invoice.seller)}
-        {party("Nabywca", invoice.buyer)}
+        {party(t("Sprzedawca"), invoice.seller)}
+        {party(t("Nabywca"), invoice.buyer)}
       </div>
       <table>
         <thead>
           <tr>
-            <th>Lp.</th>
-            <th>Nazwa towaru lub usługi</th>
+            <th>{t("Lp.")}</th>
+            <th>{t("Nazwa towaru lub usługi")}</th>
             <th>J.m.</th>
-            <th>Ilość</th>
-            <th>Cena netto</th>
-            <th>Opust</th>
-            <th>Wartość netto</th>
-            <th>Stawka VAT</th>
+            <th>{t("Ilość")}</th>
+            <th>{t("Cena netto")}</th>
+            <th>{t("Opust")}</th>
+            <th>{t("Wartość netto")}</th>
+            <th>{t("Stawka VAT")}</th>
           </tr>
         </thead>
         <tbody>
@@ -174,7 +177,7 @@ function InvoiceDocument({
       </table>
       <table className="invoice-document-totals">
         <thead>
-          <tr><th>Stawka</th><th>Netto</th><th>VAT</th><th>Brutto</th></tr>
+          <tr><th>{t("Stawka")}</th><th>{t("Netto")}</th><th>VAT</th><th>{t("Brutto")}</th></tr>
         </thead>
         <tbody>
           {invoice.totals.byRate.map((row) => (
@@ -186,7 +189,7 @@ function InvoiceDocument({
             </tr>
           ))}
           <tr className="invoice-document-sum">
-            <td>Razem</td>
+            <td>{t("Razem")}</td>
             <td>{formatMoney(invoice.totals.net, invoice.currency)}</td>
             <td>{formatMoney(invoice.totals.vat, invoice.currency)}</td>
             <td>{formatMoney(invoice.totals.gross, invoice.currency)}</td>
@@ -195,10 +198,10 @@ function InvoiceDocument({
       </table>
       <footer>
         {invoice.paymentMethod === "zapłacono"
-          ? <div className="invoice-paid-mark">Zapłacono</div>
-          : invoice.paymentMethod ? <div>Sposób płatności: {invoice.paymentMethod}</div> : null}
-        {invoice.paymentDueDate ? <div>Termin płatności: {invoice.paymentDueDate}</div> : null}
-        {invoice.bankAccount ? <div>Rachunek: {invoice.bankAccount}</div> : null}
+          ? <div className="invoice-paid-mark">{t("Zapłacono")}</div>
+          : invoice.paymentMethod ? <div>{t("Sposób płatności:")} {invoice.paymentMethod}</div> : null}
+        {invoice.paymentDueDate ? <div>{t("Termin płatności:")} {invoice.paymentDueDate}</div> : null}
+        {invoice.bankAccount ? <div>{t("Rachunek:")} {invoice.bankAccount}</div> : null}
         {annotationTexts(invoice.annotations).map((entry) => <div key={entry}><strong>{entry}</strong></div>)}
         {invoice.notes ? <p>{invoice.notes}</p> : null}
       </footer>
@@ -286,7 +289,7 @@ export function InvoicesPanel({
     setConfirmIssue(false);
     setTemplateName(null);
     setEditing({ invoiceId: null, draft: draftFromTemplate(template, settings?.seller, today(), defaults) });
-    setMessage(`Nowa faktura ze wzoru „${template.name}”. Uzupełnij numer i sprawdź pozycje.`);
+    setMessage(t("Nowa faktura ze wzoru „{name}”. Uzupełnij numer i sprawdź pozycje.", { name: template.name }));
   }
 
   // Zapis jako wzór; wzór o tej samej nazwie jest aktualizowany.
@@ -299,16 +302,16 @@ export function InvoicesPanel({
       await refreshTemplates();
       setTemplateId(saved.template.templateId);
       setTemplateName(null);
-    }, existing ? `Wzór „${name}” zaktualizowany.` : `Wzór „${name}” zapisany.`);
+    }, existing ? t("Wzór „{name}” zaktualizowany.", { name: name }) : t("Wzór „{name}” zapisany.", { name: name }));
   }
 
   function removeTemplate(): void {
     const template = templates.find((item) => item.templateId === templateId);
-    if (!template || !window.confirm(`Usunąć wzór „${template.name}”? Faktury utworzone ze wzoru zostają.`)) return;
+    if (!template || !window.confirm(t("Usunąć wzór „{name}”? Faktury utworzone ze wzoru zostają.", { name: template.name }))) return;
     void run(async () => {
       await deleteInvoiceTemplate(template.templateId);
       await refreshTemplates();
-    }, `Wzór „${template.name}” usunięty.`);
+    }, t("Wzór „{name}” usunięty.", { name: template.name }));
   }
 
   function startNew(): void {
@@ -395,25 +398,25 @@ export function InvoicesPanel({
       <aside className="chat-card invoice-list invoice-no-print">
         <div className="chat-form-row">
           <button type="button" className="chat-primary-action" disabled={busy} onClick={startNew}>
-            Nowa faktura
+            {t("Nowa faktura")}
           </button>
           {onOpenSettings ? (
             <button type="button" className="chat-secondary-action" onClick={onOpenSettings}>
-              Ustawienia KSeF
+              {t("Ustawienia KSeF")}
             </button>
           ) : null}
         </div>
         <p className="field-help">
-          Wysyłka do KSeF niedostępna w tej wersji.
-          <InfoTip>Faktury wystawiasz i drukujesz lokalnie.</InfoTip>
+          {t("Wysyłka do KSeF niedostępna w tej wersji.")}
+          <InfoTip>{t("Faktury wystawiasz i drukujesz lokalnie.")}</InfoTip>
         </p>
         <input
           type="search"
-          placeholder="Szukaj po kliencie, NIP lub numerze"
+          placeholder={t("Szukaj po kliencie, NIP lub numerze")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <select value={sort} onChange={(event) => setSort(event.target.value as InvoiceSort)} aria-label="Sortowanie">
+        <select value={sort} onChange={(event) => setSort(event.target.value as InvoiceSort)} aria-label={t("Sortowanie")}>
           {SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <ul>
@@ -433,29 +436,29 @@ export function InvoicesPanel({
               </button>
             </li>
           ))}
-          {invoices.length === 0 ? <li className="field-help">Brak faktur.</li> : null}
+          {invoices.length === 0 ? <li className="field-help">{t("Brak faktur.")}</li> : null}
         </ul>
         <div className="invoice-templates">
           <h3>
-            Wzory faktur
-            <InfoTip>Wzór zapiszesz w edytorze faktury („Zapisz jako wzór”): nabywca, pozycje, płatność, miejsce wystawienia i uwagi, bez numeru i dat.</InfoTip>
+            {t("Wzory faktur")}
+            <InfoTip>{t("Wzór zapiszesz w edytorze faktury („Zapisz jako wzór”): nabywca, pozycje, płatność, miejsce wystawienia i uwagi, bez numeru i dat.")}</InfoTip>
           </h3>
           {templates.length ? (
             <>
-              <select value={templateId} aria-label="Wzór faktury" onChange={(event) => setTemplateId(event.target.value)}>
+              <select value={templateId} aria-label={t("Wzór faktury")} onChange={(event) => setTemplateId(event.target.value)}>
                 {templates.map((item) => <option key={item.templateId} value={item.templateId}>{item.name}</option>)}
               </select>
               <div className="chat-form-row">
                 <button type="button" className="chat-primary-action" disabled={busy || !templateId} onClick={startFromTemplate}>
-                  Nowa ze wzoru
+                  {t("Nowa ze wzoru")}
                 </button>
                 <button type="button" className="chat-secondary-action" disabled={busy || !templateId} onClick={removeTemplate}>
-                  Usuń wzór
+                  {t("Usuń wzór")}
                 </button>
               </div>
             </>
           ) : (
-            <p className="field-help">Brak wzorów.</p>
+            <p className="field-help">{t("Brak wzorów.")}</p>
           )}
         </div>
       </aside>
@@ -463,56 +466,56 @@ export function InvoicesPanel({
       <div className="invoice-main">
         {editing ? (
           <article className="chat-card invoice-editor">
-            <h2>{editing.invoiceId ? "Edycja szkicu" : "Nowa faktura"}</h2>
+            <h2>{editing.invoiceId ? t("Edycja szkicu") : t("Nowa faktura")}</h2>
             <div className="invoice-grid">
               <label>
-                Numer faktury
+                {t("Numer faktury")}
                 <input
                   value={editing.draft.number}
                   placeholder={suggestedNumber ? `auto: ${suggestedNumber}` : ""}
                   onChange={(event) => patch({ number: event.target.value })}
                 />
                 {autoNumbering && !editing.draft.number.trim() ? (
-                  <small className="field-help">Puste pole = numer nadany automatycznie przy zapisie.</small>
+                  <small className="field-help">{t("Puste pole = numer nadany automatycznie przy zapisie.")}</small>
                 ) : null}
               </label>
               <label>
-                Data wystawienia
+                {t("Data wystawienia")}
                 <input type="date" value={editing.draft.issueDate} onChange={(event) => setIssueDate(event.target.value, editing.draft)} />
               </label>
               <label>
-                Data sprzedaży / wykonania usługi
+                {t("Data sprzedaży / wykonania usługi")}
                 <input type="date" value={editing.draft.saleDate ?? ""} onChange={(event) => patch({ saleDate: event.target.value })} />
               </label>
               <label>
-                Miejsce wystawienia
+                {t("Miejsce wystawienia")}
                 <input value={editing.draft.placeOfIssue ?? ""} onChange={(event) => patch({ placeOfIssue: event.target.value })} />
               </label>
             </div>
             <div className="invoice-parties">
               <PartyFields
-                title="Sprzedawca"
+                title={t("Sprzedawca")}
                 party={editing.draft.seller}
                 onChange={(seller) => patch({ seller })}
                 onFound={(lookup) => {
                   // Jedyny rachunek sprzedawcy z wykazu VAT trafia do pustego pola rachunku.
                   if (editing.draft.paymentMethod !== "przelew" || editing.draft.bankAccount?.trim() || lookup.accounts.length !== 1) return null;
                   patch({ bankAccount: lookup.accounts[0] });
-                  return "Rachunek z wykazu VAT wstawiony.";
+                  return t("Rachunek z wykazu VAT wstawiony.");
                 }}
               />
-              <PartyFields title="Nabywca" party={editing.draft.buyer} onChange={(buyer) => patch({ buyer })} />
+              <PartyFields title={t("Nabywca")} party={editing.draft.buyer} onChange={(buyer) => patch({ buyer })} />
             </div>
             <table className="invoice-lines">
               <thead>
                 <tr>
-                  <th>Nazwa towaru lub usługi</th>
+                  <th>{t("Nazwa towaru lub usługi")}</th>
                   <th>J.m.</th>
-                  <th>Ilość</th>
-                  <th>Cena netto</th>
-                  <th>Opust (kwota)</th>
-                  <th>Stawka VAT</th>
-                  <th>Wartość netto</th>
+                  <th>{t("Ilość")}</th>
+                  <th>{t("Cena netto")}</th>
+                  <th>{t("Opust (kwota)")}</th>
+                  <th>{t("Stawka VAT")}</th>
+                  <th>{t("Wartość netto")}</th>
                   <th />
                 </tr>
               </thead>
@@ -525,8 +528,8 @@ export function InvoicesPanel({
                     <td><input inputMode="decimal" value={line.unitNetPrice} onChange={(event) => patchLine(index, { unitNetPrice: event.target.value })} /></td>
                     <td><input inputMode="decimal" value={line.discount ?? ""} placeholder="0" onChange={(event) => patchLine(index, { discount: event.target.value })} /></td>
                     <td>
-                      <select value={line.vatRate} aria-label="Stawka VAT" onChange={(event) => patchLine(index, { vatRate: event.target.value })}>
-                        {line.vatRate === "" ? <option value="">wybierz</option> : null}
+                      <select value={line.vatRate} aria-label={t("Stawka VAT")} onChange={(event) => patchLine(index, { vatRate: event.target.value })}>
+                        {line.vatRate === "" ? <option value="">{t("wybierz")}</option> : null}
                         {line.vatRate && !VAT_RATES.some(([rate]) => rate === line.vatRate)
                           ? <option value={line.vatRate}>{line.vatRate}</option>
                           : null}
@@ -541,7 +544,7 @@ export function InvoicesPanel({
                         disabled={editing.draft.lines.length === 1}
                         onClick={() => patch({ lines: editing.draft.lines.filter((_, at) => at !== index) })}
                       >
-                        Usuń
+                        {t("Usuń")}
                       </button>
                     </td>
                   </tr>
@@ -553,20 +556,20 @@ export function InvoicesPanel({
               className="chat-secondary-action"
               onClick={() => patch({ lines: [...editing.draft.lines, emptyLine(defaults.vatRate)] })}
             >
-              Dodaj pozycję
+              {t("Dodaj pozycję")}
             </button>
             <p className="invoice-totals-preview">
               {totals
                 ? `Netto ${formatMoney(totals.net, editing.draft.currency)} · VAT ${formatMoney(totals.vat, editing.draft.currency)} · Brutto ${formatMoney(totals.gross, editing.draft.currency)}`
-                : "Uzupełnij ilość, cenę i stawkę w każdej pozycji, aby zobaczyć sumy."}
+                : t("Uzupełnij ilość, cenę i stawkę w każdej pozycji, aby zobaczyć sumy.")}
             </p>
             <div className="invoice-grid">
               <label>
-                Waluta
+                {t("Waluta")}
                 <input maxLength={3} value={editing.draft.currency} onChange={(event) => patch({ currency: event.target.value.toUpperCase() })} />
               </label>
               <label>
-                Sposób płatności
+                {t("Sposób płatności")}
                 <select value={editing.draft.paymentMethod ?? ""} onChange={(event) => setPaymentMethod(event.target.value, editing.draft)}>
                   {editing.draft.paymentMethod && !PAYMENT_METHODS.some(([method]) => method === editing.draft.paymentMethod)
                     ? <option value={editing.draft.paymentMethod}>{editing.draft.paymentMethod}</option>
@@ -577,32 +580,32 @@ export function InvoicesPanel({
               {editing.draft.paymentMethod === "przelew" ? (
                 <>
                   <label>
-                    Termin płatności
+                    {t("Termin płatności")}
                     <select
                       value={String(termDaysOf(editing.draft.issueDate, editing.draft.paymentDueDate) ?? "custom")}
                       onChange={(event) => setTerm(event.target.value, editing.draft)}
                     >
-                      {PAYMENT_TERMS.map((days) => <option key={days} value={days}>{days} dni</option>)}
-                      <option value="custom">inna data</option>
+                      {PAYMENT_TERMS.map((days) => <option key={days} value={days}>{days} {t("dni")}</option>)}
+                      <option value="custom">{t("inna data")}</option>
                     </select>
                   </label>
                   <label>
-                    Data płatności
+                    {t("Data płatności")}
                     <input type="date" value={editing.draft.paymentDueDate ?? ""} onChange={(event) => patch({ paymentDueDate: event.target.value })} />
                   </label>
                   <label>
-                    Numer rachunku
+                    {t("Numer rachunku")}
                     <input value={editing.draft.bankAccount ?? ""} onChange={(event) => patch({ bankAccount: event.target.value })} />
                   </label>
                 </>
               ) : null}
               <label className="invoice-wide">
-                Uwagi
+                {t("Uwagi")}
                 <textarea value={editing.draft.notes ?? ""} onChange={(event) => patch({ notes: event.target.value })} />
               </label>
             </div>
             <fieldset className="invoice-party">
-              <legend>Oznaczenia na fakturze</legend>
+              <legend>{t("Oznaczenia na fakturze")}</legend>
               {ANNOTATION_FLAGS.map(([flag, label]) => (
                 <label key={flag} className="invoice-flag">
                   <input
@@ -614,7 +617,7 @@ export function InvoicesPanel({
                 </label>
               ))}
               <label>
-                Podstawa zwolnienia od podatku (wymagana przy pozycjach ze stawką „zw”)
+                {t("Podstawa zwolnienia od podatku (wymagana przy pozycjach ze stawką „zw”)")}
                 <input
                   value={editing.draft.annotations?.exemptionBasis ?? ""}
                   onChange={(event) => patchAnnotations({ exemptionBasis: event.target.value })}
@@ -623,16 +626,16 @@ export function InvoicesPanel({
             </fieldset>
             {developerMode ? (
               <details className="invoice-requirements-details">
-                <summary>Sprawdź wymagane elementy faktury</summary>
+                <summary>{t("Sprawdź wymagane elementy faktury")}</summary>
                 <InvoiceRequirementsCard />
               </details>
             ) : null}
             <div className="chat-form-row">
               <button type="button" className="chat-primary-action" disabled={busy} onClick={save}>
-                Zapisz szkic
+                {t("Zapisz szkic")}
               </button>
               <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing(null)}>
-                Anuluj
+                {t("Anuluj")}
               </button>
               <button
                 type="button"
@@ -640,21 +643,21 @@ export function InvoicesPanel({
                 disabled={busy}
                 onClick={() => setTemplateName(templateName === null ? editing.draft.buyer.name : null)}
               >
-                Zapisz jako wzór…
+                {t("Zapisz jako wzór…")}
               </button>
             </div>
             {templateName !== null ? (
               <div className="chat-form-row invoice-template-save">
                 <label>
-                  Nazwa wzoru
+                  {t("Nazwa wzoru")}
                   <input value={templateName} maxLength={200} onChange={(event) => setTemplateName(event.target.value)} />
                 </label>
                 <button type="button" className="chat-primary-action" disabled={busy || !templateName.trim()} onClick={saveTemplate}>
                   {templates.some((item) => item.name.toLocaleLowerCase("pl") === templateName.trim().toLocaleLowerCase("pl"))
-                    ? "Zaktualizuj wzór"
-                    : "Zapisz wzór"}
+                    ? t("Zaktualizuj wzór")
+                    : t("Zapisz wzór")}
                 </button>
-                <InfoTip>Wzór zapisuje nabywcę, pozycje, płatność (termin w dniach), miejsce wystawienia i uwagi; bez numeru i dat.</InfoTip>
+                <InfoTip>{t("Wzór zapisuje nabywcę, pozycje, płatność (termin w dniach), miejsce wystawienia i uwagi; bez numeru i dat.")}</InfoTip>
               </div>
             ) : null}
           </article>
@@ -669,10 +672,10 @@ export function InvoicesPanel({
                     disabled={busy}
                     onClick={() => setEditing({ invoiceId: selected.invoiceId, draft: draftOf(selected) })}
                   >
-                    Edytuj
+                    {t("Edytuj")}
                   </button>
                   <button type="button" className="chat-primary-action" disabled={busy} onClick={() => setConfirmIssue(true)}>
-                    Wystaw
+                    {t("Wystaw")}
                   </button>
                   <button
                     type="button"
@@ -682,10 +685,10 @@ export function InvoicesPanel({
                       void run(async () => {
                         await deleteInvoice(selected.invoiceId);
                         setSelected(null);
-                      }, "Szkic usunięty.")
+                      }, t("Szkic usunięty."))
                     }
                   >
-                    Usuń szkic
+                    {t("Usuń szkic")}
                   </button>
                 </>
               ) : null}
@@ -698,10 +701,10 @@ export function InvoicesPanel({
                     const copy = await duplicateInvoice(selected.invoiceId);
                     setSelected(null);
                     setEditing({ invoiceId: copy.invoice.invoiceId, draft: draftOf(copy.invoice) });
-                  }, `Utworzono szkic na podstawie faktury ${selected.number}.`)
+                  }, t("Utworzono szkic na podstawie faktury {number}.", { number: selected.number }))
                 }
               >
-                Nowa na podstawie tej
+                {t("Nowa na podstawie tej")}
               </button>
               <button
                 type="button"
@@ -713,29 +716,29 @@ export function InvoicesPanel({
                     const saved = await downloadBlob(exported.blob, exported.filename);
                     const where = saved ? `Zapisano: ${saved}.` : `Pobrano ${exported.filename}.`;
                     return exported.logoOmitted
-                      ? `${where} Logo pominięto: obraz w nieobsługiwanym formacie (np. PNG z przeplotem); zapisz logo ponownie jako zwykły PNG lub JPEG.`
+                      ? t("{where} Logo pominięto: obraz w nieobsługiwanym formacie (np. PNG z przeplotem); zapisz logo ponownie jako zwykły PNG lub JPEG.", { where: where })
                       : where;
                   })
                 }
               >
-                Eksport PDF
+                {t("Eksport PDF")}
               </button>
               <button type="button" className="chat-secondary-action" onClick={() => window.print()}>
-                Drukuj
+                {t("Drukuj")}
               </button>
               <button
                 type="button"
                 className="chat-secondary-action"
                 disabled
-                title="Wysyłka do KSeF będzie dostępna w kolejnym etapie, po weryfikacji wymogów przez ELI."
+                title={t("Wysyłka do KSeF będzie dostępna w kolejnym etapie, po weryfikacji wymogów przez ELI.")}
               >
-                Wyślij do KSeF
+                {t("Wyślij do KSeF")}
               </button>
             </div>
             {confirmIssue ? (
               <div className="invoice-confirm invoice-no-print">
                 <p>
-                  Wystawionej faktury nie można już edytować ani usunąć. Wystawić fakturę {selected.number}?
+                  {t("Wystawionej faktury nie można już edytować ani usunąć. Wystawić fakturę")} {selected.number}?
                 </p>
                 <div className="chat-form-row">
                   <button
@@ -750,10 +753,10 @@ export function InvoicesPanel({
                       }, `Faktura ${selected.number} wystawiona.`)
                     }
                   >
-                    Tak, wystaw
+                    {t("Tak, wystaw")}
                   </button>
                   <button type="button" className="chat-secondary-action" onClick={() => setConfirmIssue(false)}>
-                    Anuluj
+                    {t("Anuluj")}
                   </button>
                 </div>
               </div>
@@ -762,8 +765,8 @@ export function InvoicesPanel({
           </>
         ) : (
           <article className="chat-card invoice-no-print">
-            <h2>Faktury</h2>
-            <p>Wybierz fakturę z listy albo utwórz nową.</p>
+            <h2>{t("Faktury")}</h2>
+            <p>{t("Wybierz fakturę z listy albo utwórz nową.")}</p>
             {developerMode ? <InvoiceRequirementsCard /> : null}
           </article>
         )}

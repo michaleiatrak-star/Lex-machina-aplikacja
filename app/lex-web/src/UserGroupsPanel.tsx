@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -13,11 +14,11 @@ import {
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
-  USER_GROUP_NAME_TAKEN: "Grupa o tej nazwie już istnieje.",
-  USER_GROUP_NAME_INVALID: "Nazwa grupy: od 1 do 80 znaków.",
-  USER_GROUP_MEMBERS_INVALID: "Lista członków zawiera nieznanego użytkownika.",
-  USER_GROUP_NOT_FOUND: "Grupa już nie istnieje.",
-  AUTHORIZATION_DENIED: "Grupami zarządza administrator."
+  USER_GROUP_NAME_TAKEN: t("Grupa o tej nazwie już istnieje."),
+  USER_GROUP_NAME_INVALID: t("Nazwa grupy: od 1 do 80 znaków."),
+  USER_GROUP_MEMBERS_INVALID: t("Lista członków zawiera nieznanego użytkownika."),
+  USER_GROUP_NOT_FOUND: t("Grupa już nie istnieje."),
+  AUTHORIZATION_DENIED: t("Grupami zarządza administrator.")
 };
 
 export function groupErrorText(error: unknown): string {
@@ -26,17 +27,17 @@ export function groupErrorText(error: unknown): string {
 }
 
 const SKIP_REASONS: Record<string, string> = {
-  ALREADY_HAS_ACCESS: "ma już dostęp",
-  TARGET_CRYPTO_NOT_READY: "nie zalogował się jeszcze ani razu (brak kluczy szyfrowania)",
+  ALREADY_HAS_ACCESS: t("ma już dostęp"),
+  TARGET_CRYPTO_NOT_READY: t("nie zalogował się jeszcze ani razu (brak kluczy szyfrowania)"),
   TARGET_USER_NOT_FOUND: "konto nieaktywne"
 };
 
 /** "Dodano 3 osoby; pominięto: @jan (ma już dostęp)". */
 export function groupShareSummary(result: GroupShareResult, names: Map<string, string>): string {
   const name = (userId: string) => names.get(userId) ?? userId;
-  const added = result.granted.length ? `Dodano do sprawy: ${result.granted.map(name).join(", ")}.` : "Nikt nowy nie został dodany.";
+  const added = result.granted.length ? t("Dodano do sprawy: {value}.", { value: result.granted.map(name).join(", ") }) : t("Nikt nowy nie został dodany.");
   const skipped = result.skipped.map((item) => `${name(item.userId)} (${SKIP_REASONS[item.reason] ?? item.reason})`);
-  return skipped.length ? `${added} Pominięto: ${skipped.join(", ")}.` : added;
+  return skipped.length ? t("{added} Pominięto: {value}.", { added: added, value: skipped.join(", ") }) : added;
 }
 
 /** Ustawienia -> Użytkownicy (administrator): grupy do udostępniania spraw jednym kliknięciem. */
@@ -77,37 +78,36 @@ export function UserGroupsPanel() {
 
   return (
     <article className="chat-card user-groups-panel">
-      <p className="eyebrow">Grupy</p>
+      <p className="eyebrow">{t("Grupy")}</p>
       <h2>
-        Grupy użytkowników
+        {t("Grupy użytkowników")}
         <InfoTip>
-          Zespół, dział lub pełnomocnicy jednej sprawy: przy sprawie „Udostępnij grupie” nadaje dostęp każdemu członkowi osobno,
-          z jego własną kopią klucza sprawy. Osoba dopisana do grupy później dostaje dostęp przy kolejnym udostępnieniu grupie.
+          {t("Zespół, dział lub pełnomocnicy jednej sprawy: przy sprawie „Udostępnij grupie” nadaje dostęp każdemu członkowi osobno, z jego własną kopią klucza sprawy. Osoba dopisana do grupy później dostaje dostęp przy kolejnym udostępnieniu grupie.")}
         </InfoTip>
       </h2>
       <ul className="user-groups-list">
         {groups.map((group) => (
           <li key={group.groupId}>
-            <strong>{group.name}</strong> · {group.memberUserIds.length} os.
+            <strong>{group.name}</strong> · {group.memberUserIds.length} {t("os.")}
             <small>{group.memberUserIds.map(label).join(", ")}</small>
             <span>
               <button type="button" className="chat-link-button" disabled={busy} onClick={() => setEditing({ groupId: group.groupId, name: group.name, members: new Set(group.memberUserIds) })}>
-                Edytuj
+                {t("Edytuj")}
               </button>
               <button
                 type="button"
                 className="chat-link-button"
                 disabled={busy}
                 onClick={() => {
-                  if (window.confirm(`Usunąć grupę „${group.name}”? Dostęp do spraw już nadany zostaje.`)) void run(() => deleteUserGroup(group.groupId));
+                  if (window.confirm(t("Usunąć grupę „{name}”? Dostęp do spraw już nadany zostaje.", { name: group.name }))) void run(() => deleteUserGroup(group.groupId));
                 }}
               >
-                Usuń
+                {t("Usuń")}
               </button>
             </span>
           </li>
         ))}
-        {!groups.length ? <li>Brak grup.</li> : null}
+        {!groups.length ? <li>{t("Brak grup.")}</li> : null}
       </ul>
       {editing ? (
         <form
@@ -123,11 +123,11 @@ export function UserGroupsPanel() {
           }}
         >
           <label>
-            Nazwa
+            {t("Nazwa")}
             <input value={editing.name} maxLength={80} onChange={(event) => setEditing({ ...editing, name: event.target.value })} />
           </label>
           <fieldset>
-            <legend>Członkowie</legend>
+            <legend>{t("Członkowie")}</legend>
             {users.map((user) => (
               <label key={user.userId}>
                 <input
@@ -146,16 +146,16 @@ export function UserGroupsPanel() {
           </fieldset>
           <div className="google-import-actions">
             <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing(null)}>
-              Anuluj
+              {t("Anuluj")}
             </button>
             <button type="submit" className="chat-primary-action" disabled={busy || !editing.name.trim()}>
-              Zapisz grupę
+              {t("Zapisz grupę")}
             </button>
           </div>
         </form>
       ) : (
         <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing({ name: "", members: new Set() })}>
-          Nowa grupa
+          {t("Nowa grupa")}
         </button>
       )}
       {message ? <p role="alert">{message}</p> : null}

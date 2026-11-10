@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { ApplicationDownloadProgress } from "./ApplicationDownloadProgress.js";
 import {
   useEffect,
@@ -27,6 +28,7 @@ import {
 } from "./use-floating-panel.js";
 import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
+import { WebSearchSection } from "./WebSearchSection.js";
 import { JurisdictionSection } from "./JurisdictionSection.js";
 import { LegiIndexSection } from "./LegiIndexSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
@@ -41,11 +43,11 @@ const CHANNEL_LABEL: Record<SkillChannel, string> = {
 };
 
 function shortDate(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString("pl-PL") : "—";
+  return value ? new Date(value).toLocaleString(currentLocale()) : "—";
 }
 
 function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse["lastResult"]>): string {
-  const source = result.source === "channel" && result.channel ? `kanał ${CHANNEL_LABEL[result.channel]}` : "wydanie skilli";
+  const source = result.source === "channel" && result.channel ? t("kanał {value}", { value: CHANNEL_LABEL[result.channel] }) : "wydanie skilli";
   const target = result.target ? (result.source === "channel" ? ` (commit ${result.target.slice(0, 7)})` : ` ${result.target}`) : "";
   switch (result.outcome) {
     case "INSTALLED":
@@ -53,24 +55,24 @@ function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse[
     case "UP_TO_DATE":
       return `aktualne (${source}).`;
     case "BLOCKED":
-      return `nowsze skille są, ale wydanie nie ma kompletu do weryfikacji (${result.detail ?? "brak"}); bez instalacji.`;
+      return t("nowsze skille są, ale wydanie nie ma kompletu do weryfikacji ({value}); bez instalacji.", { value: result.detail ?? "brak" });
     default:
-      return `nie udało się (${source}: ${result.detail ?? "błąd"}).`;
+      return t("nie udało się ({source}: {value}).", { source: source, value: result.detail ?? "błąd" });
   }
 }
 
 function channelUnavailableText(reason: string | undefined): string {
-  if (!reason) return "Nie udało się sprawdzić kanału skilli.";
+  if (!reason) return t("Nie udało się sprawdzić kanału skilli.");
   if (/GITHUB_HTTP_(403|429)/.test(reason)) {
-    return "GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę.";
+    return t("GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę.");
   }
   if (/fetch failed|ENOTFOUND|ECONN|timeout|aborted/i.test(reason)) {
-    return "Brak połączenia z GitHub — nie sprawdzono kanału skilli.";
+    return t("Brak połączenia z GitHub — nie sprawdzono kanału skilli.");
   }
   if (reason === "SKILL_CHANNEL_DIRECTORY_MISSING") {
-    return "W repozytorium Lex Machina nie ma katalogu tego kanału.";
+    return t("W repozytorium Lex Machina nie ma katalogu tego kanału.");
   }
-  return `Nie udało się sprawdzić kanału skilli (${reason}).`;
+  return t("Nie udało się sprawdzić kanału skilli ({reason}).", { reason: reason });
 }
 
 function formatBytes(bytes: number): string {
@@ -89,27 +91,27 @@ export function friendlyError(error: unknown): string {
         : String(error);
 
   if (/UPDATE_ASSET_HASH|UPDATE_ASSET_SIZE|UPDATE_ASSET_RANGE/.test(code)) {
-    return "Pobrane pliki są niekompletne lub uszkodzone. Spróbuj pobrać aktualizację ponownie.";
+    return t("Pobrane pliki są niekompletne lub uszkodzone. Spróbuj pobrać aktualizację ponownie.");
   }
   if (/UPDATE_ASSET_DOWNLOAD|fetch failed|Failed to fetch|TimeoutError|AbortError/.test(code)) {
-    return "Pobieranie zostało przerwane. Sprawdź połączenie z internetem i spróbuj ponownie.";
+    return t("Pobieranie zostało przerwane. Sprawdź połączenie z internetem i spróbuj ponownie.");
   }
   // The update runner (PowerShell) ended at once: it never ran the update script.
   if (code.startsWith("APPLICATION_UPDATE_RUNNER_EXITED")) {
     const detail = code.split(":").slice(2).join(":").trim();
     return (
-      "Instalator aktualizacji nie mógł się uruchomić: Windows zatrzymał skrypt aktualizacji (najczęściej zasady wykonywania " +
-      "skryptów PowerShell ustawione przez administratora albo program antywirusowy). Aplikacja pozostaje bez zmian. " +
-      "Zainstaluj nową wersję instalatorem ze strony wydania; szczegóły: %LOCALAPPDATA%\\LexMachina\\update-runner-start.log" +
+      t("Instalator aktualizacji nie mógł się uruchomić: Windows zatrzymał skrypt aktualizacji (najczęściej zasady wykonywania ") +
+      t("skryptów PowerShell ustawione przez administratora albo program antywirusowy). Aplikacja pozostaje bez zmian. ") +
+      t("Zainstaluj nową wersję instalatorem ze strony wydania; szczegóły: %LOCALAPPDATA%\\LexMachina\\update-runner-start.log") +
       (detail ? ` (${detail.slice(0, 300)})` : "")
     );
   }
   if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
-    return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
+    return t("Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.");
   }
   // Wydanie bez instalatora dla tego systemu (z sumą SHA-256 GitHub), nie błąd podpisu.
   if (code === "APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED") {
-    return "Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.";
+    return t("Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.");
   }
   if (
     code.includes("SIGNER_POLICY_MISSING") ||
@@ -117,19 +119,19 @@ export function friendlyError(error: unknown): string {
     code.includes("SIGNATURE_INVALID") ||
     code.includes("NOT_VERIFIED")
   ) {
-    return "Aktualizacja programu jest zablokowana przez politykę bezpieczeństwa: produkcyjny podpis Authenticode nie został jeszcze poprawnie skonfigurowany albo nie przeszedł weryfikacji.";
+    return t("Aktualizacja programu jest zablokowana przez politykę bezpieczeństwa: produkcyjny podpis Authenticode nie został jeszcze poprawnie skonfigurowany albo nie przeszedł weryfikacji.");
   }
   if (
     code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
     code.includes("APPLICATION_UPDATE_PLATFORM_UNSUPPORTED")
   ) {
-    return "Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).";
+    return t("Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).");
   }
   if (code === "APPLICATION_UPDATE_NOT_AVAILABLE") {
-    return "Brak nowszej wersji programu do pobrania.";
+    return t("Brak nowszej wersji programu do pobrania.");
   }
   if (code === "SKILL_UPDATE_NOT_AVAILABLE") {
-    return "Brak nowszego pakietu skilli do zastosowania.";
+    return t("Brak nowszego pakietu skilli do zastosowania.");
   }
   return code;
 }
@@ -139,9 +141,9 @@ export function appStatusLabel(status: string | undefined): string {
     case "UP_TO_DATE":
       return "aktualny";
     case "AVAILABLE":
-      return "dostępna aktualizacja";
+      return t("dostępna aktualizacja");
     case "UNAVAILABLE":
-      return "nie można sprawdzić";
+      return t("nie można sprawdzić");
     case "NO_RELEASE":
       return "brak opublikowanego wydania";
     case undefined:
@@ -153,8 +155,8 @@ export function appStatusLabel(status: string | undefined): string {
 
 export function manualUpdateInstruction(userAgent: string): string {
   return /Mac OS X|Macintosh/i.test(userAgent)
-    ? "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
-    : "Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.";
+    ? t("Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają.")
+    : t("Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.");
 }
 
 /**
@@ -257,7 +259,7 @@ export function MaintenancePanel({
       return "SPRAWDZANIE";
     }
     if (error) {
-      return "BŁĄD SPRAWDZANIA";
+      return t("BŁĄD SPRAWDZANIA");
     }
     return "AKTUALNE";
   }, [
@@ -317,14 +319,14 @@ export function MaintenancePanel({
     setBusy("app-download");
     setError("");
     setMessage(
-      "Pobieram aktualizację i sprawdzam, czy pliki są kompletne."
+      t("Pobieram aktualizację i sprawdzam, czy pliki są kompletne.")
     );
     try {
       const result =
         await downloadApplicationUpdate();
       setStaged(result);
       setMessage(
-        `Aktualizacja ${result.version} jest gotowa do instalacji (${formatBytes(result.bytes)}).`
+        t("Aktualizacja {version} jest gotowa do instalacji ({bytes}).", { version: result.version, bytes: formatBytes(result.bytes) })
       );
     } catch (problem) {
       setMessage("");
@@ -360,8 +362,8 @@ export function MaintenancePanel({
     setError("");
     setMessage(
       /Mac OS X|Macintosh/i.test(navigator.userAgent)
-        ? "Otwieram instalator. Przejdź jego kroki; potem Lex Machina pokaże dalsze przygotowanie."
-        : "Instaluję aktualizację. Aplikacja zamknie się i uruchomi ponownie po zakończeniu."
+        ? t("Otwieram instalator. Przejdź jego kroki; potem Lex Machina pokaże dalsze przygotowanie.")
+        : t("Instaluję aktualizację. Aplikacja zamknie się i uruchomi ponownie po zakończeniu.")
     );
     try {
       await installStagedApplicationUpdate(
@@ -384,12 +386,12 @@ export function MaintenancePanel({
     setBusy("skills");
     setError("");
     setMessage(
-      `Pobieram skille z kanału ${CHANNEL_LABEL[channel]} repozytorium Lex Machina, sprawdzam sumę każdego pliku i strukturę, potem aktywuję.`
+      t("Pobieram skille z kanału {value} repozytorium Lex Machina, sprawdzam sumę każdego pliku i strukturę, potem aktywuję.", { value: CHANNEL_LABEL[channel] })
     );
     try {
       const result = await refreshSkillsFromChannel(channel);
       setMessage(
-        `Skille odświeżone z kanału ${CHANNEL_LABEL[result.channel]} (${result.directory}, commit ${result.commit.slice(0, 7)}, ${result.files} plików). Uruchom ponownie program, aby runtime załadował skille; przy nieudanym starcie wróci poprzednia wersja.`
+        t("Skille odświeżone z kanału {value} ({directory}, commit {value2}, {files} plików). Uruchom ponownie program, aby wczytał nowe skille; przy nieudanym starcie wróci poprzednia wersja.", { value: CHANNEL_LABEL[result.channel], directory: result.directory, value2: result.commit.slice(0, 7), files: result.files })
       );
       setSkillStatus(await getSkillChannelStatus(channel));
     } catch (problem) {
@@ -429,8 +431,8 @@ export function MaintenancePanel({
       >
         <span
           className="floating-drag-handle"
-          title="Przeciągnij panel"
-          aria-label="Przeciągnij panel utrzymania"
+          title={t("Przeciągnij panel")}
+          aria-label={t("Przeciągnij panel utrzymania")}
           {...floatingDrag.handleProps}
         >
           ⋮⋮
@@ -438,7 +440,7 @@ export function MaintenancePanel({
         <button
           type="button"
           className="floating-icon-button"
-          aria-label="Rozwiń panel utrzymania"
+          aria-label={t("Rozwiń panel utrzymania")}
           title={
             `Utrzymanie · ${badge.toLowerCase()}`
           }
@@ -451,7 +453,7 @@ export function MaintenancePanel({
         {badge === "AKTUALIZACJA" ? (
           <span
             className="floating-update-dot"
-            aria-label="Dostępna aktualizacja"
+            aria-label={t("Dostępna aktualizacja")}
           />
         ) : null}
       </div>
@@ -479,8 +481,8 @@ export function MaintenancePanel({
         {!embedded ? (
           <span
             className="floating-drag-handle"
-            title="Przeciągnij panel"
-            aria-label="Przeciągnij panel utrzymania"
+            title={t("Przeciągnij panel")}
+            aria-label={t("Przeciągnij panel utrzymania")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -491,7 +493,7 @@ export function MaintenancePanel({
           </span>
         ) : null}
         <span className="maintenance-title">
-          <strong>Utrzymanie</strong>
+          <strong>{t("Utrzymanie")}</strong>
         </span>
         <span
           className={
@@ -506,8 +508,8 @@ export function MaintenancePanel({
           <button
             type="button"
             className="floating-minimize-button"
-            aria-label="Zminimalizuj panel utrzymania"
-            title="Zminimalizuj do ikony"
+            aria-label={t("Zminimalizuj panel utrzymania")}
+            title={t("Zminimalizuj do ikony")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -524,9 +526,9 @@ export function MaintenancePanel({
           <div className="maintenance-heading">
             <div>
               <strong>
-                Program
+                {t("Program")}
                 {!/Mac OS X|Macintosh/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? (
-                  <InfoTip>Aktualizacja jest instalowana tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.</InfoTip>
+                  <InfoTip>{t("Aktualizacja jest instalowana tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.")}</InfoTip>
                 ) : null}
               </strong>
               <small>
@@ -551,10 +553,10 @@ export function MaintenancePanel({
                 }
               >
                 {busy === "app-download"
-                  ? "Pobieranie i weryfikacja…"
+                  ? t("Pobieranie i weryfikacja…")
                   : staged
-                    ? "Pobierz ponownie"
-                    : "Pobierz i zweryfikuj"}
+                    ? t("Pobierz ponownie")
+                    : t("Pobierz i zweryfikuj")}
               </button>
               <button
                 type="button"
@@ -566,12 +568,12 @@ export function MaintenancePanel({
                   void installUpdate()
                 }
               >
-                Zainstaluj i uruchom ponownie
+                {t("Zainstaluj i uruchom ponownie")}
               </button>
             </div>
           ) : (
             <small>
-              Aktualizację programu instaluje administrator.
+              {t("Aktualizację programu instaluje administrator.")}
             </small>
           )}
         </section>
@@ -579,22 +581,22 @@ export function MaintenancePanel({
         <section>
           <div className="maintenance-heading">
             <div>
-              <strong>Skille</strong>
+              <strong>{t("Skille")}</strong>
               <small>
                 {skillStatus
                   ? skillStatus.installed
                     ? `zainstalowane: ${CHANNEL_LABEL[skillStatus.installed.channel]}, commit ${skillStatus.installed.commit.slice(0, 7)} (${shortDate(skillStatus.installed.installedAt)})`
-                    : "zainstalowane: wbudowane w instalator aplikacji"
+                    : t("zainstalowane: wbudowane w instalator aplikacji")
                   : user.appRole === "ADMIN"
                     ? "sprawdzanie…"
-                    : "status dostępny administratorowi"}
+                    : t("stan dostępny administratorowi")}
               </small>
             </div>
             <span>
               {skillStatus?.status === "UNAVAILABLE"
                 ? "niedostępne"
                 : skillStatus?.status === "AVAILABLE"
-                  ? "do odświeżenia"
+                  ? t("do odświeżenia")
                   : skillStatus?.status === "UP_TO_DATE"
                     ? "aktualne"
                     : "—"}
@@ -603,8 +605,8 @@ export function MaintenancePanel({
 
           {user.appRole === "ADMIN" ? (
             <label className="maintenance-channel">
-              Kanał skilli
-              <InfoTip>Skille są pobierane z repozytorium Lex Machina.</InfoTip>
+              {t("Kanał skilli")}
+              <InfoTip>{t("Skille są pobierane z repozytorium Lex Machina.")}</InfoTip>
               <select
                 value={channel}
                 disabled={Boolean(busy)}
@@ -612,8 +614,8 @@ export function MaintenancePanel({
                   selectChannel(event.target.value === "development" ? "development" : "stable")
                 }
               >
-                <option value="stable">Wersja stabilna</option>
-                <option value="development">Wersja rozwojowa</option>
+                <option value="stable">{t("Wersja stabilna")}</option>
+                <option value="development">{t("Wersja rozwojowa")}</option>
               </select>
             </label>
           ) : null}
@@ -626,28 +628,28 @@ export function MaintenancePanel({
                 disabled={Boolean(busy)}
                 onChange={(event) => void toggleAutoUpdate(event.target.checked)}
               />
-              Aktualizuj skille automatycznie
+              {t("Aktualizuj skille automatycznie")}
               <InfoTip>
-                Co {autoUpdate.intervalHours} godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).
+                {t("Co")} {autoUpdate.intervalHours} {t("godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).")}
               </InfoTip>
             </label>
           ) : null}
 
           {autoUpdate?.pendingActivation ? (
             <small className="maintenance-trust-warning">
-              Nowe skille są pobrane i sprawdzone. Uruchom ponownie program, aby zaczęły działać.
+              {t("Nowe skille są pobrane i sprawdzone. Uruchom ponownie program, aby zaczęły działać.")}
             </small>
           ) : null}
 
           {autoUpdate?.lastResult ? (
             <small>
-              Ostatnie automatyczne sprawdzenie: {shortDate(autoUpdate.lastResult.at)} — {autoUpdateOutcomeText(autoUpdate.lastResult)}
+              {t("Ostatnie automatyczne sprawdzenie:")} {shortDate(autoUpdate.lastResult.at)} — {autoUpdateOutcomeText(autoUpdate.lastResult)}
             </small>
           ) : null}
 
           {skillStatus?.latest ? (
             <small>
-              Najnowsze w kanale: {skillStatus.latest.directory}, commit {skillStatus.latest.commit.slice(0, 7)} z {shortDate(skillStatus.latest.committedAt)}, {skillStatus.latest.files} plików.
+              {t("Najnowsze w kanale:")} {skillStatus.latest.directory}{t(", commit")} {skillStatus.latest.commit.slice(0, 7)} z {shortDate(skillStatus.latest.committedAt)}, {skillStatus.latest.files} {t("plików.")}
             </small>
           ) : null}
 
@@ -669,8 +671,8 @@ export function MaintenancePanel({
               }
             >
               {busy === "skills"
-                ? "Pobieranie, weryfikacja i aktywacja…"
-                : "Odśwież skille"}
+                ? t("Pobieranie, weryfikacja i aktywacja…")
+                : t("Odśwież skille")}
             </button>
           ) : null}
         </section>
@@ -681,6 +683,7 @@ export function MaintenancePanel({
         <JurisdictionSection />
         <LegiIndexSection />
         <DomainFallbackSection />
+        <WebSearchSection admin={user.appRole === "ADMIN"} />
 
         {developer ? <AnomalyJournalSection user={user} /> : null}
 
@@ -690,7 +693,7 @@ export function MaintenancePanel({
           disabled={Boolean(busy)}
           onClick={() => void refresh()}
         >
-          Sprawdź ponownie
+          {t("Sprawdź ponownie")}
         </button>
 
         {busy === "app-download" ? <ApplicationDownloadProgress /> : null}

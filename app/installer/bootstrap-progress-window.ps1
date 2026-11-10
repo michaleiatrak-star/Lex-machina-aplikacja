@@ -9,6 +9,27 @@ $form.ClientSize = New-Object Drawing.Size(540, 220)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.ControlBox = $false
+# Above the installer's window, which stays in front otherwise.
+$form.TopMost = $true
+$form.ShowInTaskbar = $true
+# The installer starts this process hidden; Windows applies that to the process's first ShowWindow,
+# which would leave the form invisible. Consume it before the form shows, then keep it visible.
+$native = $null
+try {
+  $native = Add-Type -PassThru -Name LexProgressWindow -Namespace LexInstaller -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+'@
+} catch { $native = $null }
+$form.Add_HandleCreated({ if ($native) { [void]$native::ShowWindow($form.Handle, 0) } })
+function Show-ProgressWindow {
+  if ($native -and -not $native::IsWindowVisible($form.Handle)) {
+    [void]$native::ShowWindow($form.Handle, 1)
+    [void]$native::SetForegroundWindow($form.Handle)
+  }
+}
+$form.Add_Shown({ Show-ProgressWindow; $form.Activate() })
 $stage = New-Object Windows.Forms.Label
 $stage.SetBounds(24, 16, 490, 26)
 $stage.Font = New-Object Drawing.Font("Segoe UI", 12, [Drawing.FontStyle]::Bold)
@@ -29,6 +50,7 @@ $timer = New-Object Windows.Forms.Timer
 $timer.Interval = 300
 $timer.Add_Tick({
   if (-not (Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue)) { $form.Close(); return }
+  Show-ProgressWindow
   try {
     $state = Get-Content -Raw -LiteralPath $StatusPath | ConvertFrom-Json
     $label.Text = $state.text

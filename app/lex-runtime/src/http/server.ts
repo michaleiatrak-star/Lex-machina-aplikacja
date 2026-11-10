@@ -87,6 +87,7 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
+import { configureGeminiSearchKey, configureWebSearchSettings } from "../web-search-settings.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -423,6 +424,7 @@ export async function startLocalServer(options?: {
   // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
   configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
+  configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
   configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
   const authStore =
     new LocalAuthStore({
@@ -607,6 +609,8 @@ export async function startLocalServer(options?: {
       environmentCredentials,
       serverMode
     );
+  // Internet search through Gemini with Google Search uses the Google key saved for the models.
+  configureGeminiSearchKey(() => credentials.getApiKey("google"));
   const accountSessions =
     new AccountSessionManager();
   const providerRegistry = createLiveProviderRegistry(

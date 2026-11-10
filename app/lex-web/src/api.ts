@@ -1,3 +1,4 @@
+import { currentLocale } from "./i18n";
 import type { ChatWidget, RestorationMark } from "./workspace-client.js";
 
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
@@ -3289,6 +3290,8 @@ export function executeSession(input: {
     // A local model can answer for longer than the desktop proxy waits in silence.
     headers: {
       "X-Lex-Keep-Alive": "1",
+      // The model answers in the interface language (Polish adds nothing).
+      ...(currentLocale() !== "pl" ? { "X-Lex-Language": currentLocale() } : {}),
       ...(executionId ? { "X-Lex-Execution-Id": executionId } : {})
     },
     body: JSON.stringify({
@@ -4177,6 +4180,54 @@ export function getLocalOffline(): Promise<{ enabled: boolean; forced: boolean }
 
 export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }> {
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
+
+export type SearchEngineScore = {
+  engine: SearchEngineName;
+  score: number;
+  availability: number;
+  officialSources: number;
+  freeSources?: number;
+  relevance: number;
+  medianMs: number | null;
+  queries: number;
+  answered: number;
+  error?: string;
+};
+
+export type WebSearchSettings = {
+  searxngUrl: string;
+  order: SearchEngineName[];
+  effectiveOrder: SearchEngineName[];
+  engines: SearchEngineName[];
+  lastTest: { testedAt: string; scores: SearchEngineScore[] } | null;
+  searxngUrlForced: boolean;
+  firecrawlConfigured: boolean;
+  firecrawlKeyForced: boolean;
+  googleSession: boolean;
+  providerForced: string | null;
+};
+
+export function getWebSearchSettings(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search");
+}
+
+export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
+}
+
+export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ firecrawlApiKey }) });
+}
+
+export function setGoogleSession(googleSession: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSession }) });
+}
+
+export function runWebSearchTest(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search/test", { method: "POST", body: "{}" });
 }
 
 export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {

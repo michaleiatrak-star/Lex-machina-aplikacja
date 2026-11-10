@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { InfoTip } from "./InfoTip";
 import {
@@ -77,11 +78,11 @@ export function RecoveryAuthPanel({
           "INVALID_RECOVERY_REQUEST"
       ) {
         setError(
-          "Sprawdź login oraz nowe hasło. Nowe hasło musi mieć co najmniej 10 znaków."
+          t("Sprawdź login oraz nowe hasło. Nowe hasło musi mieć co najmniej 10 znaków.")
         );
       } else {
         setError(
-          "Nieprawidłowy login lub kod recovery."
+          t("Nieprawidłowy login lub kod odzyskiwania.")
         );
       }
     } finally {
@@ -97,20 +98,20 @@ export function RecoveryAuthPanel({
       <main className="auth-shell">
         <section className="auth-card recovery-confirm-card">
           <p className="eyebrow">
-            Recovery zakończone
+            {t("Odzyskiwanie konta zakończone")}
           </p>
           <h1>
-            Zapisz nowy kod recovery
+            {t("Zapisz nowy kod odzyskiwania")}
           </h1>
           <p className="auth-copy">
-            Poprzedni kod został unieważniony. Ten kod jest nową drogą odzyskania tego samego lokalnego klucza użytkownika.
+            {t("Poprzedni kod został unieważniony. Ten kod jest nową drogą odzyskania tego samego lokalnego klucza użytkownika.")}
           </p>
           <div className="recovery-code-box">
             <code>
               {replacementCode}
             </code>
             <p>
-              Przechowuj go poza tym komputerem. Po przejściu dalej aplikacja nie będzie mogła ponownie go wyświetlić.
+              {t("Przechowuj go poza tym komputerem. Po przejściu dalej aplikacja nie będzie mogła ponownie go wyświetlić.")}
             </p>
           </div>
           <button
@@ -122,7 +123,7 @@ export function RecoveryAuthPanel({
               )
             }
           >
-            Zapisałem kod — przejdź do aplikacji
+            {t("Zapisałem kod — przejdź do aplikacji")}
           </button>
         </section>
       </main>
@@ -136,19 +137,19 @@ export function RecoveryAuthPanel({
           <img className="auth-brand-icon" src={LEX_MACHINA_BRAND_ICON} alt="" aria-hidden="true" />
           <div>
             <strong>Lex Machina</strong>
-            <span>Lokalny warsztat prawny</span>
+            <span>{t("Lokalny warsztat prawny")}</span>
           </div>
         </div>
         <p className="eyebrow">
-          Odzyskiwanie lokalnego konta
+          {t("Odzyskiwanie lokalnego konta")}
         </p>
         <h1>
-          Użyj kodu recovery
-          <InfoTip>Odblokowuje ten sam klucz konta i istniejące sprawy, ustawia nowe hasło i wydaje nowy kod recovery (stary przestaje działać).</InfoTip>
+          {t("Użyj kodu odzyskiwania")}
+          <InfoTip>{t("Odblokowuje ten sam klucz konta i istniejące sprawy, ustawia nowe hasło i wydaje nowy kod odzyskiwania (stary przestaje działać).")}</InfoTip>
         </h1>
 
         <label>
-          Login
+          {t("Login")}
           <input
             value={loginName}
             autoComplete="username"
@@ -162,7 +163,7 @@ export function RecoveryAuthPanel({
         </label>
 
         <label>
-          Kod recovery
+          {t("Kod odzyskiwania")}
           <input
             type="password"
             value={recoveryCode}
@@ -176,7 +177,7 @@ export function RecoveryAuthPanel({
         </label>
 
         <label>
-          Nowe hasło
+          {t("Nowe hasło")}
           <input
             type="password"
             value={newPassword}
@@ -211,7 +212,7 @@ export function RecoveryAuthPanel({
         >
           {busy
             ? "Odzyskuję…"
-            : "Odzyskaj konto"}
+            : t("Odzyskaj konto")}
         </button>
 
         <button
@@ -220,7 +221,7 @@ export function RecoveryAuthPanel({
           disabled={busy}
           onClick={onCancel}
         >
-          Wróć do logowania
+          {t("Wróć do logowania")}
         </button>
       </section>
     </main>

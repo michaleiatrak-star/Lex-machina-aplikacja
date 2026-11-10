@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { DocumentCoverageEntry } from "./api.js";
 
 type Range = [number, number];
@@ -63,8 +64,8 @@ export function unfinishedDocuments(
 /** The request sent by "Dokończ analizę": the pages left, without going over the read ones. */
 export function finishAnalysisMessage(name: string, item: UnfinishedDocument): string {
   return (
-    `Dokończ analizę dokumentu „${name}”: przeczytaj nieprzeczytane strony ${formatRanges(item.missing)} z ${item.totalPages} ` +
-    `(read_case_file, kolejne fragmenty) i uzupełnij wcześniejszy wynik. Nie powtarzaj stron już omówionych (${formatRanges(item.read)}).`
+    t("Dokończ analizę dokumentu „{name}”: przeczytaj nieprzeczytane strony {missing} z {totalPages} ", { name: name, missing: formatRanges(item.missing), totalPages: item.totalPages }) +
+    t("(read_case_file, kolejne fragmenty) i uzupełnij wcześniejszy wynik. Nie powtarzaj stron już omówionych ({read}).", { read: formatRanges(item.read) })
   );
 }
 
@@ -72,12 +73,12 @@ export function finishAnalysisMessage(name: string, item: UnfinishedDocument): s
 export function CoverageLine({ entries, label }: { entries: DocumentCoverageEntry[]; label: (entry: DocumentCoverageEntry) => string }) {
   return (
     <small className="chat-coverage-line">
-      Przeczytane:{" "}
+      {t("Przeczytane:")}{" "}
       {entries
         .map((entry) =>
           entry.status === "FULL"
-            ? `${label(entry)} w całości (${entry.totalPages} s.)`
-            : `${label(entry)} częściowo: s. ${formatRanges(entry.pages)} z ${entry.totalPages}`
+            ? t("{entry} w całości ({totalPages} s.)", { entry: label(entry), totalPages: entry.totalPages })
+            : t("{entry} częściowo: s. {pages} z {totalPages}", { entry: label(entry), pages: formatRanges(entry.pages), totalPages: entry.totalPages })
         )
         .join("; ")}
     </small>
@@ -99,15 +100,15 @@ export function UnfinishedAnalysis({
   if (!items.length) return null;
   return (
     <div className="chat-unfinished-analysis" role="status">
-      <strong>Analiza niedokończona: praca nad dokumentem nie jest zamknięta</strong>
+      <strong>{t("Analiza niedokończona: praca nad dokumentem nie jest zamknięta")}</strong>
       <ul>
         {items.map((item) => (
           <li key={item.documentId}>
             <span>
-              {label(item)}: przeczytane s. {formatRanges(item.read)} z {item.totalPages}; nieprzeczytane s. {formatRanges(item.missing)}
+              {label(item)}{t(": przeczytane s.")} {formatRanges(item.read)} z {item.totalPages}{t("; nieprzeczytane s.")} {formatRanges(item.missing)}
             </span>
             <button type="button" className="chat-secondary-action" disabled={disabled} onClick={() => onFinish(finishAnalysisMessage(label(item), item))}>
-              Dokończ analizę
+              {t("Dokończ analizę")}
             </button>
           </li>
         ))}

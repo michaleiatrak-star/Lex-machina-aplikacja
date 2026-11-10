@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import {
   useEffect,
   useMemo,
@@ -43,11 +44,11 @@ const STAGE_LABELS: Record<
   ProcessPleadingWorkflowState["stage"],
   string
 > = {
-  CG_ACCEPTANCE: "Akceptacja startu",
-  W1: "W1 · rama i strategia",
+  CG_ACCEPTANCE: t("Akceptacja startu"),
+  W1: t("W1 · rama i strategia"),
   PRE_W2: "PRE-W2 · weryfikacja",
-  W2: "W2 · projekt i red-team",
-  W3: "W3 · walidacja końcowa",
+  W2: t("W2 · projekt i red-team"),
+  W3: t("W3 · walidacja końcowa"),
   FINAL: "FINAL"
 };
 
@@ -56,12 +57,12 @@ const PLAIN_STAGE_LABELS: Record<
   ProcessPleadingWorkflowState["stage"],
   string
 > = {
-  CG_ACCEPTANCE: "Akceptacja startu",
-  W1: "Etap 1 · rama i strategia",
+  CG_ACCEPTANCE: t("Akceptacja startu"),
+  W1: t("Etap 1 · rama i strategia"),
   PRE_W2: "Etap 2 · weryfikacja",
-  W2: "Etap 3 · projekt i przegląd krytyczny",
-  W3: "Etap 4 · kontrola końcowa",
-  FINAL: "Pismo gotowe"
+  W2: t("Etap 3 · projekt i przegląd krytyczny"),
+  W3: t("Etap 4 · kontrola końcowa"),
+  FINAL: t("Pismo gotowe")
 };
 
 const PLAIN_DOCUMENT_STATUS: Record<string, string> = {
@@ -211,7 +212,7 @@ export function ProcessPleadingWorkflowPanel({
 
   async function restart(): Promise<void> {
     if (operation || !canWrite) return;
-    if (!window.confirm("Rozpocząć nowe pismo? Bieżący pipeline i zapisany projekt zostaną usunięte (historia czatu zostaje).")) return;
+    if (!window.confirm(t("Rozpocząć nowe pismo? Bieżący proces i zapisany projekt zostaną usunięte (historia czatu zostaje)."))) return;
     setOperation(true);
     try {
       await resetCaseWorkflow(caseId, { kind: "process-pleading" });
@@ -228,20 +229,20 @@ export function ProcessPleadingWorkflowPanel({
   const draftSection = state && state.stage !== "CG_ACCEPTANCE" ? (
     <div className="process-workflow-draft">
       <div className="process-workflow-draft-head">
-        <strong>Projekt pisma</strong>
+        <strong>{t("Projekt pisma")}</strong>
         <span>
           {latest
-            ? `wersja ${latest.version} · ${latest.source === "USER" ? "Twoja poprawka" : developer ? `pipeline, etap ${latest.stage}` : "przygotowana przez aplikację"}`
-            : developer ? "jeszcze nie powstał (pojawi się po W2)" : "jeszcze nie powstał (pojawi się w etapie projektu)"}
+            ? t("wersja {version} · {value}", { version: latest.version, value: latest.source === "USER" ? "Twoja poprawka" : developer ? `pipeline, etap ${latest.stage}` : t("przygotowana przez aplikację") })
+            : developer ? t("jeszcze nie powstał (pojawi się po W2)") : t("jeszcze nie powstał (pojawi się w etapie projektu)")}
         </span>
       </div>
       {latest && editText === null ? (
         <div className="process-workflow-actions">
           <button type="button" onClick={() => setShowDraft((value) => !value)}>
-            {showDraft ? "Ukryj tekst" : "Pokaż tekst"}
+            {showDraft ? t("Ukryj tekst") : t("Pokaż tekst")}
           </button>
           <button type="button" disabled={locked} onClick={() => setEditText(latest.text)}>
-            Edytuj projekt
+            {t("Edytuj projekt")}
           </button>
           {onDownloadDraft ? (
             <button type="button" disabled={locked} onClick={onDownloadDraft}>
@@ -257,38 +258,37 @@ export function ProcessPleadingWorkflowPanel({
             className="process-workflow-draft-edit"
             value={editText}
             onChange={(event) => setEditText(event.target.value)}
-            aria-label="Edycja projektu pisma"
+            aria-label={t("Edycja projektu pisma")}
           />
           <div className="process-workflow-actions">
-            <button type="button" disabled={locked || !editText.trim()} onClick={() => void saveEdit("MINOR")} title="literówki, styl, układ — zamknięte kontrole zostają">
-              Zapisz: drobna poprawka
+            <button type="button" disabled={locked || !editText.trim()} onClick={() => void saveEdit("MINOR")} title={t("literówki, styl, układ — zamknięte kontrole zostają")}>
+              {t("Zapisz: drobna poprawka")}
             </button>
-            <button type="button" disabled={locked || !editText.trim()} onClick={() => void saveEdit("SUBSTANTIVE")} title="fakty, żądania, podstawa prawna — atak na projekt i kontrole W3 od nowa">
-              Zapisz: zmiana merytoryczna
+            <button type="button" disabled={locked || !editText.trim()} onClick={() => void saveEdit("SUBSTANTIVE")} title={t("fakty, żądania, podstawa prawna — atak na projekt i kontrole W3 od nowa")}>
+              {t("Zapisz: zmiana merytoryczna")}
             </button>
             <button type="button" disabled={operation} onClick={() => setEditText(null)}>
-              Anuluj
+              {t("Anuluj")}
             </button>
           </div>
           <small>
-            {developer ? "Zmiana merytoryczna cofa pismo do W2 i statusu DRAFT." : "Zmiana merytoryczna cofa pismo do etapu projektu."}
+            {developer ? t("Zmiana merytoryczna cofa pismo do W2 i stanu projektu (DRAFT).") : t("Zmiana merytoryczna cofa pismo do etapu projektu.")}
             <InfoTip>
-              Merytoryczna (fakty, żądania, podstawa prawna): atak na projekt i kontrole W3 od nowa. Drobna zachowuje
-              zamknięte kontrole.
+              {t("Merytoryczna (fakty, żądania, podstawa prawna): atak na projekt i kontrole W3 od nowa. Drobna zachowuje zamknięte kontrole.")}
             </InfoTip>
           </small>
         </>
       ) : null}
       {draft && draft.versions.length > 1 ? (
         <details>
-          <summary>Historia wersji ({draft.versions.length})</summary>
+          <summary>{t("Historia wersji (")}{draft.versions.length})</summary>
           <ul className="process-workflow-versions">
             {draft.versions
               .slice()
               .reverse()
               .map((item) => (
                 <li key={item.version}>
-                  {`v${item.version} · ${item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : developer ? `pipeline ${item.checkpoint ?? item.stage}` : "aplikacja"} · ${new Date(item.createdAt).toLocaleString("pl-PL")}`}
+                  {t("v{version} · {value} · {value2}", { version: item.version, value: item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : developer ? `pipeline ${item.checkpoint ?? item.stage}` : "aplikacja", value2: new Date(item.createdAt).toLocaleString(currentLocale()) })}
                 </li>
               ))}
           </ul>
@@ -302,12 +302,12 @@ export function ProcessPleadingWorkflowPanel({
       <div className="process-workflow-heading">
         <div>
           <p className="eyebrow">
-            {developer ? "Deterministyczny pipeline pisma" : "Pismo procesowe"}
+            {developer ? t("Pismo w stałym procesie") : t("Pismo procesowe")}
           </p>
           <h3>
             {state
               ? stageLabels[state.stage]
-              : developer ? "Pisma procesowe v3" : "Pismo procesowe etapami"}
+              : developer ? "Pisma procesowe v3" : t("Pismo procesowe etapami")}
           </h3>
         </div>
         <span
@@ -328,11 +328,11 @@ export function ProcessPleadingWorkflowPanel({
       {!state ? (
         <>
           <p>
-            {developer ? "Pipeline W1 → PRE-W2 → W2 → W3." : "Pismo powstaje w czterech etapach: rama, weryfikacja, projekt, kontrola końcowa."}
+            {developer ? "Pipeline W1 → PRE-W2 → W2 → W3." : t("Pismo powstaje w czterech etapach: rama, weryfikacja, projekt, kontrola końcowa.")}
             <InfoTip>
               {developer
-                ? "Checkpointy zapisują się w zaszyfrowanym stanie sprawy; bez wymaganych potwierdzeń nie da się przejść dalej."
-                : "Postęp zapisuje się w zaszyfrowanej sprawie; bez Twoich potwierdzeń pismo nie przejdzie dalej."}
+                ? t("Punkty kontrolne zapisują się w zaszyfrowanym stanie sprawy; bez wymaganych potwierdzeń nie da się przejść dalej.")
+                : t("Postęp zapisuje się w zaszyfrowanej sprawie; bez Twoich potwierdzeń pismo nie przejdzie dalej.")}
             </InfoTip>
           </p>
           <button
@@ -347,19 +347,19 @@ export function ProcessPleadingWorkflowPanel({
               )
             }
           >
-            {developer ? "Uruchom pipeline w trybie checkpoint" : "Rozpocznij pismo z potwierdzaniem etapów"}
+            {developer ? t("Uruchom proces z punktami kontrolnymi") : t("Rozpocznij pismo z potwierdzaniem etapów")}
           </button>
         </>
       ) : state.stage === "CG_ACCEPTANCE" ? (
         <>
           <p>
             {developer
-              ? "Dokument pozostaje DRAFT, dopóki cały wymagany rejestr CP nie zostanie rozwiązany."
-              : "Pismo pozostaje projektem, dopóki wszystkie wymagane etapy nie zostaną zakończone."}
+              ? t("Dokument pozostaje projektem (DRAFT), dopóki cały wymagany rejestr CP nie zostanie rozwiązany.")
+              : t("Pismo pozostaje projektem, dopóki wszystkie wymagane etapy nie zostaną zakończone.")}
             <InfoTip>
               {developer
-                ? "Pipeline ma wiele etapów kontroli jakości; każde przejście jest zapisywane w zaszyfrowanym workspace sprawy."
-                : "Pismo przechodzi kilka kontroli jakości; postęp zapisuje się w zaszyfrowanej sprawie."}
+                ? t("Proces ma wiele etapów kontroli jakości; każde przejście jest zapisywane w zaszyfrowanym obszarze roboczym sprawy.")
+                : t("Pismo przechodzi kilka kontroli jakości; postęp zapisuje się w zaszyfrowanej sprawie.")}
             </InfoTip>
           </p>
           <button
@@ -373,24 +373,24 @@ export function ProcessPleadingWorkflowPanel({
               )
             }
           >
-            {developer ? "Akceptuję warunki i rozpoczynam W1" : "Akceptuję warunki i rozpoczynam"}
+            {developer ? t("Akceptuję warunki i rozpoczynam W1") : t("Akceptuję warunki i rozpoczynam")}
           </button>
         </>
       ) : (
         <>
           <div className="process-workflow-stats">
             <span>
-              {developer ? "Zamknięte" : "Zakończone kroki"}: {stats?.closed ?? 0}
+              {developer ? t("Zamknięte") : t("Zakończone kroki")}: {stats?.closed ?? 0}
             </span>
             <span>
-              {developer ? "N/A" : "Pominięte"}: {stats?.na ?? 0}
+              {developer ? "N/A" : t("Pominięte")}: {stats?.na ?? 0}
             </span>
             <span>
-              {developer ? "Otwarte / oczekujące" : "Pozostało"}: {stats?.open ?? 0}
+              {developer ? t("Otwarte / oczekujące") : t("Pozostało")}: {stats?.open ?? 0}
             </span>
             {developer ? (
               <span>
-                Rewizja: {state.revision}
+                {t("Rewizja:")} {state.revision}
               </span>
             ) : null}
           </div>
@@ -398,12 +398,12 @@ export function ProcessPleadingWorkflowPanel({
           {state.pendingCheckpoint ? (
             <div className="process-workflow-checkpoint">
               <strong>
-                Oczekuje na potwierdzenie: {developer ? state.pendingCheckpoint : checkpointLabel(state.pendingCheckpoint)}
+                {t("Oczekuje na potwierdzenie:")} {developer ? state.pendingCheckpoint : checkpointLabel(state.pendingCheckpoint)}
               </strong>
               <InfoTip>
                 {developer
-                  ? "Następny checkpoint ruszy dopiero po potwierdzeniu wyniku tego kroku."
-                  : "Następny krok ruszy dopiero po potwierdzeniu wyniku tego kroku."}
+                  ? t("Następny punkt kontrolny ruszy dopiero po potwierdzeniu wyniku tego kroku.")
+                  : t("Następny krok ruszy dopiero po potwierdzeniu wyniku tego kroku.")}
               </InfoTip>
               <button
                 type="button"
@@ -417,11 +417,11 @@ export function ProcessPleadingWorkflowPanel({
                   )
                 }
               >
-                {developer ? "Potwierdź checkpoint i odblokuj kolejny krok" : "Potwierdź i przejdź do kolejnego kroku"}
+                {developer ? t("Potwierdź punkt kontrolny i odblokuj kolejny krok") : t("Potwierdź i przejdź do kolejnego kroku")}
               </button>
               {remarks === null ? (
                 <button type="button" disabled={locked} onClick={() => setRemarks("")}>
-                  Popraw z uwagami
+                  {t("Popraw z uwagami")}
                 </button>
               ) : (
                 <>
@@ -429,18 +429,18 @@ export function ProcessPleadingWorkflowPanel({
                     className="process-workflow-remarks"
                     value={remarks}
                     onChange={(event) => setRemarks(event.target.value)}
-                    placeholder="Co poprawić w tym kroku (np. dodaj zarzut przedawnienia, zmień kwotę żądania)"
-                    aria-label="Uwagi do kroku"
+                    placeholder={t("Co poprawić w tym kroku (np. dodaj zarzut przedawnienia, zmień kwotę żądania)")}
+                    aria-label={t("Uwagi do kroku")}
                   />
                   <div className="process-workflow-actions">
                     <button type="button" disabled={locked || !remarks.trim()} onClick={() => void sendBack()}>
-                      Odeślij krok do poprawy
+                      {t("Odeślij krok do poprawy")}
                     </button>
                     <button type="button" disabled={operation} onClick={() => setRemarks(null)}>
-                      Anuluj
+                      {t("Anuluj")}
                     </button>
                   </div>
-                  <small>Krok wróci do wykonania z Twoimi uwagami po kliknięciu „{developer ? "Kontynuuj pipeline" : "Kontynuuj"}”.</small>
+                  <small>{t("Krok wróci do wykonania z Twoimi uwagami po kliknięciu „")}{developer ? t("Kontynuuj proces") : t("Kontynuuj")}”.</small>
                 </>
               )}
             </div>
@@ -448,30 +448,30 @@ export function ProcessPleadingWorkflowPanel({
             <div>
               <p className="process-workflow-final">
                 {developer
-                  ? "Wszystkie wymagane checkpointy są rozwiązane. Status procesu: FINAL."
-                  : "Wszystkie wymagane etapy są zakończone. Pismo jest gotowe."}
-                <InfoTip>Poprawki przez „Edytuj projekt”: drobna zostawia FINAL, merytoryczna cofa do W2.</InfoTip>
+                  ? t("Wszystkie wymagane punkty kontrolne są rozwiązane. Stan procesu: wersja końcowa (FINAL).")
+                  : t("Wszystkie wymagane etapy są zakończone. Pismo jest gotowe.")}
+                <InfoTip>{t("Poprawki przez „Edytuj projekt”: drobna zostawia FINAL, merytoryczna cofa do W2.")}</InfoTip>
               </p>
               <button type="button" disabled={locked} onClick={() => void restart()}>
-                Nowe pismo w tej sprawie
+                {t("Nowe pismo w tej sprawie")}
               </button>
             </div>
           ) : (
             <div className="process-workflow-checkpoint">
               <strong>
-                {developer ? "Etap gotowy do następnego checkpointu" : "Etap gotowy do kolejnego kroku"}
+                {developer ? t("Etap gotowy do następnego punktu kontrolnego") : t("Etap gotowy do kolejnego kroku")}
               </strong>
               <InfoTip>
                 {developer
-                  ? "Kolejny krok dotyczy pierwszego nierozwiązanego CP; model nie przeskoczy do późniejszego etapu."
-                  : "Kroki idą po kolei; aplikacja nie przeskoczy do późniejszego etapu."}
+                  ? t("Kolejny krok dotyczy pierwszego nierozwiązanego CP; model nie przeskoczy do późniejszego etapu.")
+                  : t("Kroki idą po kolei; aplikacja nie przeskoczy do późniejszego etapu.")}
               </InfoTip>
               <button
                 type="button"
                 disabled={locked}
                 onClick={onContinue}
               >
-                {developer ? "Kontynuuj pipeline" : "Kontynuuj"}
+                {developer ? t("Kontynuuj proces") : t("Kontynuuj")}
               </button>
             </div>
           )}
@@ -483,12 +483,12 @@ export function ProcessPleadingWorkflowPanel({
       {!canWrite ? (
         <small>
           {developer
-            ? "Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pipeline."
-            : "Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pisma."}
+            ? t("Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać procesu.")
+            : t("Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pisma.")}
         </small>
       ) : null}
       {loading ? (
-        <small>{developer ? "Odświeżam stan procesu…" : "Odświeżam stan pisma…"}</small>
+        <small>{developer ? t("Odświeżam stan procesu…") : t("Odświeżam stan pisma…")}</small>
       ) : null}
       {error ? (
         <p className="process-workflow-error">

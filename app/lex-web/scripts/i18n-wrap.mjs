@@ -1,0 +1,188 @@
+// Passes the Polish texts a component shows through t() (codemod; review the diff):
+//   node scripts/i18n-wrap.mjs src/AuthApp.tsx [more files]
+// Wrapped: JSX text, shown attributes (title, placeholder, aria-label, alt, label), messages given
+// to state setters / confirm / alert, label-like object properties and returns of *Label/*Message
+// functions. Texts at module level get N_() (translated where shown). Left alone and listed:
+// template literals with substitutions (they need t("... {name}", { name }) by hand).
+import fs from "node:fs";
+import ts from "typescript";
+
+const POLISH = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]|\b(?:i|w|z|na|do|nie|się|jest|oraz|lub|dla|przez|od|po|to|czy|jak|ten|ta)\b/iu;
+const SHOWN_ATTRIBUTES = new Set(["title", "placeholder", "aria-label", "alt", "label", "aria-description"]);
+const LABEL_PROPERTIES = new Set(["label", "title", "description", "help", "hint", "text", "message", "placeholder", "summary", "detail", "note", "caption", "heading", "empty", "tooltip"]);
+const KEEP_AS_IS = new Set(["Lex Machina", "admin", "ELI", "SAOS", "ISAP", "CBOSA", "KRS", "OK", "Bielik", "Mistral", "System", "Files", "Gemini", "Claude", "Google", "Microsoft"]);
+// A short Polish label (one to four words, starting with a capital): "Czat", "Nowa faktura".
+const SHORT_LABEL = /^[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{2,}( [A-Za-ząćęłńóśźż]+){0,3}$/u;
+
+function shownText(text) {
+  const core = text.replace(/\s+/gu, " ").trim();
+  if (!/\p{L}{2,}/u.test(core)) return null;
+  if (KEEP_AS_IS.has(core)) return null;
+  if (/^[A-Z0-9 .·\-/_:]+$/u.test(core)) return null;
+  return core;
+}
+
+function quote(text) {
+  return JSON.stringify(text);
+}
+
+function insideFunction(node) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isFunctionLike(parent)) return true;
+  }
+  return false;
+}
+
+function enclosingFunctionName(node) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isFunctionDeclaration(parent) && parent.name) return parent.name.text;
+    if ((ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) && ts.isVariableDeclaration(parent.parent) && ts.isIdentifier(parent.parent.name)) {
+      return parent.parent.name.text;
+    }
+  }
+  return "";
+}
+
+function isComparisonOrKey(node) {
+  const parent = node.parent;
+  if (ts.isBinaryExpression(parent) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(parent.operatorToken.kind)) return true;
+  if (ts.isCaseClause(parent) || ts.isLiteralTypeNode(parent) || ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) return true;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return true;
+  if (ts.isElementAccessExpression(parent)) return true;
+  return false;
+}
+
+/** Whether a string literal (not in JSX attributes) is a text the user reads. */
+function shownLiteral(node) {
+  if (isComparisonOrKey(node)) return false;
+  if (WRAP_ALL) {
+    let up = node;
+    while (ts.isParenthesizedExpression(up.parent) || ts.isConditionalExpression(up.parent) || (ts.isBinaryExpression(up.parent) && up.parent.operatorToken.kind === ts.SyntaxKind.PlusToken)) {
+      if (ts.isConditionalExpression(up.parent) && up.parent.condition === up) return false;
+      up = up.parent;
+    }
+    const parent = up.parent;
+    if (ts.isCallExpression(parent) && parent.arguments.includes(up)) {
+      return !/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare|executeMessage)$/u.test(parent.expression.getText());
+    }
+    if (ts.isNewExpression(parent)) return false;
+    if (ts.isBinaryExpression(parent)) return false;
+    return true;
+  }
+  let current = node;
+  // Through conditional branches, parentheses and ?? / || defaults.
+  while (
+    ts.isParenthesizedExpression(current.parent) ||
+    (ts.isConditionalExpression(current.parent) && current.parent.condition !== current) ||
+    (ts.isBinaryExpression(current.parent) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(current.parent.operatorToken.kind) && current.parent.right === current)
+  ) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (ts.isJsxExpression(parent)) return !ts.isJsxAttribute(parent.parent) || SHOWN_ATTRIBUTES.has(parent.parent.name.getText());
+  if (ts.isCallExpression(parent) && parent.arguments.includes(current)) {
+    const callee = parent.expression.getText();
+    if (WRAP_ALL && !/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare)$/u.test(callee)) return true;
+    return /^set[A-Z]\w*$/u.test(callee) || /(^|\.)(confirm|alert|prompt)$/u.test(callee) || /^(setError|setNotice|setMessage|showError|notify)$/u.test(callee);
+  }
+  if (ts.isPropertyAssignment(parent) && parent.initializer === current) {
+    const name = parent.name.getText().replace(/["']/gu, "");
+    return LABEL_PROPERTIES.has(name) || WRAP_ALL;
+  }
+  if (ts.isReturnStatement(parent)) return /(Label|Message|Text|Title|Description|Hint|Help)$/u.test(enclosingFunctionName(current));
+  // --all: every other Polish sentence too, except arguments of string and lookup functions.
+  if (WRAP_ALL) {
+    if (ts.isCallExpression(parent)) {
+      const callee = parent.expression.getText();
+      if (/(^|\.)(includes|startsWith|endsWith|indexOf|split|replace|replaceAll|match|test|has|get|set|delete|fetch|json|getItem|setItem|RegExp|localeCompare)$/u.test(callee)) return false;
+    }
+    if (ts.isNewExpression(parent) && /RegExp|Error/u.test(parent.expression.getText())) return false;
+    return true;
+  }
+  return false;
+}
+const WRAP_ALL = process.argv.includes("--all");
+
+export function wrapFile(file) {
+  const code = fs.readFileSync(file, "utf8");
+  const sourceFile = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const edits = [];
+  const templates = [];
+  let usesT = false;
+  let usesN = false;
+  const visit = (node) => {
+    // Code marked "Kept in Polish" (messages the runtime matches) is left as it is.
+    if (ts.getLeadingCommentRanges(code, node.getFullStart())?.some((range) => code.slice(range.pos, range.end).includes("Kept in Polish"))) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && (node.expression.text === "t" || node.expression.text === "N_")) return;
+    if (ts.isJsxText(node)) {
+      const core = shownText(node.text);
+      if (core && (WRAP_ALL || POLISH.test(node.text) || /[a-ząćęłńóśźż]{3,}/u.test(core))) {
+        const raw = node.text;
+        const start = node.pos;
+        const lead = raw.match(/^\s*/u)[0].length;
+        const trail = raw.match(/\s*$/u)[0].length;
+        edits.push({ start: start + lead, end: start + raw.length - trail, text: `{t(${quote(core)})}` });
+        usesT = true;
+      }
+    } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
+      const name = node.name.getText(sourceFile);
+      const core = shownText(node.initializer.text);
+      if (SHOWN_ATTRIBUTES.has(name) && core) {
+        edits.push({ start: node.initializer.getStart(sourceFile), end: node.initializer.getEnd(), text: `{t(${quote(node.initializer.text)})}` });
+        usesT = true;
+      }
+      return;
+    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && ((POLISH.test(node.text) && /\s/u.test(node.text)) || (WRAP_ALL && SHORT_LABEL.test(node.text) && !KEEP_AS_IS.has(node.text))) && shownLiteral(node)) {
+      const inside = WRAP_ALL || insideFunction(node);
+      edits.push({ start: node.getStart(sourceFile), end: node.getEnd(), text: `${inside ? "t" : "N_"}(${quote(node.text)})` });
+      if (inside) usesT = true;
+      else usesN = true;
+    } else if (WRAP_ALL && ts.isTemplateExpression(node) && POLISH.test(node.getText(sourceFile)) && /\s/u.test(node.head.text + node.templateSpans.map((span) => span.literal.text).join("")) && shownLiteral(node)) {
+      // `Tekst ${a.b} …` -> t("Tekst {b} …", { b: a.b }): the placeholder is named after the value.
+      const names = new Map();
+      let text = node.head.text;
+      const values = [];
+      for (const span of node.templateSpans) {
+        const expr = span.expression.getText(sourceFile);
+        let base = (expr.match(/([A-Za-z_]\w*)\s*(?:\)|\(\))?\s*$/u)?.[1] ?? "value").replace(/^(length|size)$/u, "count");
+        if (!/^[a-z]/u.test(base)) base = "value";
+        let name = base;
+        for (let n = 2; names.has(name) && names.get(name) !== expr; n += 1) name = `${base}${n}`;
+        if (!names.has(name)) {
+          names.set(name, expr);
+          values.push(`${name}: ${expr}`);
+        }
+        text += `{${name}}` + span.literal.text;
+      }
+      edits.push({ start: node.getStart(sourceFile), end: node.getEnd(), text: `t(${quote(text)}, { ${values.join(", ")} })` });
+      usesT = true;
+      return;
+    } else if (ts.isTemplateExpression(node) && POLISH.test(node.getText(sourceFile))) {
+      templates.push(`${file}:${sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1} ${node.getText(sourceFile).slice(0, 90)}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (!edits.length) return { file, edits: 0, templates };
+  let out = code;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, edit.start) + edit.text + out.slice(edit.end);
+  const names = [usesT && "t", usesN && "N_"].filter(Boolean);
+  const existing = /import \{([^}]*)\} from "\.\/i18n(?:\.js)?";/u.exec(out);
+  if (existing) {
+    const have = new Set(existing[1].split(",").map((name) => name.trim()).filter(Boolean));
+    for (const name of names) have.add(name);
+    out = out.replace(existing[0], `import { ${[...have].join(", ")} } from "./i18n";`);
+  } else {
+    out = `import { ${names.join(", ")} } from "./i18n";\n${out}`;
+  }
+  fs.writeFileSync(file, out);
+  return { file, edits: edits.length, templates };
+}
+
+if (process.argv[1] && process.argv[1].endsWith("i18n-wrap.mjs")) {
+  for (const file of process.argv.slice(2).filter((arg) => !arg.startsWith("--"))) {
+    const result = wrapFile(file);
+    console.log(`${result.file}: ${result.edits} texts`);
+    for (const line of result.templates) console.log(`  TEMPLATE (by hand): ${line}`);
+  }
+}

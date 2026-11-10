@@ -1,4 +1,6 @@
 import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
+import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
+import { classifyLocalInferenceFailure } from "../providers/ai-sdk-adapter.js";
 import { encryptedKind, passwordFromHeader, type DocumentDecryptor } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
@@ -10076,6 +10078,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   });
 
   app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
+    // The interface language: every model call of this request answers in it.
+    enterAnswerLanguage(parseAnswerLanguage(req.get("X-Lex-Language")));
     if (keepAliveRequested(req)) keepResponseAlive(res);
     if (!options.sessionExecutor) {
       res.status(503).json({
@@ -13335,10 +13339,20 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
 
-      const localFailureMessage =
+      // A workflow gate of the application (e.g. a provision without an ELI text, the criminal
+      // qualifier) is not a llama.cpp failure: it is reported as for a cloud model. Only an empty
+      // model answer stays a local-model diagnostic.
+      const localModelFailure =
         request.model.startsWith(
           "local/"
-        )
+        ) &&
+        !(
+          error instanceof Error &&
+          error.name === "LexExecutionError" &&
+          !/empty/i.test(error.message)
+        );
+      const localFailureMessage =
+        localModelFailure
           ? (
               error instanceof
                 ProviderGatewayError &&
@@ -13362,11 +13376,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           parsedLocalFailureReason
         )
           ? parsedLocalFailureReason
-          : "LOCAL_MODEL_INFERENCE_FAILED";
+          : classifyLocalInferenceFailure(
+              localFailureMessage
+            );
       if (
-        request.model.startsWith(
-          "local/"
-        )
+        localModelFailure
       ) {
         res.status(503).json({
           error:

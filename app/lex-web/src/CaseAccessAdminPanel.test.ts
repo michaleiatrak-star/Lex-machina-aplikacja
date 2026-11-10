@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignableCases, bulkAccessPlan, caseMembersText, quickCaseOptions, searchAndSortCases, splitCasesForUser } from "./CaseAccessAdminPanel.js";
+import { assignableCases, rangeForPreset, bulkAccessPlan, caseMembersText, quickCaseOptions, searchAndSortCases, splitCasesForUser } from "./CaseAccessAdminPanel.js";
 import type { CaseAccessOverviewItem } from "./api.js";
 
 function item(caseId: string, members: string[]): CaseAccessOverviewItem {
@@ -113,5 +113,43 @@ describe("zmiana zbiorcza uprawnień", () => {
     const plan = bulkAccessPlan(cases, all, "anna", { kind: "revoke" });
     expect(plan.apply).toEqual(["case_b"]);
     expect(plan.skipped.map((entry) => entry.reason)).toEqual(["bez dostępu", "nie jesteś właścicielem", "osoba jest właścicielem"]);
+  });
+});
+
+describe("uprawnienia do spraw: zakresy i sortowanie po zmianie", () => {
+  it("gotowe zakresy kończą się dziś, ten rok od 1 stycznia, własny zostawia pola", () => {
+    const today = new Date(2026, 10, 10);
+    expect(rangeForPreset("7d", today, { from: "", to: "" })).toEqual({ from: "2026-11-04", to: "2026-11-10", field: "created" });
+    expect(rangeForPreset("30d", today, { from: "", to: "", field: "updated" })).toEqual({ from: "2026-10-12", to: "2026-11-10", field: "updated" });
+    expect(rangeForPreset("year", today, { from: "", to: "" })).toEqual({ from: "2026-01-01", to: "2026-11-10", field: "created" });
+    expect(rangeForPreset("all", today, { from: "2026-01-01", to: "2026-02-01" })).toEqual({ from: "", to: "", field: "created" });
+    expect(rangeForPreset("custom", today, { from: "2026-01-01", to: "" })).toEqual({ from: "2026-01-01", to: "" });
+  });
+
+  it("zakres po ostatniej zmianie, sortowanie po zmianie i liczbie osób", () => {
+    const base = (caseId: string, updatedAt: string, members: number) => ({
+      caseId,
+      caseKind: "MATTER" as const,
+      displayName: caseId,
+      createdAt: "2026-01-01T10:00:00.000Z",
+      updatedAt,
+      canManage: true,
+      members: Array.from({ length: members }, (_, index) => ({
+        userId: `u${index}`,
+        loginName: `u${index}`,
+        displayName: `u${index}`,
+        status: "ACTIVE",
+        role: (index === 0 ? "OWNER" : "VIEWER") as "OWNER" | "VIEWER",
+        canReidentify: false,
+        grantedAt: "2026-01-01T00:00:00.000Z"
+      }))
+    });
+    const cases = [base("a", "2026-11-01T10:00:00.000Z", 1), base("b", "2026-11-09T10:00:00.000Z", 3), base("c", "2026-06-01T10:00:00.000Z", 2)];
+    const ids = (list: CaseAccessOverviewItem[]) => list.map((entry) => entry.caseId);
+    expect(ids(searchAndSortCases(cases, "", "updated-desc"))).toEqual(["b", "a", "c"]);
+    expect(ids(searchAndSortCases(cases, "", "updated-asc"))).toEqual(["c", "a", "b"]);
+    expect(ids(searchAndSortCases(cases, "", "members-desc"))).toEqual(["b", "c", "a"]);
+    expect(ids(searchAndSortCases(cases, "", "name-asc", { from: "2026-10-01", to: "", field: "updated" }))).toEqual(["a", "b"]);
+    expect(searchAndSortCases(cases, "", "name-asc", { from: "2026-10-01", to: "", field: "created" })).toEqual([]);
   });
 });

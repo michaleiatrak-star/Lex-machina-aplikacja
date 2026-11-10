@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useMemo,
@@ -41,28 +42,28 @@ function previewKey(target: SourcePreviewTarget): string {
 type FieldValue = string | boolean;
 
 const ERRORS: Record<string, string> = {
-  MCP_SOURCE_UNAVAILABLE: "Źródło nie odpowiada albo nie jest zainstalowane — to niedostępność źródła, nie brak danych.",
-  MCP_ARGUMENTS_INVALID: "Nieprawidłowe parametry zapytania.",
-  UNKNOWN_MCP_SERVER: "Nieznane źródło MCP."
+  MCP_SOURCE_UNAVAILABLE: t("Źródło nie odpowiada albo nie jest zainstalowane — to niedostępność źródła, nie brak danych."),
+  MCP_ARGUMENTS_INVALID: t("Nieprawidłowe parametry zapytania."),
+  UNKNOWN_MCP_SERVER: t("Nieznane źródło MCP.")
 };
 
 const STATUS_TEXT: Record<string, string> = {
-  FOUND: "Znaleziono",
-  NOT_FOUND: "Brak w źródle",
-  AMBIGUOUS: "Niejednoznaczne — zawęź zapytanie",
-  OUT_OF_SCOPE: "OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku",
-  ERROR: "Błąd źródła",
-  PENDING: "Zlecenie w kolejce źródła — wynik w przygotowaniu",
-  SOURCE_UNAVAILABLE: "Źródło niedostępne — nie wnioskuj o braku",
-  POLICY_BLOCKED: "Zablokowane przez politykę źródeł",
+  FOUND: t("Znaleziono"),
+  NOT_FOUND: t("Brak w źródle"),
+  AMBIGUOUS: t("Niejednoznaczne — zawęź zapytanie"),
+  OUT_OF_SCOPE: t("OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku"),
+  ERROR: t("Błąd źródła"),
+  PENDING: t("Zlecenie w kolejce źródła — wynik w przygotowaniu"),
+  SOURCE_UNAVAILABLE: t("Źródło niedostępne — nie wnioskuj o braku"),
+  POLICY_BLOCKED: t("Zablokowane przez politykę źródeł"),
   OK: "OK"
 };
 
 export const INTEGRITY_TEXT: Record<McpPackageInfo["integrity"], string> = {
-  MATCH: "zgodny z sumą kontrolną skilla (najnowsza instalacja)",
-  MISMATCH: "NIEZGODNY z sumą kontrolną skilla — zaktualizuj skille",
-  UNVERIFIED: "brak sumy kontrolnej w skillu — nie da się potwierdzić wersji",
-  MISSING: "brak pakietu serwerów MCP"
+  MATCH: t("zgodny z sumą kontrolną skilla (najnowsza instalacja)"),
+  MISMATCH: t("NIEZGODNY z sumą kontrolną skilla — zaktualizuj skille"),
+  UNVERIFIED: t("brak sumy kontrolnej w skillu — nie da się potwierdzić wersji"),
+  MISSING: t("brak pakietu serwerów MCP")
 };
 
 function failureText(error: unknown): string {
@@ -122,7 +123,7 @@ function DocumentView({
       ))}
       {onMore ? (
         <button type="button" className="chat-secondary-action" disabled={busy} onClick={onMore}>
-          {busy ? "Wczytuję…" : "Wczytaj dalszą część treści"}
+          {busy ? "Wczytuję…" : t("Wczytaj dalszą część treści")}
         </button>
       ) : null}
     </div>
@@ -410,7 +411,7 @@ export function McpSearchPanel() {
         ...previous,
         [item.key]: document
           ? { busy: false, document, args, tool: detailTool }
-          : { busy: false, error: page.notice ?? STATUS_TEXT[page.status ?? ""] ?? "Źródło nie zwróciło treści." }
+          : { busy: false, error: page.notice ?? STATUS_TEXT[page.status ?? ""] ?? t("Źródło nie zwróciło treści.") }
       }));
     } catch (failure) {
       setDetails((previous) => ({
@@ -426,22 +427,21 @@ export function McpSearchPanel() {
     <section className="chat-card-stack">
       <article className="chat-card">
         <p className="eyebrow">
-          Konektory MCP · wywołanie bezpośrednie
+          {t("Konektory MCP · wywołanie bezpośrednie")}
         </p>
         <h2>
-          Wyszukiwanie w źródłach
+          {t("Wyszukiwanie w źródłach")}
           <InfoTip>
-            Wynik pochodzi wprost z publicznego API źródła, bez modelu. Służy do odnalezienia źródła, nie jest weryfikacją: przepisy
-            potwierdza ELI, sygnatury SN weryfikator SN.
+            {t("Wynik pochodzi wprost z publicznego API źródła, bez modelu. Służy do odnalezienia źródła, nie jest weryfikacją: przepisy potwierdza ELI, sygnatury SN weryfikator SN.")}
           </InfoTip>
         </h2>
         <p className="field-help">
-          Nie wpisuj faktów sprawy ani danych klienta — zapytania trafiają do publicznych API.
+          {t("Nie wpisuj faktów sprawy ani danych klienta — zapytania trafiają do publicznych API.")}
         </p>
 
         {packageInfo ? (
           <p className="field-help">
-            Pakiet serwerów{packageInfo.version ? ` ${packageInfo.version}` : ""}
+            {t("Pakiet serwerów")}{packageInfo.version ? ` ${packageInfo.version}` : ""}
             {packageInfo.skillVersion ? ` (pakiet jurysdykcji ${packageInfo.skillVersion})` : ""}: {INTEGRITY_TEXT[packageInfo.integrity]}.
           </p>
         ) : null}
@@ -451,13 +451,13 @@ export function McpSearchPanel() {
         {sources ? (
           <div className="mcp-search-form">
             <label>
-              Źródło
+              {t("Źródło")}
               <select
                 value={sourceId}
                 disabled={busy}
                 onChange={(event) => setSourceId(event.target.value)}
               >
-                <option value="">— wybierz źródło —</option>
+                <option value="">{t("— wybierz źródło —")}</option>
                 {groupsOf(sources).map(([group, items]) => (
                   <optgroup key={group} label={group}>
                     {[...items]
@@ -465,7 +465,7 @@ export function McpSearchPanel() {
                       .map((source) => (
                         <option key={source.id} value={source.id} disabled={!source.ready}>
                           {source.label}
-                          {sourceHasPhraseSearch(source.id) ? " · szukanie po frazie" : ""}
+                          {sourceHasPhraseSearch(source.id) ? t(" · szukanie po frazie") : ""}
                           {!source.ready
                             ? " — niegotowe (Ustawienia → Konektory MCP)"
                             : source.lastCheck && !source.lastCheck.ok
@@ -480,7 +480,7 @@ export function McpSearchPanel() {
 
             {tools.length ? (
               <label>
-                Narzędzie
+                {t("Narzędzie")}
                 {tool && toolLabel(tool.name, tool.description).help ? (
                   <InfoTip>{toolLabel(tool.name, tool.description).help}</InfoTip>
                 ) : null}
@@ -565,19 +565,19 @@ export function McpSearchPanel() {
                   disabled={busy || missing}
                   onClick={() => void submit()}
                 >
-                  {busy ? "Szukam…" : "Szukaj"}
+                  {busy ? "Szukam…" : t("Szukaj")}
                 </button>
                 {busy && waited >= 5 ? (
                   <span className="field-help">
-                    Czekam na odpowiedź źródła: {waited} s
-                    {waited >= 20 ? " — źródło odpowiada wolno, aplikacja ponawia zapytanie (do kilku minut)." : ""}
+                    {t("Czekam na odpowiedź źródła:")} {waited} s
+                    {waited >= 20 ? t(" — źródło odpowiada wolno, aplikacja ponawia zapytanie (do kilku minut).") : ""}
                   </span>
                 ) : null}
               </div>
             ) : null}
           </div>
         ) : !error ? (
-          <p>Wczytywanie źródeł…</p>
+          <p>{t("Wczytywanie źródeł…")}</p>
         ) : null}
       </article>
 
@@ -587,16 +587,16 @@ export function McpSearchPanel() {
             {toolLabel(view.tool).label}
           </p>
           <h2>
-            {status ? STATUS_TEXT[status] ?? status : view.ok ? "Wynik" : "Błąd"}
+            {status ? STATUS_TEXT[status] ?? status : view.ok ? t("Wynik") : t("Błąd")}
           </h2>
           {view.total !== null ? (
             <p className="field-help">
-              Trafień w źródle: {view.total}; wyświetlono: {view.items.length}.
+              {t("Trafień w źródle:")} {view.total}{t("; wyświetlono:")} {view.items.length}.
             </p>
           ) : null}
           {view.source === "cbosa" ? (
             <p className="field-help">
-              Wyniki CBOSA nie są weryfikowane; brak trafień nie dowodzi braku orzeczenia.
+              {t("Wyniki CBOSA nie są weryfikowane; brak trafień nie dowodzi braku orzeczenia.")}
             </p>
           ) : null}
           {view.notice ? <div className="alert">{view.notice}</div> : null}
@@ -607,14 +607,12 @@ export function McpSearchPanel() {
             <div className="chat-form-row compact">
               <p className="field-help">
                 {pendingAttempt
-                  ? `Odbieranie wyniku z kolejki źródła: próba ${pendingAttempt} z ${PENDING_ATTEMPTS}${
-                      view.pending.message ? ` (${view.pending.message})` : ""
-                    }…`
-                  : "Wynik jeszcze niegotowy. Brak wyniku nie oznacza braku danych w źródle."}
+                  ? t("Odbieranie wyniku z kolejki źródła: próba {pendingAttempt} z {value}{value2}…", { pendingAttempt: pendingAttempt, value: PENDING_ATTEMPTS, value2: view.pending.message ? ` (${view.pending.message})` : "" })
+                  : t("Wynik jeszcze niegotowy. Brak wyniku nie oznacza braku danych w źródle.")}
               </p>
               {pendingAttempt ? null : (
                 <button type="button" className="chat-secondary-action" onClick={() => void collectPending(view)}>
-                  Odbierz wynik ponownie
+                  {t("Odbierz wynik ponownie")}
                 </button>
               )}
             </div>
@@ -634,12 +632,12 @@ export function McpSearchPanel() {
                         setSourcePreview(sourcePreview === key ? null : key);
                       }}
                     >
-                      {sourcePreview === previewKey(view.document.preview) ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                      {sourcePreview === previewKey(view.document.preview) ? t("Zwiń podgląd źródła") : t("Podgląd źródła")}
                     </button>
                   ) : null}{" "}
                   {view.document.url ? (
                     <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(view.document!.url!)}>
-                      Otwórz w źródle
+                      {t("Otwórz w źródle")}
                     </button>
                   ) : null}
                 </p>
@@ -684,7 +682,7 @@ export function McpSearchPanel() {
                           disabled={detail?.busy}
                           onClick={() => void toggleDetail(item)}
                         >
-                          {detail?.busy ? "Wczytuję…" : detail ? "Zwiń treść" : "Pokaż treść"}
+                          {detail?.busy ? "Wczytuję…" : detail ? t("Zwiń treść") : t("Pokaż treść")}
                         </button>
                       ) : null}
                       {item.preview ? (
@@ -696,12 +694,12 @@ export function McpSearchPanel() {
                             setSourcePreview(sourcePreview === key ? null : key);
                           }}
                         >
-                          {sourcePreview === previewKey(item.preview) ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                          {sourcePreview === previewKey(item.preview) ? t("Zwiń podgląd źródła") : t("Podgląd źródła")}
                         </button>
                       ) : null}
                       {item.url ? (
                         <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
-                          Otwórz w źródle
+                          {t("Otwórz w źródle")}
                         </button>
                       ) : null}
                     </div>
@@ -721,19 +719,19 @@ export function McpSearchPanel() {
               })}
             </ol>
           ) : !view.document && !view.pending ? (
-            <p>Brak pozycji do wyświetlenia.</p>
+            <p>{t("Brak pozycji do wyświetlenia.")}</p>
           ) : null}
 
           {view.next ? (
             <div className="chat-form-row compact">
               <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void loadMore()}>
-                {busy ? "Wczytuję…" : "Wczytaj kolejne wyniki"}
+                {busy ? "Wczytuję…" : t("Wczytaj kolejne wyniki")}
               </button>
             </div>
           ) : null}
 
           <details className="mcp-search-raw">
-            <summary>Dane techniczne (odpowiedź źródła)</summary>
+            <summary>{t("Dane techniczne (odpowiedź źródła)")}</summary>
             <pre className="mcp-search-result">
               {JSON.stringify(view.raw.length === 1 ? view.raw[0] : view.raw, null, 2)}
             </pre>

@@ -35,7 +35,7 @@ const checks = {
         trust.includes('Some("PROCESS_MEMORY") | None => false') &&
         webApiClient.includes('"PROCESS_MEMORY"') &&
         webApiClient.includes('"OS_KEYRING"') &&
-        normalizedWebApp.includes('isDesktopShell() ? "Zapisz w systemie" : "Użyj w sesji"') &&
+        normalizedWebApp.includes('isDesktopShell() ? t("Zapisz w systemie") : t("Użyj w sesji")') &&
         normalizedWebApp.includes('isDesktopShell() ? "OS_KEYRING" : "PROCESS_MEMORY"'),
     memoryOnlyRemovesStoredCredential: trust.includes("if persist") &&
         trust.includes("self.delete_provider_credential("),

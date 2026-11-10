@@ -5,7 +5,7 @@ import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 const form = <button type="button">Zapisz wpis</button>;
 
 describe("CollapsibleCaseSection", () => {
-  it("is collapsed to its header when there are no entries", () => {
+  it("is one compact row with the add button when there are no entries", () => {
     const html = renderToStaticMarkup(
       <CollapsibleCaseSection
         eyebrow="Terminarz sprawy"
@@ -19,13 +19,16 @@ describe("CollapsibleCaseSection", () => {
         {null}
       </CollapsibleCaseSection>
     );
-    expect(html).not.toContain("<details class=\"chat-card matter-schedule-card matter-collapsible\" open");
+    expect(html).toContain("matter-compact-row");
     expect(html).toContain("brak wpisów");
+    expect(html).toContain("+ Dodaj");
+    expect(html).not.toContain(">Pokaż<");
+    // The form and the list open in a window, not in the card.
+    expect(html).not.toContain("Zapisz wpis");
     expect(html).not.toContain("matter-schedule-list");
-    expect(html).toContain("Zapisz wpis");
   });
 
-  it("shows existing entries open and keeps the add form behind a toggle", () => {
+  it("shows the number of entries and a button to open them", () => {
     const html = renderToStaticMarkup(
       <CollapsibleCaseSection
         eyebrow="Osoby i organizacje"
@@ -39,13 +42,12 @@ describe("CollapsibleCaseSection", () => {
         <div className="matter-schedule-item">Jan Kowalski</div>
       </CollapsibleCaseSection>
     );
-    expect(html).toMatch(/<details class="chat-card matter-schedule-card matter-collapsible" open/);
-    expect(html).toContain("Jan Kowalski");
     expect(html).toContain(">2<");
-    expect(html).toMatch(/<details class="matter-add-entry"><summary>Dodaj kontakt<\/summary>/);
+    expect(html).toContain(">Pokaż<");
+    expect(html).not.toContain("Jan Kowalski");
   });
 
-  it("opens to show an error even without entries", () => {
+  it("shows an error in the row", () => {
     const html = renderToStaticMarkup(
       <CollapsibleCaseSection
         eyebrow="Terminarz sprawy"

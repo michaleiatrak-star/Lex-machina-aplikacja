@@ -231,6 +231,16 @@ export function classifyLocalInferenceFailure(detail) {
             return "LOCAL_MODEL_SERVER_ERROR";
         }
     }
+    // The server finished without text, or the text was only model reasoning
+    // that Lex removes. Not a llama.cpp failure: the model said nothing usable.
+    if (/local_model_http_empty_response|local_model_empty_answer|empty (?:deterministic-workflow )?(?:result|answer)/i.test(lower)) {
+        return "LOCAL_MODEL_EMPTY_ANSWER";
+    }
+    // A reply llama-server sent but Lex could not read (broken stream frame,
+    // error frame, invalid JSON body).
+    if (/local_model_http_(?:invalid_sse_json|invalid_json|stream_error)|local_model_sse_read_failed/i.test(lower)) {
+        return "LOCAL_MODEL_SERVER_ERROR";
+    }
     return "LOCAL_MODEL_INFERENCE_FAILED";
 }
 export function parseLocalToolCalls(text) {
@@ -870,7 +880,7 @@ async function streamLocalChatCompletion(endpoint, modelId, systemPrompt, messag
         }
     }
 }
-async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCharsPerToken, params) {
+export async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCharsPerToken, params) {
     const allowedTools = new Set((params.tools ?? [])
         .map((tool) => tool.function.name));
     const toolTranscript = [];
@@ -886,6 +896,9 @@ async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCh
     };
     const maxIterations = Math.max(1, Math.min(params.maxIterations ??
         10, 12));
+    // One more attempt when the model returns no usable text (an empty stream,
+    // or only reasoning that Lex strips): a second sample usually answers.
+    let emptyRetries = 0;
     for (let iteration = 0; iteration <
         maxIterations; iteration += 1) {
         let result;
@@ -901,14 +914,31 @@ async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCh
                 ? error.message
                 : String(error);
             const reason = classifyLocalInferenceFailure(detail);
+            if (reason === "LOCAL_MODEL_EMPTY_ANSWER" &&
+                emptyRetries === 0 &&
+                !localParams.abortSignal?.aborted) {
+                emptyRetries += 1;
+                iteration -= 1;
+                continue;
+            }
             throw new Error(`${reason}:${detail
                 .replace(/[\r\n]+/g, " ")
                 .slice(-800)}`);
         }
+        const rawChars = result.fullText.trim().length;
         result = {
             ...result,
             fullText: stripLocalReasoning(result.fullText)
         };
+        if (!result.fullText.trim()) {
+            if (emptyRetries === 0 &&
+                !localParams.abortSignal?.aborted) {
+                emptyRetries += 1;
+                iteration -= 1;
+                continue;
+            }
+            throw new Error(`LOCAL_MODEL_EMPTY_ANSWER:raw_chars=${rawChars}`);
+        }
         const calls = parseLocalToolCalls(result.fullText);
         if (!calls) {
             draft.finish(result.fullText);

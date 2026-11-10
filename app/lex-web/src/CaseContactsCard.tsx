@@ -1,3 +1,4 @@
+import { t, N_ } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   addCaseContact,
@@ -79,7 +80,7 @@ export function CaseContactsCard({
     } catch (failure) {
       setError(
         errorText(failure) === "INVALID_CASE_ACCESS_REQUEST"
-          ? "Sprawdź nazwę, numer telefonu i adres e-mail."
+          ? t("Sprawdź nazwę, numer telefonu i adres e-mail.")
           : errorText(failure)
       );
     } finally {
@@ -111,48 +112,48 @@ export function CaseContactsCard({
 
   return (
     <CollapsibleCaseSection
-      eyebrow="Osoby i organizacje"
-      title="Kontakty w sprawie"
+      eyebrow={N_("Osoby i organizacje")}
+      title={t("Kontakty w sprawie")}
       count={contacts.length}
       loading={loading}
       error={error}
       resetKey={caseId}
-      addLabel="Dodaj kontakt"
+      addLabel={N_("Dodaj kontakt")}
       hint={
         caseId
-          ? "Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy."
-          : "Wybierz sprawę, aby zobaczyć kontakty."
+          ? N_("Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.")
+          : N_("Wybierz sprawę, aby zobaczyć kontakty.")
       }
       addForm={
         <div className="matter-schedule-form">
           <div className="chat-form-row">
-            <select aria-label="Rodzaj kontaktu" {...field("kind")}>
-              <option value="PERSON">Osoba</option>
-              <option value="ORGANIZATION">Organizacja</option>
+            <select aria-label={t("Rodzaj kontaktu")} {...field("kind")}>
+              <option value="PERSON">{t("Osoba")}</option>
+              <option value="ORGANIZATION">{t("Organizacja")}</option>
             </select>
             <input
               maxLength={180}
-              placeholder={draft.kind === "PERSON" ? "Imię i nazwisko" : "Nazwa organizacji"}
+              placeholder={draft.kind === "PERSON" ? t("Imię i nazwisko") : t("Nazwa organizacji")}
               {...field("name")}
             />
           </div>
           <div className="chat-form-row">
-            <input maxLength={120} placeholder="Rola, np. klient, pełnomocnik strony przeciwnej" {...field("role")} />
-            <input maxLength={60} type="tel" placeholder="Telefon" {...field("phone")} />
-            <input maxLength={180} type="email" placeholder="E-mail" {...field("email")} />
+            <input maxLength={120} placeholder={t("Rola, np. klient, pełnomocnik strony przeciwnej")} {...field("role")} />
+            <input maxLength={60} type="tel" placeholder={t("Telefon")} {...field("phone")} />
+            <input maxLength={180} type="email" placeholder={t("E-mail")} {...field("email")} />
           </div>
           <div className="chat-form-row">
-            <input maxLength={300} placeholder="Adres (opcjonalnie)" {...field("address")} />
+            <input maxLength={300} placeholder={t("Adres (opcjonalnie)")} {...field("address")} />
             <button
               type="button"
               className="chat-primary-action"
               disabled={disabled || !draft.name.trim()}
               onClick={() => void save()}
             >
-              Dodaj kontakt
+              {t("Dodaj kontakt")}
             </button>
           </div>
-          <textarea maxLength={2000} placeholder="Notatka (opcjonalnie)" {...field("notes")} />
+          <textarea maxLength={2000} placeholder={t("Notatka (opcjonalnie)")} {...field("notes")} />
         </div>
       }
     >
@@ -160,7 +161,7 @@ export function CaseContactsCard({
         <div className="matter-schedule-item" key={contact.contactId}>
           <div className="matter-schedule-item-main">
             <span className="matter-schedule-kind">
-              {contact.kind === "PERSON" ? "Osoba" : "Organizacja"}
+              {contact.kind === "PERSON" ? t("Osoba") : t("Organizacja")}
               {contact.role ? ` · ${contact.role}` : ""}
             </span>
             <strong>{contact.name}</strong>
@@ -177,7 +178,7 @@ export function CaseContactsCard({
             disabled={disabled}
             onClick={() => void remove(contact.contactId)}
           >
-            Usuń
+            {t("Usuń")}
           </button>
         </div>
       ))}

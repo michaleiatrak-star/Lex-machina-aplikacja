@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { probeLawSourceSession } from "./api.js";
 import { desktopInvoke, openExternalUrl } from "./SnVerification.js";
@@ -44,7 +45,7 @@ export function LawSourceVerification({
       } catch {
         // the window was closed or the session is not set yet: try again up to the limit
       }
-      if (tries >= 45) setMessage("Weryfikacja trwa: dokończ ją w oknie źródła albo otwórz okno ponownie.");
+      if (tries >= 45) setMessage(t("Weryfikacja trwa: dokończ ją w oknie źródła albo otwórz okno ponownie."));
     }
     const timer = window.setInterval(() => void tick(), 4000);
     const first = window.setTimeout(() => void tick(), 1500);
@@ -73,15 +74,15 @@ export function LawSourceVerification({
   return (
     <div className="alert">
       <p>
-        <strong>Źródło prawa wymaga weryfikacji przeglądarki: {verification.label}.</strong> Aplikacja sama jej nie przechodzi.
+        <strong>{t("Źródło prawa wymaga weryfikacji przeglądarki:")} {verification.label}.</strong> {t("Aplikacja sama jej nie przechodzi.")}
       </p>
       <p className="field-help">
         {invoke
-          ? "Otwórz okno źródła i przejdź weryfikację, jeśli się pojawi. Pytanie ponowi się samo; nie zamykaj okna przed wynikiem."
-          : "W przeglądarce: otwórz źródło i odszukaj przepis samodzielnie."}
+          ? t("Otwórz okno źródła i przejdź weryfikację, jeśli się pojawi. Pytanie ponowi się samo; nie zamykaj okna przed wynikiem.")
+          : t("W przeglądarce: otwórz źródło i odszukaj przepis samodzielnie.")}
       </p>
       <button type="button" className="chat-primary-action" onClick={() => void start()}>
-        {invoke ? (open ? "Okno źródła otwarte…" : "Otwórz okno źródła") : "Otwórz źródło"}
+        {invoke ? (open ? t("Okno źródła otwarte…") : t("Otwórz okno źródła")) : t("Otwórz źródło")}
       </button>
       {message ? <p className="field-help">{message}</p> : null}
     </div>
