@@ -1,5 +1,28 @@
 !define LEX_HOOK_FILE_DIR "${__FILEDIR__}"
 
+; While a PowerShell step runs, NSIS gets no progress: its bar moves continuously (marquee) so the
+; installer does not look frozen; the step's own window shows the real progress.
+!macro LEX_BAR_MARQUEE ENABLE
+  Push $R7
+  Push $R8
+  Push $R9
+  FindWindow $R8 "#32770" "" $HWNDPARENT
+  GetDlgItem $R9 $R8 1004
+  System::Call "user32::GetWindowLongW(p R9, i -16) i .R7"
+  !if ${ENABLE} == 1
+    IntOp $R7 $R7 | 0x08
+    System::Call "user32::SetWindowLongW(p R9, i -16, i R7)"
+    SendMessage $R9 0x40A 1 30
+  !else
+    SendMessage $R9 0x40A 0 0
+    IntOp $R7 $R7 & 0xFFFFFFF7
+    System::Call "user32::SetWindowLongW(p R9, i -16, i R7)"
+  !endif
+  Pop $R9
+  Pop $R8
+  Pop $R7
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   SetOutPath "$PLUGINSDIR"
   File "/oname=lex-get-install-state.ps1" "${LEX_HOOK_FILE_DIR}\..\..\..\installer\get-install-state.ps1"
@@ -71,8 +94,10 @@
   IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" lex_offline_bundle lex_online_bootstrap
 
 lex_offline_bundle:
-  DetailPrint "Etap 3 z 3: właściwa instalacja — postęp w osobnym oknie Instalacja Lex Machina"
+  DetailPrint "Etap 3 z 3: właściwa instalacja — dokładny postęp w osobnym oknie „Instalacja Lex Machina”"
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-offline-bundle-install.ps1" -RuntimeRoot "$INSTDIR\runtime" -BundlePath "$EXEDIR\LexMachina-Offline-Runtime.zip"'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0
@@ -86,7 +111,9 @@ lex_offline_bundle:
 
 lex_online_bootstrap:
   DetailPrint "Lex Machina: sprawdzanie i pobieranie potrzebnych narzędzi..."
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-online-bootstrap.ps1" -RuntimeRoot "$INSTDIR\runtime"'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0
@@ -99,7 +126,9 @@ lex_online_bootstrap:
 
 lex_runtime_selftest:
   DetailPrint "Lex Machina: sprawdzanie gotowości aplikacji..."
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$INSTDIR\runtime\lex-runtime-sidecar.exe" --self-test'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0

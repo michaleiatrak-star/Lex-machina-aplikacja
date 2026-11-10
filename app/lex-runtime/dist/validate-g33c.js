@@ -24,8 +24,8 @@ const checks = {
         server.includes("bootstrap.sessionToken"),
     manualFirstLogin: authUi.includes("temporaryAdminCredentialsActive") &&
         authUi.includes('? "admin"') &&
-        authUi.includes("<strong>Pierwsze logowanie</strong>") &&
-        authUi.includes("Login <b>admin</b>, hasło <b>admin</b>."),
+        authUi.includes('<strong>{t("Pierwsze logowanie")}</strong>') &&
+        authUi.includes("Login: admin, hasło: admin."),
     warnedPasswordReplacement: authUi.includes("passwordSetupPending === true") &&
         authUi.includes("password-setup-banner") &&
         authUi.includes('role="alert"') &&
