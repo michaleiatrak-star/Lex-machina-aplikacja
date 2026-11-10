@@ -922,6 +922,10 @@ export function localModelFailureMessage(
       return t("Lokalny model działa, ale żądanie przekroczyło dostępny kontekst. Zmniejsz zakres rozmowy lub kontekst załączników. Kod: LOCAL_MODEL_CONTEXT_OVERFLOW");
     case "LOCAL_MODEL_RESOURCE_EXHAUSTED":
       return t("Lokalny model został uruchomiony, ale zabrakło pamięci RAM/VRAM podczas inferencji. Zmniejsz kontekst albo wybierz profil CPU/mniejszy model. Kod: LOCAL_MODEL_RESOURCE_EXHAUSTED");
+    case "LOCAL_MODEL_EMPTY_ANSWER":
+      return t("Lokalny model zakończył generowanie bez treści odpowiedzi, także przy drugiej próbie. To nie jest awaria serwera llama.cpp. Zadaj pytanie ponownie, krócej, albo wybierz inny model. Kod: LOCAL_MODEL_EMPTY_ANSWER");
+    case "LOCAL_MODEL_RESPONSE_TIMEOUT":
+      return t("Lokalny model nie zwrócił odpowiedzi w limicie czasu. Komputer może być obciążony; spróbuj ponownie albo zmniejsz kontekst. Kod: LOCAL_MODEL_RESPONSE_TIMEOUT");
     case "LOCAL_MODEL_INFERENCE_FAILED":
       return t("Połączenie z lokalnym llama.cpp zostało wcześniej potwierdzone testem połączenia, ale sama generacja odpowiedzi nie zakończyła się poprawnie. Kod: LOCAL_MODEL_INFERENCE_FAILED");
     default:
@@ -4697,7 +4701,12 @@ export default function MatterChatApp({
           : code === "LOCAL_MODEL_EXECUTION_FAILED"
             ? localModelFailureMessage(
                 reason
-              )
+              ) +
+              (reason === "LOCAL_MODEL_INFERENCE_FAILED" &&
+              error instanceof ApiError &&
+              error.description
+                ? t(" Szczegóły: {value}", { value: error.description.slice(0, 300) })
+                : "")
           : code === "PROVIDER_EXECUTION_FAILED"
             ? provider === "local"
               ? localModelFailureMessage(
@@ -4715,7 +4724,11 @@ export default function MatterChatApp({
             ? t("Model nie zwrócił poprawnego wyboru dziedziny i skilli w trybie automatycznym{reason}. Lex Machina nie zgaduje doboru zastępczego.", { reason: reason ? ` (kod: ${reason})` : "" })
           : code ===
               "LEGAL_WORKFLOW_EXECUTION_FAILED"
-            ? reason
+            ? reason === "QUICK_LEGAL_UNSOURCED_PROVISION"
+              ? t("Odpowiedź modelu powołuje przepisy, których brzmienia nie pobrano w tej rozmowie z ELI, a runda poprawcza tego nie naprawiła. Aplikacja nie pokazuje prawa podanego z pamięci. Zadaj pytanie ponownie albo wybierz model w chmurze. Kod: QUICK_LEGAL_UNSOURCED_PROVISION")
+              : reason === "CRIMINAL_QUALIFIER"
+                ? t("Odpowiedź w sprawie karnej wymaga zastosowania kwalifikatora karnomaterialnego, a model go nie zastosował. Zadaj pytanie ponownie. Kod: CRIMINAL_QUALIFIER")
+            : reason
               ? t("Proces prawny zatrzymał wykonanie na etapie: {reason}.", { reason })
               : t("Proces prawny zatrzymał wykonanie.")
             : code === "DOCUMENT_NOT_REVIEWED"
