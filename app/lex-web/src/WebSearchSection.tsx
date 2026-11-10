@@ -5,6 +5,7 @@ import {
   getWebSearchSettings,
   runWebSearchTest,
   setFirecrawlApiKey,
+  setGoogleSession,
   setSearxngUrl,
   type SearchEngineName,
   type WebSearchSettings
@@ -17,6 +18,8 @@ const SEARXNG_EXAMPLE = "http://localhost:8888";
 const FIRECRAWL_EXAMPLE = "fc-…";
 
 const ENGINE_LABELS: Record<SearchEngineName, string> = {
+  google: "Google",
+  gemini: "Gemini + Google",
   searxng: "SearXNG",
   duckduckgo: "DuckDuckGo",
   firecrawl: "Firecrawl"
@@ -40,6 +43,8 @@ function errorText(code: string | undefined): string {
       return t("wyczerpany miesięczny limit planu darmowego");
     case "KEY_REJECTED":
       return t("klucz odrzucony");
+    case "LAW_SOURCE_VERIFICATION_REQUIRED:www.google.com":
+      return t("potrzebne potwierdzenie w oknie Google (pojawi się w czacie)");
     default:
       return code ?? "";
   }
@@ -92,6 +97,18 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     }
   }
 
+  async function toggleGoogle(next: boolean): Promise<void> {
+    setBusy("save");
+    try {
+      setSettings(await setGoogleSession(next));
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function test(): Promise<void> {
     setBusy("test");
     try {
@@ -119,6 +136,20 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
         </div>
         <span>{settings.providerForced ? t("ustawione w konfiguracji serwera: {value}", { value: settings.providerForced }) : order}</span>
       </div>
+
+      <label className="core-law-auto">
+        <input
+          type="checkbox"
+          checked={settings.googleSession}
+          disabled={!admin || Boolean(busy)}
+          onChange={(event) => void toggleGoogle(event.target.checked)}
+        />
+        <span>{t("Google na Twojej sesji (pierwsza wyszukiwarka)")}</span>
+        <InfoTip>
+          {t("Wyszukiwanie idzie przez google.com z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Google pokaże zgodę albo captcha, w czacie pojawi się przycisk otwierający okno Google: potwierdzasz w nim Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Zapytania wybiera model, więc Google może je uznać za automatyczne i częściej pokazywać captcha.")}
+        </InfoTip>
+      </label>
+      <small>{t("Gemini + Google: wyszukiwanie Google przez Twój klucz Google z ustawień modeli; ponad darmowy limit płatne według cennika Google.")}</small>
 
       <div className="web-search-url">
         <span>{t("Adres SearXNG:")}</span>

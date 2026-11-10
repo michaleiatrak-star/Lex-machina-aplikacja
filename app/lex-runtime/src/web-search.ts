@@ -1,4 +1,10 @@
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
+import {
+  LAW_SOURCE_VERIFICATION_REQUIRED,
+  clearLawSourceSession,
+  isChallengePage,
+  lawSourceSessionHeaders
+} from "./eli/law-source-sessions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import {
   classifyKnownLegalSourceUrl,
@@ -7,6 +13,7 @@ import {
 import {
   effectiveSearchOrder,
   firecrawlApiKey,
+  geminiSearchKey,
   webSearchSettings,
   type SearchEngineName,
   type WebSearchSettings
@@ -31,11 +38,15 @@ export type WebSearchProviderName =
   | "brave"
   | "duckduckgo"
   | "searxng"
-  | "firecrawl";
+  | "firecrawl"
+  | "gemini"
+  | "google";
 
 export type WebSearchResponse = {
   provider: WebSearchProviderName;
   hits: WebSearchHit[];
+  /** A source that needs the user's check (LAW_SOURCE_VERIFICATION_REQUIRED:<host>); hits came from the next engine. */
+  verificationRequired?: string;
 };
 
 export interface WebSearchProvider {
@@ -188,6 +199,68 @@ export function parseDuckDuckGoHtml(
   return hits.slice(0, maxResults);
 }
 
+/** Organic results of a Google results page: a link with a heading (h3) inside; Google's own pages skipped. */
+export function parseGoogleHtml(html: string, maxResults: number): WebSearchHit[] {
+  const hits: WebSearchHit[] = [];
+  const seen = new Set<string>();
+  const anchor = /<a\b[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/giu;
+  let match: RegExpExecArray | null;
+  while ((match = anchor.exec(html)) !== null && hits.length < maxResults) {
+    const heading = /<h3\b[^>]*>([\s\S]*?)<\/h3>/iu.exec(match[2] ?? "");
+    if (!heading) continue;
+    let href = decodeEntities(match[1] ?? "");
+    if (href.startsWith("/url?")) {
+      href = new URLSearchParams(href.slice(5)).get("q") ?? new URLSearchParams(href.slice(5)).get("url") ?? "";
+    }
+    if (!/^https?:\/\//iu.test(href)) continue;
+    let host = "";
+    try {
+      host = new URL(href).hostname;
+    } catch {
+      continue;
+    }
+    if (/(^|\.)google\.[a-z.]+$/iu.test(host) || seen.has(href)) continue;
+    seen.add(href);
+    // The snippet: the first text block after the link (Google's markup changes; best effort).
+    const after = html.slice(anchor.lastIndex, anchor.lastIndex + 4_000);
+    const snippet = /<(?:div|span)\b[^>]*(?:VwiC3b|data-sncf)[^>]*>([\s\S]*?)<\/(?:div|span)>/iu.exec(after)?.[1] ?? "";
+    hits.push({ title: decodeEntities(heading[1] ?? ""), url: href, snippet: decodeEntities(snippet).slice(0, 400) });
+  }
+  return hits;
+}
+
+type GeminiPayload = {
+  candidates?: Array<{
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: unknown; title?: unknown } }>;
+      groundingSupports?: Array<{ segment?: { text?: unknown }; groundingChunkIndices?: unknown }>;
+    };
+  }>;
+};
+
+/** Sources of a grounded Gemini answer: one hit per source, the passages it supports as snippet. */
+export function parseGeminiGrounding(payload: GeminiPayload, maxResults: number): WebSearchHit[] {
+  const metadata = payload.candidates?.[0]?.groundingMetadata;
+  const chunks = Array.isArray(metadata?.groundingChunks) ? metadata!.groundingChunks : [];
+  const snippets = new Map<number, string[]>();
+  for (const support of Array.isArray(metadata?.groundingSupports) ? metadata!.groundingSupports : []) {
+    const text = typeof support.segment?.text === "string" ? support.segment.text : "";
+    if (!text || !Array.isArray(support.groundingChunkIndices)) continue;
+    for (const index of support.groundingChunkIndices) {
+      if (typeof index === "number") snippets.set(index, [...(snippets.get(index) ?? []), text]);
+    }
+  }
+  const seen = new Set<string>();
+  return chunks
+    .map((chunk, index) => ({
+      title: typeof chunk.web?.title === "string" ? decodeEntities(chunk.web.title) : "",
+      url: typeof chunk.web?.uri === "string" ? chunk.web.uri.trim() : "",
+      snippet: (snippets.get(index) ?? []).join(" ").slice(0, 400)
+    }))
+    .filter((item) => item.title && /^https?:\/\//iu.test(item.url) && !seen.has(item.url) && seen.add(item.url))
+    .slice(0, maxResults);
+}
+
 type FirecrawlSearchPayload = {
   success?: boolean;
   data?: { web?: Array<{ url?: unknown; title?: unknown; description?: unknown }> } | Array<{ url?: unknown; title?: unknown; description?: unknown }>;
@@ -285,17 +358,24 @@ export class PublicWebSearch implements WebSearchProvider {
           ? ["searxng"]
           : provider === "firecrawl"
             ? ["firecrawl"]
+            : provider === "gemini"
+              ? ["gemini"]
+              : provider === "google"
+                ? ["google"]
           : provider === "duckduckgo" || provider === "ddg"
             ? ["duckduckgo"]
             : [];
+    let verificationRequired: string | undefined;
     for (const engine of engines) {
       try {
         const hits = withoutBlocked(await this.searchEngine(engine, query, maxResults, settings));
         if (hits.length > 0) {
-          return { provider: engine, hits };
+          return { provider: engine, hits, ...(verificationRequired ? { verificationRequired } : {}) };
         }
       } catch (error) {
-        errors.push(`${engine}:${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.startsWith(LAW_SOURCE_VERIFICATION_REQUIRED)) verificationRequired ??= message;
+        errors.push(`${engine}:${message}`);
       }
     }
 
@@ -316,6 +396,12 @@ export class PublicWebSearch implements WebSearchProvider {
       if (!settings.searxngUrl) throw new Error("NOT_CONFIGURED");
       return this.searchSearxng(query, maxResults, settings.searxngUrl);
     }
+    if (engine === "google") return this.searchGoogle(query, maxResults);
+    if (engine === "gemini") {
+      const key = await geminiSearchKey();
+      if (!key) throw new Error("NOT_CONFIGURED");
+      return this.searchGemini(query, maxResults, key);
+    }
     if (engine === "firecrawl") {
       const key = this.env.FIRECRAWL_API_KEY?.trim() || (settings.firecrawlConfigured ? firecrawlApiKey() : "");
       if (!key) throw new Error("NOT_CONFIGURED");
@@ -335,6 +421,33 @@ export class PublicWebSearch implements WebSearchProvider {
         throw error;
       }
     }
+  }
+
+  /**
+   * Google on the user's session (as sn.pl): the cookies and User-Agent of the window in which the
+   * user passed Google's consent page and captcha. No session, or Google answers with its captcha:
+   * the session is dropped and the window is shown to the user again (LAW_SOURCE_VERIFICATION_REQUIRED).
+   */
+  private async searchGoogle(query: string, maxResults: number): Promise<WebSearchHit[]> {
+    const required = `${LAW_SOURCE_VERIFICATION_REQUIRED}:www.google.com`;
+    const session = lawSourceSessionHeaders("www.google.com");
+    if (!session) throw new Error(required);
+    const url = new URL("https://www.google.com/search");
+    url.searchParams.set("q", query);
+    url.searchParams.set("hl", "pl");
+    url.searchParams.set("num", String(Math.min(Math.max(maxResults, 1), 10)));
+    const response = await this.fetchImpl(url, {
+      headers: { Accept: "text/html", "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6", ...session },
+      redirect: "follow",
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    const html = await readLimitedText(response);
+    if (isChallengePage(response.status, html) || /\/sorry\//u.test(response.url)) {
+      clearLawSourceSession("www.google.com");
+      throw new Error(required);
+    }
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    return parseGoogleHtml(html, maxResults);
   }
 
   /** Firecrawl search API (v2): 2 credits per 10 results; the free plan has a monthly limit. */
@@ -361,6 +474,46 @@ export class PublicWebSearch implements WebSearchProvider {
     if (response.status === 401 || response.status === 403) throw new Error("KEY_REJECTED");
     if (!response.ok) throw new Error(`HTTP_${response.status}`);
     return parseFirecrawlResults(JSON.parse(await readLimitedText(response)) as FirecrawlSearchPayload, maxResults);
+  }
+
+  /**
+   * Gemini with Grounding with Google Search: real Google results through the user's own Gemini
+   * API key. The model's answer is not used; only the sources it grounded on (title, address)
+   * and the passages they support, as leads. Grounding links are redirects: resolved to the page
+   * address without downloading the page.
+   */
+  private async searchGemini(
+    query: string,
+    maxResults: number,
+    apiKey: string
+  ): Promise<WebSearchHit[]> {
+    const model = (this.env.LEX_GEMINI_SEARCH_MODEL ?? "gemini-2.5-flash").trim();
+    const response =
+      await this.fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey, "User-Agent": USER_AGENT },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `Wyszukaj w Google strony na temat: ${query}. Podaj krótko, co zawierają.` }] }],
+          tools: [{ google_search: {} }]
+        }),
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    if (response.status === 429) throw new Error("RATE_LIMITED");
+    if (response.status === 401 || response.status === 403) throw new Error("KEY_REJECTED");
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    const hits = parseGeminiGrounding(JSON.parse(await readLimitedText(response)) as GeminiPayload, maxResults);
+    return Promise.all(hits.map(async (hit) => ({ ...hit, url: await this.resolveRedirect(hit.url) })));
+  }
+
+  private async resolveRedirect(url: string): Promise<string> {
+    if (!/^https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\//u.test(url)) return url;
+    try {
+      const response = await this.fetchImpl(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(5_000) });
+      const location = response.headers.get("location");
+      return location && /^https?:\/\//iu.test(location) ? location : url;
+    } catch {
+      return url;
+    }
   }
 
   private async searchSearxng(

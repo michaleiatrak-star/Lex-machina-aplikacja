@@ -4938,19 +4938,19 @@
   },
   {
    "component": "WebSearchSection",
-   "translatable": 33,
+   "translatable": 37,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 33,
-    "de": 33,
-    "en": 33,
-    "es": 33,
-    "fr": 33,
-    "it": 33,
-    "lb": 33,
-    "nl": 33,
-    "pt": 33,
-    "sv": 33
+    "ca": 37,
+    "de": 37,
+    "en": 37,
+    "es": 37,
+    "fr": 37,
+    "it": 37,
+    "lb": 37,
+    "nl": 37,
+    "pt": 37,
+    "sv": 37
    },
    "state": {
     "pl": "całość",

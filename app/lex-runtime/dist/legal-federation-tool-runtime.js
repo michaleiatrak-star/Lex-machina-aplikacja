@@ -1139,6 +1139,10 @@ export class LegalFederationToolRuntime {
                 status: "OK",
                 query,
                 provider: response.provider,
+                // Google on the user's session needs the check in its window (shown in the chat, as sn.pl).
+                ...(response.verificationRequired
+                    ? { verification: `${response.verificationRequired}: Google wymaga potwierdzenia w oknie aplikacji (zgoda lub captcha wypełniana przez użytkownika); wyniki poniżej z następnej wyszukiwarki.` }
+                    : {}),
                 results: classifyWebSearchHits(response.hits),
                 _lexSourcePolicy: {
                     verificationAuthority: "LEX_NATIVE_ONLY",

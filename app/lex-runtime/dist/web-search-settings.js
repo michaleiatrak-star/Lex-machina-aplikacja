@@ -1,8 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-// Firecrawl last among the untested: its free plan has a monthly credit limit.
-export const SEARCH_ENGINES = ["searxng", "duckduckgo", "firecrawl"];
+// Paid-beyond-a-limit engines last among the untested: Firecrawl (monthly credits), Gemini with
+// Google Search (free quota, then billed per query on the user's Google key).
+export const SEARCH_ENGINES = ["google", "searxng", "duckduckgo", "firecrawl", "gemini"];
+// The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
+let geminiKeySource = null;
+export function configureGeminiSearchKey(source) {
+    geminiKeySource = source;
+}
+export async function geminiSearchKey() {
+    try {
+        return (await geminiKeySource?.())?.trim() || process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || "";
+    }
+    catch {
+        return "";
+    }
+}
 let settingsFile = null;
 let keyFile = null;
 export function configureWebSearchSettings(dir) {
@@ -101,7 +115,9 @@ export function webSearchSettings() {
         searxngUrl,
         order: [...new Set(order)],
         lastTest: file.lastTest && Array.isArray(file.lastTest.scores) ? file.lastTest : null,
-        firecrawlConfigured: Boolean(firecrawlApiKey())
+        firecrawlConfigured: Boolean(firecrawlApiKey()),
+        // On by default (user, 2026-11-10: attached and selected); off only when turned off in Settings.
+        googleSession: file.googleSession !== false
     };
 }
 export function searxngUrlForced() {
@@ -130,6 +146,12 @@ export function setSearxngUrl(raw) {
     write({ searxngUrl, order, lastTest: file.lastTest ?? null });
     return webSearchSettings();
 }
+export function setGoogleSession(enabled) {
+    if (typeof enabled !== "boolean")
+        throw new Error("WEB_SEARCH_GOOGLE_SESSION_INVALID");
+    write({ googleSession: enabled });
+    return webSearchSettings();
+}
 /** Saves (or with "" removes) the Firecrawl API key; a new key drops Firecrawl's measured place. */
 export function setFirecrawlApiKey(raw) {
     if (firecrawlKeyForced())
@@ -155,7 +177,18 @@ export function saveWebSearchTest(result) {
  * engine that can run (SearXNG only with an address).
  */
 export function effectiveSearchOrder(settings = webSearchSettings()) {
-    const usable = (engine) => engine === "searxng" ? Boolean(settings.searxngUrl) : engine === "firecrawl" ? settings.firecrawlConfigured : true;
+    const usable = (engine) => engine === "searxng"
+        ? Boolean(settings.searxngUrl)
+        : engine === "firecrawl"
+            ? settings.firecrawlConfigured
+            : engine === "google"
+                ? settings.googleSession
+                : true;
+    // Google on the user's session goes first once the user turned it on (their choice, not the test's).
+    if (settings.googleSession) {
+        const rest = effectiveSearchOrder({ ...settings, googleSession: false });
+        return ["google", ...rest];
+    }
     const tested = settings.order.filter(usable);
     const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
     return [...tested, ...rest];

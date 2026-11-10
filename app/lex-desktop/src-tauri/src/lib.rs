@@ -431,6 +431,8 @@ const LAW_SOURCE_HOSTS: &[&str] = &[
     "leginfo.legislature.ca.gov",
     "www.oscn.net",
     "www.capitol.hawaii.gov",
+    // Google search on the user's session (consent page and captcha passed by the user).
+    "www.google.com",
 ];
 
 fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
@@ -953,6 +955,8 @@ mod tests {
         assert!(law_source_url("https://www.capitol.hawaii.gov/docs/HRS.htm").is_ok());
         assert!(law_source_url("http://www.nysenate.gov/").is_err());
         assert!(law_source_url("https://evil.example/").is_err());
+        assert!(law_source_url("https://www.google.com/search?q=kodeks+karny&hl=pl").is_ok());
+        assert!(law_source_url("https://www.google.evil.example/").is_err());
         assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());
         let (_, item) = law_source_url("https://www.nysenate.gov/").unwrap();
         assert!(law_source_same_site(&"https://www.nysenate.gov/legislation".parse().unwrap(), item));

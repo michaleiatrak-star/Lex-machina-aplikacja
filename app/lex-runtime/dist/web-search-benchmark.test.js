@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { BENCHMARK_QUERIES, runWebSearchBenchmark, scoreEngine } from "./web-search-benchmark.js";
-import { PublicWebSearch, parseFirecrawlResults, parseSearxngResults } from "./web-search.js";
-import { configureWebSearchSettings, effectiveSearchOrder, saveWebSearchTest, setFirecrawlApiKey, setSearxngUrl, webSearchSettings } from "./web-search-settings.js";
+import { PublicWebSearch, parseFirecrawlResults, parseGeminiGrounding, parseSearxngResults } from "./web-search.js";
+import { clearLawSourceSession, lawSourceSessionHeaders, setLawSourceSession } from "./eli/law-source-sessions.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, effectiveSearchOrder, saveWebSearchTest, setFirecrawlApiKey, setGoogleSession, setSearxngUrl, webSearchSettings } from "./web-search-settings.js";
 const official = { title: "Kodeks karny art. 278 kradzież", url: "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19970880553", snippet: "" };
 const blog = { title: "Blog o kradzieży", url: "https://example.com/kradziez", snippet: "art. 278" };
 const offTopic = { title: "Pogoda", url: "https://example.com/pogoda", snippet: "" };
@@ -66,7 +67,7 @@ describe("SearXNG and the tested order", () => {
         configureWebSearchSettings(dir);
         setSearxngUrl("http://localhost:8888/");
         expect(webSearchSettings().searxngUrl).toBe("http://localhost:8888");
-        expect(effectiveSearchOrder()).toEqual(["searxng", "duckduckgo"]);
+        expect(effectiveSearchOrder()).toEqual(["google", "searxng", "duckduckgo", "gemini"]);
         saveWebSearchTest({
             testedAt: "2026-11-10T12:00:00Z",
             scores: [
@@ -113,11 +114,11 @@ describe("Firecrawl (optional, own key)", () => {
     it("seals the key (not in the settings file), reports it configured and searches with it", async () => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
         configureWebSearchSettings(dir);
-        expect(effectiveSearchOrder()).toEqual(["duckduckgo"]);
+        expect(effectiveSearchOrder()).toEqual(["google", "duckduckgo", "gemini"]);
         setFirecrawlApiKey("fc-test1234567890");
         expect(fs.readFileSync(path.join(dir, "web-search.json"), "utf8")).not.toContain("fc-test1234567890");
         expect(webSearchSettings().firecrawlConfigured).toBe(true);
-        expect(effectiveSearchOrder()).toEqual(["duckduckgo", "firecrawl"]);
+        expect(effectiveSearchOrder()).toEqual(["google", "duckduckgo", "firecrawl", "gemini"]);
         let auth = "";
         const fakeFetch = (async (_input, init) => {
             auth = String((init?.headers).Authorization);
@@ -136,5 +137,68 @@ describe("Firecrawl (optional, own key)", () => {
         const fakeFetch = (async () => new Response("{}", { status: 402 }));
         await expect(new PublicWebSearch({ FIRECRAWL_API_KEY: "fc-x12345678" }, fakeFetch, 1_000, 0).searchEngine("firecrawl", "q", 5)).rejects.toThrow("CREDITS_EXHAUSTED");
         expect(parseFirecrawlResults({ data: [{ url: "https://a.pl", title: "A" }] }, 5)).toHaveLength(1);
+    });
+});
+describe("Google on the user's session (as sn.pl) and Gemini with Google Search", () => {
+    let dir = "";
+    afterEach(() => {
+        configureWebSearchSettings(null);
+        configureGeminiSearchKey(null);
+        clearLawSourceSession("www.google.com");
+        if (dir)
+            fs.rmSync(dir, { recursive: true, force: true });
+    });
+    it("asks for the window when there is no session, and still answers from the next engine", async () => {
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
+        configureWebSearchSettings(dir);
+        const fakeFetch = (async () => new Response('<a class="result__a" href="https://isap.sejm.gov.pl/x">Kodeks karny</a>', { status: 200 }));
+        const response = await new PublicWebSearch({}, fakeFetch, 1_000, 0).search("kradzież", 5);
+        expect(response.provider).toBe("duckduckgo");
+        expect(response.verificationRequired).toBe("LAW_SOURCE_VERIFICATION_REQUIRED:www.google.com");
+    });
+    it("searches Google with the window's cookies and drops the session on a captcha", async () => {
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
+        configureWebSearchSettings(dir);
+        setLawSourceSession("www.google.com", "NID=abc; SOCS=xyz", "Mozilla/5.0 Test");
+        let cookie = "";
+        const page = '<div><a href="https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19970880553" data-ved="1"><h3 class="LC20lb">Kodeks karny - ISAP</h3></a><div class="VwiC3b">Art. 278 kradzież</div><a href="https://www.google.com/preferences"><h3>Ustawienia</h3></a><a href="/url?q=https://lexlege.pl/kk/art-278/&amp;sa=U"><h3>Art. 278 KK</h3></a></div>';
+        const ok = (async (_input, init) => {
+            cookie = String((init?.headers).cookie);
+            return new Response(page, { status: 200 });
+        });
+        const hits = await new PublicWebSearch({}, ok, 1_000, 0).searchEngine("google", "kradzież art 278", 5);
+        expect(cookie).toBe("NID=abc; SOCS=xyz");
+        expect(hits.map((hit) => hit.url)).toEqual(["https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19970880553", "https://lexlege.pl/kk/art-278/"]);
+        expect(hits[0].snippet).toContain("kradzież");
+        const captcha = (async () => new Response("Our systems have detected unusual traffic from your computer network", { status: 429 }));
+        await expect(new PublicWebSearch({}, captcha, 1_000, 0).searchEngine("google", "q", 5)).rejects.toThrow("LAW_SOURCE_VERIFICATION_REQUIRED:www.google.com");
+        expect(lawSourceSessionHeaders("www.google.com")).toBeNull();
+    });
+    it("can be turned off in Settings", () => {
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-ws-"));
+        configureWebSearchSettings(dir);
+        setGoogleSession(false);
+        expect(effectiveSearchOrder()).toEqual(["duckduckgo", "gemini"]);
+    });
+    it("takes Gemini's grounding sources (not its answer), resolving the redirect links", async () => {
+        configureGeminiSearchKey(async () => "AIza-test");
+        let key = "";
+        const fakeFetch = (async (input, init) => {
+            if (String(input).includes("generateContent")) {
+                key = String((init?.headers)["x-goog-api-key"]);
+                expect(JSON.parse(String(init?.body)).tools).toEqual([{ google_search: {} }]);
+                return new Response(JSON.stringify({
+                    candidates: [{ groundingMetadata: {
+                                groundingChunks: [{ web: { uri: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc", title: "isap.sejm.gov.pl" } }],
+                                groundingSupports: [{ segment: { text: "Kradzież: art. 278 k.k." }, groundingChunkIndices: [0] }]
+                            } }]
+                }), { status: 200 });
+            }
+            return new Response(null, { status: 302, headers: { location: official.url } });
+        });
+        const hits = await new PublicWebSearch({}, fakeFetch, 1_000, 0).searchEngine("gemini", "kradzież", 5);
+        expect(key).toBe("AIza-test");
+        expect(hits).toEqual([{ title: "isap.sejm.gov.pl", url: official.url, snippet: "Kradzież: art. 278 k.k." }]);
+        expect(parseGeminiGrounding({}, 5)).toEqual([]);
     });
 });

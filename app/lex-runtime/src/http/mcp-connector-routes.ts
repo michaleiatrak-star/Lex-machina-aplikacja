@@ -11,6 +11,7 @@ import {
   firecrawlKeyForced,
   searxngUrlForced,
   setFirecrawlApiKey,
+  setGoogleSession,
   setSearxngUrl,
   webSearchSettings
 } from "../web-search-settings.js";
@@ -616,6 +617,7 @@ export function registerMcpConnectorRoutes(
     try {
       if (req.body && "searxngUrl" in req.body) setSearxngUrl(req.body.searxngUrl ?? "");
       if (req.body && "firecrawlApiKey" in req.body) setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
+      if (req.body && "googleSession" in req.body) setGoogleSession(req.body.googleSession);
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
       return;

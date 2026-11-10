@@ -4182,7 +4182,7 @@ export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }>
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
-export type SearchEngineName = "searxng" | "duckduckgo" | "firecrawl";
+export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
 
 export type SearchEngineScore = {
   engine: SearchEngineName;
@@ -4206,6 +4206,7 @@ export type WebSearchSettings = {
   searxngUrlForced: boolean;
   firecrawlConfigured: boolean;
   firecrawlKeyForced: boolean;
+  googleSession: boolean;
   providerForced: string | null;
 };
 
@@ -4219,6 +4220,10 @@ export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
 
 export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ firecrawlApiKey }) });
+}
+
+export function setGoogleSession(googleSession: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSession }) });
 }
 
 export function runWebSearchTest(): Promise<WebSearchSettings> {

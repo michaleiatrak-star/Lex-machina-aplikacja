@@ -3,7 +3,7 @@ import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
 import { PublicWebSearch } from "../web-search.js";
 import { runWebSearchBenchmark } from "../web-search-benchmark.js";
-import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, webSearchSettings } from "../web-search-settings.js";
+import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setGoogleSession, setSearxngUrl, webSearchSettings } from "../web-search-settings.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -532,6 +532,8 @@ export function registerMcpConnectorRoutes(app, dependencies) {
                 setSearxngUrl(req.body.searxngUrl ?? "");
             if (req.body && "firecrawlApiKey" in req.body)
                 setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
+            if (req.body && "googleSession" in req.body)
+                setGoogleSession(req.body.googleSession);
         }
         catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });

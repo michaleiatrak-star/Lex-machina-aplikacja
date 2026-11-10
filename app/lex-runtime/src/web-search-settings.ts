@@ -7,10 +7,26 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
  * provider order measured by the comparison test run from this computer (web-search-benchmark.ts).
  * Env LEX_WEB_SEARCH_PROVIDER / LEX_SEARXNG_URL override the file (server configuration).
  */
-export type SearchEngineName = "searxng" | "duckduckgo" | "firecrawl";
+export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
 
-// Firecrawl last among the untested: its free plan has a monthly credit limit.
-export const SEARCH_ENGINES: SearchEngineName[] = ["searxng", "duckduckgo", "firecrawl"];
+// Paid-beyond-a-limit engines last among the untested: Firecrawl (monthly credits), Gemini with
+// Google Search (free quota, then billed per query on the user's Google key).
+export const SEARCH_ENGINES: SearchEngineName[] = ["google", "searxng", "duckduckgo", "firecrawl", "gemini"];
+
+// The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
+let geminiKeySource: (() => Promise<string | null>) | null = null;
+
+export function configureGeminiSearchKey(source: (() => Promise<string | null>) | null): void {
+  geminiKeySource = source;
+}
+
+export async function geminiSearchKey(): Promise<string> {
+  try {
+    return (await geminiKeySource?.())?.trim() || process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || "";
+  } catch {
+    return "";
+  }
+}
 export type SearchEngineScore = {
   engine: SearchEngineName;
   score: number;
@@ -36,6 +52,11 @@ export type WebSearchSettings = {
   lastTest: WebSearchTestResult | null;
   /** A Firecrawl API key is saved (the key itself never leaves the runtime). */
   firecrawlConfigured: boolean;
+  /**
+   * Google on the user's own session (opt-in): searches go to google.com with the cookies of the
+   * window in which the user passed Google's consent page and captcha; a captcha brings the window back. On by default.
+   */
+  googleSession: boolean;
 };
 
 type SealedKey = { nonce: string; ciphertext: string; tag: string };
@@ -45,6 +66,7 @@ type StoredSettings = {
   order?: SearchEngineName[];
   lastTest?: WebSearchTestResult | null;
   firecrawl?: SealedKey | undefined;
+  googleSession?: boolean;
 };
 
 let settingsFile: string | null = null;
@@ -145,7 +167,9 @@ export function webSearchSettings(): WebSearchSettings {
     searxngUrl,
     order: [...new Set(order)],
     lastTest: file.lastTest && Array.isArray(file.lastTest.scores) ? file.lastTest : null,
-    firecrawlConfigured: Boolean(firecrawlApiKey())
+    firecrawlConfigured: Boolean(firecrawlApiKey()),
+    // On by default (user, 2026-11-10: attached and selected); off only when turned off in Settings.
+    googleSession: file.googleSession !== false
   };
 }
 
@@ -175,6 +199,12 @@ export function setSearxngUrl(raw: unknown): WebSearchSettings {
   return webSearchSettings();
 }
 
+export function setGoogleSession(enabled: unknown): WebSearchSettings {
+  if (typeof enabled !== "boolean") throw new Error("WEB_SEARCH_GOOGLE_SESSION_INVALID");
+  write({ googleSession: enabled });
+  return webSearchSettings();
+}
+
 /** Saves (or with "" removes) the Firecrawl API key; a new key drops Firecrawl's measured place. */
 export function setFirecrawlApiKey(raw: unknown): WebSearchSettings {
   if (firecrawlKeyForced()) throw new Error("WEB_SEARCH_FIRECRAWL_KEY_FORCED");
@@ -201,7 +231,18 @@ export function saveWebSearchTest(result: WebSearchTestResult): WebSearchSetting
  */
 export function effectiveSearchOrder(settings: WebSearchSettings = webSearchSettings()): SearchEngineName[] {
   const usable = (engine: SearchEngineName) =>
-    engine === "searxng" ? Boolean(settings.searxngUrl) : engine === "firecrawl" ? settings.firecrawlConfigured : true;
+    engine === "searxng"
+      ? Boolean(settings.searxngUrl)
+      : engine === "firecrawl"
+        ? settings.firecrawlConfigured
+        : engine === "google"
+          ? settings.googleSession
+          : true;
+  // Google on the user's session goes first once the user turned it on (their choice, not the test's).
+  if (settings.googleSession) {
+    const rest = effectiveSearchOrder({ ...settings, googleSession: false });
+    return ["google", ...rest];
+  }
   const tested = settings.order.filter(usable);
   const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
   return [...tested, ...rest];
