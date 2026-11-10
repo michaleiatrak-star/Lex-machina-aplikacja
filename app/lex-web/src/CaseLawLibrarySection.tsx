@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
@@ -69,16 +70,16 @@ export function CaseLawLibrarySection() {
       <div className="maintenance-heading">
         <div>
           <strong>
-            Baza orzeczeń (RAG)
-            <InfoTip>Orzeczenia pobrane z oficjalnych baz, katalogowane według sądu, sygnatury i daty. Źródłem jest karta orzeczenia.</InfoTip>
+            {t("Baza orzeczeń (RAG)")}
+            <InfoTip>{t("Orzeczenia pobrane z oficjalnych baz, katalogowane według sądu, sygnatury i daty. Źródłem jest karta orzeczenia.")}</InfoTip>
           </strong>
         </div>
         <span>{enabled ? `pozycji: ${entries.length}${query ? " (wyszukane)" : ""}` : "wyłączona"}</span>
       </div>
       <label className="core-law-auto">
         <input type="checkbox" checked={enabled} disabled={busy || !available} onChange={(event) => void toggle(event.target.checked)} />
-        Zapisuj pobrane orzeczenia w bazie
-        <InfoTip>Baza jest przeszukiwana także przez model. Wyłączona: orzeczenie trafia tylko do akt sprawy, w której je użyto.</InfoTip>
+        {t("Zapisuj pobrane orzeczenia w bazie")}
+        <InfoTip>{t("Baza jest przeszukiwana także przez model. Wyłączona: orzeczenie trafia tylko do akt sprawy, w której je użyto.")}</InfoTip>
       </label>
       {enabled ? (
         <>
@@ -92,11 +93,11 @@ export function CaseLawLibrarySection() {
             <input
               type="search"
               value={query}
-              placeholder="Sygnatura, sąd albo fraza z treści"
+              placeholder={t("Sygnatura, sąd albo fraza z treści")}
               onChange={(event) => setQuery(event.target.value)}
             />
             <button type="submit" disabled={busy}>
-              Szukaj
+              {t("Szukaj")}
             </button>
           </form>
           </div>
@@ -108,17 +109,17 @@ export function CaseLawLibrarySection() {
                   <a href={entry.cardUrl} target="_blank" rel="noreferrer" title={entry.cardUrl}>
                     {label(entry)}
                   </a>
-                  <small> · pobrane {entry.fetchedAt.slice(0, 10)}</small>
+                  <small> {t("· pobrane")} {entry.fetchedAt.slice(0, 10)}</small>
                   {entry.snippet ? <small className="field-help"> … {entry.snippet} …</small> : null}
                   <button type="button" disabled={busy} onClick={() => void remove(entry)}>
-                    Usuń
+                    {t("Usuń")}
                   </button>
                 </li>
               ))}
             </ul>
             </div>
           ) : (
-            <p className="field-help">{query ? "Brak trafień." : "Baza jest pusta."}</p>
+            <p className="field-help">{query ? t("Brak trafień.") : t("Baza jest pusta.")}</p>
           )}
         </>
       ) : null}

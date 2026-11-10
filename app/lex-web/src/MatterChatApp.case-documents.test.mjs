@@ -22,7 +22,7 @@ describe("MatterChatApp case documents UI", () => {
   });
 
   it("keeps upload controls inside the merged Sprawa view", () => {
-    expect(source).toContain('<p className="eyebrow">Dokumenty sprawy</p>');
+    expect(source).toContain('<p className="eyebrow">{t("Dokumenty sprawy")}</p>');
     expect(source).toContain("Kliknij lub przeciągnij pliki");
     // "+" next to the message box opens the checklist of case files to send; adding files is inside it.
     expect(source).toContain("Dodaj pliki do sprawy");

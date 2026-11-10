@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useRef,
@@ -100,7 +101,7 @@ function decisionModeLabel(mode: PrivacyDecisionMode): string {
   if (mode === "KEEP_CLEAR") {
     return "Bez anonimizacji (tekst jawny)";
   }
-  return "Wykrywanie automatyczne + Twoje decyzje w podglądzie";
+  return t("Wykrywanie automatyczne + Twoje decyzje w podglądzie");
 }
 
 function decisionLabel(directive: PagePrivacyDirective): string {
@@ -206,7 +207,7 @@ export function DocumentPrivacyPanel({
     const pageText = draft.review.pages.find((page) => page.page === line.page)?.text ?? "";
     const next = replaceOcrLine(pageText, line, corrected);
     if (next === null) {
-      setError("Tej linii nie ma w tekście strony (np. pieczęć): popraw ją w podglądzie pliku przez „Popraw tekst strony”.");
+      setError(t("Tej linii nie ma w tekście strony (np. pieczęć): popraw ją w podglądzie pliku przez „Popraw tekst strony”."));
       return;
     }
     setBatchLineSaving(key);
@@ -442,7 +443,7 @@ export function DocumentPrivacyPanel({
     const file = reviewFiles.current.get(review.documentId) ?? activeFileRef.current;
     if (!file) {
       // Never a silent click: the preview stays and says what to do.
-      setError("Nie udało się zatwierdzić: ten podgląd nie jest już powiązany z plikiem. Wybierz plik ponownie.");
+      setError(t("Nie udało się zatwierdzić: ten podgląd nie jest już powiązany z plikiem. Wybierz plik ponownie."));
       return;
     }
     const draft: DocumentPrivacyDraft = {
@@ -595,7 +596,7 @@ export function DocumentPrivacyPanel({
             );
         if (next.length > 32) {
           setError(
-            "Do jednej sesji można dołączyć maksymalnie 32 chunki z jednego dokumentu. Wybierz mniejszy zakres."
+            t("Do jednej sesji można dołączyć maksymalnie 32 fragmenty z jednego dokumentu. Wybierz mniejszy zakres.")
           );
           return item;
         }
@@ -622,19 +623,17 @@ export function DocumentPrivacyPanel({
       <div className="document-workbench-head">
         <div>
           <p className="eyebrow">
-            Dokumenty lokalne
+            {t("Dokumenty lokalne")}
           </p>
           <h3>
-            OCR automatyczny i anonimizacja per plik
+            {t("OCR automatyczny i anonimizacja per plik")}
             <InfoTip>
-              Strony skanowane i zdjęcia przechodzą lokalny OCR, PDF z warstwą tekstową go nie potrzebuje.
-              Każdy plik ma własną zaszyfrowaną mapę reidentyfikacji; wskazania AI to tylko podpowiedzi do
-              sprawdzenia w podglądzie.
+              {t("Strony skanowane i zdjęcia przechodzą lokalny OCR, PDF z warstwą tekstową go nie potrzebuje. Każdy plik ma własną zaszyfrowaną mapę reidentyfikacji; wskazania AI to tylko podpowiedzi do sprawdzenia w podglądzie.")}
             </InfoTip>
           </h3>
           {activeFileName ? (
             <small>
-              Aktualny plik: {activeFileName}
+              {t("Aktualny plik:")} {activeFileName}
             </small>
           ) : null}
         </div>
@@ -645,8 +644,8 @@ export function DocumentPrivacyPanel({
               ? progressLabel(progress)
               : "Przetwarzanie…"
             : onFilesChosen
-              ? "Wybierz pliki (PDF, DOCX, arkusze, zdjęcia, ZIP)"
-              : "Wybierz plik (PDF, DOCX, arkusz, zdjęcie, ZIP)"}
+              ? t("Wybierz pliki (PDF, DOCX, arkusze, zdjęcia, ZIP)")
+              : t("Wybierz plik (PDF, DOCX, arkusz, zdjęcie, ZIP)")}
           <input
             type="file"
             accept=".eml,.rtf,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.weba,.mp4,.m4v,.mov,.webm,.mkv,.avi,audio/*,video/*,.pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
@@ -682,7 +681,7 @@ export function DocumentPrivacyPanel({
           </span>
           {failure ? (
             <details className="document-failure-code">
-              <summary>Szczegóły techniczne</summary>
+              <summary>{t("Szczegóły techniczne")}</summary>
               <code>{failure.code}</code>
             </details>
           ) : null}
@@ -701,13 +700,13 @@ export function DocumentPrivacyPanel({
               <input
                 type="password"
                 autoComplete="off"
-                aria-label="Hasło pliku"
-                placeholder="Hasło pliku"
+                aria-label={t("Hasło pliku")}
+                placeholder={t("Hasło pliku")}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
               <button type="submit" disabled={loading || !password}>
-                Otwórz
+                {t("Otwórz")}
               </button>
             </form>
           ) : null}
@@ -719,7 +718,7 @@ export function DocumentPrivacyPanel({
                   disabled={loading}
                   onClick={() => void openFile(activeFileRef.current ?? incomingFile ?? undefined)}
                 >
-                  Ponów
+                  {t("Ponów")}
                 </button>
               ) : null}
               <button
@@ -727,13 +726,13 @@ export function DocumentPrivacyPanel({
                 disabled={loading}
                 onClick={() => replaceInputRef.current?.click()}
               >
-                Wybierz plik ponownie
+                {t("Wybierz plik ponownie")}
               </button>
               <input
                 ref={replaceInputRef}
                 type="file"
                 hidden
-                aria-label="Wybierz plik ponownie"
+                aria-label={t("Wybierz plik ponownie")}
                 onChange={(event) => {
                   const replacement = event.currentTarget.files?.[0];
                   event.currentTarget.value = "";
@@ -755,7 +754,7 @@ export function DocumentPrivacyPanel({
                     onIncomingFileConsumed?.("SKIPPED");
                   }}
                 >
-                  Pomiń ten plik
+                  {t("Pomiń ten plik")}
                 </button>
               ) : null}
             </div>
@@ -766,18 +765,18 @@ export function DocumentPrivacyPanel({
       {archiveUpload && (
         <div className="document-finalized">
           <strong>
-            Archiwum zapisane i rozpakowane lokalnie
+            {t("Archiwum zapisane i rozpakowane lokalnie")}
           </strong>
           <span>
-            {archiveUpload.filename} · {archiveUpload.extracted.length} plików ·
-            {" "}{archiveUpload.extracted.filter((item) => item.processable).length} możliwych do dalszego przetwarzania
+            {archiveUpload.filename} · {archiveUpload.extracted.length} {t("plików ·")}
+            {" "}{archiveUpload.extracted.filter((item) => item.processable).length} {t("możliwych do dalszego przetwarzania")}
           </span>
           {archiveUpload.extracted.length > 0 && (
             <ul>
               {archiveUpload.extracted.slice(0, 20).map((entry) => (
                 <li key={entry.relativePath}>
                   {entry.relativePath}
-                  {entry.processable ? " · obsługiwalny" : " · zapisany tylko lokalnie"}
+                  {entry.processable ? t(" · obsługiwalny") : " · zapisany tylko lokalnie"}
                 </li>
               ))}
             </ul>
@@ -829,12 +828,11 @@ export function DocumentPrivacyPanel({
         <div className="privacy-decisions privacy-batch-preview">
           <div className="privacy-decision-head">
             <div>
-              <p className="eyebrow">Niezatwierdzone</p>
+              <p className="eyebrow">{t("Niezatwierdzone")}</p>
               <h3>
-                Pliki do ponownego zatwierdzenia · {batchDrafts.length}
+                {t("Pliki do ponownego zatwierdzenia ·")} {batchDrafts.length}
                 <InfoTip>
-                  Każdy plik jest zapisywany od razu po „Zatwierdź plik”. Tu zostają tylko te, których zapis
-                  się nie udał: decyzje z podglądu są zachowane, można je zatwierdzić ponownie.
+                  {t("Każdy plik jest zapisywany od razu po „Zatwierdź plik”. Tu zostają tylko te, których zapis się nie udał: decyzje z podglądu są zachowane, można je zatwierdzić ponownie.")}
                 </InfoTip>
               </h3>
             </div>
@@ -868,14 +866,14 @@ export function DocumentPrivacyPanel({
                 <summary>
                   <strong>{draft.fileName}</strong>
                   {" · "}{decisionModeLabel(draft.privacyMode)}
-                  {" · "}{draft.review.suggestions.length} wykryć
-                  {" · "}{draft.directives.length} decyzji w podglądzie
+                  {" · "}{draft.review.suggestions.length} {t("wykryć")}
+                  {" · "}{draft.directives.length} {t("decyzji w podglądzie")}
                 </summary>
 
                 {draft.review.pages.some((page) => page.review?.length) ? (
                   <div className="privacy-preview-todo">
-                    <strong>Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem</strong>
-                    <small>Popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony); większe zmiany: podgląd pliku i „Popraw tekst strony”.</small>
+                    <strong>{t("Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem")}</strong>
+                    <small>{t("Popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony); większe zmiany: podgląd pliku i „Popraw tekst strony”.")}</small>
                     <ul>
                       {draft.review.pages.flatMap((page) =>
                         (page.review ?? []).map((line, index) => {
@@ -884,7 +882,7 @@ export function DocumentPrivacyPanel({
                           const stamp = line.reason === "STAMP";
                           return (
                             <li key={`${page.page}-${index}`}>
-                              <span>s. {page.page} · {stamp ? "pieczęć · " : ""}„{line.text}”</span>
+                              <span>s. {page.page} · {stamp ? t("pieczęć · ") : ""}„{line.text}”</span>
                               {stamp ? null : (
                                 <span className="privacy-preview-line-fix">
                                   <input
@@ -920,10 +918,10 @@ export function DocumentPrivacyPanel({
 
                 <div className="privacy-review-grid">
                   <section className="privacy-document">
-                    <h4>Wykryte automatycznie</h4>
+                    <h4>{t("Wykryte automatycznie")}</h4>
                     {draft.review.suggestions.length === 0 ? (
                       <p className="field-help">
-                        Nie wykryto automatycznych elementów do anonimizacji.
+                        {t("Nie wykryto automatycznych elementów do anonimizacji.")}
                       </p>
                     ) : (
                       <ul>
@@ -942,7 +940,7 @@ export function DocumentPrivacyPanel({
                             ) ? (
                               <button
                                 type="button"
-                                title="Lokalne AI uznało, że to nie osoba. Bez kliknięcia zostaje zamaskowane."
+                                title={t("Lokalne AI uznało, że to nie osoba. Bez kliknięcia zostaje zamaskowane.")}
                                 onClick={() =>
                                   setBatchDrafts((current) =>
                                     current.map((item) =>
@@ -960,7 +958,7 @@ export function DocumentPrivacyPanel({
                                   )
                                 }
                               >
-                                Odkryj · AI: {suggestion.aiNotPerson}
+                                {t("Odkryj · AI:")} {suggestion.aiNotPerson}
                               </button>
                             ) : null}
                           </li>
@@ -970,12 +968,12 @@ export function DocumentPrivacyPanel({
                   </section>
 
                   <aside className="privacy-controls">
-                    <h4>Moje decyzje w podglądzie</h4>
+                    <h4>{t("Moje decyzje w podglądzie")}</h4>
                     {draft.privacyMode !== "MANUAL" || draft.directives.length === 0 ? (
                       <p className="field-help">
                         {draft.privacyMode === "MANUAL"
-                          ? "Brak zmian w podglądzie; wykrycia automatyczne zostaną pseudonimizowane."
-                          : "Bez zmian w podglądzie."}
+                          ? t("Brak zmian w podglądzie; wykrycia automatyczne zostaną pseudonimizowane.")
+                          : t("Bez zmian w podglądzie.")}
                       </p>
                     ) : (
                       <ul>
@@ -989,10 +987,9 @@ export function DocumentPrivacyPanel({
                     )}
 
                     <h4>
-                      Końcowa decyzja dla pliku
+                      {t("Końcowa decyzja dla pliku")}
                       <InfoTip>
-                        Wykrycia bez ręcznej decyzji są pseudonimizowane. Ręczne KEEP i LABEL wyłączają
-                        nakładające się wykrycie, a ręczne PSEUDONYMIZE ma pierwszeństwo.
+                        {t("Wykrycia bez ręcznej decyzji są pseudonimizowane. Ręczne KEEP i LABEL wyłączają nakładające się wykrycie, a ręczne PSEUDONYMIZE ma pierwszeństwo.")}
                       </InfoTip>
                     </h4>
                     <p>
@@ -1000,7 +997,7 @@ export function DocumentPrivacyPanel({
                     </p>
                     {manualOnly.length > 0 ? (
                       <div>
-                        <strong>Dodatkowe ręczne elementy poza auto-wykryciami</strong>
+                        <strong>{t("Dodatkowe ręczne elementy poza auto-wykryciami")}</strong>
                         <ul>
                           {manualOnly.map((directive, index) => (
                             <li key={`${directive.page}-${directive.start}-${index}`}>
@@ -1016,7 +1013,7 @@ export function DocumentPrivacyPanel({
                       disabled={batchFinalizing}
                       onClick={() => editDraft(draft)}
                     >
-                      Wróć do podglądu tego pliku
+                      {t("Wróć do podglądu tego pliku")}
                     </button>
                   </aside>
                 </div>
@@ -1032,11 +1029,10 @@ export function DocumentPrivacyPanel({
           <div className="privacy-decision-head">
             <div>
               <strong>
-                Zatwierdzone dokumenty: {finalizedBatch.length}
+                {t("Zatwierdzone dokumenty:")} {finalizedBatch.length}
               </strong>
               <InfoTip>
-                Mapy reidentyfikacji są osobne dla każdego pliku, zaszyfrowane lokalnie i nie trafiają do
-                providera.
+                {t("Mapy reidentyfikacji są osobne dla każdego pliku, zaszyfrowane lokalnie i nie trafiają do dostawcy modelu.")}
               </InfoTip>
             </div>
           </div>
@@ -1048,19 +1044,19 @@ export function DocumentPrivacyPanel({
             >
               <summary>
                 <strong>{item.fileName}</strong>
-                {" · "}{item.result.totalPages} stron
+                {" · "}{item.result.totalPages} {t("stron")}
                 {" · "}{item.result.ocrPages} OCR
-                {" · "}{item.result.privacy.findings} anonimizacji
-                {" · "}{item.result.chunks.length} chunków
+                {" · "}{item.result.privacy.findings} {t("anonimizacji")}
+                {" · "}{item.result.chunks.length} {t("fragmentów")}
               </summary>
 
               <div className="attachment-selector-head">
                 <div>
-                  <strong>Chunki do analizy AI</strong>
-                  <InfoTip>Po zatwierdzeniu zaznacza się automatycznie do 32 chunków; wybór możesz zmienić.</InfoTip>
+                  <strong>{t("Fragmenty do analizy AI")}</strong>
+                  <InfoTip>{t("Po zatwierdzeniu zaznacza się automatycznie do 32 fragmentów; wybór możesz zmienić.")}</InfoTip>
                 </div>
                 <span>
-                  {item.selectedChunkIndices.length}/32 wybranych
+                  {item.selectedChunkIndices.length}{t("/32 wybranych")}
                 </span>
               </div>
 
@@ -1089,7 +1085,7 @@ export function DocumentPrivacyPanel({
                       });
                     }}
                   >
-                    Zaznacz wszystkie
+                    {t("Zaznacz wszystkie")}
                   </button>
                   <button
                     type="button"
@@ -1107,7 +1103,7 @@ export function DocumentPrivacyPanel({
                       onAttachmentSelectionChange?.(null);
                     }}
                   >
-                    Wyczyść wybór
+                    {t("Wyczyść wybór")}
                   </button>
                 </div>
               )}
@@ -1132,13 +1128,13 @@ export function DocumentPrivacyPanel({
                       }
                     />
                     <span>
-                      Chunk {chunk.index} · strony{" "}
+                      {t("Fragment")} {chunk.index} {t("· strony")}{" "}
                       {chunk.pageStart}-{chunk.pageEnd}
                     </span>
                     <small>
                       {chunk.text.length.toLocaleString(
                         "pl-PL"
-                      )} znaków
+                      )} {t("znaków")}
                     </small>
                   </label>
                 ))}
@@ -1146,12 +1142,12 @@ export function DocumentPrivacyPanel({
 
               {item.result.chunks.length > 32 && (
                 <p className="field-help">
-                  Ponad 32 chunki: zaznaczono pierwsze 32, kolejne przeanalizuj osobno.
+                  {t("Ponad 32 fragmenty: zaznaczono pierwsze 32, kolejne przeanalizuj osobno.")}
                 </p>
               )}
 
               <p className="field-help">
-                Uwaga: fragmenty KEEP pozostają jawne i trafią do providera razem z wybranym chunkiem.
+                {t("Uwaga: fragmenty KEEP pozostają jawne i trafią do dostawcy modelu razem z wybranym fragmentem.")}
               </p>
             </details>
           ))}

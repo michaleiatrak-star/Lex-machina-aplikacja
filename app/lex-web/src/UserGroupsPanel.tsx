@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -77,12 +78,11 @@ export function UserGroupsPanel() {
 
   return (
     <article className="chat-card user-groups-panel">
-      <p className="eyebrow">Grupy</p>
+      <p className="eyebrow">{t("Grupy")}</p>
       <h2>
-        Grupy użytkowników
+        {t("Grupy użytkowników")}
         <InfoTip>
-          Zespół, dział lub pełnomocnicy jednej sprawy: przy sprawie „Udostępnij grupie” nadaje dostęp każdemu członkowi osobno,
-          z jego własną kopią klucza sprawy. Osoba dopisana do grupy później dostaje dostęp przy kolejnym udostępnieniu grupie.
+          {t("Zespół, dział lub pełnomocnicy jednej sprawy: przy sprawie „Udostępnij grupie” nadaje dostęp każdemu członkowi osobno, z jego własną kopią klucza sprawy. Osoba dopisana do grupy później dostaje dostęp przy kolejnym udostępnieniu grupie.")}
         </InfoTip>
       </h2>
       <ul className="user-groups-list">
@@ -92,7 +92,7 @@ export function UserGroupsPanel() {
             <small>{group.memberUserIds.map(label).join(", ")}</small>
             <span>
               <button type="button" className="chat-link-button" disabled={busy} onClick={() => setEditing({ groupId: group.groupId, name: group.name, members: new Set(group.memberUserIds) })}>
-                Edytuj
+                {t("Edytuj")}
               </button>
               <button
                 type="button"
@@ -102,12 +102,12 @@ export function UserGroupsPanel() {
                   if (window.confirm(`Usunąć grupę „${group.name}”? Dostęp do spraw już nadany zostaje.`)) void run(() => deleteUserGroup(group.groupId));
                 }}
               >
-                Usuń
+                {t("Usuń")}
               </button>
             </span>
           </li>
         ))}
-        {!groups.length ? <li>Brak grup.</li> : null}
+        {!groups.length ? <li>{t("Brak grup.")}</li> : null}
       </ul>
       {editing ? (
         <form
@@ -123,11 +123,11 @@ export function UserGroupsPanel() {
           }}
         >
           <label>
-            Nazwa
+            {t("Nazwa")}
             <input value={editing.name} maxLength={80} onChange={(event) => setEditing({ ...editing, name: event.target.value })} />
           </label>
           <fieldset>
-            <legend>Członkowie</legend>
+            <legend>{t("Członkowie")}</legend>
             {users.map((user) => (
               <label key={user.userId}>
                 <input
@@ -146,16 +146,16 @@ export function UserGroupsPanel() {
           </fieldset>
           <div className="google-import-actions">
             <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing(null)}>
-              Anuluj
+              {t("Anuluj")}
             </button>
             <button type="submit" className="chat-primary-action" disabled={busy || !editing.name.trim()}>
-              Zapisz grupę
+              {t("Zapisz grupę")}
             </button>
           </div>
         </form>
       ) : (
         <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing({ name: "", members: new Set() })}>
-          Nowa grupa
+          {t("Nowa grupa")}
         </button>
       )}
       {message ? <p role="alert">{message}</p> : null}

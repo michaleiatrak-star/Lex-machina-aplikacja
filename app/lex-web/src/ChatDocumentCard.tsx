@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import {
   downloadGeneratedArtifact,
@@ -113,7 +114,7 @@ export function ChatDocumentCard(props: {
                 ? "Gotowy dokument · "
                 : ""}
             {document.format.toUpperCase()}
-            {document.tokenized ? " · z symbolami danych osobowych" : ""}
+            {document.tokenized ? t(" · z symbolami danych osobowych") : ""}
           </small>
         </div>
       </div>
@@ -125,11 +126,11 @@ export function ChatDocumentCard(props: {
             void run(async () => {
               const blob = await downloadGeneratedArtifact(caseId, document.artifactId);
               const saved = await downloadBlob(blob, filename);
-              setStatus(saved ? `Zapisano: ${saved}` : "Pobieranie rozpoczęte.");
+              setStatus(saved ? `Zapisano: ${saved}` : t("Pobieranie rozpoczęte."));
             })
           }
         >
-          Pobierz
+          {t("Pobierz")}
         </button>
         <button
           type="button"
@@ -146,7 +147,7 @@ export function ChatDocumentCard(props: {
             })
           }
         >
-          {preview ? "Zwiń podgląd" : props.canWrite ? "Podgląd i edycja" : "Podgląd"}
+          {preview ? t("Zwiń podgląd") : props.canWrite ? t("Podgląd i edycja") : "Podgląd"}
         </button>
         {edited ? (
           <button
@@ -155,11 +156,11 @@ export function ChatDocumentCard(props: {
             onClick={() =>
               void run(async () => {
                 const saved = await downloadBlob(edited.blob, edited.filename);
-                setStatus(saved ? `Zapisano: ${saved}` : "Pobieranie rozpoczęte.");
+                setStatus(saved ? `Zapisano: ${saved}` : t("Pobieranie rozpoczęte."));
               })
             }
           >
-            Pobierz wersję edytowaną
+            {t("Pobierz wersję edytowaną")}
           </button>
         ) : null}
         {isDesktopShell() ? (
@@ -168,12 +169,12 @@ export function ChatDocumentCard(props: {
             disabled={busy}
             onClick={() => void run(() => openWorkspaceItemInSystem(caseId, document.artifactId))}
           >
-            Otwórz w Wordzie
+            {t("Otwórz w Wordzie")}
           </button>
         ) : null}
         {props.canWrite ? (
           <button type="button" disabled={busy} onClick={() => setRenaming((value) => !value)}>
-            Zmień nazwę
+            {t("Zmień nazwę")}
           </button>
         ) : null}
         {document.tokenized && props.canWrite ? (
@@ -193,7 +194,7 @@ export function ChatDocumentCard(props: {
               })
             }
           >
-            Deanonimizuj
+            {t("Deanonimizuj")}
           </button>
         ) : null}
       </div>
@@ -234,13 +235,13 @@ export function ChatDocumentCard(props: {
               ? {
                   extraActions: [
                     {
-                      label: "Użyj jako projekt pisma (drobna poprawka)",
-                      title: "literówki, styl, układ — zamknięte kontrole zostają",
+                      label: t("Użyj jako projekt pisma (drobna poprawka)"),
+                      title: t("literówki, styl, układ — zamknięte kontrole zostają"),
                       run: (blocks: EditableBlock[]) => useAsPleadingDraft(blocks, "MINOR")
                     },
                     {
-                      label: "Użyj jako projekt pisma (zmiana merytoryczna)",
-                      title: "fakty, żądania, podstawa prawna — pipeline wraca do W2",
+                      label: t("Użyj jako projekt pisma (zmiana merytoryczna)"),
+                      title: t("fakty, żądania, podstawa prawna — proces wraca do W2"),
                       run: (blocks: EditableBlock[]) => useAsPleadingDraft(blocks, "SUBSTANTIVE")
                     }
                   ]

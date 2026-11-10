@@ -2836,3 +2836,29 @@ textarea:focus {
   min-height: 38px;
   padding: 0 14px;
 }
+
+.language-picker {
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+}
+
+.translation-status {
+  margin-top: 8px;
+}
+
+.translation-status table {
+  display: block;
+  max-height: 360px;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.translation-status th,
+.translation-status td {
+  padding: 2px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--lm-l3);
+}

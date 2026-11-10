@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import type { InvoiceParty } from "./api.js";
 import { CompanyLookupError, lookupCompanyByNip, normalizeNip, type CompanyLookup } from "./company-lookup.js";
@@ -59,18 +60,18 @@ export function CompanyNipField({
             type="button"
             className="chat-secondary-action"
             disabled={!valid || state.kind === "busy"}
-            title="Nazwa i adres z białej listy VAT, a gdy podmiotu tam nie ma: z CEIDG"
+            title={t("Nazwa i adres z białej listy VAT, a gdy podmiotu tam nie ma: z CEIDG")}
             onClick={() => void load()}
           >
             {state.kind === "busy" ? "Pobieram…" : "Pobierz dane"}
           </button>
         </span>
       </label>
-      {nip.trim() && !valid ? <span className="field-help">NIP: 10 cyfr z poprawną cyfrą kontrolną.</span> : null}
+      {nip.trim() && !valid ? <span className="field-help">{t("NIP: 10 cyfr z poprawną cyfrą kontrolną.")}</span> : null}
       {state.kind === "found" ? (
         <span className="field-help" role="status">
-          Wstawiono z: {state.lookup.sourceLabel} ({state.lookup.status}){state.lookup.evidence ? `, id zapytania ${state.lookup.evidence}` : ""}.
-          {state.filled ? ` ${state.filled}` : ""} Sprawdź dane przed wystawieniem.
+          {t("Wstawiono z:")} {state.lookup.sourceLabel} ({state.lookup.status}){state.lookup.evidence ? `, id zapytania ${state.lookup.evidence}` : ""}.
+          {state.filled ? ` ${state.filled}` : ""} {t("Sprawdź dane przed wystawieniem.")}
         </span>
       ) : null}
       {state.kind === "found" && state.lookup.warnings.length ? (

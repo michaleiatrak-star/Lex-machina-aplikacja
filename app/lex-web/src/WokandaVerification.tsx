@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { probeWokandaSession } from "./api.js";
 import { desktopInvoke, openExternalUrl } from "./SnVerification.js";
@@ -44,7 +45,7 @@ export function WokandaVerification({
       } catch {
         // the window was closed or the session is not set yet: try again up to the limit
       }
-      if (tries >= 45) setMessage("Weryfikacja trwa: dokończ ją w oknie sądu albo otwórz okno ponownie.");
+      if (tries >= 45) setMessage(t("Weryfikacja trwa: dokończ ją w oknie sądu albo otwórz okno ponownie."));
     }
     const timer = window.setInterval(() => void tick(), 4000);
     const first = window.setTimeout(() => void tick(), 1500);
@@ -73,16 +74,16 @@ export function WokandaVerification({
   return (
     <div className="alert">
       <p>
-        <strong>Strona sądu wymaga weryfikacji przeglądarki.</strong>{" "}
-        {verification.savedSession ? "Sesja z poprzedniej weryfikacji wygasła." : "Aplikacja sama jej nie przechodzi."}
+        <strong>{t("Strona sądu wymaga weryfikacji przeglądarki.")}</strong>{" "}
+        {verification.savedSession ? t("Sesja z poprzedniej weryfikacji wygasła.") : t("Aplikacja sama jej nie przechodzi.")}
       </p>
       <p className="field-help">
         {invoke
-          ? "Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem."
-          : "W przeglądarce: otwórz wokandę sądu i wyszukaj sygnaturę samodzielnie."}
+          ? t("Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem.")
+          : t("W przeglądarce: otwórz wokandę sądu i wyszukaj sygnaturę samodzielnie.")}
       </p>
       <button type="button" className="chat-primary-action" onClick={() => void start()}>
-        {invoke ? (open ? "Okno sądu otwarte…" : "Otwórz okno sądu") : "Otwórz wokandę sądu"}
+        {invoke ? (open ? t("Okno sądu otwarte…") : t("Otwórz okno sądu")) : t("Otwórz wokandę sądu")}
       </button>
       {message ? <p className="field-help">{message}</p> : null}
     </div>

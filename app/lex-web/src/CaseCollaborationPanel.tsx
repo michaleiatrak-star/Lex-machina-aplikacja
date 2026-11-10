@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { listUserGroups, shareCaseWithGroup, type UserGroup } from "./api.js";
 import { groupErrorText, groupShareSummary } from "./UserGroupsPanel.js";
 import { InfoTip } from "./InfoTip";
@@ -135,7 +136,7 @@ function ParticipantRow({
         <small>
           {entry.role ===
           "OWNER"
-            ? "pełna kontrola sprawy"
+            ? t("pełna kontrola sprawy")
             : ROLE_HELP[
                 entry.role
               ]}
@@ -162,13 +163,13 @@ function ParticipantRow({
             }
           >
             <option value="EDITOR">
-              Edytor
+              {t("Edytor")}
             </option>
             <option value="ANALYST">
-              Analityk
+              {t("Analityk")}
             </option>
             <option value="VIEWER">
-              Odczyt
+              {t("Odczyt")}
             </option>
           </select>
 
@@ -186,7 +187,7 @@ function ParticipantRow({
                 )
               }
             />
-            Reidentyfikacja
+            {t("Reidentyfikacja")}
           </label>
 
           <button
@@ -197,7 +198,7 @@ function ParticipantRow({
               void save();
             }}
           >
-            Zapisz
+            {t("Zapisz")}
           </button>
           <button
             type="button"
@@ -207,7 +208,7 @@ function ParticipantRow({
               void revoke();
             }}
           >
-            Odbierz
+            {t("Odbierz")}
           </button>
         </div>
       )}
@@ -384,7 +385,7 @@ export function CaseCollaborationPanel({
     }
     if (
       !window.confirm(
-        "Przekazać własność tej sprawy? Twoja rola zostanie zmieniona na EDITOR."
+        t("Przekazać własność tej sprawy? Twoja rola zostanie zmieniona na EDITOR.")
       )
     ) {
       return;
@@ -396,7 +397,7 @@ export function CaseCollaborationPanel({
     );
     setTransferPassword("");
     setMessage(
-      "Własność sprawy została przekazana. Dotychczasowy właściciel pozostaje jako EDITOR."
+      t("Własność sprawy została przekazana. Dotychczasowy właściciel pozostaje jako EDITOR.")
     );
     await onOwnershipTransferred?.();
   }
@@ -452,7 +453,7 @@ export function CaseCollaborationPanel({
     setCanReidentify(false);
     await refresh();
     setMessage(
-      "Użytkownik otrzymał szyfrowany dostęp do sprawy."
+      t("Użytkownik otrzymał szyfrowany dostęp do sprawy.")
     );
   }
 
@@ -468,21 +469,21 @@ export function CaseCollaborationPanel({
       <div className="case-collaboration-head">
         <div>
           <p className="eyebrow">
-            Zespół sprawy
+            {t("Zespół sprawy")}
           </p>
           <h3>
-            Uczestnicy i dostęp do akt
-            <InfoTip>Każdy uczestnik ma własną kopię klucza sprawy. Odebranie dostępu zmienia klucz i odcina osobę od zaszyfrowanych dokumentów.</InfoTip>
+            {t("Uczestnicy i dostęp do akt")}
+            <InfoTip>{t("Każdy uczestnik ma własną kopię klucza sprawy. Odebranie dostępu zmienia klucz i odcina osobę od zaszyfrowanych dokumentów.")}</InfoTip>
           </h3>
         </div>
         <span className="security-pill">
-          Dostępem zarządza właściciel
+          {t("Dostępem zarządza właściciel")}
         </span>
       </div>
 
       <div className="case-collaboration-add">
         <label>
-          Użytkownik
+          {t("Użytkownik")}
           <select
             value={
               selectedUserId
@@ -501,7 +502,7 @@ export function CaseCollaborationPanel({
             {candidates.length ===
               0 && (
               <option value="">
-                Brak kolejnych aktywnych użytkowników
+                {t("Brak kolejnych aktywnych użytkowników")}
               </option>
             )}
             {candidates.map(
@@ -522,7 +523,7 @@ export function CaseCollaborationPanel({
         </label>
 
         <label>
-          Rola
+          {t("Rola")}
           <select
             value={role}
             disabled={busy}
@@ -535,13 +536,13 @@ export function CaseCollaborationPanel({
             }
           >
             <option value="EDITOR">
-              Edytor
+              {t("Edytor")}
             </option>
             <option value="ANALYST">
-              Analityk
+              {t("Analityk")}
             </option>
             <option value="VIEWER">
-              Odczyt
+              {t("Odczyt")}
             </option>
           </select>
         </label>
@@ -560,7 +561,7 @@ export function CaseCollaborationPanel({
               )
             }
           />
-          Może reidentyfikować
+          {t("Może reidentyfikować")}
         </label>
 
         <button
@@ -576,14 +577,14 @@ export function CaseCollaborationPanel({
             );
           }}
         >
-          Dodaj do sprawy
+          {t("Dodaj do sprawy")}
         </button>
       </div>
 
       {groups.length ? (
         <div className="case-collaboration-add">
           <label>
-            Grupa
+            {t("Grupa")}
             <select value={groupId} disabled={busy} onChange={(event) => setGroupId(event.target.value)}>
               {groups.map((group) => (
                 <option key={group.groupId} value={group.groupId}>
@@ -596,25 +597,25 @@ export function CaseCollaborationPanel({
             type="button"
             className="primary-button"
             disabled={busy || !groupId}
-            title="Rola i reidentyfikacja jak wyżej, dla każdego członka grupy"
+            title={t("Rola i reidentyfikacja jak wyżej, dla każdego członka grupy")}
             onClick={() => {
               void runChange(addGroup);
             }}
           >
-            Udostępnij grupie
+            {t("Udostępnij grupie")}
           </button>
         </div>
       ) : null}
 
       <div className="case-role-legend">
         <span>
-          <strong>EDITOR</strong> — dokumenty + analiza
+          <strong>EDITOR</strong> {t("— dokumenty + analiza")}
         </span>
         <span>
-          <strong>ANALYST</strong> — odczyt + analiza
+          <strong>ANALYST</strong> {t("— odczyt + analiza")}
         </span>
         <span>
-          <strong>VIEWER</strong> — odczyt
+          <strong>VIEWER</strong> {t("— odczyt")}
         </span>
       </div>
 
@@ -631,14 +632,14 @@ export function CaseCollaborationPanel({
 
       <details className="case-owner-transfer">
         <summary>
-          Przekaż własność sprawy
+          {t("Przekaż własność sprawy")}
         </summary>
         <p className="field-help">
-          Wymaga hasła. Nowy właściciel zarządza uczestnikami, a Ty zostajesz z rolą EDITOR.
+          {t("Wymaga hasła. Nowy właściciel zarządza uczestnikami, a Ty zostajesz z rolą EDITOR.")}
         </p>
         <div className="case-owner-transfer-grid">
           <label>
-            Nowy właściciel
+            {t("Nowy właściciel")}
             <select
               value={
                 transferUserId
@@ -679,7 +680,7 @@ export function CaseCollaborationPanel({
             </select>
           </label>
           <label>
-            Hasło właściciela
+            {t("Hasło właściciela")}
             <input
               type="password"
               autoComplete="current-password"
@@ -708,7 +709,7 @@ export function CaseCollaborationPanel({
               );
             }}
           >
-            Przekaż własność
+            {t("Przekaż własność")}
           </button>
         </div>
       </details>

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { AnswerCorrection } from "./api.js";
 
 const ROUND: Record<AnswerCorrection["round"], string> = {
@@ -14,14 +15,14 @@ export function CorrectionsDetails({ corrections }: { corrections: AnswerCorrect
   const removed = corrections.reduce((sum, item) => sum + item.removed.length, 0);
   return (
     <details className="chat-evidence">
-      <summary>Poprawki kontroli aplikacji ({removed ? `usunięte zdania: ${removed}` : "uzupełnienia"})</summary>
+      <summary>{t("Poprawki kontroli aplikacji (")}{removed ? `usunięte zdania: ${removed}` : "uzupełnienia"})</summary>
       {corrections.map((correction, index) => (
         <div key={index}>
-          <strong>Runda poprawcza: {ROUND[correction.round]}</strong>
+          <strong>{t("Runda poprawcza:")} {ROUND[correction.round]}</strong>
           {correction.findings.length ? (
             <ul>
               {correction.findings.map((finding) => (
-                <li key={finding}>Zarzut: {finding}</li>
+                <li key={finding}>{t("Zarzut:")} {finding}</li>
               ))}
             </ul>
           ) : null}
@@ -34,7 +35,7 @@ export function CorrectionsDetails({ corrections }: { corrections: AnswerCorrect
               ))}
             </ul>
           ) : (
-            <small>Pierwsza wersja została uzupełniona; żadne jej zdanie nie zostało usunięte.</small>
+            <small>{t("Pierwsza wersja została uzupełniona; żadne jej zdanie nie zostało usunięte.")}</small>
           )}
         </div>
       ))}

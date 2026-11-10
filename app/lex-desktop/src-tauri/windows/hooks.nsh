@@ -59,13 +59,13 @@
   ; Fail before downloading large components if the embedded thin payload is
   ; structurally incomplete.
   IfFileExists "$INSTDIR\runtime\app\dist\http\server.js" +3 0
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera kompletnego runtime aplikacji (brak app\dist\http\server.js)." /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera kompletnej usługi aplikacji (brak app\dist\http\server.js)." /SD IDOK
     Abort
   IfFileExists "$INSTDIR\runtime\corpus\*" +3 0
     MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera korpusu skilli." /SD IDOK
     Abort
   IfFileExists "$INSTDIR\runtime\lex-runtime-sidecar.exe" +3 0
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera natywnego sidecara runtime." /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera natywnego modułu usługi aplikacji." /SD IDOK
     Abort
 
   IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" lex_offline_bundle lex_online_bootstrap
@@ -79,7 +79,7 @@ lex_offline_bundle:
     FileOpen $2 "$INSTDIR\runtime\bootstrap-install-error.log" w
     FileWrite $2 "stage=offline-bundle$\r$\nexit=$0$\r$\noutput=$1$\r$\n"
     FileClose $2
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalacja lokalnego runtime offline nie powiodła się.$\r$\n$1" /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalacja lokalnej usługi aplikacji bez internetu nie powiodła się.$\r$\n$1" /SD IDOK
     Abort
   ${EndIf}
   Goto lex_runtime_selftest
@@ -112,6 +112,6 @@ lex_runtime_selftest:
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  DetailPrint "Usuwanie prywatnego runtime programu. Dane spraw i Local AI pozostają poza katalogiem aplikacji."
+  DetailPrint "Usuwanie prywatnej usługi programu. Dane spraw i lokalna AI pozostają poza katalogiem aplikacji."
   RMDir /r "$INSTDIR\runtime"
 !macroend

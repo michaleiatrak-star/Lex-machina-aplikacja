@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { ApplicationDownloadProgress } from "./ApplicationDownloadProgress.js";
 import {
   useEffect,
@@ -41,7 +42,7 @@ const CHANNEL_LABEL: Record<SkillChannel, string> = {
 };
 
 function shortDate(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString("pl-PL") : "—";
+  return value ? new Date(value).toLocaleString(currentLocale()) : "—";
 }
 
 function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse["lastResult"]>): string {
@@ -60,15 +61,15 @@ function autoUpdateOutcomeText(result: NonNullable<SkillAutoUpdateStateResponse[
 }
 
 function channelUnavailableText(reason: string | undefined): string {
-  if (!reason) return "Nie udało się sprawdzić kanału skilli.";
+  if (!reason) return t("Nie udało się sprawdzić kanału skilli.");
   if (/GITHUB_HTTP_(403|429)/.test(reason)) {
-    return "GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę.";
+    return t("GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę.");
   }
   if (/fetch failed|ENOTFOUND|ECONN|timeout|aborted/i.test(reason)) {
-    return "Brak połączenia z GitHub — nie sprawdzono kanału skilli.";
+    return t("Brak połączenia z GitHub — nie sprawdzono kanału skilli.");
   }
   if (reason === "SKILL_CHANNEL_DIRECTORY_MISSING") {
-    return "W repozytorium Lex Machina nie ma katalogu tego kanału.";
+    return t("W repozytorium Lex Machina nie ma katalogu tego kanału.");
   }
   return `Nie udało się sprawdzić kanału skilli (${reason}).`;
 }
@@ -139,9 +140,9 @@ export function appStatusLabel(status: string | undefined): string {
     case "UP_TO_DATE":
       return "aktualny";
     case "AVAILABLE":
-      return "dostępna aktualizacja";
+      return t("dostępna aktualizacja");
     case "UNAVAILABLE":
-      return "nie można sprawdzić";
+      return t("nie można sprawdzić");
     case "NO_RELEASE":
       return "brak opublikowanego wydania";
     case undefined:
@@ -317,7 +318,7 @@ export function MaintenancePanel({
     setBusy("app-download");
     setError("");
     setMessage(
-      "Pobieram aktualizację i sprawdzam, czy pliki są kompletne."
+      t("Pobieram aktualizację i sprawdzam, czy pliki są kompletne.")
     );
     try {
       const result =
@@ -360,8 +361,8 @@ export function MaintenancePanel({
     setError("");
     setMessage(
       /Mac OS X|Macintosh/i.test(navigator.userAgent)
-        ? "Otwieram instalator. Przejdź jego kroki; potem Lex Machina pokaże dalsze przygotowanie."
-        : "Instaluję aktualizację. Aplikacja zamknie się i uruchomi ponownie po zakończeniu."
+        ? t("Otwieram instalator. Przejdź jego kroki; potem Lex Machina pokaże dalsze przygotowanie.")
+        : t("Instaluję aktualizację. Aplikacja zamknie się i uruchomi ponownie po zakończeniu.")
     );
     try {
       await installStagedApplicationUpdate(
@@ -389,7 +390,7 @@ export function MaintenancePanel({
     try {
       const result = await refreshSkillsFromChannel(channel);
       setMessage(
-        `Skille odświeżone z kanału ${CHANNEL_LABEL[result.channel]} (${result.directory}, commit ${result.commit.slice(0, 7)}, ${result.files} plików). Uruchom ponownie program, aby runtime załadował skille; przy nieudanym starcie wróci poprzednia wersja.`
+        `Skille odświeżone z kanału ${CHANNEL_LABEL[result.channel]} (${result.directory}, commit ${result.commit.slice(0, 7)}, ${result.files} plików). Uruchom ponownie program, aby wczytał nowe skille; przy nieudanym starcie wróci poprzednia wersja.`
       );
       setSkillStatus(await getSkillChannelStatus(channel));
     } catch (problem) {
@@ -429,8 +430,8 @@ export function MaintenancePanel({
       >
         <span
           className="floating-drag-handle"
-          title="Przeciągnij panel"
-          aria-label="Przeciągnij panel utrzymania"
+          title={t("Przeciągnij panel")}
+          aria-label={t("Przeciągnij panel utrzymania")}
           {...floatingDrag.handleProps}
         >
           ⋮⋮
@@ -438,7 +439,7 @@ export function MaintenancePanel({
         <button
           type="button"
           className="floating-icon-button"
-          aria-label="Rozwiń panel utrzymania"
+          aria-label={t("Rozwiń panel utrzymania")}
           title={
             `Utrzymanie · ${badge.toLowerCase()}`
           }
@@ -451,7 +452,7 @@ export function MaintenancePanel({
         {badge === "AKTUALIZACJA" ? (
           <span
             className="floating-update-dot"
-            aria-label="Dostępna aktualizacja"
+            aria-label={t("Dostępna aktualizacja")}
           />
         ) : null}
       </div>
@@ -479,8 +480,8 @@ export function MaintenancePanel({
         {!embedded ? (
           <span
             className="floating-drag-handle"
-            title="Przeciągnij panel"
-            aria-label="Przeciągnij panel utrzymania"
+            title={t("Przeciągnij panel")}
+            aria-label={t("Przeciągnij panel utrzymania")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -491,7 +492,7 @@ export function MaintenancePanel({
           </span>
         ) : null}
         <span className="maintenance-title">
-          <strong>Utrzymanie</strong>
+          <strong>{t("Utrzymanie")}</strong>
         </span>
         <span
           className={
@@ -506,8 +507,8 @@ export function MaintenancePanel({
           <button
             type="button"
             className="floating-minimize-button"
-            aria-label="Zminimalizuj panel utrzymania"
-            title="Zminimalizuj do ikony"
+            aria-label={t("Zminimalizuj panel utrzymania")}
+            title={t("Zminimalizuj do ikony")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -524,9 +525,9 @@ export function MaintenancePanel({
           <div className="maintenance-heading">
             <div>
               <strong>
-                Program
+                {t("Program")}
                 {!/Mac OS X|Macintosh/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? (
-                  <InfoTip>Aktualizacja jest instalowana tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.</InfoTip>
+                  <InfoTip>{t("Aktualizacja jest instalowana tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.")}</InfoTip>
                 ) : null}
               </strong>
               <small>
@@ -551,10 +552,10 @@ export function MaintenancePanel({
                 }
               >
                 {busy === "app-download"
-                  ? "Pobieranie i weryfikacja…"
+                  ? t("Pobieranie i weryfikacja…")
                   : staged
                     ? "Pobierz ponownie"
-                    : "Pobierz i zweryfikuj"}
+                    : t("Pobierz i zweryfikuj")}
               </button>
               <button
                 type="button"
@@ -566,12 +567,12 @@ export function MaintenancePanel({
                   void installUpdate()
                 }
               >
-                Zainstaluj i uruchom ponownie
+                {t("Zainstaluj i uruchom ponownie")}
               </button>
             </div>
           ) : (
             <small>
-              Aktualizację programu instaluje administrator.
+              {t("Aktualizację programu instaluje administrator.")}
             </small>
           )}
         </section>
@@ -579,22 +580,22 @@ export function MaintenancePanel({
         <section>
           <div className="maintenance-heading">
             <div>
-              <strong>Skille</strong>
+              <strong>{t("Skille")}</strong>
               <small>
                 {skillStatus
                   ? skillStatus.installed
                     ? `zainstalowane: ${CHANNEL_LABEL[skillStatus.installed.channel]}, commit ${skillStatus.installed.commit.slice(0, 7)} (${shortDate(skillStatus.installed.installedAt)})`
-                    : "zainstalowane: wbudowane w instalator aplikacji"
+                    : t("zainstalowane: wbudowane w instalator aplikacji")
                   : user.appRole === "ADMIN"
                     ? "sprawdzanie…"
-                    : "status dostępny administratorowi"}
+                    : t("stan dostępny administratorowi")}
               </small>
             </div>
             <span>
               {skillStatus?.status === "UNAVAILABLE"
                 ? "niedostępne"
                 : skillStatus?.status === "AVAILABLE"
-                  ? "do odświeżenia"
+                  ? t("do odświeżenia")
                   : skillStatus?.status === "UP_TO_DATE"
                     ? "aktualne"
                     : "—"}
@@ -603,8 +604,8 @@ export function MaintenancePanel({
 
           {user.appRole === "ADMIN" ? (
             <label className="maintenance-channel">
-              Kanał skilli
-              <InfoTip>Skille są pobierane z repozytorium Lex Machina.</InfoTip>
+              {t("Kanał skilli")}
+              <InfoTip>{t("Skille są pobierane z repozytorium Lex Machina.")}</InfoTip>
               <select
                 value={channel}
                 disabled={Boolean(busy)}
@@ -612,8 +613,8 @@ export function MaintenancePanel({
                   selectChannel(event.target.value === "development" ? "development" : "stable")
                 }
               >
-                <option value="stable">Wersja stabilna</option>
-                <option value="development">Wersja rozwojowa</option>
+                <option value="stable">{t("Wersja stabilna")}</option>
+                <option value="development">{t("Wersja rozwojowa")}</option>
               </select>
             </label>
           ) : null}
@@ -626,28 +627,28 @@ export function MaintenancePanel({
                 disabled={Boolean(busy)}
                 onChange={(event) => void toggleAutoUpdate(event.target.checked)}
               />
-              Aktualizuj skille automatycznie
+              {t("Aktualizuj skille automatycznie")}
               <InfoTip>
-                Co {autoUpdate.intervalHours} godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).
+                Co {autoUpdate.intervalHours} {t("godz. program sprawdza skille: zainstalowane z kanału — ten sam kanał; wbudowane — podpisane wydanie skilli, tylko nowsza wersja. Pliki są weryfikowane jak przy ręcznym odświeżeniu, a nowe skille działają po ponownym uruchomieniu programu (nieudany start wraca do poprzednich).")}
               </InfoTip>
             </label>
           ) : null}
 
           {autoUpdate?.pendingActivation ? (
             <small className="maintenance-trust-warning">
-              Nowe skille są pobrane i sprawdzone. Uruchom ponownie program, aby zaczęły działać.
+              {t("Nowe skille są pobrane i sprawdzone. Uruchom ponownie program, aby zaczęły działać.")}
             </small>
           ) : null}
 
           {autoUpdate?.lastResult ? (
             <small>
-              Ostatnie automatyczne sprawdzenie: {shortDate(autoUpdate.lastResult.at)} — {autoUpdateOutcomeText(autoUpdate.lastResult)}
+              {t("Ostatnie automatyczne sprawdzenie:")} {shortDate(autoUpdate.lastResult.at)} — {autoUpdateOutcomeText(autoUpdate.lastResult)}
             </small>
           ) : null}
 
           {skillStatus?.latest ? (
             <small>
-              Najnowsze w kanale: {skillStatus.latest.directory}, commit {skillStatus.latest.commit.slice(0, 7)} z {shortDate(skillStatus.latest.committedAt)}, {skillStatus.latest.files} plików.
+              {t("Najnowsze w kanale:")} {skillStatus.latest.directory}{t(", commit")} {skillStatus.latest.commit.slice(0, 7)} z {shortDate(skillStatus.latest.committedAt)}, {skillStatus.latest.files} {t("plików.")}
             </small>
           ) : null}
 
@@ -669,8 +670,8 @@ export function MaintenancePanel({
               }
             >
               {busy === "skills"
-                ? "Pobieranie, weryfikacja i aktywacja…"
-                : "Odśwież skille"}
+                ? t("Pobieranie, weryfikacja i aktywacja…")
+                : t("Odśwież skille")}
             </button>
           ) : null}
         </section>
@@ -690,7 +691,7 @@ export function MaintenancePanel({
           disabled={Boolean(busy)}
           onClick={() => void refresh()}
         >
-          Sprawdź ponownie
+          {t("Sprawdź ponownie")}
         </button>
 
         {busy === "app-download" ? <ApplicationDownloadProgress /> : null}

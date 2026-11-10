@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import type { KeyGrammar, PrivacyKeyEntry } from "./api.js";
 import { caseLabel } from "./restoration-review.js";
@@ -69,25 +70,25 @@ export function PrivacyKeyTable(props: {
     <div className="privacy-key">
       <div className="privacy-key-bar">
         <small>
-          {props.entries.length} symboli · klucz widoczny tylko na tym komputerze, nigdy nie jest wysyłany do modeli
+          {props.entries.length} {t("symboli · klucz widoczny tylko na tym komputerze, nigdy nie jest wysyłany do modeli")}
         </small>
         <button type="button" onClick={() => setVisible((value) => !value)}>
-          {visible ? "Ukryj dane" : "Pokaż dane"}
+          {visible ? "Ukryj dane" : t("Pokaż dane")}
         </button>
       </div>
       {props.entries.length === 0 ? (
-        <p className="privacy-key-empty">W tym dokumencie nie zanonimizowano żadnych danych.</p>
+        <p className="privacy-key-empty">{t("W tym dokumencie nie zanonimizowano żadnych danych.")}</p>
       ) : (
         <div className="privacy-key-wrap">
           <table>
             <thead>
               <tr>
-                <th scope="col">Symbol wysyłany do modelu</th>
-                <th scope="col">Rodzaj</th>
-                <th scope="col">Zastępuje</th>
-                <th scope="col">Odmiana (przypadek: forma)</th>
-                <th scope="col">Wystąpienia</th>
-                {editable ? <th scope="col">Zmiany</th> : null}
+                <th scope="col">{t("Symbol wysyłany do modelu")}</th>
+                <th scope="col">{t("Rodzaj")}</th>
+                <th scope="col">{t("Zastępuje")}</th>
+                <th scope="col">{t("Odmiana (przypadek: forma)")}</th>
+                <th scope="col">{t("Wystąpienia")}</th>
+                {editable ? <th scope="col">{t("Zmiany")}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -100,7 +101,7 @@ export function PrivacyKeyTable(props: {
                     {entry.kind === "PERSON" && props.onSaveGrammar ? (
                       <select
                         aria-label={`Kim jest ${entry.token}`}
-                        title="Rodzaj i liczba trafiają do klucza dla modelu (uzgadnianie form) i zmieniają odmianę przy przywracaniu"
+                        title={t("Rodzaj i liczba trafiają do klucza dla modelu (uzgadnianie form) i zmieniają odmianę przy przywracaniu")}
                         disabled={props.busy}
                         value={grammarOf(entry)}
                         onChange={(event) => {
@@ -108,7 +109,7 @@ export function PrivacyKeyTable(props: {
                           if (next) props.onSaveGrammar?.(entry, next);
                         }}
                       >
-                        {grammarOf(entry) === "" ? <option value="">nieustalona - wybierz</option> : null}
+                        {grammarOf(entry) === "" ? <option value="">{t("nieustalona - wybierz")}</option> : null}
                         {(Object.keys(GRAMMAR_LABEL) as KeyGrammar[]).map((value) => (
                           <option key={value} value={value}>{GRAMMAR_LABEL[value]}</option>
                         ))}
@@ -150,9 +151,9 @@ export function PrivacyKeyTable(props: {
                               setEditing(null);
                             }}
                           >
-                            Zapisz formy
+                            {t("Zapisz formy")}
                           </button>
-                          <button type="button" onClick={() => setEditing(null)}>Anuluj</button>
+                          <button type="button" onClick={() => setEditing(null)}>{t("Anuluj")}</button>
                         </>
                       ) : (
                         <>
@@ -166,17 +167,17 @@ export function PrivacyKeyTable(props: {
                                 setEditing(entry.token);
                               }}
                             >
-                              Popraw formy
+                              {t("Popraw formy")}
                             </button>
                           ) : null}
                           {props.onRemove ? (
                             <button
                               type="button"
                               disabled={props.busy}
-                              title="Przywraca wartość w tekście (osoba i adres w mianowniku) i usuwa symbol z klucza"
+                              title={t("Przywraca wartość w tekście (osoba i adres w mianowniku) i usuwa symbol z klucza")}
                               onClick={() => props.onRemove?.(entry)}
                             >
-                              Usuń z anonimizacji
+                              {t("Usuń z anonimizacji")}
                             </button>
                           ) : null}
                         </>

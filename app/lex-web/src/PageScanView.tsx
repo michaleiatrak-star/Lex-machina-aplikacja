@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentPageScan } from "./api.js";
 import { loadPageScan } from "./page-scan-cache.js";
@@ -60,25 +61,25 @@ export function PageScanView(props: {
   return (
     <div className="page-scan" aria-label={`Skan strony ${props.page}`}>
       <div className="page-scan-head">
-        <strong>Oryginał · s. {props.page}</strong>
-        <div className="page-scan-zoom" role="group" aria-label="Powiększenie skanu">
+        <strong>{t("Oryginał · s.")} {props.page}</strong>
+        <div className="page-scan-zoom" role="group" aria-label={t("Powiększenie skanu")}>
           {[1, 1.5, 2.5].map((value) => (
             <button key={value} type="button" aria-pressed={zoom === value} onClick={() => setZoom(value)}>
-              {value === 1 ? "Cała strona" : `${value * 100}%`}
+              {value === 1 ? t("Cała strona") : `${value * 100}%`}
             </button>
           ))}
         </div>
       </div>
       <div className="page-scan-viewport">
         {error ? (
-          <p className="field-error">Nie udało się wczytać skanu: {error}</p>
+          <p className="field-error">{t("Nie udało się wczytać skanu:")} {error}</p>
         ) : scan === undefined ? (
-          <p className="page-scan-empty">Wczytuję skan…</p>
+          <p className="page-scan-empty">{t("Wczytuję skan…")}</p>
         ) : scan === null ? (
           <p className="page-scan-empty">
             {props.ocr
-              ? "Obraz strony nie został zachowany (limit rozmiaru). Porównaj tekst z oryginałem pliku."
-              : "Ta strona nie ma skanu: tekst z warstwy tekstowej pliku jest dokładny."}
+              ? t("Obraz strony nie został zachowany (limit rozmiaru). Porównaj tekst z oryginałem pliku.")
+              : t("Ta strona nie ma skanu: tekst z warstwy tekstowej pliku jest dokładny.")}
           </p>
         ) : (
           <div className="page-scan-sheet" style={{ width: `${zoom * 100}%` }}>
@@ -105,7 +106,7 @@ export function PageScanView(props: {
       </div>
       {scan && props.focus && "line" in props.focus && !box ? (
         <small className="page-scan-note">
-          {scan.lines.length ? "Ta linia nie ma ramki na skanie." : "Tekst poprawiony ręcznie: linie nie są już zaznaczane na skanie."}
+          {scan.lines.length ? t("Ta linia nie ma ramki na skanie.") : t("Tekst poprawiony ręcznie: linie nie są już zaznaczane na skanie.")}
         </small>
       ) : null}
     </div>

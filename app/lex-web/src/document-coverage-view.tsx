@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { DocumentCoverageEntry } from "./api.js";
 
 type Range = [number, number];
@@ -72,7 +73,7 @@ export function finishAnalysisMessage(name: string, item: UnfinishedDocument): s
 export function CoverageLine({ entries, label }: { entries: DocumentCoverageEntry[]; label: (entry: DocumentCoverageEntry) => string }) {
   return (
     <small className="chat-coverage-line">
-      Przeczytane:{" "}
+      {t("Przeczytane:")}{" "}
       {entries
         .map((entry) =>
           entry.status === "FULL"
@@ -99,15 +100,15 @@ export function UnfinishedAnalysis({
   if (!items.length) return null;
   return (
     <div className="chat-unfinished-analysis" role="status">
-      <strong>Analiza niedokończona: praca nad dokumentem nie jest zamknięta</strong>
+      <strong>{t("Analiza niedokończona: praca nad dokumentem nie jest zamknięta")}</strong>
       <ul>
         {items.map((item) => (
           <li key={item.documentId}>
             <span>
-              {label(item)}: przeczytane s. {formatRanges(item.read)} z {item.totalPages}; nieprzeczytane s. {formatRanges(item.missing)}
+              {label(item)}{t(": przeczytane s.")} {formatRanges(item.read)} z {item.totalPages}{t("; nieprzeczytane s.")} {formatRanges(item.missing)}
             </span>
             <button type="button" className="chat-secondary-action" disabled={disabled} onClick={() => onFinish(finishAnalysisMessage(label(item), item))}>
-              Dokończ analizę
+              {t("Dokończ analizę")}
             </button>
           </li>
         ))}

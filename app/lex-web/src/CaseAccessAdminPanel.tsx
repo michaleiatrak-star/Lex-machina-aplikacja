@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -36,7 +37,7 @@ const ROLE_HELP: Record<CaseRole, string> = {
 // "2 osoby: Marcin (Edycja), Anna (Podgląd)" — skrót składu sprawy w nagłówku karty.
 export function caseMembersText(item: CaseAccessOverviewItem): string {
   const others = item.members.filter((member) => member.role !== "OWNER");
-  if (!others.length) return "tylko właściciel";
+  if (!others.length) return t("tylko właściciel");
   const people = others.map((member) => `${member.displayName} (${ROLE_LABELS[member.role]})`).join(", ");
   const count = others.length;
   const noun = count === 1 ? "osoba" : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? "osoby" : "osób";
@@ -49,11 +50,11 @@ function errorText(failure: unknown): string {
   }
   switch (failure.code) {
     case "TARGET_CRYPTO_NOT_READY":
-      return "Użytkownik nie ma jeszcze kluczy do udostępniania (musi zalogować się co najmniej raz).";
+      return t("Użytkownik nie ma jeszcze kluczy do udostępniania (musi zalogować się co najmniej raz).");
     case "TARGET_USER_NOT_FOUND":
-      return "Użytkownik nie istnieje albo jest wyłączony.";
+      return t("Użytkownik nie istnieje albo jest wyłączony.");
     case "CASE_ACCESS_DENIED":
-      return "Uprawnienia do tej sprawy zmienia jej właściciel.";
+      return t("Uprawnienia do tej sprawy zmienia jej właściciel.");
     default:
       return failure.code;
   }
@@ -282,7 +283,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               type="checkbox"
               className="case-access-bulk-check"
               aria-label={`Zaznacz sprawę „${name}” do zmiany zbiorczej`}
-              title={item.canManage ? "Zaznacz do zmiany zbiorczej" : "Zmienia właściciel sprawy."}
+              title={item.canManage ? t("Zaznacz do zmiany zbiorczej") : t("Zmienia właściciel sprawy.")}
               disabled={!item.canManage || Boolean(busy)}
               checked={bulkSelected.has(item.caseId)}
               onClick={(event) => event.stopPropagation()}
@@ -297,10 +298,10 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               }}
             />
             <strong>{name}</strong>
-            {item.archivedAt ? <span className="security-pill">archiwum</span> : null}
+            {item.archivedAt ? <span className="security-pill">{t("archiwum")}</span> : null}
           </span>
           <span className="case-access-admin-meta">
-            Właściciel: {owner ? owner.displayName : "—"}
+            {t("Właściciel:")} {owner ? owner.displayName : "—"}
             {item.canManage ? " (Ty)" : ""} · {caseMembersText(item)}
           </span>
         </summary>
@@ -330,27 +331,27 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                 <input
                   value={renaming.name}
                   maxLength={160}
-                  aria-label="Nowa nazwa sprawy"
+                  aria-label={t("Nowa nazwa sprawy")}
                   autoFocus
                   disabled={Boolean(busy)}
                   onChange={(event) => setRenaming({ caseId: item.caseId, name: event.target.value })}
                 />
                 <button type="submit" className="primary-button" disabled={Boolean(busy) || !renaming.name.trim()}>
-                  Zapisz
+                  {t("Zapisz")}
                 </button>
                 <button type="button" disabled={Boolean(busy)} onClick={() => setRenaming(null)}>
-                  Anuluj
+                  {t("Anuluj")}
                 </button>
               </form>
             ) : (
               <button
                 type="button"
-                title={ownerOnly ?? "Zmień nazwę sprawy"}
+                title={ownerOnly ?? t("Zmień nazwę sprawy")}
                 aria-label={`Zmień nazwę sprawy „${name}”`}
                 disabled={Boolean(busy) || !item.canManage}
                 onClick={() => setRenaming({ caseId: item.caseId, name: item.displayName ?? "" })}
               >
-                <PencilIcon /> Zmień nazwę
+                <PencilIcon /> {t("Zmień nazwę")}
               </button>
             )}
             <button
@@ -365,22 +366,22 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                 }
               }}
             >
-              {item.archivedAt ? "Przywróć z archiwum" : "Archiwizuj"}
+              {item.archivedAt ? t("Przywróć z archiwum") : "Archiwizuj"}
             </button>
           </div>
 
           {highlightMissing ? (
-            <p className="field-help">Wybrany użytkownik nie ma dostępu do tej sprawy.</p>
+            <p className="field-help">{t("Wybrany użytkownik nie ma dostępu do tej sprawy.")}</p>
           ) : null}
 
           <table className="case-access-admin-table">
-            <caption>Osoby z dostępem</caption>
+            <caption>{t("Osoby z dostępem")}</caption>
             <thead>
               <tr>
-                <th scope="col">Osoba</th>
-                <th scope="col">Rola</th>
-                <th scope="col">Deanonimizacja</th>
-                {item.canManage ? <th scope="col"><span className="visually-hidden">Działania</span></th> : null}
+                <th scope="col">{t("Osoba")}</th>
+                <th scope="col">{t("Rola")}</th>
+                <th scope="col">{t("Deanonimizacja")}</th>
+                {item.canManage ? <th scope="col"><span className="visually-hidden">{t("Działania")}</span></th> : null}
               </tr>
             </thead>
             <tbody>
@@ -392,7 +393,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                   <td>
                     <span className="security-pill">{ROLE_LABELS.OWNER}</span>
                   </td>
-                  <td>tak</td>
+                  <td>{t("tak")}</td>
                   {item.canManage ? <td /> : null}
                 </tr>
               ) : null}
@@ -463,7 +464,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                           }
                         }}
                       >
-                        Odbierz dostęp
+                        {t("Odbierz dostęp")}
                       </button>
                     </td>
                   ) : null}
@@ -475,9 +476,9 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           {item.canManage ? (
             candidates.length ? (
               <fieldset className="case-access-admin-add">
-                <legend>Dodaj osobę do sprawy</legend>
+                <legend>{t("Dodaj osobę do sprawy")}</legend>
                 <label>
-                  Osoba
+                  {t("Osoba")}
                   <select
                     value={draft.userId}
                     disabled={Boolean(busy)}
@@ -488,7 +489,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                       }))
                     }
                   >
-                    <option value="">— wybierz —</option>
+                    <option value="">{t("— wybierz —")}</option>
                     {candidates.map((user) => (
                       <option key={user.userId} value={user.userId}>
                         {user.displayName} ({user.loginName})
@@ -497,7 +498,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                   </select>
                 </label>
                 <label>
-                  Rola
+                  {t("Rola")}
                   <select
                     value={draft.role}
                     disabled={Boolean(busy)}
@@ -527,7 +528,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                       }))
                     }
                   />
-                  może deanonimizować
+                  {t("może deanonimizować")}
                 </label>
                 <button
                   type="button"
@@ -548,17 +549,17 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                     )
                   }
                 >
-                  Nadaj dostęp
+                  {t("Nadaj dostęp")}
                 </button>
                 <small className="field-help">{ROLE_HELP[draft.role]}</small>
               </fieldset>
             ) : (
-              <p className="field-help">Wszyscy aktywni użytkownicy mają już dostęp do tej sprawy.</p>
+              <p className="field-help">{t("Wszyscy aktywni użytkownicy mają już dostęp do tej sprawy.")}</p>
             )
           ) : (
             <p className="field-help">
-              Uprawnienia zmienia właściciel ({owner ? owner.displayName : "—"}).
-              <InfoTip>Sprawa jest zaszyfrowana kluczem, który mają tylko jej członkowie.</InfoTip>
+              {t("Uprawnienia zmienia właściciel (")}{owner ? owner.displayName : "—"}).
+              <InfoTip>{t("Sprawa jest zaszyfrowana kluczem, który mają tylko jej członkowie.")}</InfoTip>
             </p>
           )}
         </div>
@@ -569,32 +570,32 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   return (
     <section className="case-access-admin-panel">
       <p className="eyebrow">
-        Uprawnienia do spraw
+        {t("Uprawnienia do spraw")}
         <InfoTip>
-          Dostęp zmieniasz tylko w sprawach, których jesteś właścicielem; pozostałe są do wglądu.
+          {t("Dostęp zmieniasz tylko w sprawach, których jesteś właścicielem; pozostałe są do wglądu.")}
           {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => ` ${ROLE_HELP[role]}`).join("")}
         </InfoTip>
       </p>
       <div className="case-access-admin-search">
         <label>
-          Szukaj sprawy
+          {t("Szukaj sprawy")}
           <input
             type="search"
             value={caseQuery}
-            placeholder="Nazwa sprawy, osoba lub login"
+            placeholder={t("Nazwa sprawy, osoba lub login")}
             onChange={(event) => setCaseQuery(event.target.value)}
           />
         </label>
         <label>
-          Utworzone od
+          {t("Utworzone od")}
           <input type="date" value={caseRange.from} max={caseRange.to || undefined} onChange={(event) => setCaseRange({ ...caseRange, from: event.target.value })} />
         </label>
         <label>
-          do
+          {t("do")}
           <input type="date" value={caseRange.to} min={caseRange.from || undefined} onChange={(event) => setCaseRange({ ...caseRange, to: event.target.value })} />
         </label>
         <label>
-          Sortowanie
+          {t("Sortowanie")}
           <select value={caseSort} onChange={(event) => setCaseSort(event.target.value as CaseSort)}>
             {(Object.keys(CASE_SORT_LABELS) as CaseSort[]).map((key) => (
               <option key={key} value={key}>
@@ -606,18 +607,18 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       </div>
       <fieldset className="case-access-admin-quick">
         <legend>
-          Przypisz osobę do sprawy
+          {t("Przypisz osobę do sprawy")}
           <InfoTip>
-            Tylko sprawy, których jesteś właścicielem (tylko on ma klucz sprawy). Przypisanie osoby z dostępem zmienia jej rolę.
+            {t("Tylko sprawy, których jesteś właścicielem (tylko on ma klucz sprawy). Przypisanie osoby z dostępem zmienia jej rolę.")}
           </InfoTip>
         </legend>
         <select
           value={quick.userId}
-          aria-label="Osoba"
+          aria-label={t("Osoba")}
           disabled={Boolean(busy)}
           onChange={(event) => setQuick({ ...quick, userId: event.target.value })}
         >
-          <option value="">Osoba…</option>
+          <option value="">{t("Osoba…")}</option>
           {users
             .filter((user) => user.userId !== currentUserId)
             .map((user) => (
@@ -628,11 +629,11 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         </select>
         <select
           value={quick.caseId}
-          aria-label="Sprawa"
+          aria-label={t("Sprawa")}
           disabled={Boolean(busy)}
           onChange={(event) => setQuick({ ...quick, caseId: event.target.value })}
         >
-          <option value="">Sprawa…</option>
+          <option value="">{t("Sprawa…")}</option>
           {quickCaseOptions(cases, caseQuery, caseSort, quick.caseId, caseRange).map((item) => {
             const member = item.members.find((m) => m.userId === quick.userId);
             return (
@@ -645,7 +646,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         </select>
         <select
           value={quick.role}
-          aria-label="Rola"
+          aria-label={t("Rola")}
           disabled={Boolean(busy)}
           onChange={(event) => setQuick({ ...quick, role: event.target.value as GrantableRole })}
         >
@@ -662,7 +663,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             disabled={Boolean(busy)}
             onChange={(event) => setQuick({ ...quick, canReidentify: event.target.checked })}
           />
-          deanonimizacja
+          {t("deanonimizacja")}
         </label>
         <button
           type="button"
@@ -688,14 +689,13 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       </fieldset>
       <fieldset className="case-access-admin-bulk">
         <legend>
-          Zmiana zbiorcza
+          {t("Zmiana zbiorcza")}
           <InfoTip>
-            Zaznacz sprawy na liście poniżej (albo wszystkie widoczne po wyszukiwaniu i filtrach), wybierz osobę i działanie. Zmiana
-            dotyczy tylko spraw, których jesteś właścicielem; właściciel sprawy zachowuje swoją rolę.
+            {t("Zaznacz sprawy na liście poniżej (albo wszystkie widoczne po wyszukiwaniu i filtrach), wybierz osobę i działanie. Zmiana dotyczy tylko spraw, których jesteś właścicielem; właściciel sprawy zachowuje swoją rolę.")}
           </InfoTip>
         </legend>
         <div className="case-access-admin-bulk-row">
-          <span className="case-access-admin-bulk-count">Zaznaczone sprawy: {bulkSelected.size}</span>
+          <span className="case-access-admin-bulk-count">{t("Zaznaczone sprawy:")} {bulkSelected.size}</span>
           <button
             type="button"
             className="chat-secondary-action"
@@ -705,20 +705,20 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
               setBulkSelected(new Set(list.filter((item) => item.canManage).map((item) => item.caseId)));
             }}
           >
-            Zaznacz wszystkie widoczne
+            {t("Zaznacz wszystkie widoczne")}
           </button>
           <button type="button" className="chat-secondary-action" disabled={Boolean(busy) || bulkSelected.size === 0} onClick={() => setBulkSelected(new Set())}>
-            Odznacz
+            {t("Odznacz")}
           </button>
         </div>
         <div className="case-access-admin-bulk-row">
           <select
             value={bulk.userId}
-            aria-label="Osoba (zmiana zbiorcza)"
+            aria-label={t("Osoba (zmiana zbiorcza)")}
             disabled={Boolean(busy)}
             onChange={(event) => setBulk({ ...bulk, userId: event.target.value })}
           >
-            <option value="">Osoba…</option>
+            <option value="">{t("Osoba…")}</option>
             {users
               .filter((user) => user.userId !== currentUserId)
               .map((user) => (
@@ -729,7 +729,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           </select>
           <select
             value={bulk.kind === "revoke" ? "revoke" : bulk.role}
-            aria-label="Działanie (zmiana zbiorcza)"
+            aria-label={t("Działanie (zmiana zbiorcza)")}
             disabled={Boolean(busy)}
             onChange={(event) =>
               setBulk(
@@ -741,10 +741,10 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
           >
             {GRANTABLE.map((role) => (
               <option key={role} value={role}>
-                Nadaj lub zmień rolę: {ROLE_LABELS[role]}
+                {t("Nadaj lub zmień rolę:")} {ROLE_LABELS[role]}
               </option>
             ))}
-            <option value="revoke">Odbierz dostęp</option>
+            <option value="revoke">{t("Odbierz dostęp")}</option>
           </select>
           {bulk.kind === "grant" ? (
             <label className="case-reidentify-toggle">
@@ -754,7 +754,7 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
                 disabled={Boolean(busy)}
                 onChange={(event) => setBulk({ ...bulk, canReidentify: event.target.checked })}
               />
-              deanonimizacja
+              {t("deanonimizacja")}
             </label>
           ) : null}
           <button
@@ -798,9 +798,9 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         </div>
       </fieldset>
       <label>
-        Użytkownik
+        {t("Użytkownik")}
         <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>
-          <option value="">Wszystkie sprawy</option>
+          <option value="">{t("Wszystkie sprawy")}</option>
           {users.map((user) => (
             <option key={user.userId} value={user.userId}>
               {user.displayName} ({user.loginName}){user.userId === currentUserId ? " — Ty" : ""}
@@ -812,17 +812,17 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
       {message ? <div className="alert">{message}</div> : null}
       {userFilter ? (
         <>
-          <h3>Sprawy z dostępem ({visible.member.length})</h3>
+          <h3>{t("Sprawy z dostępem (")}{visible.member.length})</h3>
           {visible.member.length ? visible.member.map((item) => renderCase(item, false)) : (
-            <p className="field-help">Brak spraw.</p>
+            <p className="field-help">{t("Brak spraw.")}</p>
           )}
-          <h3>Pozostałe sprawy ({visible.other.length})</h3>
+          <h3>{t("Pozostałe sprawy (")}{visible.other.length})</h3>
           {visible.other.map((item) => renderCase(item, true))}
         </>
       ) : shown.length ? (
         shown.map((item) => renderCase(item, false))
       ) : (
-        <p className="field-help">{cases.length ? "Brak spraw pasujących do wyszukiwania lub zakresu dat." : "Brak spraw."}</p>
+        <p className="field-help">{cases.length ? t("Brak spraw pasujących do wyszukiwania lub zakresu dat.") : "Brak spraw."}</p>
       )}
     </section>
   );

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import type { DocumentPageScan } from "./api.js";
 import { loadPageScan } from "./page-scan-cache.js";
@@ -22,8 +23,8 @@ export function ScanSnippet(props: { caseId: string; documentId: string; page: n
 
   const box = scan?.lines[props.line]?.box ?? null;
   let body;
-  if (scan === undefined) body = <small>Wczytuję fragment skanu…</small>;
-  else if (!scan || !box) body = <small>Brak ramki tej linii na skanie: porównaj w podglądzie strony obok.</small>;
+  if (scan === undefined) body = <small>{t("Wczytuję fragment skanu…")}</small>;
+  else if (!scan || !box) body = <small>{t("Brak ramki tej linii na skanie: porównaj w podglądzie strony obok.")}</small>;
   else {
     // The line with a margin of half its height (a word cut on the edge is still readable).
     const margin = Math.max(6, (box[3] - box[1]) / 2);
@@ -50,7 +51,7 @@ export function ScanSnippet(props: { caseId: string; documentId: string; page: n
       }}
     >
       {body}
-      <button type="button" className="scan-snippet-close" aria-label="Zamknij fragment skanu" onClick={props.onClose}>
+      <button type="button" className="scan-snippet-close" aria-label={t("Zamknij fragment skanu")} onClick={props.onClose}>
         ×
       </button>
     </div>

@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import {
   useEffect,
   useState
@@ -32,7 +33,7 @@ const ERRORS: Record<string, string> = {
 function checkText(server: McpServerStatus): string {
   const check = server.lastCheck;
   if (!check) return "";
-  const at = new Date(check.at).toLocaleString("pl-PL");
+  const at = new Date(check.at).toLocaleString(currentLocale());
   return check.ok
     ? ` · działa (sprawdzono ${at})`
     : ` · nie działa: ${ERRORS[check.error ?? ""] ?? check.error} (sprawdzono ${at})`;
@@ -187,13 +188,12 @@ export function McpConnectorsPanel() {
   return (
     <article className="chat-card">
       <p className="eyebrow">
-        Audyt systemu · FAZA 0E
+        {t("Audyt systemu · FAZA 0E")}
       </p>
       <h2>
-        Konektory MCP Lex Machina
+        {t("Konektory MCP Lex Machina")}
         <InfoTip>
-          Serwery wybranej jurysdykcji (prawo polskie: <code>prawo-polskie-v2/mcp-servers</code>). Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane
-          źródła są dostępne w czacie.
+          {t("Serwery wybranej jurysdykcji (prawo polskie:")} <code>{t("prawo-polskie-v2/mcp-servers")}</code>{t("). Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane źródła są dostępne w czacie.")}
         </InfoTip>
       </h2>
 
@@ -202,14 +202,14 @@ export function McpConnectorsPanel() {
 
       {status?.packageAvailable ? (
         <p className={status.package.integrity === "MATCH" ? "field-help" : "alert alert-error"}>
-          Pakiet serwerów{status.package.version ? ` ${status.package.version}` : ""}
+          {t("Pakiet serwerów")}{status.package.version ? ` ${status.package.version}` : ""}
           {status.package.skillVersion ? ` (pakiet jurysdykcji ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
         </p>
       ) : null}
 
       {status && !status.packageAvailable ? (
         <div className="alert alert-error">
-          Brak pakietu <code>{status.packagePath}</code> — zaktualizuj skille.
+          {t("Brak pakietu")} <code>{status.packagePath}</code> {t("— zaktualizuj skille.")}
         </div>
       ) : null}
 
@@ -223,13 +223,13 @@ export function McpConnectorsPanel() {
               onChange={(event) => setSyncDesktop(event.target.checked)}
             />
             <span>
-              Instaluj i odinstalowuj także w Claude Desktop
+              {t("Instaluj i odinstalowuj także w Claude Desktop")}
               {status.desktop.available ? (
                 <InfoTip>
-                  Zmienia <code>{status.desktop.configPath}</code>; przed każdą zmianą powstaje kopia zapasowa.
+                  {t("Zmienia")} <code>{status.desktop.configPath}</code>{t("; przed każdą zmianą powstaje kopia zapasowa.")}
                 </InfoTip>
               ) : (
-                " — nie wykryto Claude Desktop na tym komputerze"
+                t(" — nie wykryto Claude Desktop na tym komputerze")
               )}
             </span>
           </label>
@@ -247,7 +247,7 @@ export function McpConnectorsPanel() {
                         {server.installed
                           ? server.ready
                             ? "zainstalowany"
-                            : "zainstalowany, czeka na klucz"
+                            : t("zainstalowany, czeka na klucz")
                           : "niezainstalowany"}
                         {server.desktopInstalled ? " · Claude Desktop" : ""}
                         {checkText(server)}
@@ -294,14 +294,13 @@ export function McpConnectorsPanel() {
 
           <section>
             <h3>
-              Klucz API CEIDG
+              {t("Klucz API CEIDG")}
               <InfoTip>
-                Token wydaje Hurtownia danych CEIDG w Biznes.gov.pl (wniosek, logowanie Profilem Zaufanym). Klucz jest zapisywany
-                lokalnie, tylko dla Twojego konta.
+                {t("Token wydaje Hurtownia danych CEIDG w Biznes.gov.pl (wniosek, logowanie Profilem Zaufanym). Klucz jest zapisywany lokalnie, tylko dla Twojego konta.")}
               </InfoTip>
             </h3>
             <p className="field-help">
-              Stan: {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}.{" "}
+              {t("Stan:")} {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}.{" "}
               <a
                 href={status.ceidg.keyUrl}
                 target="_blank"
@@ -311,17 +310,17 @@ export function McpConnectorsPanel() {
                   void openExternalUrl(status.ceidg.keyUrl);
                 }}
               >
-                Uzyskaj klucz CEIDG
+                {t("Uzyskaj klucz CEIDG")}
               </a>
             </p>
             <label>
-              Token CEIDG
+              {t("Token CEIDG")}
               <input
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
                 value={ceidgKey}
-                placeholder="eyJ…"
+                placeholder={t("eyJ…")}
                 onChange={(event) => setCeidgKey(event.target.value)}
               />
             </label>
@@ -332,7 +331,7 @@ export function McpConnectorsPanel() {
                 disabled={Boolean(busy) || !ceidgKey.trim()}
                 onClick={saveCeidgKey}
               >
-                {busy === "ceidg-key" ? "Sprawdzam…" : "Zatwierdź klucz"}
+                {busy === "ceidg-key" ? "Sprawdzam…" : t("Zatwierdź klucz")}
               </button>
               <button
                 type="button"
@@ -340,13 +339,13 @@ export function McpConnectorsPanel() {
                 disabled={Boolean(busy) || !status.ceidg.keyConfigured}
                 onClick={removeCeidgKey}
               >
-                Usuń klucz
+                {t("Usuń klucz")}
               </button>
             </div>
           </section>
         </>
       ) : !error ? (
-        <p>Wczytywanie konektorów…</p>
+        <p>{t("Wczytywanie konektorów…")}</p>
       ) : null}
     </article>
   );

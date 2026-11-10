@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { ApplicationDownloadProgress } from "./ApplicationDownloadProgress.js";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -78,9 +79,9 @@ export function UpdatePrompt() {
   }, [store]);
 
   if (minimized && offer) return (
-    <aside className="update-download-toast" aria-label="Aktualizacja Lex Machina">
-      {busy ? <ApplicationDownloadProgress /> : <p role="status">{error || message || "Dostępna jest aktualizacja."}</p>}
-      <button type="button" onClick={() => setMinimized(false)}>Pokaż aktualizację</button>
+    <aside className="update-download-toast" aria-label={t("Aktualizacja Lex Machina")}>
+      {busy ? <ApplicationDownloadProgress /> : <p role="status">{error || message || t("Dostępna jest aktualizacja.")}</p>}
+      <button type="button" onClick={() => setMinimized(false)}>{t("Pokaż aktualizację")}</button>
     </aside>
   );
 
@@ -89,7 +90,7 @@ export function UpdatePrompt() {
     return (
       <div className="update-prompt-overlay">
         <section className="update-prompt" role="dialog" aria-modal="true" aria-labelledby="update-outcome-title">
-          <h2 id="update-outcome-title">{outcome.kind === "INSTALLED" ? "Aktualizacja zainstalowana" : "Aktualizacja nie została zainstalowana"}</h2>
+          <h2 id="update-outcome-title">{outcome.kind === "INSTALLED" ? "Aktualizacja zainstalowana" : t("Aktualizacja nie została zainstalowana")}</h2>
           <p className={outcome.kind === "INSTALLED" ? "update-prompt-status" : "update-prompt-error"} role={outcome.kind === "INSTALLED" ? "status" : "alert"}>
             {outcome.message}
           </p>
@@ -109,14 +110,14 @@ export function UpdatePrompt() {
     if (busy || !offer) return;
     setBusy(true);
     setError("");
-    setMessage("Przygotowuję aktualizację. Po pobraniu zdecydujesz, kiedy ją zainstalować.");
+    setMessage(t("Przygotowuję aktualizację. Po pobraniu zdecydujesz, kiedy ją zainstalować."));
     setStage(1);
     try {
       if (!staged || staged.version !== offer.version) {
         const downloaded = await downloadApplicationUpdate();
         setStaged(downloaded);
         if (downloaded.version !== offer.version) setOffer({ ...offer, version: downloaded.version });
-        setMessage("Aktualizacja jest gotowa. Zapisz pracę przed rozpoczęciem instalacji.");
+        setMessage(t("Aktualizacja jest gotowa. Zapisz pracę przed rozpoczęciem instalacji."));
         setBusy(false);
         setStage(0);
         return;
@@ -124,8 +125,8 @@ export function UpdatePrompt() {
       setStage(2);
       setMessage(
         macos
-          ? "Otwieram instalator macOS. Lex Machina zamknie się teraz; przejdź kroki instalatora."
-          : "Instaluję aktualizację. Lex Machina zamknie się, zaktualizuje i uruchomi ponownie."
+          ? t("Otwieram instalator macOS. Lex Machina zamknie się teraz; przejdź kroki instalatora.")
+          : t("Instaluję aktualizację. Lex Machina zamknie się, zaktualizuje i uruchomi ponownie.")
       );
       rememberUpdateHandoff(store, staged.version || offer.version);
       await installStagedApplicationUpdate(staged.receiptToken);
@@ -153,11 +154,11 @@ export function UpdatePrompt() {
   return (
     <div className="update-prompt-overlay">
       <section className="update-prompt" role="dialog" aria-modal="true" aria-labelledby="update-prompt-title">
-        <h2 id="update-prompt-title">Dostępna jest nowa wersja Lex Machina</h2>
+        <h2 id="update-prompt-title">{t("Dostępna jest nowa wersja Lex Machina")}</h2>
         <p>
-          Zainstalowana: <strong>{APP_VERSION}</strong> · nowa: <strong>{offer.version}</strong>
+          {t("Zainstalowana:")} <strong>{APP_VERSION}</strong> {t("· nowa:")} <strong>{offer.version}</strong>
         </p>
-        <p>Czy zaktualizować teraz? Dane, sprawy i ustawienia zostają.</p>
+        <p>{t("Czy zaktualizować teraz? Dane, sprawy i ustawienia zostają.")}</p>
         {failure && !message && !error ? (
           <p className="update-prompt-error" role="alert" title={lastAttempt?.lastError}>
             {failure}
@@ -167,7 +168,7 @@ export function UpdatePrompt() {
         {busy && stage === 1 ? <ApplicationDownloadProgress /> : null}
         {stage === 2 ? (
           <div className="update-prompt-progress">
-            <progress aria-label="Postęp aktualizacji" />
+            <progress aria-label={t("Postęp aktualizacji")} />
             <ol>
               {UPDATE_STEPS(macos).map((label, index) => (
                 <li key={label} className={index + 1 < stage ? "done" : index + 1 === stage ? "current" : undefined}>
@@ -179,9 +180,9 @@ export function UpdatePrompt() {
         ) : null}
         {error ? <p className="update-prompt-error" role="alert">{error}</p> : null}
         <div className="update-prompt-actions">
-          {busy && stage === 1 ? <button type="button" onClick={() => setMinimized(true)}>Pracuj dalej</button> : null}
+          {busy && stage === 1 ? <button type="button" onClick={() => setMinimized(true)}>{t("Pracuj dalej")}</button> : null}
           <button type="button" className="update-prompt-primary" disabled={busy} onClick={() => void update()}>
-            {busy ? "Przygotowuję…" : staged?.version === offer.version ? "Zainstaluj i uruchom ponownie" : "Pobierz aktualizację"}
+            {busy ? "Przygotowuję…" : staged?.version === offer.version ? t("Zainstaluj i uruchom ponownie") : t("Pobierz aktualizację")}
           </button>
           <button
             type="button"
@@ -191,7 +192,7 @@ export function UpdatePrompt() {
               setOffer(null);
             }}
           >
-            Później
+            {t("Później")}
           </button>
           <button
             type="button"
@@ -201,12 +202,12 @@ export function UpdatePrompt() {
               setOffer(null);
             }}
           >
-            Pomiń tę wersję
+            {t("Pomiń tę wersję")}
           </button>
         </div>
         {offer.releaseUrl ? (
           <button type="button" className="update-prompt-link" disabled={busy} onClick={() => void openReleasePage(offer.releaseUrl!)}>
-            Co nowego w tej wersji
+            {t("Co nowego w tej wersji")}
           </button>
         ) : null}
       </section>

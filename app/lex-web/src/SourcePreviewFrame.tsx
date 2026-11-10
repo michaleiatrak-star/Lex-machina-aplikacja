@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, previewMcpSource } from "./api.js";
 import { PdfPreview } from "./PdfPreview.js";
@@ -55,7 +56,7 @@ export function SourcePreviewFrame(props: { target: SourcePreviewTarget }) {
     };
   }, [key]);
 
-  if (state.kind === "loading") return <p className="field-help">Wczytywanie źródła…</p>;
+  if (state.kind === "loading") return <p className="field-help">{t("Wczytywanie źródła…")}</p>;
   if (state.kind === "error") return <p className="chat-inline-error">{state.message}</p>;
   if (state.kind === "pdf") return <PdfPreview blob={state.blob} filename={key} />;
   return (

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, apiBase, attemptSnSessionOnServer, closeSnProxyWindow, isDesktopShell, openSnProxyWindow, probeSnSession, saveSnSession, snProxyWindowStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
@@ -84,7 +85,7 @@ export function SnVerification({
         // okno zamknięte albo ciasteczka jeszcze niegotowe — próbujemy dalej do limitu
       }
       if (tries >= 45) {
-        setMessage("Weryfikacja trwa — po rozwiązaniu zadania w oknie sn.pl kliknij „Gotowe”.");
+        setMessage(t("Weryfikacja trwa — po rozwiązaniu zadania w oknie sn.pl kliknij „Gotowe”."));
       }
     }
     const timer = window.setInterval(() => void tick(), 4000);
@@ -128,24 +129,23 @@ export function SnVerification({
   return (
     <div className="alert">
       <p>
-        <strong>sn.pl wymaga weryfikacji człowieka (captcha).</strong>{" "}
+        <strong>{t("sn.pl wymaga weryfikacji człowieka (captcha).")}</strong>{" "}
         {verification.savedSession
-          ? "Zapisana sesja wygasła albo została odrzucona — zweryfikuj się ponownie."
-          : "Zapytanie automatyczne zostało zablokowane."}
+          ? t("Zapisana sesja wygasła albo została odrzucona — zweryfikuj się ponownie.")
+          : t("Zapytanie automatyczne zostało zablokowane.")}
       </p>
       {invoke ? (
         <>
           <p className="field-help">
-            Otwórz okno sn.pl i rozwiąż captchę, jeśli się pojawi - zapytanie ponowi się samo. Nie zamykaj okna przed
-            wynikiem.
-            <InfoTip>Okno możesz zminimalizować. „Gotowe” jest potrzebne tylko, gdy aplikacja nie wykryje rozwiązania.</InfoTip>
+            {t("Otwórz okno sn.pl i rozwiąż captchę, jeśli się pojawi - zapytanie ponowi się samo. Nie zamykaj okna przed wynikiem.")}
+            <InfoTip>{t("Okno możesz zminimalizować. „Gotowe” jest potrzebne tylko, gdy aplikacja nie wykryje rozwiązania.")}</InfoTip>
           </p>
           <div className="chat-form-row compact">
             <button type="button" className="chat-secondary-action" disabled={stage === "saving"} onClick={() => void open()}>
-              {stage === "open" ? "Pokaż okno sn.pl" : "Zweryfikuj w sn.pl"}
+              {stage === "open" ? t("Pokaż okno sn.pl") : t("Zweryfikuj w sn.pl")}
             </button>
             <button type="button" className="chat-primary-action" disabled={stage !== "open"} onClick={() => void finish()}>
-              {stage === "saving" ? "Zapisuję…" : "Gotowe — ponów zapytanie"}
+              {stage === "saving" ? "Zapisuję…" : t("Gotowe — ponów zapytanie")}
             </button>
           </div>
         </>
@@ -213,7 +213,7 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
   async function openWindow() {
     cancelRef.current = false;
     setStage("window");
-    setMessage("Okno sn.pl otwarte przez serwer — rozwiąż captchę, jeśli się pojawi. Okno zamknie się samo.");
+    setMessage(t("Okno sn.pl otwarte przez serwer — rozwiąż captchę, jeśli się pojawi. Okno zamknie się samo."));
     try {
       const result = await runSnProxyWindow({
         open: openSnProxyWindow,
@@ -225,28 +225,28 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
         cancelled: () => cancelRef.current
       });
       if (result === "ready") {
-        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        setMessage(t("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie."));
         onVerified();
-      } else if (result === "blocked") setMessage("Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.");
-      else if (result === "closed") setMessage("Przerwano oczekiwanie na weryfikację w oknie sn.pl.");
-      else setMessage("Weryfikacja w oknie nie przeszła w 10 minut.");
+      } else if (result === "blocked") setMessage(t("Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony i spróbuj ponownie."));
+      else if (result === "closed") setMessage(t("Przerwano oczekiwanie na weryfikację w oknie sn.pl."));
+      else setMessage(t("Weryfikacja w oknie nie przeszła w 10 minut."));
     } catch (error) {
-      setMessage(error instanceof ApiError ? `Nie udało się otworzyć okna sn.pl (${error.code}).` : "Nie udało się otworzyć okna sn.pl.");
+      setMessage(error instanceof ApiError ? `Nie udało się otworzyć okna sn.pl (${error.code}).` : t("Nie udało się otworzyć okna sn.pl."));
     } finally {
       setStage("idle");
     }
   }
   async function tryServer() {
     setStage("server");
-    setMessage("Serwer próbuje przejść weryfikację sn.pl (do ok. minuty)…");
+    setMessage(t("Serwer próbuje przejść weryfikację sn.pl (do ok. minuty)…"));
     try {
       const result = await attemptSnSessionOnServer();
       if (result.ready) {
-        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        setMessage(t("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie."));
         onVerified();
-      } else setMessage(SN_SERVER_REASONS[result.reason ?? ""] ?? "Weryfikacja na serwerze nie przeszła.");
+      } else setMessage(SN_SERVER_REASONS[result.reason ?? ""] ?? t("Weryfikacja na serwerze nie przeszła."));
     } catch (error) {
-      setMessage(error instanceof ApiError ? `Weryfikacja na serwerze nie powiodła się (${error.code}).` : "Weryfikacja na serwerze nie powiodła się.");
+      setMessage(error instanceof ApiError ? `Weryfikacja na serwerze nie powiodła się (${error.code}).` : t("Weryfikacja na serwerze nie powiodła się."));
     } finally {
       setStage("idle");
     }
@@ -256,12 +256,12 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
     try {
       const { ready } = await probeSnSession(cookie.replace(/^\s*cookie:\s*/iu, "").trim(), navigator.userAgent);
       if (ready) {
-        setMessage("Sesja działa z serwera — zapisana, ponawiam zapytanie.");
+        setMessage(t("Sesja działa z serwera — zapisana, ponawiam zapytanie."));
         setCookie("");
         onVerified();
-      } else setMessage("sn.pl nie przyjął tej sesji z adresu serwera (sesja z innej sieci albo wygasła).");
+      } else setMessage(t("sn.pl nie przyjął tej sesji z adresu serwera (sesja z innej sieci albo wygasła)."));
     } catch {
-      setMessage("Nie udało się sprawdzić sesji.");
+      setMessage(t("Nie udało się sprawdzić sesji."));
     } finally {
       setStage("idle");
     }
@@ -269,40 +269,40 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
   return (
     <>
       <p className="field-help">
-        Okno sn.pl otwiera się przez serwer Lex Machina, więc sesja należy do jego adresu; zamknie się samo po przejściu weryfikacji.
-        <InfoTip>Sesja sn.pl działa tylko z adresu, z którego przeszła weryfikację. Wklejany jest wyłącznie nagłówek Cookie zapytania do sn.pl (narzędzia programisty → Sieć); aplikacja go nie wyświetla ani nie zapisuje w logach.</InfoTip>
+        {t("Okno sn.pl otwiera się przez serwer Lex Machina, więc sesja należy do jego adresu; zamknie się samo po przejściu weryfikacji.")}
+        <InfoTip>{t("Sesja sn.pl działa tylko z adresu, z którego przeszła weryfikację. Wklejany jest wyłącznie nagłówek Cookie zapytania do sn.pl (narzędzia programisty → Sieć); aplikacja go nie wyświetla ani nie zapisuje w logach.")}</InfoTip>
       </p>
       <div className="chat-form-row compact">
         {stage === "window" ? (
           <button type="button" className="chat-secondary-action" onClick={() => (cancelRef.current = true)}>
-            Anuluj oczekiwanie
+            {t("Anuluj oczekiwanie")}
           </button>
         ) : (
           <button type="button" className="chat-primary-action" disabled={stage !== "idle"} onClick={() => void openWindow()}>
-            Zweryfikuj w oknie sn.pl
+            {t("Zweryfikuj w oknie sn.pl")}
           </button>
         )}
         <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => void tryServer()}>
-          {stage === "server" ? "Serwer sprawdza…" : "Spróbuj na serwerze"}
+          {stage === "server" ? "Serwer sprawdza…" : t("Spróbuj na serwerze")}
         </button>
         <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(url)}>
-          Otwórz sn.pl
+          {t("Otwórz sn.pl")}
         </button>
         <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => setStage("paste")}>
-          Wklej sesję
+          {t("Wklej sesję")}
         </button>
       </div>
       {stage === "paste" || stage === "saving" ? (
         <div className="chat-form-row compact">
           <input
             type="password"
-            aria-label="Nagłówek Cookie z sn.pl"
-            placeholder="Cookie: visid_incap_…; incap_ses_…"
+            aria-label={t("Nagłówek Cookie z sn.pl")}
+            placeholder={t("Cookie: visid_incap_…; incap_ses_…")}
             value={cookie}
             onChange={(event) => setCookie(event.target.value)}
           />
           <button type="button" className="chat-primary-action" disabled={!cookie.trim() || stage === "saving"} onClick={() => void savePasted()}>
-            {stage === "saving" ? "Sprawdzam…" : "Sprawdź i zapisz"}
+            {stage === "saving" ? "Sprawdzam…" : t("Sprawdź i zapisz")}
           </button>
         </div>
       ) : null}

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import {
   createDeanonymizationIntent,
@@ -80,7 +81,7 @@ export function ArtifactDeanonymize(props: {
   if (ticket) {
     return (
       <div className="artifact-deanonymize">
-        <p>Plik z przywróconymi danymi jest w aktach sprawy.</p>
+        <p>{t("Plik z przywróconymi danymi jest w aktach sprawy.")}</p>
         <button
           type="button"
           onClick={() =>
@@ -95,9 +96,9 @@ export function ArtifactDeanonymize(props: {
             })
           }
         >
-          Pobierz teraz (jednorazowo)
+          {t("Pobierz teraz (jednorazowo)")}
         </button>
-        <button type="button" onClick={props.onCancel}>Zamknij</button>
+        <button type="button" onClick={props.onCancel}>{t("Zamknij")}</button>
         {error ? <p className="chat-inline-error">{error}</p> : null}
       </div>
     );
@@ -139,8 +140,8 @@ export function ArtifactDeanonymize(props: {
   return (
     <div className="artifact-deanonymize">
       <p>
-        Przywróć dane osobowe w dokumencie.
-        <InfoTip>Dane wrócą z klucza tej sprawy w przypadkach podanych przez model. Plik z symbolami zostaje bez zmian.</InfoTip>
+        {t("Przywróć dane osobowe w dokumencie.")}
+        <InfoTip>{t("Dane wrócą z klucza tej sprawy w przypadkach podanych przez model. Plik z symbolami zostaje bez zmian.")}</InfoTip>
       </p>
       <div className="chat-form-row compact">
         <button
@@ -161,9 +162,9 @@ export function ArtifactDeanonymize(props: {
             })
           }
         >
-          Podgląd przed deanonimizacją
+          {t("Podgląd przed deanonimizacją")}
         </button>
-        <button type="button" disabled={busy} onClick={props.onCancel}>Anuluj</button>
+        <button type="button" disabled={busy} onClick={props.onCancel}>{t("Anuluj")}</button>
       </div>
       {error ? <p className="chat-inline-error">{error}</p> : null}
     </div>

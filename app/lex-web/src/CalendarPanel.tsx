@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import {
   addCaseScheduleEvent,
@@ -171,11 +172,11 @@ export function CalendarPanel({
     <section className="chat-card-stack">
       <article className="chat-card">
         <div className="lex-calendar-head">
-          <button type="button" className="chat-secondary-action" onClick={() => shiftMonth(-1)} aria-label="Poprzedni miesiąc">‹</button>
+          <button type="button" className="chat-secondary-action" onClick={() => shiftMonth(-1)} aria-label={t("Poprzedni miesiąc")}>‹</button>
           <h2>
             {MONTH_NAMES[cursor.month]} {cursor.year}
           </h2>
-          <button type="button" className="chat-secondary-action" onClick={() => shiftMonth(1)} aria-label="Następny miesiąc">›</button>
+          <button type="button" className="chat-secondary-action" onClick={() => shiftMonth(1)} aria-label={t("Następny miesiąc")}>›</button>
           <button
             type="button"
             className="chat-secondary-action"
@@ -185,10 +186,10 @@ export function CalendarPanel({
               setSelectedDay(today);
             }}
           >
-            Dziś
+            {t("Dziś")}
           </button>
         </div>
-        <div className="lex-calendar-grid" role="grid" aria-label="Kalendarz spraw">
+        <div className="lex-calendar-grid" role="grid" aria-label={t("Kalendarz spraw")}>
           {WEEKDAYS.map((name) => (
             <span key={name} className="lex-calendar-weekday">{name}</span>
           ))}
@@ -229,15 +230,15 @@ export function CalendarPanel({
             </span>
           ))}
         </div>
-        {loading ? <p>Ładuję zdarzenia…</p> : null}
+        {loading ? <p>{t("Ładuję zdarzenia…")}</p> : null}
         {error ? <p className="chat-error">{error}</p> : null}
       </article>
 
       <article className="chat-card matter-schedule-card">
-        <p className="eyebrow">Najbliższe {AGENDA_DAYS} dni</p>
-        <h2>Nadchodzące terminy</h2>
+        <p className="eyebrow">{t("Najbliższe")} {AGENDA_DAYS} {t("dni")}</p>
+        <h2>{t("Nadchodzące terminy")}</h2>
         {agenda.length === 0 ? (
-          <p>Brak zdarzeń w najbliższych {AGENDA_DAYS} dniach.</p>
+          <p>{t("Brak zdarzeń w najbliższych")} {AGENDA_DAYS} {t("dniach.")}</p>
         ) : (
           <ul className="lex-calendar-agenda">
             {agenda.map((event) => {
@@ -266,7 +267,7 @@ export function CalendarPanel({
         <h2>{dayLabel(selectedDay)}</h2>
         <div className="matter-schedule-list">
           {dayEvents.length === 0 ? (
-            <p>Brak zdarzeń tego dnia.</p>
+            <p>{t("Brak zdarzeń tego dnia.")}</p>
           ) : (
             dayEvents.map((event) => (
               <div className="matter-schedule-item" key={event.eventId}>
@@ -283,7 +284,7 @@ export function CalendarPanel({
                 </div>
                 <div className="matter-schedule-item-actions">
                   <button type="button" className="chat-secondary-action" onClick={() => onOpenCase(event.caseId)}>
-                    Otwórz sprawę
+                    {t("Otwórz sprawę")}
                   </button>
                   {canWrite(event.caseId) ? (
                     <button
@@ -292,7 +293,7 @@ export function CalendarPanel({
                       disabled={busy}
                       onClick={() => void remove(event)}
                     >
-                      Usuń
+                      {t("Usuń")}
                     </button>
                   ) : null}
                 </div>
@@ -301,15 +302,15 @@ export function CalendarPanel({
           )}
         </div>
 
-        <h3>Dodaj zdarzenie do kalendarza i sprawy</h3>
+        <h3>{t("Dodaj zdarzenie do kalendarza i sprawy")}</h3>
         <div className="matter-schedule-form">
           <select
-            aria-label="Sprawa, której dotyczy zdarzenie"
+            aria-label={t("Sprawa, której dotyczy zdarzenie")}
             value={draft.caseId}
             disabled={busy}
             onChange={(event) => setDraft((current) => ({ ...current, caseId: event.target.value }))}
           >
-            <option value="">Wskaż sprawę (wymagane)</option>
+            <option value="">{t("Wskaż sprawę (wymagane)")}</option>
             {writableCases.map((item) => (
               <option key={item.caseId} value={item.caseId}>
                 {item.displayName || "Sprawa bez nazwy"}
@@ -318,7 +319,7 @@ export function CalendarPanel({
           </select>
           <div className="chat-form-row">
             <select
-              aria-label="Rodzaj zdarzenia"
+              aria-label={t("Rodzaj zdarzenia")}
               value={draft.kind}
               disabled={busy}
               onChange={(event) =>
@@ -331,7 +332,7 @@ export function CalendarPanel({
             </select>
             <input
               type="date"
-              aria-label="Data"
+              aria-label={t("Data")}
               value={selectedDay}
               disabled={busy}
               onChange={(event) => {
@@ -340,7 +341,7 @@ export function CalendarPanel({
             />
             <input
               type="time"
-              aria-label="Godzina"
+              aria-label={t("Godzina")}
               value={draft.time}
               disabled={busy}
               onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))}
@@ -348,7 +349,7 @@ export function CalendarPanel({
           </div>
           <input
             maxLength={180}
-            placeholder="Opis, np. rozprawa apelacyjna"
+            placeholder={t("Opis, np. rozprawa apelacyjna")}
             value={draft.title}
             disabled={busy}
             onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -356,7 +357,7 @@ export function CalendarPanel({
           <div className="chat-form-row">
             <input
               maxLength={180}
-              placeholder="Miejsce / sala / adres (opcjonalnie)"
+              placeholder={t("Miejsce / sala / adres (opcjonalnie)")}
               value={draft.location}
               disabled={busy}
               onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
@@ -367,18 +368,18 @@ export function CalendarPanel({
               disabled={busy || !draft.caseId || !draft.title.trim() || !draft.time}
               onClick={() => void save()}
             >
-              Dodaj zdarzenie
+              {t("Dodaj zdarzenie")}
             </button>
           </div>
           <textarea
             maxLength={2000}
-            placeholder="Notatka (opcjonalnie)"
+            placeholder={t("Notatka (opcjonalnie)")}
             value={draft.notes}
             disabled={busy}
             onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
           />
           {writableCases.length === 0 ? (
-            <small>Brak spraw z prawem zapisu: najpierw załóż sprawę.</small>
+            <small>{t("Brak spraw z prawem zapisu: najpierw załóż sprawę.")}</small>
           ) : null}
         </div>
       </article>

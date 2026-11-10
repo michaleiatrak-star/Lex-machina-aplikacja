@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, getDomainFallback, setDomainFallback, type DomainFallbackChoice } from "./api.js";
 import { InfoTip } from "./InfoTip";
@@ -46,17 +47,16 @@ export function DomainFallbackSection() {
       <div className="maintenance-heading">
         <div>
           <strong>
-            Model zapasowy routingu dziedzin
+            {t("Model zapasowy routingu dziedzin")}
             <InfoTip>
-              Gdy reguły nie wskażą dziedziny prawa (ok. 1–3% pytań), wybrany model dostaje krótkie zapytanie. Pytanie idzie po
-              pseudonimizacji; model lokalny zostaje na tym komputerze.
+              {t("Gdy reguły nie wskażą dziedziny prawa (ok. 1–3% pytań), wybrany model dostaje krótkie zapytanie. Pytanie idzie po pseudonimizacji; model lokalny zostaje na tym komputerze.")}
             </InfoTip>
           </strong>
         </div>
         <span>{LABELS[choice]}</span>
       </div>
       <label className="core-law-auto">
-        Model:{" "}
+        {t("Model:")}{" "}
         <select value={choice} disabled={busy} onChange={(event) => void change(event.target.value as DomainFallbackChoice)}>
           {choices.map((item) => (
             <option key={item} value={item}>
@@ -65,7 +65,7 @@ export function DomainFallbackSection() {
           ))}
         </select>
       </label>
-      <InfoTip>Model lokalny musi być zainstalowany. Jeśli nie odpowie, rozmowa toczy się dalej bez wskazówki dziedziny.</InfoTip>
+      <InfoTip>{t("Model lokalny musi być zainstalowany. Jeśli nie odpowie, rozmowa toczy się dalej bez wskazówki dziedziny.")}</InfoTip>
       {error ? <p className="field-error">{error}</p> : null}
     </section>
   );

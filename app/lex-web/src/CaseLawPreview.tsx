@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, copyCaseLaw, previewCaseLaw, type CaseLawCopy, type CaseLawPreview as Preview } from "./api.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
@@ -134,7 +135,7 @@ export function CaseLawPreview(props: {
     };
   }, [sourceUrl, passage, signature, attributed, caseId]);
 
-  if (state.kind === "loading") return <p className="field-help">Wczytywanie pełnego tekstu ze źródła…</p>;
+  if (state.kind === "loading") return <p className="field-help">{t("Wczytywanie pełnego tekstu ze źródła…")}</p>;
   if (state.kind === "error") {
     return (
       <>
@@ -161,7 +162,7 @@ export function CaseLawPreview(props: {
       {onSaveToCase ? (
         <p className="field-help">
           <button type="button" className="chat-secondary-action" disabled={saving.kind === "saving" || saving.kind === "done"} onClick={() => void save()}>
-            {saving.kind === "saving" ? "Zapisywanie w aktach…" : saving.kind === "done" ? "Zapisano w aktach sprawy" : "Zapisz w aktach sprawy"}
+            {saving.kind === "saving" ? t("Zapisywanie w aktach…") : saving.kind === "done" ? t("Zapisano w aktach sprawy") : t("Zapisz w aktach sprawy")}
           </button>{" "}
           {saving.kind === "done" ? `${saving.name} (z linkiem do karty orzeczenia)` : null}
           {saving.kind === "error" ? <span className="chat-inline-error">{saving.message}</span> : null}

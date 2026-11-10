@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, getJurisdiction, setLegalSystem, type JurisdictionSettings, type LegalSystemOption } from "./api.js";
 import { InfoTip } from "./InfoTip";
@@ -65,19 +66,16 @@ export function JurisdictionSection() {
       <div className="maintenance-heading">
         <div>
           <strong>
-            System prawny
+            {t("System prawny")}
             <InfoTip>
-              Prawo kraju, z którym pracuje aplikacja. Zmiana działa od razu: skill prawa krajowego, skille dziedzinowe,
-              konektory i źródła przepisów przełączają się na wybrany kraj, a pozostałe kraje są wyłączone. Lokalna baza
-              aktów (RAG) aktualizuje się tylko dla wybranej jurysdykcji; w trybie serwerowym — dla wszystkich.
-              Pakiet ze skillami dziedzinowymi ma dziś tylko Polska.
+              {t("Prawo kraju, z którym pracuje aplikacja. Zmiana działa od razu: skill prawa krajowego, skille dziedzinowe, konektory i źródła przepisów przełączają się na wybrany kraj, a pozostałe kraje są wyłączone. Lokalna baza aktów (RAG) aktualizuje się tylko dla wybranej jurysdykcji; w trybie serwerowym — dla wszystkich. Pakiet ze skillami dziedzinowymi ma dziś tylko Polska.")}
             </InfoTip>
           </strong>
         </div>
         <span>{chosen?.name ?? settings?.country ?? ""}</span>
       </div>
       <label className="core-law-auto">
-        Kraj:{" "}
+        {t("Kraj:")}{" "}
         <select value={settings?.country ?? ""} disabled={busy || !settings} onChange={(event) => void change(event.target.value)}>
           {FAMILIES.map(([family, label]) => {
             const members = countries.filter((item) => (item.family ?? "kontynentalne") === family);
@@ -95,15 +93,15 @@ export function JurisdictionSection() {
       </label>
       {chosen ? (
         <p className="field-help">
-          {chosen.pack ? `Pakiet prawa krajowego: ${chosen.pack}. ` : "Brak pakietu prawa krajowego i skilli dziedzinowych tego kraju: skille metod działają bez nich. "}
-          Źródło przepisów: {READING[chosen.reading] ?? chosen.reading} ({chosen.portal}).
+          {chosen.pack ? `Pakiet prawa krajowego: ${chosen.pack}. ` : t("Brak pakietu prawa krajowego i skilli dziedzinowych tego kraju: skille metod działają bez nich. ")}
+          {t("Źródło przepisów:")} {READING[chosen.reading] ?? chosen.reading} ({chosen.portal}).
           {chosen.familyLabel ? ` Rodzina prawa: ${chosen.familyLabel.toLowerCase()}.` : ""}
-          {chosen.family === "common-law" ? " Źródłem są ustawy i orzeczenia (precedens); model sprawdza oba." : ""}
+          {chosen.family === "common-law" ? t(" Źródłem są ustawy i orzeczenia (precedens); model sprawdza oba.") : ""}
         </p>
       ) : null}
       {chosen?.familyNote ? <p className="field-help">{chosen.familyNote}</p> : null}
       {provider?.missing.length ? (
-        <p className="field-error">Bez dostawcy w aplikacji (tryb zdegradowany): {provider.missing.join(", ")}.</p>
+        <p className="field-error">{t("Bez dostawcy w aplikacji (tryb zdegradowany):")} {provider.missing.join(", ")}.</p>
       ) : null}
       {error ? <p className="field-error">{error}</p> : null}
     </section>

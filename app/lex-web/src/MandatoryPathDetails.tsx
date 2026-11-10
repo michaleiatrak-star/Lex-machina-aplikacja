@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { MandatoryPathStep, MandatoryPathView } from "./api.js";
 
 const LAYERS: Array<[MandatoryPathStep["layer"], string]> = [
@@ -27,13 +28,13 @@ export function MandatoryPathDetails({ path }: { path: MandatoryPathView }) {
   return (
     <details className="chat-evidence chat-mandatory-path">
       <summary>
-        Ścieżka obowiązkowa — profil {path.profile === "PELNY" ? "pełny" : "lekki"}: {met}/{counted.length}
+        {t("Ścieżka obowiązkowa — profil")} {path.profile === "PELNY" ? "pełny" : "lekki"}: {met}/{counted.length}
         {path.complete ? "" : ` · brak: ${path.missing.length}`}
       </summary>
-      <p className="field-help">Rejestr prowadzi aplikacja na podstawie audytu tej odpowiedzi; źródło modelu ścieżki: {path.source}.</p>
+      <p className="field-help">{t("Rejestr prowadzi aplikacja na podstawie audytu tej odpowiedzi; źródło modelu ścieżki:")} {path.source}.</p>
       {path.routingTrace ? (
         <div>
-          <strong>Ślad routingu (KROK 3A)</strong>
+          <strong>{t("Ślad routingu (KROK 3A)")}</strong>
           <pre className="chat-routing-trace">{path.routingTrace}</pre>
         </div>
       ) : null}
@@ -59,7 +60,7 @@ export function MandatoryPathDetails({ path }: { path: MandatoryPathView }) {
       })}
       {skipped.length ? (
         <div>
-          <strong>Pominięte w tej turze (wyzwalacz nie wystąpił)</strong>
+          <strong>{t("Pominięte w tej turze (wyzwalacz nie wystąpił)")}</strong>
           <ul>
             {skipped.map((step) => (
               <li key={step.id}>

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listCaseFiles } from "./api.js";
 import { getWorkspace } from "./workspace-client.js";
@@ -75,7 +76,7 @@ export function FirmFilePicker(props: {
                 name: item.filename,
                 folderId,
                 pick: { kind: "template", templateId: item.itemId },
-                note: "Wzór · tekst jawny, bez anonimizacji - usuń z wzoru dane klientów"
+                note: t("Wzór · tekst jawny, bez anonimizacji - usuń z wzoru dane klientów")
               };
             }
             const processing = files.uploads.find((file) => file.uploadId === item.itemId)?.processing;
@@ -94,7 +95,7 @@ export function FirmFilePicker(props: {
                   name: item.filename,
                   folderId,
                   pick: null,
-                  note: "Nieprzetworzony - przetwórz go w zakładce Kancelaria"
+                  note: t("Nieprzetworzony - przetwórz go w zakładce Kancelaria")
                 };
           });
         props.onNames?.(
@@ -175,21 +176,21 @@ export function FirmFilePicker(props: {
   };
 
   return (
-    <div className="firm-pick" aria-label="Wzory i know-how kancelarii">
+    <div className="firm-pick" aria-label={t("Wzory i know-how kancelarii")}>
       <input
         type="search"
         className="firm-pick-search"
-        placeholder="Szukaj wzoru lub dokumentu kancelarii"
-        aria-label="Szukaj w plikach kancelarii"
+        placeholder={t("Szukaj wzoru lub dokumentu kancelarii")}
+        aria-label={t("Szukaj w plikach kancelarii")}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      {error ? <p className="chat-inline-error">Nie udało się odczytać plików kancelarii: {error}</p> : null}
-      {!tree && !error ? <small>Wczytywanie…</small> : null}
+      {error ? <p className="chat-inline-error">{t("Nie udało się odczytać plików kancelarii:")} {error}</p> : null}
+      {!tree && !error ? <small>{t("Wczytywanie…")}</small> : null}
       {tree && filesIn(tree).length === 0 ? (
-        <small>Biblioteka kancelarii jest pusta. Dodaj wzory i dokumenty w zakładce Kancelaria.</small>
+        <small>{t("Biblioteka kancelarii jest pusta. Dodaj wzory i dokumenty w zakładce Kancelaria.")}</small>
       ) : visible === null && tree ? (
-        <small>Brak plików pasujących do „{query}”.</small>
+        <small>{t("Brak plików pasujących do „")}{query}”.</small>
       ) : visible ? (
         <ul className="firm-pick-tree">{renderFolder(visible, 0)}</ul>
       ) : null}

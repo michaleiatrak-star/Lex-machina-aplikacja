@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
@@ -37,7 +38,7 @@ const PERIODS = [
 ];
 
 function when(value: string): string {
-  return new Date(value).toLocaleString("pl-PL");
+  return new Date(value).toLocaleString(currentLocale());
 }
 
 function detailText(entry: AnomalyEntry): string {
@@ -96,7 +97,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
   }
 
   async function onClear() {
-    if (!window.confirm("Wyczyścić cały dziennik nieprawidłowości?")) return;
+    if (!window.confirm(t("Wyczyścić cały dziennik nieprawidłowości?"))) return;
     try {
       await clearAnomalies();
       await load();
@@ -111,17 +112,17 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
       <summary className="maintenance-heading">
         <div>
           <strong>
-            Dziennik nieprawidłowości
-            <InfoTip>Błędne ścieżki skilli, blokady i błędy sesji. Dziennik nie zawiera treści spraw.</InfoTip>
+            {t("Dziennik nieprawidłowości")}
+            <InfoTip>{t("Błędne ścieżki skilli, blokady i błędy sesji. Dziennik nie zawiera treści spraw.")}</InfoTip>
           </strong>
         </div>
         <span className={errors || loadError ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
-          {loadError ? "dziennik niedostępny" : `${errors} błędów · ${warnings} ostrzeżeń`}
+          {loadError ? t("dziennik niedostępny") : `${errors} błędów · ${warnings} ostrzeżeń`}
         </span>
       </summary>
 
       <div className="anomaly-filters">
-        <select value={hours} onChange={(event) => setHours(Number(event.target.value))} aria-label="Okres">
+        <select value={hours} onChange={(event) => setHours(Number(event.target.value))} aria-label={t("Okres")}>
           {PERIODS.map((period) => (
             <option key={period.hours} value={period.hours}>{period.label}</option>
           ))}
@@ -129,25 +130,25 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
         <select
           value={severity}
           onChange={(event) => setSeverity(event.target.value as AnomalySeverity | "")}
-          aria-label="Waga"
+          aria-label={t("Waga")}
         >
-          <option value="">wszystkie</option>
-          <option value="ERROR">błędy</option>
-          <option value="WARN">ostrzeżenia</option>
+          <option value="">{t("wszystkie")}</option>
+          <option value="ERROR">{t("błędy")}</option>
+          <option value="WARN">{t("ostrzeżenia")}</option>
         </select>
-        <button type="button" disabled={busy} onClick={() => void load()}>Odśwież</button>
-        <button type="button" disabled={busy || !summary.length} onClick={() => void onExport()}>Eksportuj</button>
-        <button type="button" disabled={busy || !summary.length} onClick={() => void onClear()}>Wyczyść</button>
+        <button type="button" disabled={busy} onClick={() => void load()}>{t("Odśwież")}</button>
+        <button type="button" disabled={busy || !summary.length} onClick={() => void onExport()}>{t("Eksportuj")}</button>
+        <button type="button" disabled={busy || !summary.length} onClick={() => void onClear()}>{t("Wyczyść")}</button>
       </div>
 
       {loadError ? (
-        <p className="maintenance-error">Nie udało się wczytać dziennika: {loadError}</p>
+        <p className="maintenance-error">{t("Nie udało się wczytać dziennika:")} {loadError}</p>
       ) : summary.length ? (
         <>
-          <small>Powtarzające się (ten sam kod i plik):</small>
+          <small>{t("Powtarzające się (ten sam kod i plik):")}</small>
           <table className="anomaly-table">
             <thead>
-              <tr><th>Waga</th><th>Kod</th><th>Plik / cel</th><th>Ile</th><th>Ostatnio</th><th>Model</th></tr>
+              <tr><th>{t("Waga")}</th><th>Kod</th><th>{t("Plik / cel")}</th><th>Ile</th><th>{t("Ostatnio")}</th><th>{t("Model")}</th></tr>
             </thead>
             <tbody>
               {summary.slice(0, 30).map((row) => (
@@ -167,7 +168,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
           </table>
 
           <details>
-            <summary>Ostatnie wpisy ({entries.length})</summary>
+            <summary>{t("Ostatnie wpisy (")}{entries.length})</summary>
             <ul className="anomaly-entries">
               {entries.map((entry, index) => (
                 <li key={`${entry.at}-${index}`} className={entry.severity === "ERROR" ? "anomaly-error" : ""}>
@@ -181,7 +182,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
           </details>
         </>
       ) : (
-        <small>Brak nieprawidłowości w wybranym okresie.</small>
+        <small>{t("Brak nieprawidłowości w wybranym okresie.")}</small>
       )}
 
       {message ? <p className="maintenance-error">{message}</p> : null}

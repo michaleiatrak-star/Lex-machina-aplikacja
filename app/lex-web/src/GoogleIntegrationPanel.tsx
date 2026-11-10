@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
@@ -59,7 +60,7 @@ export function GoogleIntegrationPanel() {
     try {
       const flow = await startGoogleWorkspaceConnect();
       await openExternalUrl(flow.authorizationUrl);
-      setMessage("Dokończ logowanie w przeglądarce i zaznacz dostęp do Gmaila lub Dysku.");
+      setMessage(t("Dokończ logowanie w przeglądarce i zaznacz dostęp do Gmaila lub Dysku."));
       const until = Date.now() + 10 * 60 * 1000;
       while (!cancelled.current && Date.now() < until) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -71,7 +72,7 @@ export function GoogleIntegrationPanel() {
         }
         if (result.status === "FAILED") throw new ApiError(result.error ?? "GOOGLE_FLOW_FAILED", 409);
       }
-      if (!cancelled.current) setMessage("Nie dokończono logowania w 10 minut — spróbuj ponownie.");
+      if (!cancelled.current) setMessage(t("Nie dokończono logowania w 10 minut — spróbuj ponownie."));
     } catch (error) {
       setMessage(googleErrorText(error));
     } finally {
@@ -93,33 +94,31 @@ export function GoogleIntegrationPanel() {
 
   return (
     <article className="chat-card">
-      <p className="eyebrow">Konto Google</p>
+      <p className="eyebrow">{t("Konto Google")}</p>
       <h2>
-        Gmail i Dysk Google
+        {t("Gmail i Dysk Google")}
         <InfoTip>
-          Tylko odczyt. Do akt trafiają wyłącznie wątki i pliki, które sam wskażesz w „Importuj z Google” w plikach sprawy;
-          potem przechodzą zwykły OCR i anonimizację. Aplikacja nie wysyła poczty ani nie zmienia plików. Dostęp jest
-          zaszyfrowany kluczem Twojego konta i działa tylko po zalogowaniu.
+          {t("Tylko odczyt. Do akt trafiają wyłącznie wątki i pliki, które sam wskażesz w „Importuj z Google” w plikach sprawy; potem przechodzą zwykły OCR i anonimizację. Aplikacja nie wysyła poczty ani nie zmienia plików. Dostęp jest zaszyfrowany kluczem Twojego konta i działa tylko po zalogowaniu.")}
         </InfoTip>
       </h2>
       {!status ? (
         <p>{message || "Sprawdzam…"}</p>
       ) : !status.configured ? (
-        <p>Integracja Google nie jest skonfigurowana w tej instalacji (brak klienta OAuth).</p>
+        <p>{t("Integracja Google nie jest skonfigurowana w tej instalacji (brak klienta OAuth).")}</p>
       ) : status.connected ? (
         <>
           <p>
-            Połączono: <strong>{status.email}</strong>
-            {" · "}Gmail: {status.gmail ? "tak" : "nie"} · Dysk: {status.drive ? "tak" : "nie"}
-            {status.connectedAt ? ` · od ${new Date(status.connectedAt).toLocaleDateString("pl-PL")}` : ""}
+            {t("Połączono:")} <strong>{status.email}</strong>
+            {" · "}{t("Gmail:")} {status.gmail ? "tak" : "nie"} {t("· Dysk:")} {status.drive ? "tak" : "nie"}
+            {status.connectedAt ? ` · od ${new Date(status.connectedAt).toLocaleDateString(currentLocale())}` : ""}
           </p>
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void disconnect()}>
-            Rozłącz konto Google
+            {t("Rozłącz konto Google")}
           </button>
         </>
       ) : (
         <button type="button" className="chat-primary-action" disabled={busy} onClick={() => void connect()}>
-          {busy ? "Czekam na Google…" : "Zaloguj kontem Google"}
+          {busy ? t("Czekam na Google…") : "Zaloguj kontem Google"}
         </button>
       )}
       {status && message ? <p role="status">{message}</p> : null}
@@ -194,19 +193,19 @@ export function GoogleImportDialog({
     });
 
   return (
-    <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-label="Importuj z Google">
+    <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-label={t("Importuj z Google")}>
       <div className="chat-card google-import-dialog">
-        <p className="eyebrow">Importuj z Google</p>
+        <p className="eyebrow">{t("Importuj z Google")}</p>
         <nav className="chat-settings-nav">
-          <button type="button" className={tab === "gmail" ? "active" : ""} onClick={() => setTab("gmail")}>Gmail</button>
-          <button type="button" className={tab === "drive" ? "active" : ""} onClick={() => setTab("drive")}>Dysk Google</button>
+          <button type="button" className={tab === "gmail" ? "active" : ""} onClick={() => setTab("gmail")}>{t("Gmail")}</button>
+          <button type="button" className={tab === "drive" ? "active" : ""} onClick={() => setTab("drive")}>{t("Dysk Google")}</button>
         </nav>
         {tab === "gmail" ? (
           <>
             <form className="google-import-search" onSubmit={(event) => { event.preventDefault(); void searchMail(); }}>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="np. filename:pdf from:sad.gov.pl after:2026/01/01" />
-              <button type="submit" className="chat-secondary-action" disabled={busy}>Szukaj</button>
-              <InfoTip>Operatory Gmaila: filename:pdf, from:, to:, subject:, after:, before:, has:attachment. Wątek trafia do akt jako plik tekstowy, a każdy załącznik jako osobny plik.</InfoTip>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("np. filename:pdf from:sad.gov.pl after:2026/01/01")} />
+              <button type="submit" className="chat-secondary-action" disabled={busy}>{t("Szukaj")}</button>
+              <InfoTip>{t("Operatory Gmaila: filename:pdf, from:, to:, subject:, after:, before:, has:attachment. Wątek trafia do akt jako plik tekstowy, a każdy załącznik jako osobny plik.")}</InfoTip>
             </form>
             <ul className="google-import-list">
               {threads.map((thread) => (
@@ -219,15 +218,15 @@ export function GoogleImportDialog({
                   </label>
                 </li>
               ))}
-              {!busy && !threads.length ? <li>Brak wątków dla tego wyszukiwania.</li> : null}
+              {!busy && !threads.length ? <li>{t("Brak wątków dla tego wyszukiwania.")}</li> : null}
             </ul>
           </>
         ) : (
           <>
             <form className="google-import-search" onSubmit={(event) => { event.preventDefault(); void searchDrive(); }}>
-              <input value={driveQuery} onChange={(event) => setDriveQuery(event.target.value)} placeholder="Szukaj po nazwie pliku" />
-              <button type="submit" className="chat-secondary-action" disabled={busy}>Szukaj</button>
-              <InfoTip>Zaznaczony folder dodaje pliki z trzech poziomów (do 100). Dokumenty i arkusze Google trafiają jako .docx i .xlsx.</InfoTip>
+              <input value={driveQuery} onChange={(event) => setDriveQuery(event.target.value)} placeholder={t("Szukaj po nazwie pliku")} />
+              <button type="submit" className="chat-secondary-action" disabled={busy}>{t("Szukaj")}</button>
+              <InfoTip>{t("Zaznaczony folder dodaje pliki z trzech poziomów (do 100). Dokumenty i arkusze Google trafiają jako .docx i .xlsx.")}</InfoTip>
             </form>
             <p>
               {folders.map((folder, index) => (
@@ -252,13 +251,13 @@ export function GoogleImportDialog({
                   </label>
                 </li>
               ))}
-              {!busy && !items.length ? <li>Pusto.</li> : null}
+              {!busy && !items.length ? <li>{t("Pusto.")}</li> : null}
             </ul>
           </>
         )}
         {message ? <p role="alert">{message}</p> : null}
         <div className="google-import-actions">
-          <button type="button" className="chat-secondary-action" disabled={busy} onClick={onClose}>Anuluj</button>
+          <button type="button" className="chat-secondary-action" disabled={busy} onClick={onClose}>{t("Anuluj")}</button>
           <button type="button" className="chat-primary-action" disabled={busy || !count} onClick={() => void submit()}>
             {busy ? "Pracuję…" : `Dodaj do akt (${count})`}
           </button>

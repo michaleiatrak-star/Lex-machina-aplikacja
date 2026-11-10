@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useMemo,
@@ -67,8 +68,8 @@ function FullDocument({
     document.getElementById(`full-${selected.citationId}`)?.scrollIntoView({ block: "center" });
   }, [version, selected.citationId]);
 
-  if (error) return <p className="document-citation-error">Nie udało się wczytać dokumentu: {error}</p>;
-  if (!version) return <p>Wczytywanie całego dokumentu…</p>;
+  if (error) return <p className="document-citation-error">{t("Nie udało się wczytać dokumentu:")} {error}</p>;
+  if (!version) return <p>{t("Wczytywanie całego dokumentu…")}</p>;
   const sameDocument = citations.filter((item) => item.documentId === selected.documentId);
   return (
     <div className="document-citation-full">
@@ -205,19 +206,19 @@ export function DocumentCitationContent({
 
       {citations.length > 0 ? (
         <details className="chat-evidence document-citation-list">
-          <summary>Dokumenty z akt cytowane w odpowiedzi ({citations.length})</summary>
+          <summary>{t("Dokumenty z akt cytowane w odpowiedzi (")}{citations.length})</summary>
           <ul>
             {citations.map((citation) => (
               <li key={citation.citationId}>
                 <strong>{citation.label}</strong>
-                {citation.quoteFidelity === "NOT_FOUND" ? <em className="document-citation-mismatch">cytat niezgodny z dokumentem</em> : null}
+                {citation.quoteFidelity === "NOT_FOUND" ? <em className="document-citation-mismatch">{t("cytat niezgodny z dokumentem")}</em> : null}
                 {citation.quote ? <span>„{citation.quote.length > 160 ? `${citation.quote.slice(0, 160)}…` : citation.quote}”</span> : null}
                 <button type="button" className="chat-secondary-action" onClick={() => { setSelected(citation); setWhole(false); }}>
-                  Fragment
+                  {t("Fragment")}
                 </button>
                 {caseId || citation.caseId ? (
                   <button type="button" className="chat-secondary-action" onClick={() => { setSelected(citation); setWhole(true); }}>
-                    Cały dokument z zaznaczeniem
+                    {t("Cały dokument z zaznaczeniem")}
                   </button>
                 ) : null}
               </li>
@@ -231,7 +232,7 @@ export function DocumentCitationContent({
           ref={viewerRef}
           id={`citation-${selected.citationId}`}
           className="document-citation-viewer"
-          aria-label="Cytowany fragment dokumentu"
+          aria-label={t("Cytowany fragment dokumentu")}
           aria-live="polite"
           tabIndex={-1}
         >
@@ -239,23 +240,23 @@ export function DocumentCitationContent({
             <div>
               <strong>{selected.label}</strong>
               <small>
-                dokument {selected.documentId} · chunk {selected.chunkIndex}
+                {t("dokument")} {selected.documentId} {t("· fragment")} {selected.chunkIndex}
                 {selected.caseId ? ` · sprawa ${selected.caseId.slice(0, 14)}…` : ""}
               </small>
             </div>
             <div>
               {caseId || selected.caseId ? (
                 <button type="button" onClick={() => setWhole((value) => !value)}>
-                  {whole ? "Tylko fragment" : "Cały dokument"}
+                  {whole ? "Tylko fragment" : t("Cały dokument")}
                 </button>
               ) : null}
               {onAskAbout ? (
                 <button type="button" onClick={() => onAskAbout(askAboutText(selected, viewerRef.current))}>
-                  Zapytaj o ten fragment
+                  {t("Zapytaj o ten fragment")}
                 </button>
               ) : null}
               <button type="button" onClick={() => setSelected(null)}>
-                Zamknij
+                {t("Zamknij")}
               </button>
             </div>
           </div>
@@ -266,25 +267,25 @@ export function DocumentCitationContent({
           )}
           <div className="document-citation-foot">
             <span>
-              Strona {selected.pageStart}
+              {t("Strona")} {selected.pageStart}
               {selected.pageEnd !== selected.pageStart ? `–${selected.pageEnd}` : ""}
             </span>
             {selected.quoteFidelity === "NOT_FOUND" ? (
               <strong className="document-citation-mismatch">
-                Cytat niezgodny z dokumentem
-                <InfoTip>Słów przytoczonych w odpowiedzi nie ma w tym dokumencie. Sprawdź brzmienie w źródle przed użyciem.</InfoTip>
+                {t("Cytat niezgodny z dokumentem")}
+                <InfoTip>{t("Słów przytoczonych w odpowiedzi nie ma w tym dokumencie. Sprawdź brzmienie w źródle przed użyciem.")}</InfoTip>
               </strong>
             ) : selected.quoteFidelity === "DIGEST_UNCHECKED" ? (
               <span>
-                Cytatu nie sprawdzono
-                <InfoTip>Model widział ten fragment w skrócie, więc dosłowności cytatu nie dało się porównać z pełnym tekstem.</InfoTip>
+                {t("Cytatu nie sprawdzono")}
+                <InfoTip>{t("Model widział ten fragment w skrócie, więc dosłowności cytatu nie dało się porównać z pełnym tekstem.")}</InfoTip>
               </span>
             ) : selected.highlightStart !== undefined && selected.highlightEnd !== undefined ? (
-              <strong>Dokładny cytat zaznaczony w źródle</strong>
+              <strong>{t("Dokładny cytat zaznaczony w źródle")}</strong>
             ) : (
               <span>
-                Bez dokładnego cytatu
-                <InfoTip>Odpowiedź opiera się na tym fragmencie, ale nie cytuje go dosłownie.</InfoTip>
+                {t("Bez dokładnego cytatu")}
+                <InfoTip>{t("Odpowiedź opiera się na tym fragmencie, ale nie cytuje go dosłownie.")}</InfoTip>
               </span>
             )}
           </div>

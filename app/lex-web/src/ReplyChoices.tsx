@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { replyChoices } from "./reply-choices";
 
 /** Buttons for the choices the last answer asks for (lettered options, checkpoint frame). */
@@ -15,7 +16,7 @@ export function ReplyChoices({
   const choices = replyChoices(answer);
   if (!choices.length) return null;
   return (
-    <div className="chat-pipeline-next chat-reply-choices" role="group" aria-label="Odpowiedz na pytanie">
+    <div className="chat-pipeline-next chat-reply-choices" role="group" aria-label={t("Odpowiedz na pytanie")}>
       {choices.map((choice, index) =>
         choice.kind === "SEND" ? (
           <button

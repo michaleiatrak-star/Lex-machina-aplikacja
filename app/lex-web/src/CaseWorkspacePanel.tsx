@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -120,20 +121,20 @@ export function CaseWorkspacePanel({
     <section className="case-workspace-browser">
       <div className="case-workspace-column">
         <p className="eyebrow">
-          Akta wybranej sprawy
+          {t("Akta wybranej sprawy")}
         </p>
         <h3>
-          Dokumenty sprawy
-          <InfoTip>Tylko pliki z katalogu wybranej sprawy.</InfoTip>
+          {t("Dokumenty sprawy")}
+          <InfoTip>{t("Tylko pliki z katalogu wybranej sprawy.")}</InfoTip>
         </h3>
 
         {!caseId ? (
           <p className="workspace-empty">
-            Najpierw wybierz sprawę.
+            {t("Najpierw wybierz sprawę.")}
           </p>
         ) : uploads.length === 0 ? (
           <p className="workspace-empty">
-            Brak zapisanych dokumentów.
+            {t("Brak zapisanych dokumentów.")}
           </p>
         ) : (
           <ul className="workspace-file-list">
@@ -178,18 +179,18 @@ export function CaseWorkspacePanel({
 
       <div className="case-workspace-column">
         <p className="eyebrow">
-          Katalog wspólny
+          {t("Katalog wspólny")}
         </p>
         <h3>
-          Wzory kancelarii
-          <InfoTip>Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego. Papier firmowy (DOCX lub DOTX): nagłówek, stopka i układ strony trafiają do pisma; pola {"{{data}}"}, {"{{miejscowość}}"}, {"{{adresat}}"}, {"{{sygnatura}}"}, {"{{tytuł}}"} są wypełniane, a w osobnym wierszu {"{{treść}}"} wskazuje miejsce na treść pisma.</InfoTip>
+          {t("Wzory kancelarii")}
+          <InfoTip>{t("Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego. Papier firmowy (DOCX lub DOTX): nagłówek, stopka i układ strony trafiają do pisma; pola")} {"{{data}}"}, {"{{miejscowość}}"}, {"{{adresat}}"}, {"{{sygnatura}}"}, {"{{tytuł}}"} {t("są wypełniane, a w osobnym wierszu")} {"{{treść}}"} {t("wskazuje miejsce na treść pisma.")}</InfoTip>
         </h3>
 
         {isAdmin && caseId && (
           <label className="file-button workspace-template-upload">
             {loading
               ? "Zapisywanie…"
-              : "Dodaj wzór DOCX/DOTX/ODT"}
+              : t("Dodaj wzór DOCX/DOTX/ODT")}
             <input
               type="file"
               accept=".docx,.dotx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.text"
@@ -208,7 +209,7 @@ export function CaseWorkspacePanel({
 
         {templates.length === 0 ? (
           <p className="workspace-empty">
-            Brak wspólnych wzorów.
+            {t("Brak wspólnych wzorów.")}
           </p>
         ) : (
           <ul className="workspace-file-list">
@@ -223,7 +224,7 @@ export function CaseWorkspacePanel({
                     {template.filename}
                   </strong>
                   <span>
-                    WSPÓLNY ·{" "}
+                    {t("WSPÓLNY ·")}{" "}
                     {template.bytes.toLocaleString(
                       "pl-PL"
                     )} B
@@ -239,7 +240,7 @@ export function CaseWorkspacePanel({
                           void changeRole(template, kind ? { kind, isDefault: template.role?.isDefault ?? false } : null);
                         }}
                       >
-                        <option value="">rodzaj: nie ustawiono</option>
+                        <option value="">{t("rodzaj: nie ustawiono")}</option>
                         {TEMPLATE_KINDS.map(([id, label]) => (
                           <option key={id} value={id}>
                             {label}
@@ -255,7 +256,7 @@ export function CaseWorkspacePanel({
                             if (template.role) void changeRole(template, { kind: template.role.kind, isDefault: event.target.checked });
                           }}
                         />{" "}
-                        domyślny dla tego rodzaju
+                        {t("domyślny dla tego rodzaju")}
                       </label>
                     </span>
                   ) : (

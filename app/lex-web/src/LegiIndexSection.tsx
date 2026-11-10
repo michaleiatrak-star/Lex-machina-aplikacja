@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, buildLegiIndex, getLegiIndex, type LegiIndexStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
@@ -36,19 +37,18 @@ export function LegiIndexSection() {
       <div className="maintenance-heading">
         <div>
           <strong>
-            Prawo francuskie (LEGI)
+            {t("Prawo francuskie (LEGI)")}
             <InfoTip>
-              Kodeksy francuskie bez klucza API: zrzut LEGI z otwartych danych DILA (około 1,2 GB) pobierany raz i
-              indeksowany lokalnie. Tekst skonsolidowany nie ma mocy urzędowej; moc ma Journal officiel.
+              {t("Kodeksy francuskie bez klucza API: zrzut LEGI z otwartych danych DILA (około 1,2 GB) pobierany raz i indeksowany lokalnie. Tekst skonsolidowany nie ma mocy urzędowej; moc ma Journal officiel.")}
             </InfoTip>
           </strong>
         </div>
         <span>{status?.built ? `indeks z ${String(status.built.built).slice(0, 10)}: ${status.built.codes} kodeksów` : "brak indeksu"}</span>
       </div>
       <button type="button" disabled={building || !status} onClick={() => void start()}>
-        {building ? `Indeksowanie… (${status?.build?.files ?? 0} plików)` : status?.built ? "Odśwież indeks LEGI" : "Zbuduj indeks LEGI"}
+        {building ? `Indeksowanie… (${status?.build?.files ?? 0} plików)` : status?.built ? t("Odśwież indeks LEGI") : "Zbuduj indeks LEGI"}
       </button>
-      {status?.build?.state === "FAILED" ? <p className="field-error">Indeksowanie nie powiodło się: {status.build.error}</p> : null}
+      {status?.build?.state === "FAILED" ? <p className="field-error">{t("Indeksowanie nie powiodło się:")} {status.build.error}</p> : null}
       {error ? <p className="field-error">{error}</p> : null}
     </section>
   );

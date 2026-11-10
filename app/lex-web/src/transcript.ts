@@ -1,3 +1,4 @@
+import { currentLocale } from "./i18n";
 // A recording's transcript as the runtime writes it (transcription.ts transcriptLine): one line per
 // utterance, "[01:23] Osoba 1: tekst" ("[01:02:03]" past an hour; no speaker without the speaker
 // models). Here: lines read back for the editor, written again after edits, and the protocol as
@@ -167,7 +168,7 @@ export function transcriptDocx(pages: readonly TranscriptPage[], meta: Transcrip
     ...(meta.caseName ? [detail("Sprawa", meta.caseName)] : []),
     detail("Czas trwania", meta.duration),
     ...(withSpeakers ? [detail("Rozmówcy", speakers.join(", "))] : []),
-    detail("Sporządzono", meta.madeAt.toLocaleString("pl-PL")),
+    detail("Sporządzono", meta.madeAt.toLocaleString(currentLocale())),
     paragraph(
       run(
         "Transkrypcja automatyczna (rozpoznawanie mowy i rozmówców na komputerze użytkownika); przed użyciem porównaj ją z nagraniem. Czas przy wypowiedzi wskazuje jej początek w nagraniu.",

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { fillPdfForm, getPdfFormFields, type PdfFormField } from "./workspace-client.js";
 
@@ -79,9 +80,9 @@ export function PdfFormPanel(props: {
 
   const editable = !props.readOnly;
   return (
-    <section className="pdf-form-panel" aria-label="Pola formularza PDF">
+    <section className="pdf-form-panel" aria-label={t("Pola formularza PDF")}>
       <header>
-        <strong>Formularz PDF: {fields.length} pól</strong>
+        <strong>{t("Formularz PDF:")} {fields.length} {t("pól")}</strong>
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
           {open ? "Zwiń" : "Wypełnij"}
         </button>
@@ -96,7 +97,7 @@ export function PdfFormPanel(props: {
               const label = (
                 <label htmlFor={id}>
                   {field.label}
-                  <small> (str. {field.page})</small>
+                  <small> {t("(str.")} {field.page})</small>
                 </label>
               );
               if (field.type === "checkbox") {
@@ -139,15 +140,15 @@ export function PdfFormPanel(props: {
           </div>
           {editable ? (
             <div className="pdf-form-actions">
-              <label title="Wartości wpisane na stałe w stronę; pól nie da się już edytować">
-                <input type="checkbox" checked={flatten} onChange={(event) => setFlatten(event.target.checked)} /> Spłaszcz (do wysłania)
+              <label title={t("Wartości wpisane na stałe w stronę; pól nie da się już edytować")}>
+                <input type="checkbox" checked={flatten} onChange={(event) => setFlatten(event.target.checked)} /> {t("Spłaszcz (do wysłania)")}
               </label>
               <button type="button" disabled={saving || changed.size === 0} onClick={() => void save()}>
-                {saving ? "Zapisywanie…" : "Zapisz wypełniony PDF"}
+                {saving ? "Zapisywanie…" : t("Zapisz wypełniony PDF")}
               </button>
             </div>
           ) : (
-            <small>Sprawa tylko do odczytu.</small>
+            <small>{t("Sprawa tylko do odczytu.")}</small>
           )}
           {status ? <p role="status">{status}</p> : null}
         </>

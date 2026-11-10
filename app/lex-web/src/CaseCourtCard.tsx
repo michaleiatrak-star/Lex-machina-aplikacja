@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { InfoTip } from "./InfoTip";
 import { CourtPicker } from "./CourtPicker.js";
@@ -99,7 +100,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
 
   async function save(clear = false) {
     if (!clear && partsStarted && !signature) {
-      setMessage("Uzupełnij sygnaturę: nr wydziału, repertorium, numer i rok (np. XI C 1768/26).");
+      setMessage(t("Uzupełnij sygnaturę: nr wydziału, repertorium, numer i rok (np. XI C 1768/26)."));
       return;
     }
     setBusy("save");
@@ -114,9 +115,9 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
       const code = error instanceof Error ? error.message : String(error);
       setMessage(
         code.includes("CASE_COURT_UNKNOWN")
-          ? "Wybierz sąd z listy sądów powszechnych."
+          ? t("Wybierz sąd z listy sądów powszechnych.")
           : code.includes("CASE_SIGNATURE_INVALID")
-            ? "Sygnatura w postaci: wydział repertorium numer/rok, np. XI C 1768/26."
+            ? t("Sygnatura w postaci: wydział repertorium numer/rok, np. XI C 1768/26.")
             : code
       );
     } finally {
@@ -161,10 +162,9 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
   return (
     <article className="chat-card case-court-card">
       <p className="eyebrow">
-        Sąd i sygnatura
+        {t("Sąd i sygnatura")}
         <InfoTip>
-          Sąd i sygnatura sprawy. Wokandę sprawdzasz na żądanie: aplikacja wysyła jedno zapytanie o tę sygnaturę na stronę sądu, jak przeglądarka. Nie
-          odpytuje sądów w tle.
+          {t("Sąd i sygnatura sprawy. Wokandę sprawdzasz na żądanie: aplikacja wysyła jedno zapytanie o tę sygnaturę na stronę sądu, jak przeglądarka. Nie odpytuje sądów w tle.")}
         </InfoTip>
       </p>
       {editing ? (
@@ -176,20 +176,20 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
           }}
         >
           <label>
-            Sąd
+            {t("Sąd")}
             <CourtPicker value={draft.nazwa} courts={courtNames} onChange={(nazwa) => setDraft({ ...draft, nazwa })} />
           </label>
           <label>
-            Wydział
-            <input value={draft.wydzial} maxLength={120} placeholder="I Wydział Cywilny" onChange={(event) => setDraft({ ...draft, wydzial: event.target.value })} />
+            {t("Wydział")}
+            <input value={draft.wydzial} maxLength={120} placeholder={t("I Wydział Cywilny")} onChange={(event) => setDraft({ ...draft, wydzial: event.target.value })} />
           </label>
           <fieldset className="case-signature-fields">
             <legend>
-              Sygnatura akt
-              <InfoTip>Jak w sądzie: nr wydziału, repertorium, numer i rok. Zapis „XI C 1768/26” powstaje z tych pól.</InfoTip>
+              {t("Sygnatura akt")}
+              <InfoTip>{t("Jak w sądzie: nr wydziału, repertorium, numer i rok. Zapis „XI C 1768/26” powstaje z tych pól.")}</InfoTip>
             </legend>
             <label>
-              Nr wydziału
+              {t("Nr wydziału")}
               <select value={parts.wydzial} onChange={(event) => setParts({ ...parts, wydzial: event.target.value })}>
                 <option value="">–</option>
                 {DEPARTMENTS.map((value) => (
@@ -200,7 +200,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
               </select>
             </label>
             <label>
-              Repertorium
+              {t("Repertorium")}
               <input
                 list={`repertoria-${caseId}`}
                 value={parts.repertorium}
@@ -215,7 +215,7 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
               </datalist>
             </label>
             <label>
-              Numer
+              {t("Numer")}
               <input inputMode="numeric" value={parts.numer} maxLength={6} placeholder="1768" onChange={(event) => setParts({ ...parts, numer: event.target.value.replace(/\D/gu, "") })} />
             </label>
             <label>
@@ -230,19 +230,19 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
               </select>
             </label>
             <small className="case-signature-preview" aria-live="polite">
-              {signature ? `Sygnatura: ${signature}` : partsStarted ? "Uzupełnij wszystkie cztery pola." : "Bez sygnatury (sprawa jeszcze nie w sądzie)."}
+              {signature ? `Sygnatura: ${signature}` : partsStarted ? t("Uzupełnij wszystkie cztery pola.") : t("Bez sygnatury (sprawa jeszcze nie w sądzie).")}
             </small>
           </fieldset>
           <div className="case-court-actions">
             <button type="submit" className="chat-primary-action" disabled={Boolean(busy) || !draft.nazwa.trim()}>
-              Zapisz
+              {t("Zapisz")}
             </button>
             <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => setEditing(false)}>
-              Anuluj
+              {t("Anuluj")}
             </button>
             {court ? (
               <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void save(true)}>
-                Usuń sąd ze sprawy
+                {t("Usuń sąd ze sprawy")}
               </button>
             ) : null}
           </div>
@@ -253,21 +253,21 @@ export function CaseCourtCard({ caseId, canWrite, onScheduleChanged }: { caseId:
           <small>
             {[court.wydzial, court.sygnatura ? `sygn. ${court.sygnatura}` : "bez sygnatury", SOURCE_LABEL[court.zrodlo]].filter(Boolean).join(" · ")}
           </small>
-          {wokanda ? <small>Wokanda: {WOKANDA_STATUS_LABEL[wokanda.status]}</small> : null}
+          {wokanda ? <small>{t("Wokanda:")} {WOKANDA_STATUS_LABEL[wokanda.status]}</small> : null}
         </div>
       ) : (
-        <p className="field-help">Sprawa nie ma przypisanego sądu.</p>
+        <p className="field-help">{t("Sprawa nie ma przypisanego sądu.")}</p>
       )}
       {!editing ? (
         <div className="case-court-actions">
           {canWrite ? (
             <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => setEditing(true)}>
-              {court ? "Zmień sąd lub sygnaturę" : "Przypisz sąd"}
+              {court ? t("Zmień sąd lub sygnaturę") : t("Przypisz sąd")}
             </button>
           ) : null}
           {court?.sygnatura ? (
             <button type="button" className="chat-primary-action" disabled={Boolean(busy)} onClick={() => void runCheck()}>
-              {busy === "check" ? "Sprawdzanie wokandy…" : "Sprawdź wokandę"}
+              {busy === "check" ? "Sprawdzanie wokandy…" : t("Sprawdź wokandę")}
             </button>
           ) : null}
         </div>
@@ -302,34 +302,34 @@ function WokandaCheckView({
   onAdd: (hearing: WokandaHearing) => void;
   onVerified: () => void;
 }) {
-  const when = new Date(check.checkedAt).toLocaleString("pl-PL");
+  const when = new Date(check.checkedAt).toLocaleString(currentLocale());
   if (check.state === "FOUND" || check.state === "NOT_FOUND") {
     return (
       <div className="case-court-result" role="status">
         <small>
-          Wokanda {check.court}, sygn. {check.signature} · sprawdzono {when} ·{" "}
+          {t("Wokanda")} {check.court}{t(", sygn.")} {check.signature} {t("· sprawdzono")} {when} ·{" "}
           <a href={check.searchUrl} target="_blank" rel="noreferrer">
-            strona sądu
+            {t("strona sądu")}
           </a>
         </small>
         {check.note ? <p className="field-help">{check.note}</p> : null}
         {check.state === "NOT_FOUND" ? (
-          <p className="field-help">Na wokandzie nie ma terminów tej sprawy (wokanda pokazuje zwykle najbliższe posiedzenia jawne).</p>
+          <p className="field-help">{t("Na wokandzie nie ma terminów tej sprawy (wokanda pokazuje zwykle najbliższe posiedzenia jawne).")}</p>
         ) : (
           <ul className="case-court-hearings">
             {check.hearings.map((hearing) => (
               <li key={hearing.url + hearing.data + hearing.godzina}>
                 <span>{hearingLine(hearing)}</span>
-                {hearing.sklad ? <small>skład: {hearing.sklad}</small> : null}
+                {hearing.sklad ? <small>{t("skład:")} {hearing.sklad}</small> : null}
                 <span className="case-court-actions">
                   <a href={hearing.url} target="_blank" rel="noreferrer">
-                    szczegóły
+                    {t("szczegóły")}
                   </a>
                   {inCalendar(hearing) ? (
-                    <small className="case-court-in-calendar">w kalendarzu sprawy</small>
+                    <small className="case-court-in-calendar">{t("w kalendarzu sprawy")}</small>
                   ) : canWrite ? (
                     <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => onAdd(hearing)}>
-                      Dodaj do kalendarza
+                      {t("Dodaj do kalendarza")}
                     </button>
                   ) : null}
                 </span>
@@ -355,7 +355,7 @@ function WokandaCheckView({
         {blocked.reason}{" "}
         {blocked.url ? (
           <a href={blocked.url} target="_blank" rel="noreferrer">
-            Otwórz wokandę sądu
+            {t("Otwórz wokandę sądu")}
           </a>
         ) : null}
       </p>

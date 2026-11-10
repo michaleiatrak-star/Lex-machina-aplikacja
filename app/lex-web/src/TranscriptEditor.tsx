@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useMemo, useState } from "react";
 import { InfoTip } from "./InfoTip";
 import { downloadBlob } from "./download-file.js";
@@ -58,7 +59,7 @@ export function TranscriptEditor({
     setSaving(true);
     setMessage("");
     try {
-      setMessage((await onSave(changed)) ? "Zapisano poprawki transkrypcji." : "Nie udało się zapisać poprawek.");
+      setMessage((await onSave(changed)) ? "Zapisano poprawki transkrypcji." : t("Nie udało się zapisać poprawek."));
     } finally {
       setSaving(false);
     }
@@ -74,24 +75,23 @@ export function TranscriptEditor({
   const total = draft.reduce((sum, page) => sum + page.turns.length, 0);
 
   return (
-    <section className="transcript-editor" aria-label="Transkrypcja nagrania">
+    <section className="transcript-editor" aria-label={t("Transkrypcja nagrania")}>
       <header className="transcript-editor-head">
         <div>
           <p className="eyebrow">
-            Transkrypcja nagrania
+            {t("Transkrypcja nagrania")}
             <InfoTip>
-              Tekst i rozmówców rozpoznano automatycznie na tym komputerze. Sprawdź je: popraw tekst wypowiedzi, nazwij rozmówców (np. „Sędzia”, „Świadek”) i zmień
-              osobę przy wypowiedzi, jeśli została przypisana błędnie.
+              {t("Tekst i rozmówców rozpoznano automatycznie na tym komputerze. Sprawdź je: popraw tekst wypowiedzi, nazwij rozmówców (np. „Sędzia”, „Świadek”) i zmień osobę przy wypowiedzi, jeśli została przypisana błędnie.")}
             </InfoTip>
           </p>
           <strong>{fileName}</strong>
           <small>
-            czas trwania {transcriptDuration(draft)} · {total} wypowiedzi{speakers.length ? ` · rozmówcy: ${speakers.length}` : " · bez podziału na rozmówców"}
+            {t("czas trwania")} {transcriptDuration(draft)} · {total} {t("wypowiedzi")}{speakers.length ? ` · rozmówcy: ${speakers.length}` : t(" · bez podziału na rozmówców")}
           </small>
         </div>
         <div className="case-court-actions">
           <button type="button" className="chat-secondary-action" disabled={busy || saving} onClick={() => void download()}>
-            Pobierz .docx
+            {t("Pobierz .docx")}
           </button>
           <button type="button" className="chat-primary-action" disabled={busy || saving || !changed.length} onClick={() => void save()}>
             {saving ? "Zapisywanie…" : changed.length ? `Zapisz poprawki (${changed.length} str.)` : "Brak zmian"}
@@ -101,13 +101,12 @@ export function TranscriptEditor({
       {onRetranscribe ? (
         <div className="transcript-retranscribe">
           <label>
-            Liczba rozmówców w nagraniu
+            {t("Liczba rozmówców w nagraniu")}
             <InfoTip>
-              Podana liczba osób (np. sąd, strony, pełnomocnicy, świadek) daje dokładniejszy podział niż ocena automatyczna. Nagranie zostanie przetworzone
-              ponownie; poprawki niezapisane przepadną.
+              {t("Podana liczba osób (np. sąd, strony, pełnomocnicy, świadek) daje dokładniejszy podział niż ocena automatyczna. Nagranie zostanie przetworzone ponownie; poprawki niezapisane przepadną.")}
             </InfoTip>
             <select value={speakerCount} onChange={(event) => setSpeakerCount(Number(event.target.value))}>
-              <option value={0}>automatycznie</option>
+              <option value={0}>{t("automatycznie")}</option>
               {Array.from({ length: 11 }, (_, index) => index + 2).map((count) => (
                 <option key={count} value={count}>
                   {count}
@@ -116,7 +115,7 @@ export function TranscriptEditor({
             </select>
           </label>
           <button type="button" className="chat-secondary-action" disabled={busy || saving} onClick={() => onRetranscribe(speakerCount)}>
-            Rozpoznaj rozmówców ponownie
+            {t("Rozpoznaj rozmówców ponownie")}
           </button>
         </div>
       ) : null}
@@ -128,7 +127,7 @@ export function TranscriptEditor({
               <input
                 value={renames[speaker] ?? ""}
                 maxLength={40}
-                placeholder="Nazwa, np. Sędzia"
+                placeholder={t("Nazwa, np. Sędzia")}
                 aria-label={`Nowa nazwa dla: ${speaker}`}
                 onChange={(event) => setRenames({ ...renames, [speaker]: event.target.value })}
                 onKeyDown={(event) => {
@@ -139,7 +138,7 @@ export function TranscriptEditor({
                 }}
               />
               <button type="button" className="chat-secondary-action" disabled={!(renames[speaker] ?? "").trim()} onClick={() => applyRename(speaker)}>
-                Zmień w całej transkrypcji
+                {t("Zmień w całej transkrypcji")}
               </button>
             </label>
           ))}

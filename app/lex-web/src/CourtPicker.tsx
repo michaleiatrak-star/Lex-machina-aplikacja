@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useId, useMemo, useState } from "react";
 
 const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l").replace(/Ł/gu, "L").toLowerCase();
@@ -30,7 +31,7 @@ export function CourtPicker({ value, courts, onChange }: { value: string; courts
         aria-controls={listId}
         aria-autocomplete="list"
         value={value}
-        placeholder="Wpisz fragment nazwy, np. rejonowy krak"
+        placeholder={t("Wpisz fragment nazwy, np. rejonowy krak")}
         onFocus={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onChange={(event) => {
@@ -72,7 +73,7 @@ export function CourtPicker({ value, courts, onChange }: { value: string; courts
               </li>
             ))
           ) : (
-            <li className="court-picker-empty">Brak sądu z tym fragmentem nazwy.</li>
+            <li className="court-picker-empty">{t("Brak sądu z tym fragmentem nazwy.")}</li>
           )}
         </ul>
       ) : null}

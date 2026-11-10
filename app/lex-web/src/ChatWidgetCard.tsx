@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, chatWidgetFrameUrl, registerChatWidget } from "./api.js";
 import { downloadBlob } from "./download-file.js";
@@ -65,7 +66,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
       if (message.type === "prompt") {
         if (onPrompt) {
           onPrompt(message.text);
-          setStatus("Wysłano do czatu.");
+          setStatus(t("Wysłano do czatu."));
         }
       }
       if (message.type === "save") {
@@ -86,7 +87,7 @@ export function ChatWidgetCard({ widget, onPrompt }: Props) {
         {widget.source ? <span className="field-help">{widget.source}</span> : null}
         <span className="chat-widget-actions">
           <button type="button" className="chat-secondary-action" onClick={() => setReload((value) => value + 1)}>
-            Odśwież
+            {t("Odśwież")}
           </button>
           <button type="button" className="chat-secondary-action" onClick={() => setOpen((value) => !value)}>
             {open ? "Zwiń" : "Rozwiń"}

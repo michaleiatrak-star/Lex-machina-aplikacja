@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { ApiError, previewProvision, type ProvisionPreview as Preview } from "./api.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
@@ -26,23 +27,23 @@ export function ProvisionPreview({ claim, sourceUrl }: { claim: string; sourceUr
     };
   }, [claim, sourceUrl]);
 
-  if (state.kind === "loading") return <p className="field-help">Wczytywanie przepisu…</p>;
-  if (state.kind === "error") return <p className="chat-inline-error">Nie udało się wczytać przepisu ({state.message}).</p>;
+  if (state.kind === "loading") return <p className="field-help">{t("Wczytywanie przepisu…")}</p>;
+  if (state.kind === "error") return <p className="chat-inline-error">{t("Nie udało się wczytać przepisu (")}{state.message}).</p>;
   if (state.kind === "missing") {
     return sourceUrl ? (
       <>
-        <p className="field-help">Tego przepisu nie ma w lokalnej kopii; poniżej oficjalny tekst bez zaznaczenia.</p>
+        <p className="field-help">{t("Tego przepisu nie ma w lokalnej kopii; poniżej oficjalny tekst bez zaznaczenia.")}</p>
         <SourcePreviewFrame target={{ kind: "url", url: sourceUrl }} />
       </>
     ) : (
-      <p className="field-help">Tego przepisu nie ma w lokalnej kopii.</p>
+      <p className="field-help">{t("Tego przepisu nie ma w lokalnej kopii.")}</p>
     );
   }
   const { preview } = state;
   return (
     <>
       {!preview.unitFound ? (
-        <p className="field-help">Nie wyodrębniono {preview.unit} w tekście kopii; zaznaczono cały artykuł.</p>
+        <p className="field-help">{t("Nie wyodrębniono")} {preview.unit} {t("w tekście kopii; zaznaczono cały artykuł.")}</p>
       ) : null}
       <SourcePreviewFrame
         target={{ kind: "record", key: `${preview.eli}:${preview.article}:${preview.unit ?? ""}`, html: preview.html, anchor: preview.anchor }}
