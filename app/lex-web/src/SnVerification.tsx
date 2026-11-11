@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, apiBase, attemptSnSessionOnServer, closeSnProxyWindow, isDesktopShell, openSnProxyWindow, probeSnSession, saveSnSession, snProxyWindowStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
+/** Probes (4 s apart) a window opened minimized gets before it is shown to the user. */
+export const AUTO_TRIES = 5;
+
 export function desktopInvoke():
   | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
   | null {
@@ -40,15 +43,22 @@ const SN_VERIFICATION_ERRORS: Record<string, string> = {
 // aplikacja zapisuje tylko ciasteczka tej sesji dla konektora SN i ponawia zapytanie.
 export function SnVerification({
   verification,
-  onVerified
+  onVerified,
+  autoStart = true
 }: {
   verification: { url: string; savedSession?: boolean; instruction?: string | null };
   onVerified: () => void;
+  /** Open the window minimized right away; false for an older message of the conversation. */
+  autoStart?: boolean;
 }) {
   const invoke = desktopInvoke();
   const [stage, setStage] = useState<"idle" | "open" | "saving">("idle");
   const [message, setMessage] = useState("");
   const doneRef = useRef(false);
+  // The window opens by itself, minimized: without a captcha the check passes on its own; after
+  // AUTO_TRIES probes without a session it is shown to the user.
+  const [quiet, setQuiet] = useState(false);
+  const quietRef = useRef(false);
   // Rodzice podają onVerified jako nową lambdę przy każdym renderze; w zależnościach
   // efektu restartowałaby odliczanie sondowania (i przy częstych renderach nie
   // wykonałaby się żadna próba).
@@ -84,6 +94,11 @@ export function SnVerification({
       } catch {
         // okno zamknięte albo ciasteczka jeszcze niegotowe — próbujemy dalej do limitu
       }
+      if (quietRef.current && tries >= AUTO_TRIES && !cancelled && !doneRef.current) {
+        quietRef.current = false;
+        setQuiet(false);
+        await invoke!("verification_window_show", { kind: "sn" }).catch(() => undefined);
+      }
       if (tries >= 45) {
         setMessage(t("Weryfikacja trwa — po rozwiązaniu zadania w oknie sn.pl kliknij „Gotowe”."));
       }
@@ -97,17 +112,24 @@ export function SnVerification({
     };
   }, [invoke, stage]);
 
-  async function open(): Promise<void> {
+  async function open(minimized = false): Promise<void> {
     if (!invoke) return;
     setMessage("");
     doneRef.current = false;
     try {
-      await invoke("sn_verification_open");
+      await invoke("sn_verification_open", { minimized });
+      quietRef.current = minimized;
+      setQuiet(minimized);
       setStage("open");
     } catch (failure) {
       setMessage(String(failure));
     }
   }
+
+  useEffect(() => {
+    if (invoke && autoStart) void open(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verification.url]);
 
   async function finish(): Promise<void> {
     if (!invoke || doneRef.current) return;
@@ -140,6 +162,7 @@ export function SnVerification({
             {t("Otwórz okno sn.pl i rozwiąż captchę, jeśli się pojawi - zapytanie ponowi się samo. Nie zamykaj okna przed wynikiem.")}
             <InfoTip>{t("Okno możesz zminimalizować. „Gotowe” jest potrzebne tylko, gdy aplikacja nie wykryje rozwiązania.")}</InfoTip>
           </p>
+          {quiet ? <p className="field-help">{t("Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.")}</p> : null}
           <div className="chat-form-row compact">
             <button type="button" className="chat-secondary-action" disabled={stage === "saving"} onClick={() => void open()}>
               {stage === "open" ? t("Pokaż okno sn.pl") : t("Zweryfikuj w sn.pl")}

@@ -80,6 +80,19 @@ describe("wokanda: the court portal", () => {
     expect((await recheckWokandaCourt(court, async (url) => ({ status: 403, url, text: "Trwa weryfikacja przeglądarki" }))).status).toBe("BROWSER");
     expect((await recheckWokandaCourt(court, async () => { throw new Error("x"); })).status).toBe("UNREACHABLE");
   });
+
+  it("names why a court did not answer instead of TypeError; a firewall's 403/429 goes to the court's window", async () => {
+    const court = { nazwa: "Sąd Okręgowy w Białymstoku", domena: "bialystok.so.gov.pl", status: "UNREACHABLE" as const };
+    const failing = (code: string) => async () => {
+      throw Object.assign(new TypeError("fetch failed"), { cause: { code } });
+    };
+    expect(await recheckWokandaCourt(court, failing("UNABLE_TO_VERIFY_LEAF_SIGNATURE"))).toMatchObject({ status: "UNREACHABLE", powod: "niekompletny certyfikat strony sądu" });
+    expect(await recheckWokandaCourt(court, failing("ENOTFOUND"))).toMatchObject({ powod: "adres strony sądu nie istnieje (DNS)" });
+    expect(await recheckWokandaCourt(court, failing("ECONNRESET"))).toMatchObject({ powod: "strona sądu zerwała połączenie" });
+    const blocked = await recheckWokandaCourt(court, async (url) => ({ status: 403, url, text: "Forbidden" }));
+    expect(blocked).toMatchObject({ status: "BROWSER", powod: "strona blokuje zapytania aplikacji (HTTP 403)" });
+    expect((await recheckWokandaCourt(court, async (url) => ({ status: 429, url, text: "" }))).status).toBe("BROWSER");
+  });
 });
 
 describe("wokanda: browser verification passed by the user (as sn.pl)", () => {

@@ -1,4 +1,4 @@
-import { firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
+import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
 import { SkillAutoUpdater } from "../skill-auto-update.js";
 import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
@@ -509,6 +509,12 @@ export async function startLocalServer(options) {
             const index = await workspaceStore.readIndex({ caseId, caseDataKey, keyVersion });
             const uploads = await secureCaseUploadStore.listUploads({ caseId, caseDataKey, keyVersion });
             return firmKnowledgeDocumentIds(firmKnowledgeItems(index, selection), uploads);
+        },
+        // How the model uses each firm document: by the purpose of its folder.
+        firmDocumentPurposes: async ({ caseId, caseDataKey, keyVersion }) => {
+            const index = await workspaceStore.readIndex({ caseId, caseDataKey, keyVersion });
+            const uploads = await secureCaseUploadStore.listUploads({ caseId, caseDataKey, keyVersion });
+            return firmDocumentPurposes(index, uploads);
         },
         documentGenerationState,
         caseFileStore,

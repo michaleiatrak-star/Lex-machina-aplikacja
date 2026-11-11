@@ -34,7 +34,8 @@ import {
   QUICK_LOCAL_MAX_OUTPUT_TOKENS,
   QUICK_LOCAL_MAX_TOOL_ROUNDS,
   QUICK_LOCAL_TOOLS,
-  QuickLaneSources
+  QuickLaneSources,
+  unsourcedWarning
 } from "./quick-legal-question.js";
 import {
   assessMatterComplexity,
@@ -582,6 +583,11 @@ export class LexExecutionEngine {
      */
     quickLocalLegal?: {
       toolPrompt: string;
+      /**
+       * The wording of the articles an answer cites, read by the application from the
+       * core law copy (no model); null when none resolves.
+       */
+      articlesForAnswer?: (answer: string) => string | null;
     };
     /** Result of the entry gate; computed here when the caller has none. */
     matterComplexity?: MatterComplexity;
@@ -1941,24 +1947,34 @@ export class LexExecutionEngine {
       const response = await quickRequest([question]);
       let missing = sources.unsourced(response.fullText);
       if (missing.length > 0) {
-        // One correcting round: fetch the text or drop the provision.
+        // The application reads the cited articles itself: a local model often answers
+        // from the provisions it knows and does not call read_core_law_article.
+        const fetched = args.quickLocalLegal.articlesForAnswer?.(response.fullText) ?? null;
+        if (fetched) sources.addPrompt(fetched);
+        missing = sources.unsourced(response.fullText);
+        // One correcting round: base the answer on the fetched wording, fetch the rest or drop it.
         emit(
           "gate",
           "QUICK_LEGAL_SOURCES",
           "OK",
-          `correction=${missing.join("|")}`
+          `correction=${missing.join("|") || "fetched"}`
         );
-        // A failed correcting round keeps the first answer for the source gate below; it no
-        // longer drops the whole turn (Bielik: the answer was on screen, then the turn failed
-        // as LOCAL_MODEL_INFERENCE_FAILED when this second call came back empty).
+        // A failed correcting round keeps the first answer; it no longer drops the whole turn
+        // (Bielik: the answer was on screen, then the turn failed as LOCAL_MODEL_INFERENCE_FAILED
+        // when this second call came back empty).
         const corrected = await quickRequest([
           question,
           { role: "assistant", content: response.fullText },
           {
             role: "user",
             content:
-              `Odpowiedź zawiera odwołania bez źródła w tej rozmowie: ${missing.join("; ")}. ` +
-              "Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
+              (fetched
+                ? `${fetched}\n\nAplikacja odczytała powyżej brzmienie przepisów powołanych w Twojej odpowiedzi. Popraw odpowiedź tak, aby opierała się na tym brzmieniu (progi kwotowe, zagrożenie karą, znamiona). `
+                : "") +
+              (missing.length > 0
+                ? `Odpowiedź zawiera odwołania bez źródła w tej rozmowie: ${missing.join("; ")}. Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. `
+                : "") +
+              "Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
               CORRECTED_ANSWER_ONLY
           }
         ]).catch((error: unknown) => {
@@ -1971,17 +1987,15 @@ export class LexExecutionEngine {
         missing = sources.unsourced(response.fullText);
       }
       if (missing.length > 0) {
+        // A missing source is a warning, not a missing answer: the answer is shown with the
+        // references the application could not confirm in ELI in this turn named under it.
         emit(
           "gate",
           "QUICK_LEGAL_SOURCES",
-          "BLOCKED",
-          `unsourced=${missing.join("|")}`
+          "OK",
+          `unsourced_warning=${missing.join("|")}`
         );
-        throw new LexExecutionError(
-          "The answer cites provisions without an ELI text in this turn.",
-          "QUICK_LEGAL_UNSOURCED_PROVISION",
-          [...events]
-        );
+        response.fullText = `${response.fullText.trimEnd()}\n\n${unsourcedWarning(missing)}`;
       }
       emit(
         "gate",

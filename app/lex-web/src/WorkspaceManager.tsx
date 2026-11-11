@@ -38,6 +38,8 @@ import {
   createWorkspaceFolder,
   deleteWorkspaceFolder,
   setWorkspaceFolderChatDefault,
+  setWorkspaceFolderPurpose,
+  inheritedFolderPurpose,
   deleteWorkspaceItem,
   getWorkspace,
   moveWorkspaceItem,
@@ -50,6 +52,7 @@ import {
   type EditableFormat,
   type EditableSheets,
   type WorkspaceFolder,
+  type WorkspaceFolderPurpose,
   type WorkspaceItem,
   type WorkspaceResponse
 } from "./workspace-client.js";
@@ -1392,6 +1395,26 @@ export function WorkspaceManager({
                   />
                   {t("domyślnie w rozmowie")}
                 </label>
+              ) : null}
+              {workspace?.caseKind === "FIRM_KNOWLEDGE" ? (
+                <select
+                  className="workspace-folder-purpose"
+                  aria-label={t("Rodzaj folderu: {name}", { name: folder.name })}
+                  title={t("Rodzaj folderu decyduje, jak model używa plików: wzory tylko do wypełnienia (nie są źródłem faktów), orzeczenia i interpretacje jako kopia kancelarii do sprawdzenia w źródle urzędowym, zasady w każdej rozmowie (nie uchylają zasad źródeł prawa).")}
+                  value={folder.purpose ?? ""}
+                  disabled={!canWrite || busy}
+                  onChange={(event) => {
+                    const next = (event.target.value || null) as WorkspaceFolderPurpose | null;
+                    void run(async () => {
+                      await setWorkspaceFolderPurpose(caseId, folder.folderId, next);
+                    });
+                  }}
+                >
+                  <option value="">{folder.parentId && inheritedFolderPurpose(folders, folder.parentId) ? t("Jak folder nadrzędny") : t("Wiedza ogólna")}</option>
+                  <option value="TEMPLATES">{t("Wzory do wypełnienia")}</option>
+                  <option value="CASE_LAW">{t("Orzeczenia i interpretacje")}</option>
+                  <option value="RULES">{t("Zasady kancelarii")}</option>
+                </select>
               ) : null}
               {canWrite ? (
                 <button

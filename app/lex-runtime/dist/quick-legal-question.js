@@ -178,7 +178,9 @@ export function citedArticles(text) {
 }
 export function sourcedArticlesFromPrompt(prompt) {
     return [
-        ...prompt.matchAll(/^\[[^\]]+\][^\n]*— art\. (\S+)$/gmu)
+        // "[ELI] Title — art. 278" (retrieval) and "[ELI] Title — art. 278 (tekst z ELI z dnia …)"
+        // (articles the application read by number).
+        ...prompt.matchAll(/^\[[^\]]+\][^\n]*— art\. (\S+?)(?: \([^\n]*\))?$/gmu)
     ].map((match) => match[1].toLowerCase());
 }
 export function sourcedArticlesFromToolResult(name, content) {
@@ -300,4 +302,16 @@ export class QuickLaneSources {
         }
         return missing;
     }
+}
+/**
+ * The note under a quick answer whose references the application could not back in this
+ * turn: the answer stays, the unconfirmed references are named (no source is a warning,
+ * not a missing answer).
+ */
+export function unsourcedWarning(missing) {
+    return [
+        "---",
+        `**Uwaga: bez potwierdzenia w ELI w tej odpowiedzi:** ${missing.join("; ")}.`,
+        "Brzmienia tych przepisów aplikacja nie pobrała w tej rozmowie. Sprawdź je w ELI przed użyciem albo zadaj pytanie modelowi w chmurze."
+    ].join("\n");
 }

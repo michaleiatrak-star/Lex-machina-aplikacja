@@ -667,16 +667,33 @@ export const EVIDENCE_IMAGE_NOTE = [
     "Opisuj to, co widać (stan rzeczy, uszkodzenia, miejsce, układ, podpisy i pieczęcie jako fakt ich obecności); oddziel obserwację od wniosku i nie przypisuj osób na podstawie wyglądu.",
     "Nazwy i dane z dokumentu bierz z tekstu z symbolami [PII:...], nie z obrazu."
 ].join("\n");
+// The firm's own copies of judgments and interpretations: a lead, never a verified source.
+export const FIRM_CASE_LAW_NOTE = [
+    "ORZECZENIA I INTERPRETACJE · KOPIA KANCELARII (HARD GATE):",
+    "To kopie z bazy kancelarii, nie źródło urzędowe. Orzeczenie albo interpretację z tej kopii powołaj dopiero po sprawdzeniu w oficjalnym źródle (SN, SAOS, CBOSA, EUREKA) narzędziem weryfikacji; bez tego oznacz je jako niezweryfikowane.",
+    "Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień w źródle = OUT_OF_SCOPE, nie brak orzeczenia.",
+    "Sygnaturę, sąd i datę bierz z tekstu kopii, nie z pamięci."
+].join("\n");
+// The firm's rules: how the firm works, below the rules of legal sources.
+export const FIRM_RULES_NOTE = [
+    "ZASADY KANCELARII:",
+    "Stosuj metodykę, regulaminy i rozwiązania kancelarii z tych dokumentów (forma pism, kolejność, styl, wymagania kancelarii).",
+    "Nie uchylają one zasad źródeł prawa ani bramek aplikacji: przepisy tylko z ELI, nigdy z pamięci; orzeczenia tylko po weryfikacji. Przy sprzeczności pierwszeństwo mają te zasady źródeł."
+].join("\n");
 function buildDocumentContext(attachments, images = []) {
     const sections = attachments.map((attachment) => {
         const chunks = attachment.chunks.map((chunk) => {
             const sourceLabel = attachment.sourceScope === "FIRM_TEMPLATE"
                 ? "WZÓR KANCELARII"
-                : attachment.sourceScope === "FIRM_KNOWLEDGE"
-                    ? "KNOW-HOW KANCELARII"
-                    : attachment.sourceScope === "CASE_KNOWLEDGE"
-                        ? "CASE KNOWLEDGE"
-                        : "DOCUMENT";
+                : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "CASE_LAW"
+                    ? "ORZECZENIE/INTERPRETACJA · KOPIA KANCELARII"
+                    : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "RULES"
+                        ? "ZASADY KANCELARII"
+                        : attachment.sourceScope === "FIRM_KNOWLEDGE"
+                            ? "KNOW-HOW KANCELARII"
+                            : attachment.sourceScope === "CASE_KNOWLEDGE"
+                                ? "CASE KNOWLEDGE"
+                                : "DOCUMENT";
             const representation = chunk.representation ===
                 "EXTRACTIVE_DIGEST"
                 ? " · EXTRACTIVE DIGEST · BACKLINK=ORIGINAL_CHUNK"
@@ -705,7 +722,15 @@ function buildDocumentContext(attachments, images = []) {
             ...images.map((image, index) => `[OBRAZ ${index + 1}: ${image.documentId} · STRONA ${image.page} · zamaskowane obszary: ${image.masked}]`)
         ].join("\n")
         : null;
-    return [...(firm ? [FIRM_MATERIAL_NOTE] : []), ...sections, ...(imageIndex ? [imageIndex] : [])].join("\n\n---\n\n");
+    const caseLaw = attachments.some((attachment) => attachment.firmPurpose === "CASE_LAW");
+    const rules = attachments.some((attachment) => attachment.firmPurpose === "RULES");
+    return [
+        ...(firm ? [FIRM_MATERIAL_NOTE] : []),
+        ...(caseLaw ? [FIRM_CASE_LAW_NOTE] : []),
+        ...(rules ? [FIRM_RULES_NOTE] : []),
+        ...sections,
+        ...(imageIndex ? [imageIndex] : [])
+    ].join("\n\n---\n\n");
 }
 export const buildDocumentContextForTest = buildDocumentContext;
 export const FIRM_MATERIAL_NOTE = [
@@ -2351,7 +2376,13 @@ export class SafeSessionExecutor {
                             ...(citedLaw ? [citedLaw] : []),
                             coreLawRag ??
                                 "# LOKALNE TEKSTY USTAW\nDla tego pytania nie dobrano automatycznie artykułów. Znajdź przepis search_core_law, a jego brzmienie weź z read_core_law_article; bez tego nie podawaj treści przepisu."
-                        ].join("\n\n")
+                        ].join("\n\n"),
+                        articlesForAnswer: (answer) => {
+                            const index = this.coreLawIndex;
+                            if (!index)
+                                return null;
+                            return citedArticlesPrompt(index, citedArticles(answer, resolveActModulesWithChecks(this.registry, pathFacts.query).modules.flatMap((module) => (module.basis ? [module.basis] : [])), provisionsForDetection), 1_800);
+                        }
                     }
                 }
                 : {}),

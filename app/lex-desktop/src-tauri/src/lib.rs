@@ -281,9 +281,15 @@ fn cookie_header<'a>(pairs: impl Iterator<Item = (&'a str, &'a str)>) -> String 
         .join("; ")
 }
 
+// `minimized`: the window opens minimized and unfocused; a check that passes on its own in a real
+// browser engine needs nothing from the user. The application shows it (verification_window_show)
+// only when the check waits for the user (a captcha). Without `minimized` the window is shown.
 #[tauri::command]
-async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
+async fn sn_verification_open(app: tauri::AppHandle, minimized: Option<bool>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(SN_VERIFICATION_LABEL) {
+        if minimized.unwrap_or(false) {
+            return Ok(());
+        }
         let _ = window.unminimize();
         return window
             .set_focus()
@@ -292,17 +298,40 @@ async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
     let url = SN_VERIFICATION_URL
         .parse::<tauri::Url>()
         .map_err(|_| "SN_VERIFICATION_URL_INVALID".to_string())?;
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         SN_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(url),
     )
     .title("Weryfikacja sn.pl - rozwiaz captcha, potem kliknij Gotowe w Lex Machina")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     .on_navigation(is_sn_url)
     .build()
     .map_err(|error| format!("SN_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
+}
+
+// A verification window opened minimized, brought to the front: its check waits for the user.
+#[tauri::command]
+async fn verification_window_show(app: tauri::AppHandle, kind: String) -> Result<(), String> {
+    let label = match kind.as_str() {
+        "sn" => SN_VERIFICATION_LABEL,
+        "wokanda" => WOKANDA_VERIFICATION_LABEL,
+        "law-source" => LAW_SOURCE_VERIFICATION_LABEL,
+        _ => return Err("VERIFICATION_WINDOW_UNKNOWN".to_string()),
+    };
+    let window = app
+        .get_webview_window(label)
+        .ok_or_else(|| "VERIFICATION_WINDOW_MISSING".to_string())?;
+    let _ = window.unminimize();
+    window
+        .set_focus()
+        .map_err(|_| "VERIFICATION_WINDOW_FAILED".to_string())
 }
 
 // Odczyt ciasteczek okna sn.pl jako nagłówek Cookie. Async: na Windows odczyt WebView2
@@ -376,27 +405,38 @@ fn wokanda_court_url(raw: &str) -> Result<tauri::Url, String> {
     Ok(url)
 }
 
+// `minimized`: as sn_verification_open (most courts' browser check passes on its own).
 #[tauri::command]
-async fn wokanda_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn wokanda_verification_open(
+    app: tauri::AppHandle,
+    url: String,
+    minimized: Option<bool>,
+) -> Result<(), String> {
     let target = wokanda_court_url(&url)?;
     let court = target.host_str().and_then(court_host).unwrap_or_default();
     if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
         let _ = window.close();
     }
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         WOKANDA_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(target),
     )
     .title("Weryfikacja wokandy sadu - przejdz weryfikacje, sprawdzenie ponowi sie samo")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     .on_navigation(move |next| {
         next.scheme() == "https" && next.host_str().and_then(court_host).as_deref() == Some(court.as_str())
     })
     .build()
     .map_err(|error| format!("WOKANDA_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
 }
+
 
 // Ciasteczka okna sądu dla adresu tego sądu, jako nagłówek Cookie (bez zamykania okna).
 #[tauri::command]
@@ -457,22 +497,31 @@ fn law_source_same_site(next: &tauri::Url, item: &str) -> bool {
 }
 
 #[tauri::command]
-async fn law_source_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn law_source_verification_open(
+    app: tauri::AppHandle,
+    url: String,
+    minimized: Option<bool>,
+) -> Result<(), String> {
     let (target, item) = law_source_url(&url)?;
     if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
         let _ = window.close();
     }
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         LAW_SOURCE_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(target),
     )
     .title("Weryfikacja zrodla prawa - przejdz weryfikacje, pytanie ponowi sie samo")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     // The check's own pages load from other hosts inside the page; top-level navigation stays on the source.
     .on_navigation(move |next| law_source_same_site(next, item))
     .build()
     .map_err(|error| format!("LAW_SOURCE_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
 }
 
@@ -765,6 +814,7 @@ pub fn run() {
                 wokanda_verification_open,
                 wokanda_verification_cookies,
                 wokanda_verification_close,
+                verification_window_show,
                 law_source_verification_open,
                 law_source_verification_cookies,
                 law_source_verification_close,

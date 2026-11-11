@@ -6482,6 +6482,7 @@ export default function MatterChatApp({
                   {message.sourceVerification?.source === "law" ? (
                     <LawSourceVerification
                       verification={message.sourceVerification}
+                      autoStart={message.id === messages.at(-1)?.id}
                       onVerified={() => {
                         const index = messages.findIndex((item) => item.id === message.id);
                         const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
@@ -6491,6 +6492,7 @@ export default function MatterChatApp({
                   ) : message.sourceVerification ? (
                     <SnVerification
                       verification={{ url: message.sourceVerification.url }}
+                      autoStart={message.id === messages.at(-1)?.id}
                       onVerified={() => {
                         const index = messages.findIndex((item) => item.id === message.id);
                         const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
