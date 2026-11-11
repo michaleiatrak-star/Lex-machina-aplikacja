@@ -1820,8 +1820,32 @@
     flex-wrap: wrap;
   }
 
+  /* Narrow window: the sections in compact rows, each group's buttons side by side (as a grid
+     the cells stretched to the tallest group and pushed the page down by ~600 px). */
   .chat-tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+  }
+
+  .chat-tabs .chat-tab-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .chat-tabs .chat-tab-group + .chat-tab-group {
+    margin-top: 0;
+  }
+
+  .chat-tabs .chat-tab-group-label {
+    padding: 0 4px 0 0;
+  }
+
+  .chat-tab {
+    min-height: 34px;
   }
 
   .chat-sidebar-card,
@@ -1890,9 +1914,6 @@
     flex-direction: column;
   }
 
-  .chat-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .chat-message {
     width: 96%;
@@ -2180,15 +2201,22 @@
     grid-template-columns: 1fr;
   }
 
+  /* Every section visible in wrapped rows (a sideways strip hid half of them past the edge). */
   .chat-settings-nav {
     position: static;
     display: flex;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 4px;
   }
 
   .chat-settings-nav button {
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+
+  .chat-settings-nav .chat-settings-nav-group {
+    padding: 0 2px 0 12px;
   }
 }
 

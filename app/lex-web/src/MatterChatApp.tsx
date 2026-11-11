@@ -8228,6 +8228,7 @@ export default function MatterChatApp({
                 </small>
               ) : null}
               {providerDefinition &&
+              provider !== "local" &&
               !model.startsWith("local/") &&
               !isAccountPrimarySource(provider) ? (
                 <button

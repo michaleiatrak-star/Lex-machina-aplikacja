@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /**
  * A short explanation kept out of the layout: an "i" next to a heading or a control, the text
@@ -10,8 +10,33 @@ import { useId, useState, type ReactNode } from "react";
 export function InfoTip({ children, label = t("Więcej informacji") }: { children: ReactNode; label?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [shift, setShift] = useState(0);
+  const bubble = useRef<HTMLSpanElement>(null);
+  const shown = open || hover;
+  // The bubble centred on the "i" would leave the window near its edge: moved back inside (8 px margin).
+  useLayoutEffect(() => {
+    if (!shown || !bubble.current) {
+      setShift(0);
+      return;
+    }
+    const rect = bubble.current.getBoundingClientRect();
+    const left = rect.left - shift;
+    const right = rect.right - shift;
+    const margin = 8;
+    const next = right > window.innerWidth - margin ? window.innerWidth - margin - right : left < margin ? margin - left : 0;
+    if (next !== shift) setShift(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
   return (
-    <span className={open ? "info-tip open" : "info-tip"}>
+    <span
+      className={["info-tip", open ? "open" : "", shown ? "shown" : ""].filter(Boolean).join(" ")}
+      style={{ "--info-tip-shift": `${shift}px` } as CSSProperties}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+    >
       <button
         type="button"
         className="info-tip-button"
@@ -30,7 +55,7 @@ export function InfoTip({ children, label = t("Więcej informacji") }: { childre
       >
         i
       </button>
-      <span role="tooltip" id={id} className="info-tip-bubble">
+      <span ref={bubble} role="tooltip" id={id} className="info-tip-bubble">
         {children}
       </span>
     </span>

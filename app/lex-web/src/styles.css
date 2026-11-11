@@ -2662,16 +2662,21 @@ textarea:focus {
   font-style: normal;
   text-align: left;
   white-space: normal;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--info-tip-shift, 0px)));
   visibility: hidden;
   opacity: 0;
   transition: opacity 0.12s ease;
   pointer-events: none;
 }
 
-.info-tip:hover .info-tip-bubble,
-.info-tip:focus-within .info-tip-bubble,
-.info-tip.open .info-tip-bubble {
+/* Hidden, the bubble takes no place in the layout (a hidden bubble at the right edge widened the
+   page and gave it a horizontal scroll); shown, it is moved to stay inside the window (InfoTip). */
+.info-tip-bubble {
+  display: none;
+}
+
+.info-tip.shown .info-tip-bubble {
+  display: block;
   visibility: visible;
   opacity: 1;
 }
