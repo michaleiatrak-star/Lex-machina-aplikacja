@@ -39,6 +39,11 @@ const checks = {
     workflow.includes("actions/upload-artifact") &&
     workflow.includes("LexMachina-Windows-Online-Installer"),
   installerHooksUtf8Bom: hooksUtf8Bom,
+  // The worker writes the progress file as UTF-8 without a BOM; PowerShell 5.1 reads such a file
+  // in the ANSI code page unless told otherwise ("Sprawdzanie gotowości" showed garbled).
+  progressWindowReadsUtf8: read("app/installer/bootstrap-progress-window.ps1").includes(
+    "Get-Content -Raw -Encoding UTF8 -LiteralPath $StatusPath"
+  ),
   installedCopyBootstrappedAndTested:
     acceptance.includes("/S") &&
     acceptance.includes("component-lock.json") &&

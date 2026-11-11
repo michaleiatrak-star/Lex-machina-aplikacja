@@ -52,7 +52,7 @@ $timer.Add_Tick({
   if (-not (Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue)) { $form.Close(); return }
   Show-ProgressWindow
   try {
-    $state = Get-Content -Raw -LiteralPath $StatusPath | ConvertFrom-Json
+    $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $StatusPath | ConvertFrom-Json
     $label.Text = $state.text
     if ($state.stage) { $stage.Text = $state.stage }
     if ($state.done) { $form.Close(); return }
