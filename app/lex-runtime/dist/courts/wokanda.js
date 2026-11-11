@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { courtByName } from "./court-base.js";
 import { WOKANDA_REGISTER } from "./wokanda-registry-data.js";
+import { isIncompleteChain, missingIntermediate, networkReason, requestWithIntermediate } from "./tls-chain.js";
 export const WOKANDA_USER_AGENT = "LexMachina (wokanda; zapytanie uzytkownika o jego sprawe)";
 const TIMEOUT_MS = 20_000;
 const MAX_HEARINGS = 10;
@@ -16,14 +17,26 @@ const MAX_HEARINGS = 10;
 // application does not get past it and gives the address instead.
 const GUARD = /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge/iu;
 export const defaultFetchText = async (url, headers = {}, init) => {
-    const response = await fetch(url, {
-        headers: { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: "follow",
-        ...(init ? { method: init.method, body: init.body } : {})
-    });
-    const text = await response.text();
-    return { status: response.status, url: response.url || url, text: text.slice(0, 1_000_000) };
+    const allHeaders = { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers };
+    try {
+        const response = await fetch(url, {
+            headers: allHeaders,
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+            redirect: "follow",
+            ...(init ? { method: init.method, body: init.body } : {})
+        });
+        const text = await response.text();
+        return { status: response.status, url: response.url || url, text: text.slice(0, 1_000_000) };
+    }
+    catch (error) {
+        // A court site without its intermediate certificate: fetched the way a browser does.
+        if (!isIncompleteChain(error))
+            throw error;
+        const intermediate = await missingIntermediate(new URL(url).hostname);
+        if (!intermediate)
+            throw error;
+        return await requestWithIntermediate(url, intermediate, allHeaders, init);
+    }
 };
 const sessions = new Map();
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
@@ -324,7 +337,10 @@ export async function checkWokanda(courtName, signature, fetchText = defaultFetc
         return { ...base, state: "NO_WOKANDA", reason: "Sądu nie ma w rejestrze wokand (sądy powszechne)." };
     if (court.status === "NONE")
         return { ...base, state: "NO_WOKANDA", ...(court.url ? { url: court.url } : {}), reason: "Strona sądu nie publikuje wokandy." };
-    const verifiable = court.status === "PORTAL" || (court.status === "BROWSER" && court.powod === "weryfikacja przeglądarki");
+    // A browser check or a firewall that turns away the application's requests (403, 429): the
+    // court's window, a real browser engine, gets through and lends its session.
+    const verifiable = court.status === "PORTAL" ||
+        (court.status === "BROWSER" && (court.powod === "weryfikacja przeglądarki" || Boolean(court.powod?.startsWith("strona blokuje zapytania aplikacji"))));
     const verification = (savedSession) => ({ domain: court.domena, url: court.url ?? `https://${court.domena}/wokanda`, savedSession });
     const session = verifiable ? sessionHeaders(court.domena) : null;
     if (court.status === "BROWSER" && !session) {
@@ -368,7 +384,7 @@ export async function checkWokanda(courtName, signature, fetchText = defaultFetc
             };
         }
         catch (error) {
-            return { ...base, state: "UNREACHABLE", url: court.url ?? `https://${court.domena}`, reason: `Strona sądu nie odpowiedziała (${error instanceof Error ? error.name : "błąd"}).` };
+            return { ...base, state: "UNREACHABLE", url: court.url ?? `https://${court.domena}`, reason: `Strona sądu nie odpowiedziała (${networkReason(error)}).` };
         }
     }
     const searchUrl = portalSearchUrl(court.url ?? `https://${court.domena}/wokanda`, parsed);
@@ -377,9 +393,9 @@ export async function checkWokanda(courtName, signature, fetchText = defaultFetc
         page = await fetchPage(searchUrl);
     }
     catch (error) {
-        return { ...base, state: "UNREACHABLE", url: court.url ?? searchUrl, reason: `Strona sądu nie odpowiedziała (${error instanceof Error ? error.name : "błąd"}).` };
+        return { ...base, state: "UNREACHABLE", url: court.url ?? searchUrl, reason: `Strona sądu nie odpowiedziała (${networkReason(error)}).` };
     }
-    if (GUARD.test(page.text)) {
+    if (GUARD.test(page.text) || page.status === 403 || page.status === 429) {
         return {
             ...base,
             state: "BROWSER_ONLY",
@@ -419,12 +435,16 @@ export async function recheckWokandaCourt(court, fetchText = defaultFetchText) {
             return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: "weryfikacja przeglądarki" };
         if (page.status === 200 && /wokand/iu.test(page.text))
             return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: court.powod ?? "inny system wokandy" };
+        // A firewall answering the application with 403 or 429 lets a browser through: the court's
+        // window (as for a browser check) opens it.
+        if (page.status === 403 || page.status === 429)
+            return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url || url, powod: `strona blokuje zapytania aplikacji (HTTP ${page.status})` };
         if (page.status === 200 || page.status === 404)
             return { nazwa: court.nazwa, domena: court.domena, status: court.status === "NONE" ? "NONE" : court.status, ...(court.url ? { url: court.url } : {}), ...(court.powod ? { powod: court.powod } : {}) };
         return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: `HTTP ${page.status}` };
     }
     catch (error) {
-        return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: error instanceof Error ? error.name : "błąd sieci" };
+        return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: networkReason(error) };
     }
 }
 export function wokandaOverridesPath(env = process.env) {

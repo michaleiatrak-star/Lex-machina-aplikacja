@@ -1,8 +1,23 @@
 import { documentIdFromSha256 } from "./case-document-purge.js";
+/** The folder's purpose, or the nearest parent's (a subfolder of "Orzeczenia" holds judgments). */
+export function folderPurpose(index, folderId) {
+    const byId = new Map(index.folders.map((folder) => [folder.folderId, folder]));
+    const seen = new Set();
+    let current = folderId ? byId.get(folderId) : undefined;
+    while (current && !seen.has(current.folderId)) {
+        if (current.purpose)
+            return current.purpose;
+        seen.add(current.folderId);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return null;
+}
 export function firmKnowledgeItems(index, selection) {
     const known = new Set(index.folders.map((folder) => folder.folderId));
     const roots = new Set([
         ...index.folders.filter((folder) => folder.chatDefault).map((folder) => folder.folderId),
+        // The firm's rules apply in every conversation.
+        ...index.folders.filter((folder) => folder.purpose === "RULES").map((folder) => folder.folderId),
         ...selection.folderIds.filter((folderId) => known.has(folderId))
     ]);
     // Subfolders of a chosen folder are chosen too.
@@ -23,6 +38,25 @@ export function firmKnowledgeItems(index, selection) {
             items.add(itemId);
     }
     return items;
+}
+/**
+ * The purpose of every firm document (doc_<sha256 prefix>) by the folder it lies in; documents
+ * of general know-how are absent.
+ */
+export function firmDocumentPurposes(index, uploads) {
+    const purposes = new Map();
+    for (const upload of uploads) {
+        const purpose = folderPurpose(index, index.itemLocations[upload.uploadId]);
+        if (!purpose)
+            continue;
+        try {
+            purposes.set(documentIdFromSha256(upload.sha256), purpose);
+        }
+        catch {
+            // not a processable upload
+        }
+    }
+    return purposes;
 }
 /** The documents (doc_<sha256 prefix>) of the chosen uploads. */
 export function firmKnowledgeDocumentIds(items, uploads) {

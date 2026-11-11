@@ -17,6 +17,7 @@ import { validateCourtAnalysisState } from "./court-analysis-state.js";
 import { validateChronologyState } from "./chronology-state.js";
 import { validateContractAnalysisState } from "./contract-analysis-state.js";
 import { validateOrderedCaseWorkflowState } from "./ordered-case-workflow-state.js";
+export const WORKSPACE_FOLDER_PURPOSES = ["TEMPLATES", "CASE_LAW", "RULES"];
 const CASE_ID = /^case_[a-f0-9]{32}$/;
 const FOLDER_ID = /^folder_[a-f0-9]{32}$/;
 const ITEM_ID = /^(?:upload|template)_[a-f0-9]{32}$/;
@@ -568,6 +569,24 @@ export class EncryptedCaseWorkspaceStore {
             folder.chatDefault = true;
         else
             delete folder.chatDefault;
+        await this.write(index, args.caseDataKey, args.keyVersion);
+        return folder;
+    }
+    async setFolderPurpose(args) {
+        if (!FOLDER_ID.test(args.folderId)) {
+            throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+        }
+        if (args.purpose !== null && !WORKSPACE_FOLDER_PURPOSES.includes(args.purpose)) {
+            throw new Error("WORKSPACE_FOLDER_PURPOSE_INVALID");
+        }
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        const folder = index.folders.find((item) => item.folderId === args.folderId);
+        if (!folder)
+            throw new Error("WORKSPACE_FOLDER_NOT_FOUND");
+        if (args.purpose)
+            folder.purpose = args.purpose;
+        else
+            delete folder.purpose;
         await this.write(index, args.caseDataKey, args.keyVersion);
         return folder;
     }
