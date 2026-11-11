@@ -1,4 +1,4 @@
-!define LEX_HOOK_FILE_DIR "${__FILEDIR__}"
+﻿!define LEX_HOOK_FILE_DIR "${__FILEDIR__}"
 
 ; While a PowerShell step runs, NSIS gets no progress: its bar moves continuously (marquee) so the
 ; installer does not look frozen; the step's own window shows the real progress.
