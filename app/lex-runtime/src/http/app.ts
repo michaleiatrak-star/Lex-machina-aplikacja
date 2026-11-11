@@ -777,7 +777,8 @@ export type LexHttpAppOptions = {
     | "listCaseContacts"
     | "addCaseContact"
     | "deleteCaseContact"
-  >;
+  > &
+    Partial<Pick<LocalCaseAccessService, "updateCaseScheduleEvent">>;
 };
 
 /** Steps the session audit recorded as BLOCKED (the targets, shortened). */
@@ -4409,6 +4410,31 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
       }
     };
+
+  // Edit in place from the calendar (an older runtime without the method answers 503).
+  app.patch(
+    "/api/cases/:caseId/schedule/:eventId",
+    scheduleRoute("CASE_SCHEDULE_UPDATE_FAILED", async (service, req, res) => {
+      if (!service.updateCaseScheduleEvent) {
+        res.status(503).json({ error: "CASE_SCHEDULE_UNAVAILABLE" });
+        return;
+      }
+      res.json(
+        await service.updateCaseScheduleEvent(
+          responseAuthContext(res),
+          String(req.params.caseId ?? ""),
+          String(req.params.eventId ?? ""),
+          {
+            kind: req.body?.kind,
+            title: req.body?.title,
+            startsAt: req.body?.startsAt,
+            location: req.body?.location,
+            notes: req.body?.notes
+          }
+        )
+      );
+    })
+  );
 
   // Home screen and calendar: events of all the user's active cases.
   app.get(

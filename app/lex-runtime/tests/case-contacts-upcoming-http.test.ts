@@ -100,6 +100,35 @@ describe("case contacts and upcoming events", () => {
       ["Pozniej", "Sprawa A"]
     ]);
 
+    // Edit in place from the calendar: the event keeps its id and author, the list re-sorts.
+    const later = upcoming.body.events[1] as { eventId: string; createdAt: string };
+    const edited = await request(current.app)
+      .patch(`/api/cases/${firstId}/schedule/${later.eventId}`)
+      .set(auth)
+      .send({ kind: "COURT_HEARING", title: "Rozprawa", startsAt: "2098-12-01T09:30", location: "sala 5" })
+      .expect(200);
+    expect(edited.body).toMatchObject({
+      eventId: later.eventId,
+      kind: "COURT_HEARING",
+      title: "Rozprawa",
+      startsAt: "2098-12-01T09:30",
+      location: "sala 5",
+      createdAt: later.createdAt
+    });
+    const resorted = await request(current.app)
+      .get("/api/schedule/upcoming").set(auth).expect(200);
+    expect(resorted.body.events.map((event: { title: string }) => event.title)).toEqual(["Rozprawa", "Wczesniej"]);
+    await request(current.app)
+      .patch(`/api/cases/${firstId}/schedule/${later.eventId}`)
+      .set(auth)
+      .send({ kind: "COURT_HEARING", title: "", startsAt: "2098-12-01T09:30" })
+      .expect(400);
+    await request(current.app)
+      .patch(`/api/cases/${firstId}/schedule/scheduleevent_${"0".repeat(32)}`)
+      .set(auth)
+      .send({ kind: "OTHER", title: "X", startsAt: "2098-12-01T09:30" })
+      .expect(404);
+
     const limited = await request(current.app)
       .get("/api/schedule/upcoming?limit=1").set(auth).expect(200);
     expect(limited.body.events).toHaveLength(1);

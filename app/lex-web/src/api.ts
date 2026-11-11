@@ -2046,6 +2046,23 @@ export function addCaseScheduleEvent(
   );
 }
 
+export function updateCaseScheduleEvent(
+  caseId: string,
+  eventId: string,
+  input: {
+    kind: CaseScheduleKind;
+    title: string;
+    startsAt: string;
+    location?: string;
+    notes?: string;
+  }
+): Promise<CaseScheduleEvent> {
+  return json<CaseScheduleEvent>(`/api/cases/${caseId}/schedule/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
 export function deleteCaseScheduleEvent(
   caseId: string,
   eventId: string

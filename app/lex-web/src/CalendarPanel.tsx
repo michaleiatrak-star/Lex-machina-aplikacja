@@ -1,8 +1,9 @@
 import { t } from "./i18n";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   addCaseScheduleEvent,
   deleteCaseScheduleEvent,
+  updateCaseScheduleEvent,
   listUpcomingEvents,
   type CaseListItem,
   type CaseScheduleKind,
@@ -55,14 +56,19 @@ export function CalendarPanel({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // The window above the calendar: the selected day's events, or the add / edit form.
+  const [dialog, setDialog] = useState<"" | "day" | "form">("");
+  const [editing, setEditing] = useState<UpcomingCaseEvent | null>(null);
   const [draft, setDraft] = useState({
     caseId: "",
     kind: "COURT_HEARING" as CaseScheduleKind,
     title: "",
+    day: today,
     time: "09:00",
     location: "",
     notes: ""
   });
+  const dialogTitleId = useId();
 
   const weeks = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
   const byDay = useMemo(() => groupByDay(events), [events]);
@@ -122,6 +128,43 @@ export function CalendarPanel({
     }
   }
 
+  useEffect(() => {
+    if (!dialog) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDialog("");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialog]);
+
+  function openDay(key: string): void {
+    selectDay(key);
+    setError("");
+    setDialog("day");
+  }
+
+  function openAdd(day: string): void {
+    setEditing(null);
+    setError("");
+    setDraft((current) => ({ ...current, title: "", location: "", notes: "", day }));
+    setDialog("form");
+  }
+
+  function openEdit(event: UpcomingCaseEvent): void {
+    setEditing(event);
+    setError("");
+    setDraft({
+      caseId: event.caseId,
+      kind: event.kind,
+      title: event.title,
+      day: event.startsAt.slice(0, 10),
+      time: event.startsAt.slice(11, 16),
+      location: event.location ?? "",
+      notes: event.notes ?? ""
+    });
+    setDialog("form");
+  }
+
   async function remove(event: UpcomingCaseEvent): Promise<void> {
     if (busy || !window.confirm(t("Usunąć zdarzenie „{title}” ({value})?", { title: event.title, value: dayLabel(event.startsAt.slice(0, 10)) }))) return;
     setBusy(true);
@@ -145,20 +188,30 @@ export function CalendarPanel({
   }
 
   async function save(): Promise<void> {
-    if (busy || !draft.caseId || !draft.title.trim() || !/^\d{2}:\d{2}$/.test(draft.time)) return;
+    if (
+      busy ||
+      !draft.caseId ||
+      !draft.title.trim() ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(draft.day) ||
+      !/^\d{2}:\d{2}$/.test(draft.time)
+    ) return;
     setBusy(true);
     setError("");
+    const input = {
+      kind: draft.kind,
+      title: draft.title.trim(),
+      startsAt: `${draft.day}T${draft.time}`,
+      ...(draft.location.trim() ? { location: draft.location.trim() } : {}),
+      ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {})
+    };
     try {
-      await addCaseScheduleEvent(draft.caseId, {
-        kind: draft.kind,
-        title: draft.title.trim(),
-        startsAt: `${selectedDay}T${draft.time}`,
-        ...(draft.location.trim() ? { location: draft.location.trim() } : {}),
-        ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {})
-      });
-      setDraft((current) => ({ ...current, title: "", location: "", notes: "" }));
+      if (editing) await updateCaseScheduleEvent(editing.caseId, editing.eventId, input);
+      else await addCaseScheduleEvent(draft.caseId, input);
       setReload((value) => value + 1);
       onChanged(draft.caseId);
+      selectDay(draft.day);
+      setEditing(null);
+      setDialog("day");
     } catch (failure) {
       setError(errorText(failure));
     } finally {
@@ -188,6 +241,11 @@ export function CalendarPanel({
           >
             {t("Dziś")}
           </button>
+          {writableCases.length > 0 ? (
+            <button type="button" className="chat-primary-action lex-calendar-add" onClick={() => openAdd(selectedDay)}>
+              {t("Dodaj zdarzenie")}
+            </button>
+          ) : null}
         </div>
         <div className="lex-calendar-grid" role="grid" aria-label={t("Kalendarz spraw")}>
           {WEEKDAYS.map((name) => (
@@ -208,7 +266,7 @@ export function CalendarPanel({
                   day.key === today ? "today" : "",
                   day.key === selectedDay ? "selected" : ""
                 ].join(" ").trim()}
-                onClick={() => setSelectedDay(day.key)}
+                onClick={() => openDay(day.key)}
               >
                 <span>{day.day}</span>
                 {count > 0 ? <small>{count}</small> : null}
@@ -245,7 +303,7 @@ export function CalendarPanel({
               const key = event.startsAt.slice(0, 10);
               return (
                 <li key={event.eventId} className={event.kind === "DEADLINE" ? "deadline" : undefined}>
-                  <button type="button" className="lex-calendar-agenda-day" onClick={() => selectDay(key)}>
+                  <button type="button" className="lex-calendar-agenda-day" onClick={() => openDay(key)}>
                     <strong>{relativeDayText(key, today)}</strong>
                     <small>
                       {dayLabel(key)} · {event.startsAt.slice(11)}
@@ -253,7 +311,7 @@ export function CalendarPanel({
                   </button>
                   <span>
                     <span className="matter-schedule-kind">{caseScheduleKindLabel(event.kind)}</span> {event.title}
-                    <small> · {event.caseDisplayName || "Sprawa bez nazwy"}</small>
+                    <small> · {event.caseDisplayName || t("Sprawa bez nazwy")}</small>
                   </span>
                 </li>
               );
@@ -262,127 +320,187 @@ export function CalendarPanel({
         )}
       </article>
 
-      <article className="chat-card matter-schedule-card">
-        <p className="eyebrow">{relativeDayText(selectedDay, today)}</p>
-        <h2>{dayLabel(selectedDay)}</h2>
-        <div className="matter-schedule-list">
-          {dayEvents.length === 0 ? (
-            <p>{t("Brak zdarzeń tego dnia.")}</p>
-          ) : (
-            dayEvents.map((event) => (
-              <div className="matter-schedule-item" key={event.eventId}>
-                <div className="matter-schedule-item-main">
-                  <span className="matter-schedule-kind">{caseScheduleKindLabel(event.kind)}</span>
-                  <strong>
-                    {event.startsAt.slice(11)} · {event.title}
-                  </strong>
-                  <small>
-                    {event.caseDisplayName || "Sprawa bez nazwy"}
-                    {event.location ? ` · ${event.location}` : ""}
-                  </small>
-                  {event.notes ? <p>{event.notes}</p> : null}
-                </div>
-                <div className="matter-schedule-item-actions">
-                  <button type="button" className="chat-secondary-action" onClick={() => onOpenCase(event.caseId)}>
-                    {t("Otwórz sprawę")}
-                  </button>
-                  {canWrite(event.caseId) ? (
-                    <button
-                      type="button"
-                      className="chat-secondary-action danger"
-                      disabled={busy}
-                      onClick={() => void remove(event)}
-                    >
-                      {t("Usuń")}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+      {writableCases.length === 0 ? (
+        <p className="matter-collapsible-hint">{t("Brak spraw z prawem zapisu: najpierw załóż sprawę.")}</p>
+      ) : null}
 
-        <h3>{t("Dodaj zdarzenie do kalendarza i sprawy")}</h3>
-        <div className="matter-schedule-form">
-          <select
-            aria-label={t("Sprawa, której dotyczy zdarzenie")}
-            value={draft.caseId}
-            disabled={busy}
-            onChange={(event) => setDraft((current) => ({ ...current, caseId: event.target.value }))}
-          >
-            <option value="">{t("Wskaż sprawę (wymagane)")}</option>
-            {writableCases.map((item) => (
-              <option key={item.caseId} value={item.caseId}>
-                {item.displayName || "Sprawa bez nazwy"}
-              </option>
-            ))}
-          </select>
-          <div className="chat-form-row">
-            <select
-              aria-label={t("Rodzaj zdarzenia")}
-              value={draft.kind}
-              disabled={busy}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, kind: event.target.value as CaseScheduleKind }))
-              }
-            >
-              {CASE_SCHEDULE_KINDS.map(([id, label]) => (
-                <option key={id} value={id}>{label}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              aria-label={t("Data")}
-              value={selectedDay}
-              disabled={busy}
-              onChange={(event) => {
-                if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) selectDay(event.target.value);
-              }}
-            />
-            <input
-              type="time"
-              aria-label={t("Godzina")}
-              value={draft.time}
-              disabled={busy}
-              onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))}
-            />
-          </div>
-          <input
-            maxLength={180}
-            placeholder={t("Opis, np. rozprawa apelacyjna")}
-            value={draft.title}
-            disabled={busy}
-            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-          />
-          <div className="chat-form-row">
-            <input
-              maxLength={180}
-              placeholder={t("Miejsce / sala / adres (opcjonalnie)")}
-              value={draft.location}
-              disabled={busy}
-              onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-            />
-            <button
-              type="button"
-              className="chat-primary-action"
-              disabled={busy || !draft.caseId || !draft.title.trim() || !draft.time}
-              onClick={() => void save()}
-            >
-              {t("Dodaj zdarzenie")}
-            </button>
-          </div>
-          <textarea
-            maxLength={2000}
-            placeholder={t("Notatka (opcjonalnie)")}
-            value={draft.notes}
-            disabled={busy}
-            onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-          />
-          {writableCases.length === 0 ? (
-            <small>{t("Brak spraw z prawem zapisu: najpierw załóż sprawę.")}</small>
-          ) : null}
+      {dialog ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={dialogTitleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setDialog("");
+          }}
+        >
+          <section className="chat-card matter-section-dialog">
+            <div className="matter-section-dialog-head">
+              <div>
+                <p className="eyebrow">{dialog === "day" ? relativeDayText(selectedDay, today) : t("Kalendarz spraw")}</p>
+                <h2 id={dialogTitleId}>
+                  {dialog === "day"
+                    ? dayLabel(selectedDay)
+                    : editing
+                      ? t("Edytuj zdarzenie")
+                      : t("Dodaj zdarzenie do kalendarza i sprawy")}
+                </h2>
+              </div>
+              <button type="button" className="chat-secondary-action" onClick={() => setDialog("")}>
+                {t("Zamknij")}
+              </button>
+            </div>
+            {error ? <p className="chat-error">{error}</p> : null}
+            {dialog === "day" ? (
+              <>
+                <div className="matter-schedule-list">
+                  {dayEvents.length === 0 ? (
+                    <p>{t("Brak zdarzeń tego dnia.")}</p>
+                  ) : (
+                    dayEvents.map((event) => (
+                      <div className="matter-schedule-item" key={event.eventId}>
+                        <div className="matter-schedule-item-main">
+                          <span className="matter-schedule-kind">{caseScheduleKindLabel(event.kind)}</span>
+                          <strong>
+                            {event.startsAt.slice(11)} · {event.title}
+                          </strong>
+                          <small>
+                            {event.caseDisplayName || t("Sprawa bez nazwy")}
+                            {event.location ? ` · ${event.location}` : ""}
+                          </small>
+                          {event.notes ? <p>{event.notes}</p> : null}
+                        </div>
+                        <div className="matter-schedule-item-actions">
+                          {canWrite(event.caseId) ? (
+                            <button
+                              type="button"
+                              className="chat-secondary-action"
+                              aria-label={t("Edytuj zdarzenie")}
+                              title={t("Edytuj zdarzenie")}
+                              disabled={busy}
+                              onClick={() => openEdit(event)}
+                            >
+                              ✎ {t("Edytuj")}
+                            </button>
+                          ) : null}
+                          <button type="button" className="chat-secondary-action" onClick={() => onOpenCase(event.caseId)}>
+                            {t("Otwórz sprawę")}
+                          </button>
+                          {canWrite(event.caseId) ? (
+                            <button
+                              type="button"
+                              className="chat-secondary-action danger"
+                              disabled={busy}
+                              onClick={() => void remove(event)}
+                            >
+                              {t("Usuń")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {writableCases.length > 0 ? (
+                  <button type="button" className="chat-secondary-action matter-section-dialog-add" onClick={() => openAdd(selectedDay)}>
+                    {t("+ Dodaj")}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <form
+                className="matter-schedule-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void save();
+                }}
+              >
+                <select
+                  aria-label={t("Sprawa, której dotyczy zdarzenie")}
+                  value={draft.caseId}
+                  disabled={busy || Boolean(editing)}
+                  onChange={(event) => setDraft((current) => ({ ...current, caseId: event.target.value }))}
+                >
+                  <option value="">{t("Wskaż sprawę (wymagane)")}</option>
+                  {(editing && !writableCases.some((item) => item.caseId === editing.caseId)
+                    ? [...writableCases, ...cases.filter((item) => item.caseId === editing.caseId)]
+                    : writableCases
+                  ).map((item) => (
+                    <option key={item.caseId} value={item.caseId}>
+                      {item.displayName || t("Sprawa bez nazwy")}
+                    </option>
+                  ))}
+                </select>
+                <div className="chat-form-row">
+                  <select
+                    aria-label={t("Rodzaj zdarzenia")}
+                    value={draft.kind}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, kind: event.target.value as CaseScheduleKind }))
+                    }
+                  >
+                    {CASE_SCHEDULE_KINDS.map(([id, label]) => (
+                      <option key={id} value={id}>{label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    aria-label={t("Data")}
+                    value={draft.day}
+                    disabled={busy}
+                    onChange={(event) => setDraft((current) => ({ ...current, day: event.target.value }))}
+                  />
+                  <input
+                    type="time"
+                    aria-label={t("Godzina")}
+                    value={draft.time}
+                    disabled={busy}
+                    onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))}
+                  />
+                </div>
+                <input
+                  maxLength={180}
+                  placeholder={t("Opis, np. rozprawa apelacyjna")}
+                  aria-label={t("Opis, np. rozprawa apelacyjna")}
+                  value={draft.title}
+                  disabled={busy}
+                  autoFocus
+                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                />
+                <input
+                  maxLength={180}
+                  placeholder={t("Miejsce / sala / adres (opcjonalnie)")}
+                  aria-label={t("Miejsce / sala / adres (opcjonalnie)")}
+                  value={draft.location}
+                  disabled={busy}
+                  onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+                />
+                <textarea
+                  maxLength={2000}
+                  placeholder={t("Notatka (opcjonalnie)")}
+                  aria-label={t("Notatka (opcjonalnie)")}
+                  value={draft.notes}
+                  disabled={busy}
+                  onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                />
+                <div className="chat-form-row">
+                  <button
+                    type="submit"
+                    className="chat-primary-action"
+                    disabled={busy || !draft.caseId || !draft.title.trim() || !draft.time || !draft.day}
+                  >
+                    {editing ? t("Zapisz") : t("Dodaj zdarzenie")}
+                  </button>
+                  <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setDialog(editing ? "day" : "")}>
+                    {t("Anuluj")}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
         </div>
-      </article>
+      ) : null}
     </section>
   );
 }
