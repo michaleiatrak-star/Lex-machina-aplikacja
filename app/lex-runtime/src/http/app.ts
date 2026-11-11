@@ -1,4 +1,5 @@
 import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
+import { astLines, compareFileWithDraft, draftLines, fileCheckReason } from "../file-consistency.js";
 import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
 import { classifyLocalInferenceFailure } from "../providers/ai-sdk-adapter.js";
 import { encryptedKind, passwordFromHeader, type DocumentDecryptor } from "../document-decryption.js";
@@ -8430,6 +8431,15 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               error: "DOCUMENT_PLEADING_FIDELITY_FAILED",
               reason: `zgodność z zapisanym projektem ${Math.round(fidelity * 100)}% (wymagane ${Math.round(PLEADING_FIDELITY_MIN * 100)}%)`
             });
+            return;
+          }
+        }
+        const fileSource = longDocumentSource ? joinParts(longDocumentSource) : pleadingSource?.text;
+        if (fileSource !== undefined) {
+          // G99 FILE CHECK (T33): the amounts, dates, sums and attachments of the stored text.
+          const findings = compareFileWithDraft(draftLines(fileSource), astLines(generated.ast));
+          if (findings.length) {
+            res.status(422).json({ error: "DOCUMENT_FILE_CHECK_FAILED", reason: fileCheckReason(findings) });
             return;
           }
         }

@@ -3314,19 +3314,19 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 628,
+   "translatable": 637,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 628,
-    "de": 628,
-    "en": 628,
-    "es": 628,
-    "fr": 628,
-    "it": 628,
-    "lb": 628,
-    "nl": 628,
-    "pt": 628,
-    "sv": 628
+    "ca": 637,
+    "de": 637,
+    "en": 637,
+    "es": 637,
+    "fr": 637,
+    "it": 637,
+    "lb": 637,
+    "nl": 637,
+    "pt": 637,
+    "sv": 637
    },
    "state": {
     "pl": "całość",

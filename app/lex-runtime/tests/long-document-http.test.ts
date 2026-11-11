@@ -233,8 +233,11 @@ function fixture() {
       return result;
     });
 
-  const generate = vi.fn(async (_request: { sourceText?: { label: string; text: string }; processRenderOnly?: unknown }) => ({
-    ast: { schemaVersion: "1", documentType: "letter", locale: "pl-PL", styleProfile: "lex-classic-clean-v1", blocks: [{ type: "paragraph", content: [{ type: "text", text: "Regulamin" }] }] as unknown[] },
+  // The generator carries the stored text into the file (FILE CHECK compares its dates and amounts).
+  const paragraphs = (text: string) =>
+    text.split("\n").filter((line) => line.trim()).map((line) => ({ type: "paragraph", content: [{ type: "text", text: line }] }));
+  const generate = vi.fn(async (request: { sourceText?: { label: string; text: string }; processRenderOnly?: unknown }) => ({
+    ast: { schemaVersion: "1", documentType: "letter", locale: "pl-PL", styleProfile: "lex-classic-clean-v1", blocks: (request.sourceText ? paragraphs(request.sourceText.text) : paragraphs("Regulamin")) as unknown[] },
     aliasesUsed: [],
     sessionId: "session-generate",
     validationContext: {}
@@ -331,7 +334,8 @@ function fixture() {
     execute,
     answers,
     extras,
-    generate
+    generate,
+    createReady
   };
 }
 
@@ -463,6 +467,16 @@ describe("długie pismo w częściach: czat i plik", () => {
         .send({ query: "Przygotuj plik .docx.", provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", format: "docx", documentType: "letter", styleProfile: "lex-classic-clean-v1", attachments: [], longDocumentId });
     expect((await file("00000000-0000-4000-8000-000000000000")).status).toBe(409);
     expect(current.generate).not.toHaveBeenCalled();
+    // A file that changed a date of the stored text (FILE CHECK, T33): refused, with the date named.
+    current.generate.mockImplementationOnce(async (request) => {
+      const text = (request.sourceText?.text ?? "").replace("18 lipca 2002", "18 lipca 2003");
+      return { aliasesUsed: [], sessionId: "session-generate", validationContext: {}, ast: { schemaVersion: "1", documentType: "letter", locale: "pl-PL", styleProfile: "lex-classic-clean-v1", blocks: text.split("\n").filter((line) => line.trim()).map((line) => ({ type: "paragraph", content: [{ type: "text", text: line }] })) } } as never;
+    });
+    const changed = await file(id);
+    expect(changed.status).toBe(422);
+    expect(changed.body).toMatchObject({ error: "DOCUMENT_FILE_CHECK_FAILED" });
+    expect(changed.body.reason).toContain("P3=2002-07-18");
+    expect(current.createReady).not.toHaveBeenCalled();
     const made = await file(id);
     expect(made.status).toBe(201);
     const source = current.generate.mock.calls[0]?.[0].sourceText;
