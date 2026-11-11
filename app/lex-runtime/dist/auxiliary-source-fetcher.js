@@ -1,3 +1,7 @@
+import { clearLawSourceSession, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders, registerPageCheck } from "./eli/law-source-sessions.js";
+// A bot check's own page answered with 200 (Cloudflare "Just a moment…", DataDome): small and with
+// the check's markers. A page with a contact form's reCAPTCHA is not one.
+const BOT_CHECK_PAGE = /<title>Just a moment\.\.\.<\/title>|cf-chl-|\/cdn-cgi\/challenge-platform\/|captcha-delivery\.com|Attention Required! \| Cloudflare/iu;
 import { isBlockedHost } from "./blocked-jurisdictions.js";
 import { createHash } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
@@ -242,7 +246,9 @@ const defaultTransport = async (target, options) => await new Promise((resolve, 
                 .hostname,
             Accept: "text/html,application/xhtml+xml,text/plain,application/json,application/xml,text/xml;q=0.9,*/*;q=0.1",
             "Accept-Encoding": "identity",
-            "User-Agent": "Lex-Machina/0.1.7 AuxiliaryLegalResearch"
+            "User-Agent": "Lex-Machina/0.1.7 AuxiliaryLegalResearch",
+            ...(target.headers?.cookie ? { Cookie: target.headers.cookie } : {}),
+            ...(target.headers?.["user-agent"] ? { "User-Agent": target.headers["user-agent"] } : {})
         }
     }, (response) => {
         const chunks = [];
@@ -495,8 +501,20 @@ export class SafeAuxiliarySourceFetcher {
         let current = requested;
         let redirectCount = 0;
         while (true) {
-            const target = await resolveAuxiliarySourceTarget(current, this.resolver);
+            const resolved = await resolveAuxiliarySourceTarget(current, this.resolver);
+            const session = lawSourceSessionHeaders(resolved.url.hostname);
+            const target = session ? { ...resolved, headers: session } : resolved;
             const response = await this.connect(target);
+            // A bot check (Cloudflare, DataDome, a firewall) instead of the page: the user passes it in
+            // the application's window; this page's host becomes a source with a check for this run.
+            const challenged = [401, 403, 429, 503].includes(response.statusCode) ||
+                (response.statusCode >= 200 && response.statusCode < 300 && response.body.byteLength < 60_000 && BOT_CHECK_PAGE.test(new TextDecoder().decode(response.body.subarray(0, 20_000))));
+            if (challenged) {
+                if (session)
+                    clearLawSourceSession(resolved.url.hostname);
+                registerPageCheck(current);
+                throw new AuxiliarySourceFetchError(`${LAW_SOURCE_VERIFICATION_REQUIRED}:${resolved.url.hostname}`, "AUX_SOURCE_BROWSER_CHECK");
+            }
             if (REDIRECT_STATUSES.has(response.statusCode)) {
                 if (!response.location) {
                     throw new AuxiliarySourceFetchError("Auxiliary source redirect is missing Location.", "AUX_SOURCE_REDIRECT_INVALID");

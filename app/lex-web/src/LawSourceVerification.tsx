@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
-import { probeLawSourceSession } from "./api.js";
+import { attemptLawSourceSessionOnServer, probeLawSourceSession } from "./api.js";
 import { AUTO_TRIES, desktopInvoke, openExternalUrl } from "./SnVerification.js";
 
 /**
@@ -98,18 +98,125 @@ export function LawSourceVerification({
   return (
     <div className="alert">
       <p>
-        <strong>{t("Źródło prawa wymaga weryfikacji przeglądarki:")} {verification.label}.</strong> {t("Aplikacja sama jej nie przechodzi.")}
+        <strong>{t("Źródło prawa wymaga weryfikacji przeglądarki:")} {verification.label}.</strong> {invoke ? t("Aplikacja sama jej nie przechodzi.") : null}
       </p>
-      <p className="field-help">
-        {invoke
-          ? t("Otwórz okno źródła i przejdź weryfikację, jeśli się pojawi. Pytanie ponowi się samo; nie zamykaj okna przed wynikiem.")
-          : t("W przeglądarce: otwórz źródło i odszukaj przepis samodzielnie.")}
-      </p>
-      {quiet ? <p className="field-help">{t("Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.")}</p> : null}
-      <button type="button" className="chat-primary-action" onClick={() => void start(false)}>
-        {invoke ? (open ? t("Okno źródła otwarte…") : t("Otwórz okno źródła")) : t("Otwórz źródło")}
-      </button>
+      {invoke ? (
+        <>
+          <p className="field-help">{t("Otwórz okno źródła i przejdź weryfikację, jeśli się pojawi. Pytanie ponowi się samo; nie zamykaj okna przed wynikiem.")}</p>
+          {quiet ? <p className="field-help">{t("Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.")}</p> : null}
+          <button type="button" className="chat-primary-action" onClick={() => void start(false)}>
+            {open ? t("Okno źródła otwarte…") : t("Otwórz okno źródła")}
+          </button>
+        </>
+      ) : (
+        <ServerSessionVerification
+          url={verification.url}
+          autoStart={autoStart}
+          attempt={() => attemptLawSourceSessionOnServer(verification.host)}
+          probe={(cookie) => probeLawSourceSession(verification.host, cookie, navigator.userAgent)}
+          onVerified={() => onVerifiedRef.current()}
+        />
+      )}
       {message ? <p className="field-help">{message}</p> : null}
     </div>
+  );
+}
+
+const SERVER_REASONS: Record<string, string> = {
+  SERVER_BROWSER_MISSING: t("Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację."),
+  SERVER_REJECTED: t("Serwer nie przeszedł weryfikacji tego źródła (np. captcha). Otwórz źródło w przeglądarce w sieci serwera, przejdź weryfikację i wklej sesję.")
+};
+
+// Server mode (a browser, no application window): the server tries the check itself in its headless
+// browser; without success the user passes it in a browser in the server's network and pastes the
+// Cookie header of the source's request, probed at the source before it is kept.
+export function ServerSessionVerification({
+  url,
+  autoStart,
+  attempt,
+  probe,
+  onVerified
+}: {
+  url: string;
+  autoStart: boolean;
+  attempt: () => Promise<{ ready: boolean; reason?: string }>;
+  probe: (cookie: string) => Promise<{ ready: boolean }>;
+  onVerified: () => void;
+}) {
+  const [stage, setStage] = useState<"idle" | "server" | "paste" | "saving">("idle");
+  const [cookie, setCookie] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function tryServer(): Promise<void> {
+    setStage("server");
+    setMessage(t("Serwer próbuje przejść weryfikację źródła (do ok. 30 s)…"));
+    try {
+      const result = await attempt();
+      if (result.ready) {
+        setMessage("");
+        setStage("idle");
+        onVerified();
+        return;
+      }
+      setMessage(SERVER_REASONS[result.reason ?? ""] ?? SERVER_REASONS.SERVER_REJECTED!);
+    } catch {
+      setMessage(SERVER_REASONS.SERVER_REJECTED!);
+    }
+    setStage("paste");
+  }
+
+  useEffect(() => {
+    if (autoStart) void tryServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  async function save(): Promise<void> {
+    if (!cookie.trim()) return;
+    setStage("saving");
+    try {
+      const { ready } = await probe(cookie.trim());
+      if (ready) {
+        setCookie("");
+        setMessage("");
+        setStage("idle");
+        onVerified();
+        return;
+      }
+      setMessage(t("Źródło nie przyjęło tej sesji (inna sieć albo wygasła)."));
+    } catch {
+      setMessage(t("Nie udało się sprawdzić sesji."));
+    }
+    setStage("paste");
+  }
+
+  return (
+    <>
+      <div className="chat-form-row compact">
+        <button type="button" className="chat-secondary-action" disabled={stage === "server" || stage === "saving"} onClick={() => void tryServer()}>
+          {t("Spróbuj na serwerze")}
+        </button>
+        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(url)}>
+          {t("Otwórz źródło")}
+        </button>
+        <button type="button" className="chat-secondary-action" disabled={stage === "server"} onClick={() => setStage("paste")}>
+          {t("Wklej sesję")}
+        </button>
+      </div>
+      {stage === "paste" || stage === "saving" ? (
+        <div className="chat-form-row compact">
+          <input
+            aria-label={t("Nagłówek Cookie ze źródła")}
+            placeholder={t("Nagłówek Cookie ze źródła")}
+            value={cookie}
+            autoComplete="off"
+            onChange={(event) => setCookie(event.target.value)}
+          />
+          <button type="button" className="chat-primary-action" disabled={!cookie.trim() || stage === "saving"} onClick={() => void save()}>
+            {t("Sprawdź i zapisz")}
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="field-help">{message}</p> : null}
+    </>
   );
 }

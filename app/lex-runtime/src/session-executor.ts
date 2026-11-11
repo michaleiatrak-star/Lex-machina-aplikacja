@@ -1,4 +1,4 @@
-import { lawSourceWithCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
+import { lawSourceWithCheck, registerPageCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock, type ChatTurnRecord } from "./chat-turn-journal.js";
 import type { LlmImage } from "./providers/types.js";
 import { directImageNote, type DirectImage } from "./direct-images.js";
@@ -3618,7 +3618,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         for (const result of federationResults) {
           const host = /LAW_SOURCE_VERIFICATION_REQUIRED:([a-z0-9.-]+)/u.exec(result.content)?.[1];
-          if (host) lawSourceVerification ??= lawSourceWithCheck(host);
+          // A connector's source (R2A) behind a bot check is not on the fixed list: its host becomes
+          // a source with a check for this run (its main page probed with the window's session).
+          if (host) lawSourceVerification ??= lawSourceWithCheck(host) ?? registerPageCheck(`https://${host}/`) ?? undefined;
         }
         for (const result of federationResults) {
           caseSourceTexts.push(result.content);

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 /**
  * Official law sources behind a bot check (Cloudflare, DataDome), handled as sn.pl and the courts'
  * wokanda: the application never passes the check itself. The user passes it in the application's
@@ -50,6 +52,33 @@ export function configureLawSourceSessionStore(next: LawSourceSessionStore | nul
   store = next;
 }
 
+// The MCP connectors (R2A sources: courts' portals, CBOSA, TK, KIO, UODO, EUREKA...) are processes of
+// their own: the sessions of the verification windows reach them through this file (0600, read by
+// the connectors' shared layer, wspolne/sesja-przegladarki.mjs). Values are never logged.
+let sessionsFile: string | null = null;
+
+export function configureBrowserSessionsFile(file: string | null): void {
+  sessionsFile = file;
+  writeSessionsFile();
+}
+
+function writeSessionsFile(): void {
+  if (!sessionsFile) return;
+  const hosts: Record<string, { cookie: string; userAgent: string; saved_at: string }> = {};
+  for (const [host, session] of sessions) {
+    if (Date.now() - session.at > (keeps(host) ? KEPT_SESSION_TTL_MS : SESSION_TTL_MS)) continue;
+    hosts[host] = { cookie: session.cookie, userAgent: session.userAgent, saved_at: new Date(session.at).toISOString() };
+  }
+  try {
+    fs.mkdirSync(path.dirname(sessionsFile), { recursive: true });
+    const temp = `${sessionsFile}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify({ hosts }) + "\n", { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temp, sessionsFile);
+  } catch {
+    // The connectors then ask for the check again; the runtime's own reads keep the session.
+  }
+}
+
 function keeps(host: string): boolean {
   try {
     return Boolean(store?.keeps(host));
@@ -62,9 +91,37 @@ function keeps(host: string): boolean {
 // Google: its "unusual traffic" page (/sorry/, reCAPTCHA) and the consent page before the first search.
 const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare|google\.com\/sorry\/|unusual traffic from your computer|nietypowy ruch|g-recaptcha|consent\.google\.com|Zanim przejdziesz do Google|Before you continue to Google/iu;
 
+// Auxiliary pages (R2B/R3: articles, commentaries, authorities' and chambers' sites) behind a bot
+// check, met while answering: the page the runtime itself tried to read, never one named by the
+// browser. Kept for this run, at most PAGE_CHECKS_MAX hosts.
+const pageChecks = new Map<string, VerifiedLawSource>();
+const PAGE_CHECKS_MAX = 50;
+
+/** Registers an auxiliary page the runtime could not read past a bot check; its host as a source. */
+export function registerPageCheck(rawUrl: string): VerifiedLawSource | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !/^[a-z0-9.-]+$/u.test(url.hostname)) return null;
+  const host = url.hostname.toLowerCase();
+  const fixed = LAW_SOURCES_WITH_CHECK.find((item) => item.host === host);
+  if (fixed) return fixed;
+  const source: VerifiedLawSource = { host, code: "PAGE", url: url.toString(), label: host };
+  pageChecks.delete(host);
+  pageChecks.set(host, source);
+  while (pageChecks.size > PAGE_CHECKS_MAX) pageChecks.delete(pageChecks.keys().next().value!);
+  return source;
+}
+
 export function lawSourceWithCheck(host: string): VerifiedLawSource | undefined {
   const name = host.toLowerCase();
-  return LAW_SOURCES_WITH_CHECK.find((item) => item.host === name || item.host === `www.${name}` || `www.${item.host}` === name);
+  return (
+    LAW_SOURCES_WITH_CHECK.find((item) => item.host === name || item.host === `www.${name}` || `www.${item.host}` === name) ??
+    pageChecks.get(name)
+  );
 }
 
 export function isChallengePage(status: number, text: string): boolean {
@@ -77,6 +134,7 @@ export function setLawSourceSession(host: string, cookie: string, userAgent: str
   if (!cookie.trim() || cookie.length > 16_384 || /[\r\n]/u.test(cookie + userAgent) || userAgent.length > 512) throw new Error("LAW_SOURCE_SESSION_INVALID");
   const session = { cookie: cookie.trim(), userAgent: userAgent.trim(), at: Date.now() };
   sessions.set(source.host, session);
+  writeSessionsFile();
   if (keeps(source.host)) {
     try {
       store!.save(source.host, session);
@@ -120,6 +178,7 @@ export function clearLawSourceSession(host: string): void {
   const source = lawSourceWithCheck(host);
   if (!source) return;
   sessions.delete(source.host);
+  writeSessionsFile();
   try {
     store?.save(source.host, null);
   } catch {

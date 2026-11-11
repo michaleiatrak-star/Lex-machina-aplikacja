@@ -200,6 +200,44 @@ export const googleSessionStore = {
             write({ googleCookies: seal(JSON.stringify(session), GOOGLE_AAD) });
     }
 };
+const WOKANDA_AAD = Buffer.from("lex-wokanda:sessions", "utf8");
+/**
+ * Sessions of the courts' wokanda windows (courts/wokanda.ts), sealed (AES-256-GCM, own AAD) next to
+ * the settings so a verification passed by the user survives a restart (report 2026-11-11). Values
+ * are never returned or logged; a court that asks again simply opens its window again.
+ */
+export const wokandaSessionDiskStore = {
+    load() {
+        if (!settingsFile)
+            return {};
+        const text = unseal(stored().wokandaSessions, WOKANDA_AAD);
+        if (!text)
+            return {};
+        try {
+            const value = JSON.parse(text);
+            const out = {};
+            for (const [domain, item] of Object.entries(value)) {
+                if (typeof item?.cookie === "string" && typeof item.userAgent === "string" && typeof item.at === "number") {
+                    out[domain] = { cookie: item.cookie, userAgent: item.userAgent, at: item.at };
+                }
+            }
+            return out;
+        }
+        catch {
+            return {};
+        }
+    },
+    save(all) {
+        if (!settingsFile)
+            return;
+        try {
+            write({ wokandaSessions: Object.keys(all).length ? seal(JSON.stringify(all), WOKANDA_AAD) : undefined });
+        }
+        catch {
+            // Not kept on disk: the session still serves until the application closes.
+        }
+    }
+};
 /** Saves (or with "" removes) the Firecrawl API key; a new key drops Firecrawl's measured place. */
 export function setFirecrawlApiKey(raw) {
     if (firecrawlKeyForced())

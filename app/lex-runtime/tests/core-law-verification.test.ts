@@ -148,6 +148,14 @@ function verify(
 }
 
 describe("verifyFromCoreLaw", () => {
+  it("a quote with the provision's words in another order is a paraphrase; other words or numbers contradict it (2026-11-11)", async () => {
+    const { QUOTE_CONTRADICTS_UNIT, QUOTE_NOT_IN_UNIT } = await import("../src/verification-ledger.js");
+    const paraphrase = verify(index(kw()), { quote: "podlega karze grzywny, ograniczenia wolności albo aresztu" });
+    expect(paraphrase).toMatchObject({ decision: "RECORD", record: { status: "UNVERIFIED", evidence: QUOTE_NOT_IN_UNIT } });
+    const wrong = verify(index(kw()), { quote: "podlega karze pozbawienia wolności do lat 2" });
+    expect(wrong).toMatchObject({ decision: "RECORD", record: { status: "UNVERIFIED", evidence: QUOTE_CONTRADICTS_UNIT } });
+  });
+
   it("VERIFIED offline when the provision exists in the consolidated ELI text", () => {
     const outcome = verify(index(kw()));
     expect(outcome.decision).toBe("RECORD");
@@ -623,7 +631,7 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     expect(payload.sourceNotice).toBeUndefined();
   });
 
-  it("model w chmurze: kopia, gdy ELI właśnie potwierdziło aktualny t.j.; inaczej źródło ELI", async () => {
+  it("model w chmurze: kopia, gdy ELI potwierdziło aktualny t.j. albo nie odpowiada; nowsza wersja -> źródło ELI", async () => {
     const withCheck = (state: "CURRENT" | "UPDATE_FOUND" | "UNREACHABLE") => {
       const current = kw();
       const checked: string[] = [];
@@ -642,10 +650,14 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     const [fromCopy] = await runtime(new VerificationLedger(), eli(), [], { index: confirmed.idx }).runTools([call]);
     expect(confirmed.checked).toEqual(["DU/2025/734"]);
     expect(JSON.parse(fromCopy!.content)).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" }, freshness: { liveCheck: "CURRENT" } });
-    for (const state of ["UPDATE_FOUND", "UNREACHABLE"] as const) {
-      const [online] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck(state).idx }).runTools([call]);
-      expect(JSON.parse(online!.content).act?.sourceKind).not.toBe("local_eli_copy");
-    }
+    const [online] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck("UPDATE_FOUND").idx }).runTools([call]);
+    expect(JSON.parse(online!.content).act?.sourceKind).not.toBe("local_eli_copy");
+    // ELI not answering: fetching the provision from ELI would fail too (11-16 s); the copy checked
+    // within the freshness limit answers, with the outage stated (report 2026-11-11).
+    const [outage] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck("UNREACHABLE").idx }).runTools([call]);
+    const outagePayload = JSON.parse(outage!.content);
+    expect(outagePayload).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" }, freshness: { liveCheck: "UNREACHABLE" } });
+    expect(JSON.stringify(outagePayload)).toContain("ELI_UNAVAILABLE");
     process.env.LEX_CLOUD_LOCAL_COPY = "0";
     try {
       const [off] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck("CURRENT").idx }).runTools([call]);

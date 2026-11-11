@@ -1,5 +1,5 @@
 import { probeLawSourceSession } from "../eli/law-source-sessions.js";
-import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister } from "../courts/wokanda.js";
+import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister, wokandaSessionDomains } from "../courts/wokanda.js";
 import { ChatTurnJournal } from "../chat-turn-journal.js";
 import { AuthError } from "../auth/service.js";
 import { isSkillChannel } from "../skill-channel.js";
@@ -64,7 +64,9 @@ export function registerMaintenanceRoutes(app, dependencies) {
     app.get("/api/courts/wokanda", (req, res) => {
         try {
             authenticated(req, authService);
-            res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView() });
+            // "sesja": the court's verification window was passed and its session is kept (never the cookies).
+            const kept = new Set(wokandaSessionDomains());
+            res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView().map((court) => (kept.has(court.domena) ? { ...court, sesja: true } : court)) });
         }
         catch (error) {
             if (error instanceof AuthError) {
@@ -75,9 +77,22 @@ export function registerMaintenanceRoutes(app, dependencies) {
         }
     });
     app.post("/api/courts/wokanda/recheck", async (req, res) => {
-        if (!requireAdmin(req, res, authService))
-            return;
         const names = Array.isArray(req.body?.courts) ? req.body.courts.filter((name) => typeof name === "string").slice(0, 400) : null;
+        // One court after the user's own verification in its window: any signed-in user; more: administrator.
+        if (names?.length === 1) {
+            try {
+                authenticated(req, authService);
+            }
+            catch (error) {
+                if (error instanceof AuthError) {
+                    res.status(error.httpStatus).json({ error: error.code });
+                    return;
+                }
+                throw error;
+            }
+        }
+        else if (!requireAdmin(req, res, authService))
+            return;
         try {
             res.json({ courts: await recheckWokandaCourts(names && names.length ? names : null, dependencies.wokandaFetch) });
         }

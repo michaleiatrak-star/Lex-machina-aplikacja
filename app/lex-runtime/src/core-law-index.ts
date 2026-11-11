@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 import {
   CoreLawSearchIndex,
   type SearchHit,
@@ -242,9 +243,14 @@ const OCR_MIN_PAGE_CHARS = 40;
 const OCR_BATCH_PAGES = 25;
 const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
-// Przy użyciu kopii relacje aktu są sprawdzane w ELI, nie częściej niż raz na kwadrans.
+// Przy użyciu kopii relacje aktu są sprawdzane w ELI co kwadrans (jak dotąd), ale w tle:
+// odpowiedź nie czeka na ELI (zgłoszenie 2026-11-11), a wykryta zmiana kieruje kolejne odczyty
+// do ELI. Czekanie tylko przy pierwszym użyciu aktu albo kopii niesprawdzanej ponad limit świeżości.
 const USE_CHECK_AFTER_MS = 15 * 60 * 1000;
-const USE_CHECK_TIMEOUT_MS = 15_000;
+const USE_CHECK_TIMEOUT_MS = 8_000;
+// Nieudane sprawdzenie (ELI wolne lub niedostępne) nie jest ponawiane przy każdym przepisie
+// tego aktu: przez ten czas kolejne użycia dostają od razu UNREACHABLE.
+const USE_CHECK_RETRY_AFTER_MS = 5 * 60 * 1000;
 // Kopie sprzed kotwic jednostek (extraction < 3) są pobierane ponownie, partiami.
 const ANCHOR_UPGRADES_PER_RUN = 5;
 const NOTE_CHARS = 400;
@@ -826,6 +832,8 @@ export class CoreLawIndex {
   private refreshing: Promise<void> | null = null;
   private progress: CoreLawProgress | null = null;
   private readonly useChecks = new Map<string, Promise<CoreLawUseCheck>>();
+  private readonly failedUseChecks = new Map<string, { at: number; error: string }>();
+  private readonly backgroundUseChecks = new Set<string>();
 
   constructor(
     private readonly directory: string = defaultCoreLawDir(),
@@ -1061,26 +1069,51 @@ export class CoreLawIndex {
       void this.refresh({ force: true, only: [eli] }).catch(() => undefined);
     }
     const last = state.relationsCheckedAt ? Date.parse(state.relationsCheckedAt) : 0;
-    if (!pending() && this.now() - last < USE_CHECK_AFTER_MS) return result();
-    if (this.state.blockedUntil && Date.parse(this.state.blockedUntil) > this.now()) {
-      return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: "ELI_BLOCKED" };
+    const age = this.now() - last;
+    if (!pending() && age < USE_CHECK_AFTER_MS) return result();
+    // Kopia ma pierwszeństwo (zgłoszenie 2026-11-11): sprawdzona w ELI w ciągu
+    // FRESHNESS_MAX_AGE_MS odpowiada od razu, a wersja jest sprawdzana w tle; wykryta nowsza
+    // wersja kieruje kolejne odczyty do ELI. Czekanie na ELI tylko przy pierwszym użyciu aktu
+    // (brak sprawdzenia albo starsze niż limit świeżości).
+    if (!pending() && age < FRESHNESS_MAX_AGE_MS) {
+      if (!this.backgroundUseChecks.has(eli)) {
+        this.backgroundUseChecks.add(eli);
+        void this.liveUseCheck(eli, ref, state).finally(() => this.backgroundUseChecks.delete(eli));
+      }
+      // The last check failed a moment ago: the copy still answers, with the outage stated.
+      const failed = this.failedUseChecks.get(eli);
+      if (failed && this.now() - failed.at < USE_CHECK_RETRY_AFTER_MS) {
+        return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: failed.error };
+      }
+      return result();
     }
     if (!pending()) {
-      try {
-        await this.checkConsolidated(ref, state, false, USE_CHECK_TIMEOUT_MS);
-      } catch (error) {
-        return {
-          state: "UNREACHABLE",
-          checkedAt: state.relationsCheckedAt ?? null,
-          error: error instanceof Error ? error.message : String(error)
-        };
-      }
-      this.saveState();
-    }
-    if (pending() && this.autoApply) {
+      const failure = await this.liveUseCheck(eli, ref, state);
+      if (failure) return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: failure };
+    } else if (this.autoApply) {
       void this.refresh({ force: true, apply: [eli], only: [eli] }).catch(() => undefined);
     }
     return result();
+  }
+
+  /** Sprawdzenie relacji aktu w ELI; zwraca powód niepowodzenia albo null. */
+  private async liveUseCheck(eli: string, ref: CoreActRef, state: ActState): Promise<string | null> {
+    if (this.state.blockedUntil && Date.parse(this.state.blockedUntil) > this.now()) return "ELI_BLOCKED";
+    const failed = this.failedUseChecks.get(eli);
+    if (failed && this.now() - failed.at < USE_CHECK_RETRY_AFTER_MS) return failed.error;
+    try {
+      await this.checkConsolidated(ref, state, false, USE_CHECK_TIMEOUT_MS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.failedUseChecks.set(eli, { at: this.now(), error: message });
+      return message;
+    }
+    this.failedUseChecks.delete(eli);
+    this.saveState();
+    if ((state.pendingConsolidated || state.pendingAmendments?.length) && this.autoApply) {
+      void this.refresh({ force: true, apply: [eli], only: [eli] }).catch(() => undefined);
+    }
+    return null;
   }
 
   /** Usuwa z kopii akt dodany przez użytkownika (akty z map zostają). */

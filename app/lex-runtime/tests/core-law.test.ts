@@ -672,4 +672,40 @@ describe("core law index", () => {
     expect(payload.liveCheck.notice).toContain("ELI niedostępne (ELI_HTTP_403)");
     expect(payload.liveCheck.notice).toContain("z dnia 2026-09-23");
   });
+
+  it("nieudane sprawdzenie w ELI nie jest ponawiane przy każdym przepisie tego aktu (2026-11-11)", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    const { eli, index } = later(store, start + 30 * 60_000, { deny: true });
+    const tools = new CoreLawToolRuntime(index);
+    await tools.runTools([{ id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }]);
+    const requests = eli.requested.length;
+    const [second] = await tools.runTools([{ id: "2", name: "read_core_law_article", input: { act: "KK", article: "148" } }]);
+    expect(eli.requested).toHaveLength(requests);
+    expect(JSON.parse(second!.content).liveCheck).toMatchObject({ state: "UNREACHABLE" });
+  });
+
+  it("kopia sprawdzona w ciągu 7 dni odpowiada od razu; wersja sprawdzana w tle, nowsza kieruje dalej do ELI (2026-11-11)", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    // Relations checked one day after download (the daily refresh).
+    const checked = later(store, start + DAY, {});
+    await checked.index.refresh();
+    // Two days later ELI has a newer t.j.: the first read is served from the copy at once.
+    const { eli, index } = later(store, start + 3 * DAY, { references: NEWER_TJ });
+    const tools = new CoreLawToolRuntime(index);
+    const [first] = await tools.runTools([{ id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }]);
+    // Served from the copy without waiting for ELI (the background check may already have finished).
+    expect(JSON.parse(first!.content)).toMatchObject({ status: "OK", eli: "DU/2025/383", text: expect.stringContaining("Kto zabija") });
+    for (let i = 0; i < 50 && !eli.requested.some((url) => url.endsWith("/DU/2025/383/references")); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(eli.requested).toContain("https://api.sejm.gov.pl/eli/acts/DU/2025/383/references");
+    for (let i = 0; i < 50 && index.summary("DU/2025/383")?.currentEli !== "DU/2026/1500"; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(index.summary("DU/2025/383")).toMatchObject({ currentEli: "DU/2026/1500" });
+  });
 });

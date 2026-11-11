@@ -5037,6 +5037,8 @@ export type WokandaCourtInfo = {
   powod?: string;
   sprawdzono?: string;
   zrodlo?: "WYDANIE" | "TEN_KOMPUTER";
+  // The court's verification window was passed and its session is kept.
+  sesja?: boolean;
 };
 
 export type WokandaHearing = {
@@ -5093,6 +5095,16 @@ export type SourceVerification = { source: "sn"; url: string } | { source: "law"
 
 export function probeLawSourceSession(host: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
   return json("/api/law-sources/session/probe", { method: "POST", body: JSON.stringify({ host, cookie, userAgent }) });
+}
+
+/** Server mode: the server tries the source's bot check in its own headless browser. */
+export function attemptLawSourceSessionOnServer(host: string): Promise<{ ready: boolean; reason?: string }> {
+  return json("/api/law-sources/session/server-attempt", { method: "POST", body: JSON.stringify({ host }) });
+}
+
+/** Server mode: the server tries the court's wokanda check in its own headless browser. */
+export function attemptWokandaSessionOnServer(domain: string): Promise<{ ready: boolean; reason?: string }> {
+  return json("/api/courts/wokanda/session/server-attempt", { method: "POST", body: JSON.stringify({ domain }) });
 }
 
 export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {

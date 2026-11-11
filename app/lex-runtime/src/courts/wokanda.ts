@@ -102,11 +102,41 @@ export const defaultFetchText: FetchText = async (url, headers = {}, init) => {
 // --- Sessions after a browser verification done by the user --------------------------------
 // As for sn.pl: the user passes the court's verification in the application's window of that
 // court; its cookies and the browser's User-Agent serve this user's wokanda queries to that
-// court. Kept in memory only; never returned or logged.
+// court. Never returned or logged; sealed on disk by the store set with
+// configureWokandaSessionStore, so a verification survives a restart (report 2026-11-11).
+// A court that no longer accepts the session asks for the window again.
 
 type WokandaSession = { cookie: string; userAgent: string; at: number };
 const sessions = new Map<string, WokandaSession>();
-const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type WokandaSessionStore = {
+  load(): Record<string, WokandaSession>;
+  save(all: Record<string, WokandaSession>): void;
+};
+let sessionStore: WokandaSessionStore | null = null;
+
+export function configureWokandaSessionStore(store: WokandaSessionStore | null): void {
+  sessionStore = store;
+  if (!store) return;
+  for (const [domain, session] of Object.entries(store.load())) {
+    if (Date.now() - session.at <= SESSION_TTL_MS && !sessions.has(domain)) sessions.set(domain, session);
+  }
+}
+
+function persistSessions(): void {
+  if (!sessionStore) return;
+  const all: Record<string, WokandaSession> = {};
+  for (const [domain, session] of sessions) {
+    if (Date.now() - session.at <= SESSION_TTL_MS) all[domain] = session;
+  }
+  sessionStore.save(all);
+}
+
+/** Courts with a kept verification session (names of domains only, never the cookies). */
+export function wokandaSessionDomains(): string[] {
+  return [...sessions].filter(([, session]) => Date.now() - session.at <= SESSION_TTL_MS).map(([domain]) => domain);
+}
 
 export function courtDomain(host: string): string {
   return host.toLowerCase().replace(/^www\./u, "");
@@ -121,10 +151,12 @@ function sessionHeaders(domain: string): Record<string, string> | null {
 export function setWokandaSession(domain: string, cookie: string, userAgent: string): void {
   if (!cookie.trim() || cookie.length > 16_384 || /[\r\n]/u.test(cookie + userAgent) || userAgent.length > 512) throw new Error("WOKANDA_SESSION_INVALID");
   sessions.set(courtDomain(domain), { cookie: cookie.trim(), userAgent: userAgent.trim() || WOKANDA_USER_AGENT, at: Date.now() });
+  persistSessions();
 }
 
 export function clearWokandaSessions(): void {
   sessions.clear();
+  persistSessions();
 }
 
 /** The court's wokanda page read with the window's cookies: the portal answered, the session is kept. */
@@ -496,6 +528,19 @@ export async function checkWokanda(
 export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchText = defaultFetchText): Promise<WokandaCourt> {
   const other = court.system && court.system !== "MS_PORTAL";
   const url = (court.status === "PORTAL" && !other) || !court.url ? `https://${court.domena}/wokanda` : court.url;
+  // A court passed in its window by the user: the portal read with that session (report 2026-11-11:
+  // the register kept "no access" after the user's verification).
+  const session = sessionHeaders(court.domena);
+  if (session) {
+    try {
+      const portal = await fetchText(`https://${court.domena}/wokanda`, session);
+      if (portal.status === 200 && !GUARD.test(portal.text) && portal.text.includes('name="nrspr"')) {
+        return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: portal.url, powod: "przez sesję z okna sądu" };
+      }
+    } catch {
+      // The session no longer serves: the check below says what the court answers without it.
+    }
+  }
   try {
     const page = await fetchText(url);
     // Another system that answers without a guard keeps its way of searching.
@@ -526,7 +571,15 @@ export function wokandaOverridesPath(env: NodeJS.ProcessEnv = process.env): stri
 function readOverrides(file: string): Record<string, WokandaCourt & { sprawdzono: string }> {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, WokandaCourt & { sprawdzono: string }>) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    // A re-check older than the register shipped with the application gives way to it: the release
+    // may correct the court's address (report 2026-11-11: addresses kept from an older re-check).
+    const shipped = Date.parse(WOKANDA_REGISTER.sprawdzono);
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, WokandaCourt & { sprawdzono: string }>).filter(
+        ([, court]) => !(Date.parse(court?.sprawdzono ?? "") < shipped)
+      )
+    );
   } catch {
     return {};
   }
