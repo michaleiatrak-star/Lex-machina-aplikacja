@@ -863,6 +863,7 @@ export default function ChatApp({
                   {message.sourceVerification?.source === "law" ? (
                     <LawSourceVerification
                       verification={message.sourceVerification}
+                      autoStart={message.id === messages.at(-1)?.id}
                       onVerified={() => {
                         const index = messages.findIndex((item) => item.id === message.id);
                         const question = messages
@@ -875,6 +876,7 @@ export default function ChatApp({
                   ) : message.sourceVerification ? (
                     <SnVerification
                       verification={{ url: message.sourceVerification.url }}
+                      autoStart={message.id === messages.at(-1)?.id}
                       onVerified={() => {
                         const index = messages.findIndex((item) => item.id === message.id);
                         const question = messages

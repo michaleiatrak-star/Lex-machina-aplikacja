@@ -1645,6 +1645,7 @@
  "Sprawdzam przygotowanie aplikacji…": "Tarkistetaan sovelluksen valmistelua…",
  "Sprawdzam stronę sądu w tle (do ok. 20 s)…": "Tarkistan tuomioistuimen sivua taustalla (enintään noin 20 s)…",
  "Sprawdzam w ELI…": "Tarkistetaan ELI:ssä…",
+ "Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.": "Tarkistan taustalla (enintään noin 20 s); ikkuna tulee näkyviin, jos captcha tarvitaan.",
  "Sprawdzam, co trzeba przygotować…": "Tarkistetaan, mitä on valmisteltava…",
  "Sprawdzanie bazy wiedzy…": "Tarkistetaan tietämyskantaa…",
  "Sprawdzanie gotowości modelu": "Tarkistetaan mallin valmiutta",

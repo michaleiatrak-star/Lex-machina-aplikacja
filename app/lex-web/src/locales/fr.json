@@ -1645,6 +1645,7 @@
  "Sprawdzam przygotowanie aplikacji…": "Vérification de la préparation de l'application…",
  "Sprawdzam stronę sądu w tle (do ok. 20 s)…": "Vérification de la page du tribunal en arrière-plan (jusqu’à environ 20 s)…",
  "Sprawdzam w ELI…": "Vérification dans ELI…",
+ "Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.": "Vérification en arrière-plan (jusqu’à environ 20 s) ; la fenêtre s’affichera si un captcha est nécessaire.",
  "Sprawdzam, co trzeba przygotować…": "Vérification de ce qui doit être préparé…",
  "Sprawdzanie bazy wiedzy…": "Vérification de la base de connaissances…",
  "Sprawdzanie gotowości modelu": "Vérification de la disponibilité du modèle",

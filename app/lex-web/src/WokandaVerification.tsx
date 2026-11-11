@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { probeWokandaSession } from "./api.js";
-import { desktopInvoke, openExternalUrl } from "./SnVerification.js";
+import { AUTO_TRIES, desktopInvoke, openExternalUrl } from "./SnVerification.js";
 
 /**
  * A court's wokanda behind a browser verification, as sn.pl: the user passes it in the court's
@@ -9,8 +9,6 @@ import { desktopInvoke, openExternalUrl } from "./SnVerification.js";
  * against the court's wokanda, and once it answers the window closes and the check runs again.
  * Outside the desktop application: the court's page in the browser.
  */
-const AUTO_TRIES = 5;
-
 export function WokandaVerification({
   verification,
   onVerified
@@ -54,7 +52,7 @@ export function WokandaVerification({
       if (quietRef.current && tries >= AUTO_TRIES && !cancelled && !done.current) {
         quietRef.current = false;
         setQuiet(false);
-        await invoke!("wokanda_verification_show").catch(() => undefined);
+        await invoke!("verification_window_show", { kind: "wokanda" }).catch(() => undefined);
       }
       if (tries >= 45) setMessage(t("Weryfikacja trwa: dokończ ją w oknie sądu albo otwórz okno ponownie."));
     }
@@ -78,7 +76,7 @@ export function WokandaVerification({
       // Already open (also minimized in the background): bring it to the front.
       quietRef.current = false;
       setQuiet(false);
-      await invoke("wokanda_verification_show").catch(() => undefined);
+      await invoke("verification_window_show", { kind: "wokanda" }).catch(() => undefined);
       return;
     }
     try {

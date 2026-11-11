@@ -1645,6 +1645,7 @@
  "Sprawdzam przygotowanie aplikacji…": "Prüfe die Vorbereitung der Anwendung…",
  "Sprawdzam stronę sądu w tle (do ok. 20 s)…": "Die Gerichtsseite wird im Hintergrund geprüft (bis etwa 20 s)…",
  "Sprawdzam w ELI…": "Prüfung in ELI…",
+ "Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.": "Prüfung im Hintergrund (bis etwa 20 s); das Fenster erscheint, falls ein Captcha nötig ist.",
  "Sprawdzam, co trzeba przygotować…": "Prüfe, was vorbereitet werden muss…",
  "Sprawdzanie bazy wiedzy…": "Wissensdatenbank wird geprüft…",
  "Sprawdzanie gotowości modelu": "Bereitschaft des Modells wird geprüft",

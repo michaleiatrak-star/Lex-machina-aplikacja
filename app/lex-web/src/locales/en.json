@@ -1649,6 +1649,7 @@
  "Sprawdzam przygotowanie aplikacji…": "Checking the application's preparation…",
  "Sprawdzam stronę sądu w tle (do ok. 20 s)…": "Checking the court's page in the background (up to about 20 s)…",
  "Sprawdzam w ELI…": "Checking in ELI…",
+ "Sprawdzam w tle (do ok. 20 s); okno pokaże się, jeśli potrzebna będzie captcha.": "Checking in the background (up to about 20 s); the window will appear if a captcha is needed.",
  "Sprawdzam, co trzeba przygotować…": "Checking what needs to be prepared…",
  "Sprawdzanie bazy wiedzy…": "Checking the knowledge base…",
  "Sprawdzanie gotowości modelu": "Checking that the model is ready",
