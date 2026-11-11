@@ -376,26 +376,50 @@ fn wokanda_court_url(raw: &str) -> Result<tauri::Url, String> {
     Ok(url)
 }
 
+// `minimized`: the court's window opens minimized and unfocused (as the automatic sn.pl check):
+// most courts' browser check passes on its own in a real browser engine; the window is shown
+// (wokanda_verification_show) only when the user has to act.
 #[tauri::command]
-async fn wokanda_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn wokanda_verification_open(
+    app: tauri::AppHandle,
+    url: String,
+    minimized: Option<bool>,
+) -> Result<(), String> {
     let target = wokanda_court_url(&url)?;
     let court = target.host_str().and_then(court_host).unwrap_or_default();
     if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
         let _ = window.close();
     }
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         WOKANDA_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(target),
     )
     .title("Weryfikacja wokandy sadu - przejdz weryfikacje, sprawdzenie ponowi sie samo")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     .on_navigation(move |next| {
         next.scheme() == "https" && next.host_str().and_then(court_host).as_deref() == Some(court.as_str())
     })
     .build()
     .map_err(|error| format!("WOKANDA_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
+}
+
+// The minimized court window brought to the front: its check needs the user.
+#[tauri::command]
+async fn wokanda_verification_show(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window(WOKANDA_VERIFICATION_LABEL)
+        .ok_or_else(|| "WOKANDA_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let _ = window.unminimize();
+    window
+        .set_focus()
+        .map_err(|_| "WOKANDA_VERIFICATION_WINDOW_FAILED".to_string())
 }
 
 // Ciasteczka okna sądu dla adresu tego sądu, jako nagłówek Cookie (bez zamykania okna).
@@ -765,6 +789,7 @@ pub fn run() {
                 wokanda_verification_open,
                 wokanda_verification_cookies,
                 wokanda_verification_close,
+                wokanda_verification_show,
                 law_source_verification_open,
                 law_source_verification_cookies,
                 law_source_verification_close,
