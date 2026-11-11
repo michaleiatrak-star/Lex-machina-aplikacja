@@ -3430,7 +3430,20 @@ export class SafeSessionExecutor implements SessionExecutor {
                 ...(citedLaw ? [citedLaw] : []),
                 coreLawRag ??
                   "# LOKALNE TEKSTY USTAW\nDla tego pytania nie dobrano automatycznie artykułów. Znajdź przepis search_core_law, a jego brzmienie weź z read_core_law_article; bez tego nie podawaj treści przepisu."
-              ].join("\n\n")
+              ].join("\n\n"),
+              articlesForAnswer: (answer: string) => {
+                const index = this.coreLawIndex;
+                if (!index) return null;
+                return citedArticlesPrompt(
+                  index,
+                  citedArticles(
+                    answer,
+                    resolveActModulesWithChecks(this.registry, pathFacts.query).modules.flatMap((module) => (module.basis ? [module.basis] : [])),
+                    provisionsForDetection
+                  ),
+                  1_800
+                );
+              }
             }
           }
         : {}),
