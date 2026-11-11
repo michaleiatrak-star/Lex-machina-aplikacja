@@ -1,7 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkWokanda, clearWokandaSessions, parseCommonSignature, probeWokandaSession, sameSignature, parsePortalDetails, parsePortalResults, portalSearchUrl, recheckWokandaCourt, wokandaCourt, wokandaRegister, type FetchText } from "../src/courts/wokanda.js";
+import { checkWokanda, clearWokandaSessions, configureWokandaSessionStore, recheckWokandaCourts, wokandaCourtsView, wokandaSessionDomains, parseCommonSignature, probeWokandaSession, sameSignature, parsePortalDetails, parsePortalResults, portalSearchUrl, recheckWokandaCourt, wokandaCourt, wokandaRegister, type FetchText } from "../src/courts/wokanda.js";
 import { COURT_BASE } from "../src/courts/court-base-data.js";
 
 // Pages of the Ministry's court portal (Sąd Okręgowy w Krakowie, 2026-11-04), judges' names
@@ -124,6 +125,38 @@ describe("wokanda: browser verification passed by the user (as sn.pl)", () => {
     const expired = await checkWokanda(guarded.nazwa, "XI C 1768/26", async (url) => ({ status: 403, url, text: "Trwa weryfikacja przeglądarki" }));
     expect(expired).toMatchObject({ state: "BROWSER_ONLY", verification: { savedSession: true } });
     clearWokandaSessions();
+  });
+
+  it("keeps the window's session across a restart and the register's re-check uses it (2026-11-11)", async () => {
+    clearWokandaSessions();
+    const guarded = wokandaRegister().sady.find((court) => court.status === "BROWSER" && court.powod === "weryfikacja przeglądarki")!;
+    let disk: Record<string, { cookie: string; userAgent: string; at: number }> = {};
+    configureWokandaSessionStore({ load: () => disk, save: (all) => (disk = all) });
+    const portal = '<form class="cases-form"><input name="p" type="hidden" value="cases" /><input name="nrspr"/></form>';
+    const site: FetchText = async (url, headers) =>
+      headers?.cookie === "verified=1" ? { status: 200, url, text: portal } : { status: 403, url, text: "Trwa weryfikacja przeglądarki" };
+    expect(await probeWokandaSession(guarded.domena, "verified=1", "Mozilla/5.0 WebView", site)).toEqual({ ready: true });
+    expect(Object.keys(disk)).toEqual([guarded.domena]);
+
+    // Restart: memory empty, the sealed store brings the session back.
+    const saved = disk;
+    clearWokandaSessions();
+    disk = saved;
+    configureWokandaSessionStore({ load: () => disk, save: (all) => (disk = all) });
+    expect(wokandaSessionDomains()).toContain(guarded.domena);
+
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lex-wokanda-")), "wokanda.json");
+    const [court] = await recheckWokandaCourts([guarded.nazwa], site, file);
+    expect(court).toMatchObject({ status: "PORTAL", powod: "przez sesję z okna sądu", zrodlo: "TEN_KOMPUTER" });
+    configureWokandaSessionStore(null);
+    clearWokandaSessions();
+  });
+
+  it("a re-check older than the shipped register gives way to the register's corrected address", () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lex-wokanda-")), "wokanda.json");
+    const zagan = wokandaRegister().sady.find((court) => court.domena === "zagan.sr.gov.pl")!;
+    fs.writeFileSync(file, JSON.stringify({ [zagan.nazwa]: { ...zagan, url: "https://zagan.sr.gov.pl/", sprawdzono: "2026-11-11T14:58:49Z" } }));
+    expect(wokandaCourtsView(file).find((court) => court.nazwa === zagan.nazwa)).toMatchObject({ url: "https://zagan.sr.gov.pl/?mod=74", zrodlo: "WYDANIE" });
   });
 
   it("a court with another system gets only its address, no verification window", async () => {

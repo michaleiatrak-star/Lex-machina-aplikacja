@@ -107,6 +107,12 @@ const SHEET_TYPES = new Set([
   "text/tab-separated-values"
 ]);
 
+const FOLDER_PURPOSE_LABEL: Record<WorkspaceFolderPurpose, string> = {
+  TEMPLATES: N_("wzory"),
+  CASE_LAW: N_("orzeczenia"),
+  RULES: N_("zasady")
+};
+
 export function previewKind(
   mediaType: string,
   filename: string
@@ -920,6 +926,7 @@ export function WorkspaceManager({
     ),
     [workspace]
   );
+  const openedFolder = selectedFolder ? folders.find((item) => item.folderId === selectedFolder) ?? null : null;
 
   const rootFolderName =
     workspace?.caseDisplayName
@@ -1396,25 +1403,8 @@ export function WorkspaceManager({
                   {t("domyślnie w rozmowie")}
                 </label>
               ) : null}
-              {workspace?.caseKind === "FIRM_KNOWLEDGE" ? (
-                <select
-                  className="workspace-folder-purpose"
-                  aria-label={t("Rodzaj folderu: {name}", { name: folder.name })}
-                  title={t("Rodzaj folderu decyduje, jak model używa plików: wzory tylko do wypełnienia (nie są źródłem faktów), orzeczenia i interpretacje jako kopia kancelarii do sprawdzenia w źródle urzędowym, zasady w każdej rozmowie (nie uchylają zasad źródeł prawa).")}
-                  value={folder.purpose ?? ""}
-                  disabled={!canWrite || busy}
-                  onChange={(event) => {
-                    const next = (event.target.value || null) as WorkspaceFolderPurpose | null;
-                    void run(async () => {
-                      await setWorkspaceFolderPurpose(caseId, folder.folderId, next);
-                    });
-                  }}
-                >
-                  <option value="">{folder.parentId && inheritedFolderPurpose(folders, folder.parentId) ? t("Jak folder nadrzędny") : t("Wiedza ogólna")}</option>
-                  <option value="TEMPLATES">{t("Wzory do wypełnienia")}</option>
-                  <option value="CASE_LAW">{t("Orzeczenia i interpretacje")}</option>
-                  <option value="RULES">{t("Zasady kancelarii")}</option>
-                </select>
+              {workspace?.caseKind === "FIRM_KNOWLEDGE" && folder.purpose ? (
+                <small className="workspace-folder-purpose-tag">{t(FOLDER_PURPOSE_LABEL[folder.purpose])}</small>
               ) : null}
               {canWrite ? (
                 <button
@@ -1467,6 +1457,30 @@ export function WorkspaceManager({
                   ? folderPath(folders.find((item) => item.folderId === selectedFolder)!, folders)
                   : rootFolderName}
             </strong>
+            {workspace?.caseKind === "FIRM_KNOWLEDGE" && !documentSearch.trim() && openedFolder ? (
+              <label className="workspace-folder-purpose">
+                {t("Rodzaj zasobu")}
+                <select
+                  aria-label={t("Rodzaj folderu: {name}", { name: openedFolder.name })}
+                  value={openedFolder.purpose ?? ""}
+                  disabled={!canWrite || busy}
+                  onChange={(event) => {
+                    const next = (event.target.value || null) as WorkspaceFolderPurpose | null;
+                    void run(async () => {
+                      await setWorkspaceFolderPurpose(caseId, openedFolder.folderId, next);
+                    });
+                  }}
+                >
+                  <option value="">{openedFolder.parentId && inheritedFolderPurpose(folders, openedFolder.parentId) ? t("Jak folder nadrzędny") : t("Wiedza ogólna")}</option>
+                  <option value="TEMPLATES">{t("Wzory do wypełnienia")}</option>
+                  <option value="CASE_LAW">{t("Orzeczenia i interpretacje")}</option>
+                  <option value="RULES">{t("Zasady kancelarii")}</option>
+                </select>
+                <InfoTip>
+                  {t("Rodzaj folderu decyduje, jak model używa plików: wzory tylko do wypełnienia (nie są źródłem faktów), orzeczenia i interpretacje jako kopia kancelarii do sprawdzenia w źródle urzędowym, zasady w każdej rozmowie (nie uchylają zasad źródeł prawa).")}
+                </InfoTip>
+              </label>
+            ) : null}
             <span>
               {visibleItems.length}
               {documentSearch.trim()

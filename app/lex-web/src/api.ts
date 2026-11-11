@@ -5037,6 +5037,8 @@ export type WokandaCourtInfo = {
   powod?: string;
   sprawdzono?: string;
   zrodlo?: "WYDANIE" | "TEN_KOMPUTER";
+  // The court's verification window was passed and its session is kept.
+  sesja?: boolean;
 };
 
 export type WokandaHearing = {

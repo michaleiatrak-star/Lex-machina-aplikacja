@@ -3713,6 +3713,11 @@ mark.restored {
   min-width: 0;
 }
 
+.wokanda-courts li > .alert {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .wokanda-group summary {
   cursor: pointer;
 }

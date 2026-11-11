@@ -334,6 +334,15 @@ export class LexMcpConnectorStore {
     get ceidgKeyFile() {
         return path.join(this.stateDir, "ceidg.token");
     }
+    // Sesje okien weryfikacji pozostałych źródeł (R2A za ochroną antybotową); zapisuje je
+    // law-source-sessions.ts, czyta wspólna warstwa konektorów (wspolne/sesja-przegladarki.mjs).
+    get browserSessionsFile() {
+        return path.join(this.stateDir, "browser-sessions.json");
+    }
+    // Katalog serwerów MCP (Playwright z Chromium do próby weryfikacji na serwerze).
+    get serversDirectory() {
+        return path.dirname(path.dirname(lexMcpPackagePath(this.skillsRoot)));
+    }
     // Sesja sn.pl z weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl aplikacji.
     get snSessionFile() {
         return path.join(this.stateDir, "sn-session.json");
@@ -488,6 +497,7 @@ export class LexMcpConnectorStore {
         if (key)
             env.CEIDG_API_KEY = key;
         env.SN_SESSION_FILE = this.snSessionFile;
+        env.LEX_BROWSER_SESSIONS_FILE = this.browserSessionsFile;
         // Serwer bez ekranu (tryb serwerowy, kontener): okna weryfikacji sn.pl nie ma kto zobaczyć;
         // zostaje próba bez okna i sesja wklejona przez użytkownika.
         if (env.SN_CAPTCHA_RECZNIE === undefined && process.platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {

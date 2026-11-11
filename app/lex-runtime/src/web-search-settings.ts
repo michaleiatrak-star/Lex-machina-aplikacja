@@ -74,6 +74,7 @@ type StoredSettings = {
   googleSession?: boolean;
   googleSessionKeep?: boolean;
   googleCookies?: SealedKey | undefined;
+  wokandaSessions?: SealedKey | undefined;
 };
 
 let settingsFile: string | null = null;
@@ -252,6 +253,42 @@ export const googleSessionStore: LawSourceSessionStore = {
       return;
     }
     if (webSearchSettings().googleSessionKeep) write({ googleCookies: seal(JSON.stringify(session), GOOGLE_AAD) });
+  }
+};
+
+const WOKANDA_AAD = Buffer.from("lex-wokanda:sessions", "utf8");
+export type StoredWokandaSession = { cookie: string; userAgent: string; at: number };
+
+/**
+ * Sessions of the courts' wokanda windows (courts/wokanda.ts), sealed (AES-256-GCM, own AAD) next to
+ * the settings so a verification passed by the user survives a restart (report 2026-11-11). Values
+ * are never returned or logged; a court that asks again simply opens its window again.
+ */
+export const wokandaSessionDiskStore = {
+  load(): Record<string, StoredWokandaSession> {
+    if (!settingsFile) return {};
+    const text = unseal(stored().wokandaSessions, WOKANDA_AAD);
+    if (!text) return {};
+    try {
+      const value = JSON.parse(text) as Record<string, Partial<StoredWokandaSession>>;
+      const out: Record<string, StoredWokandaSession> = {};
+      for (const [domain, item] of Object.entries(value)) {
+        if (typeof item?.cookie === "string" && typeof item.userAgent === "string" && typeof item.at === "number") {
+          out[domain] = { cookie: item.cookie, userAgent: item.userAgent, at: item.at };
+        }
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  },
+  save(all: Record<string, StoredWokandaSession>): void {
+    if (!settingsFile) return;
+    try {
+      write({ wokandaSessions: Object.keys(all).length ? seal(JSON.stringify(all), WOKANDA_AAD) : undefined });
+    } catch {
+      // Not kept on disk: the session still serves until the application closes.
+    }
   }
 };
 

@@ -88,6 +88,10 @@ export function queryModePrompt(decision) {
     }
     else {
         lines.push("Nie zmieniaj tego trybu i nie wykrywaj go ponownie; pisz w nim (LAIK: prosto, krok po kroku; PRAWNIK: tekst specjalistyczny).");
+        if (decision.mode === "LAIK") {
+            // Zgłoszenie 2026-11-11: pierwsza odpowiedź LAIK na pytanie prawne była bez przepisów.
+            lines.push("LAIK zmienia język, nie podstawę: odpowiedź na pytanie prawne zawsze wskazuje przepisy (artykuł i akt), zweryfikowane narzędziem weryfikacji z markerem, a potem wyjaśnia je prostymi słowami. Bez przepisów tylko odpowiedź, która nie stosuje prawa (np. pytanie o fakty sprawy).");
+        }
     }
     return lines.join("\n");
 }

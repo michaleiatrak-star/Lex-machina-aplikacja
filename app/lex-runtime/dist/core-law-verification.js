@@ -5,7 +5,7 @@ import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
 import { claimedUnitState } from "./legal-source-verifier.js";
-import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
+import { FRESHNESS_MAX_AGE_MS, QUOTE_NOT_IN_UNIT } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
 function articleToken(claim) {
@@ -215,7 +215,7 @@ export function verifyFromCoreLaw(args) {
         else if (args.quote?.trim() &&
             !comparable(evidence).includes(comparable(args.quote))) {
             evidence = undefined;
-            failure = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
+            failure = QUOTE_NOT_IN_UNIT;
         }
     }
     else if (args.kind === "journal") {

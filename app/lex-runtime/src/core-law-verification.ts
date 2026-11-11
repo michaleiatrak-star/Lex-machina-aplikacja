@@ -8,6 +8,7 @@ import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-fr
 import { claimedUnitState } from "./legal-source-verifier.js";
 import {
   FRESHNESS_MAX_AGE_MS,
+  QUOTE_NOT_IN_UNIT,
   type VerificationKind,
   type VerificationRecord
 } from "./verification-ledger.js";
@@ -286,7 +287,7 @@ export function verifyFromCoreLaw(args: {
       !comparable(evidence).includes(comparable(args.quote))
     ) {
       evidence = undefined;
-      failure = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
+      failure = QUOTE_NOT_IN_UNIT;
     }
   } else if (args.kind === "journal") {
     evidence = journalMatches(args.claim, [summary.eli, record.eli])

@@ -62,8 +62,9 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
-import { configureGeminiSearchKey, configureWebSearchSettings, googleSessionStore } from "../web-search-settings.js";
-import { configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, googleSessionStore, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { configureWokandaSessionStore } from "../courts/wokanda.js";
+import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -256,6 +257,8 @@ export async function startLocalServer(options) {
     configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
     // A Google session the user chose to keep survives a restart (sealed next to the settings).
     configureLawSourceSessionStore(googleSessionStore);
+    // Courts' wokanda sessions from the user's verification windows survive a restart (sealed).
+    configureWokandaSessionStore(wokandaSessionDiskStore);
     configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
     const authStore = new LocalAuthStore({
         rootDir: caseFileStore.rootDir
@@ -368,6 +371,8 @@ export async function startLocalServer(options) {
     const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true }));
     // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
     const mcpConnectors = new LexMcpConnectorStore(connectorCorpusRoot(runtimeRoot, baseRuntimeRoot));
+    // Sessions of the verification windows reach the connectors (R2A sources behind a bot check).
+    configureBrowserSessionsFile(mcpConnectors.browserSessionsFile);
     const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
     const legalFederationTools = new LegalFederationToolRuntime(undefined, undefined, mcpConnectors);
     // Morfeusz2/SGJP person-name morphology in the payload Python.

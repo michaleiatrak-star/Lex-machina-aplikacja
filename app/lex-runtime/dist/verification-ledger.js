@@ -22,6 +22,7 @@ function journalPosition(url) {
  * t.j. 2023/2119, which prints the old and the new wording): the newer text's verification
  * stands; the older text's doubt is about a past state, not today's wording.
  */
+export const QUOTE_NOT_IN_UNIT = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
 function newerVerifiedSource(records) {
     const last = records.at(-1);
     if (!last || last.status === "VERIFIED")
@@ -29,11 +30,19 @@ function newerVerifiedSource(records) {
     const lastPosition = journalPosition(last.sourceUrl);
     if (!lastPosition)
         return undefined;
+    // A later call with a paraphrased quote ("od 2 do 15 lat" for "od lat 2 do 15", art. 280 § 1 KK,
+    // user report 2026-11-11) failed only on the quote: the provision read from the same text stays
+    // verified; the paraphrase is not a quotation and is not presented as one.
+    const quoteOnly = last.evidence === QUOTE_NOT_IN_UNIT;
     return [...records].reverse().find((record) => {
         if (record.status !== "VERIFIED")
             return false;
         const position = journalPosition(record.sourceUrl);
-        return Boolean(position) && (position[0] > lastPosition[0] || (position[0] === lastPosition[0] && position[1] > lastPosition[1]));
+        if (!position)
+            return false;
+        if (quoteOnly && position[0] === lastPosition[0] && position[1] === lastPosition[1])
+            return true;
+        return position[0] > lastPosition[0] || (position[0] === lastPosition[0] && position[1] > lastPosition[1]);
     });
 }
 export class VerificationLedger {
