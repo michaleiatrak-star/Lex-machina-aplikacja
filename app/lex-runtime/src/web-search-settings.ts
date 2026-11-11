@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import type { LawSourceSession, LawSourceSessionStore } from "./eli/law-source-sessions.js";
 
 /**
  * Internet search settings (Ustawienia > Wyszukiwarka internetowa): the SearXNG address and the
@@ -57,6 +58,10 @@ export type WebSearchSettings = {
    * window in which the user passed Google's consent page and captcha; a captcha brings the window back. On by default.
    */
   googleSession: boolean;
+  /** Keep the Google session (its cookies, sealed) after the application restarts. Off by default. */
+  googleSessionKeep: boolean;
+  /** A kept Google session is saved on disk. */
+  googleSessionSaved: boolean;
 };
 
 type SealedKey = { nonce: string; ciphertext: string; tag: string };
@@ -67,6 +72,8 @@ type StoredSettings = {
   lastTest?: WebSearchTestResult | null;
   firecrawl?: SealedKey | undefined;
   googleSession?: boolean;
+  googleSessionKeep?: boolean;
+  googleCookies?: SealedKey | undefined;
 };
 
 let settingsFile: string | null = null;
@@ -93,23 +100,24 @@ function rootKey(create: boolean): Buffer | null {
 }
 
 const KEY_AAD = Buffer.from("lex-web-search:firecrawl", "utf8");
+const GOOGLE_AAD = Buffer.from("lex-web-search:google-session", "utf8");
 
-function seal(secret: string): SealedKey {
+function seal(secret: string, aad: Buffer = KEY_AAD): SealedKey {
   const key = rootKey(true);
   if (!key) throw new Error("WEB_SEARCH_SETTINGS_NOT_CONFIGURED");
   const nonce = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, nonce);
-  cipher.setAAD(KEY_AAD);
+  cipher.setAAD(aad);
   const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   return { nonce: nonce.toString("base64"), ciphertext: ciphertext.toString("base64"), tag: cipher.getAuthTag().toString("base64") };
 }
 
-function unseal(sealed: SealedKey | undefined): string {
+function unseal(sealed: SealedKey | undefined, aad: Buffer = KEY_AAD): string {
   const key = rootKey(false);
   if (!sealed || !key) return "";
   try {
     const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(sealed.nonce, "base64"));
-    decipher.setAAD(KEY_AAD);
+    decipher.setAAD(aad);
     decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
     return Buffer.concat([decipher.update(Buffer.from(sealed.ciphertext, "base64")), decipher.final()]).toString("utf8");
   } catch {
@@ -169,7 +177,9 @@ export function webSearchSettings(): WebSearchSettings {
     lastTest: file.lastTest && Array.isArray(file.lastTest.scores) ? file.lastTest : null,
     firecrawlConfigured: Boolean(firecrawlApiKey()),
     // On by default (user, 2026-11-10: attached and selected); off only when turned off in Settings.
-    googleSession: file.googleSession !== false
+    googleSession: file.googleSession !== false,
+    googleSessionKeep: file.googleSession !== false && file.googleSessionKeep === true,
+    googleSessionSaved: file.googleSession !== false && file.googleSessionKeep === true && Boolean(file.googleCookies)
   };
 }
 
@@ -183,6 +193,7 @@ function write(next: StoredSettings): void {
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   const merged: StoredSettings = { ...stored(), ...next };
   if (!merged.firecrawl) delete merged.firecrawl;
+  if (!merged.googleCookies) delete merged.googleCookies;
   const temporary = `${settingsFile}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(merged), { encoding: "utf8", mode: 0o600 });
   fs.renameSync(temporary, settingsFile);
@@ -201,9 +212,48 @@ export function setSearxngUrl(raw: unknown): WebSearchSettings {
 
 export function setGoogleSession(enabled: unknown): WebSearchSettings {
   if (typeof enabled !== "boolean") throw new Error("WEB_SEARCH_GOOGLE_SESSION_INVALID");
-  write({ googleSession: enabled });
+  // Turned off: the kept session goes too.
+  write(enabled ? { googleSession: true } : { googleSession: false, googleCookies: undefined });
   return webSearchSettings();
 }
+
+/** Keep (or stop keeping, which removes the saved cookies) the Google session across restarts. */
+export function setGoogleSessionKeep(enabled: unknown): WebSearchSettings {
+  if (typeof enabled !== "boolean") throw new Error("WEB_SEARCH_GOOGLE_SESSION_KEEP_INVALID");
+  write(enabled ? { googleSessionKeep: true } : { googleSessionKeep: false, googleCookies: undefined });
+  return webSearchSettings();
+}
+
+const GOOGLE_HOST = "www.google.com";
+
+/**
+ * The law-source session store (eli/law-source-sessions.ts) for Google: the window's cookies and
+ * User-Agent sealed (AES-256-GCM, own AAD) in web-search.json, only while the user keeps them.
+ */
+export const googleSessionStore: LawSourceSessionStore = {
+  keeps: (host) => host === GOOGLE_HOST && Boolean(settingsFile) && webSearchSettings().googleSessionKeep,
+  load(host) {
+    if (host !== GOOGLE_HOST) return null;
+    const text = unseal(stored().googleCookies, GOOGLE_AAD);
+    if (!text) return null;
+    try {
+      const value = JSON.parse(text) as Partial<LawSourceSession>;
+      return typeof value.cookie === "string" && typeof value.userAgent === "string" && typeof value.at === "number"
+        ? { cookie: value.cookie, userAgent: value.userAgent, at: value.at }
+        : null;
+    } catch {
+      return null;
+    }
+  },
+  save(host, session) {
+    if (host !== GOOGLE_HOST || !settingsFile) return;
+    if (!session) {
+      if (stored().googleCookies) write({ googleCookies: undefined });
+      return;
+    }
+    if (webSearchSettings().googleSessionKeep) write({ googleCookies: seal(JSON.stringify(session), GOOGLE_AAD) });
+  }
+};
 
 /** Saves (or with "" removes) the Firecrawl API key; a new key drops Firecrawl's measured place. */
 export function setFirecrawlApiKey(raw: unknown): WebSearchSettings {

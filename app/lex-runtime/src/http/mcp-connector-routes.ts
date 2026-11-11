@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { clearLawSourceSession, keepLawSourceSession } from "../eli/law-source-sessions.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
@@ -12,6 +13,7 @@ import {
   searxngUrlForced,
   setFirecrawlApiKey,
   setGoogleSession,
+  setGoogleSessionKeep,
   setSearxngUrl,
   webSearchSettings
 } from "../web-search-settings.js";
@@ -618,6 +620,12 @@ export function registerMcpConnectorRoutes(
       if (req.body && "searxngUrl" in req.body) setSearxngUrl(req.body.searxngUrl ?? "");
       if (req.body && "firecrawlApiKey" in req.body) setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
       if (req.body && "googleSession" in req.body) setGoogleSession(req.body.googleSession);
+      if (req.body && "googleSessionKeep" in req.body) {
+        setGoogleSessionKeep(req.body.googleSessionKeep);
+        if (req.body.googleSessionKeep === true) keepLawSourceSession("www.google.com");
+      }
+      // Google turned off: its session is dropped now, not after its time runs out.
+      if (req.body?.googleSession === false) clearLawSourceSession("www.google.com");
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
       return;

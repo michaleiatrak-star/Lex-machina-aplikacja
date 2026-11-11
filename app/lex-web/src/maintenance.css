@@ -486,3 +486,13 @@ li.anomaly-error > strong {
 .web-search-score-error {
   color: var(--lm-t5);
 }
+
+/* Second-level option under "Google na Twojej sesji". */
+.web-search-keep {
+  margin-left: 22px;
+  align-items: flex-start;
+}
+
+.web-search-keep input {
+  margin-top: 4px;
+}

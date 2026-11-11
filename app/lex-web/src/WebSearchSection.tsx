@@ -6,6 +6,7 @@ import {
   runWebSearchTest,
   setFirecrawlApiKey,
   setGoogleSession,
+  setGoogleSessionKeep,
   setSearxngUrl,
   type SearchEngineName,
   type WebSearchSettings
@@ -109,6 +110,18 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     }
   }
 
+  async function toggleGoogleKeep(next: boolean): Promise<void> {
+    setBusy("save");
+    try {
+      setSettings(await setGoogleSessionKeep(next));
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function test(): Promise<void> {
     setBusy("test");
     try {
@@ -149,6 +162,25 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           {t("Wyszukiwanie idzie przez google.com z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Google pokaże zgodę albo captcha, w czacie pojawi się przycisk otwierający okno Google: potwierdzasz w nim Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Zapytania wybiera model, więc Google może je uznać za automatyczne i częściej pokazywać captcha.")}
         </InfoTip>
       </label>
+      {settings.googleSession ? (
+        <label className="core-law-auto web-search-keep">
+          <input
+            type="checkbox"
+            checked={settings.googleSessionKeep}
+            disabled={!admin || Boolean(busy)}
+            onChange={(event) => void toggleGoogleKeep(event.target.checked)}
+          />
+          <span>
+            {t("Pamiętaj sesję po ponownym uruchomieniu")}
+            {settings.googleSessionKeep ? (
+              <small> · {settings.googleSessionSaved ? t("sesja zapisana") : t("zapisze się po najbliższym potwierdzeniu w oknie Google")}</small>
+            ) : null}
+          </span>
+          <InfoTip>
+            {t("Bez tej opcji sesja Google trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Google są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Google pokaże captcha, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.")}
+          </InfoTip>
+        </label>
+      ) : null}
       <small>{t("Gemini + Google: wyszukiwanie Google przez Twój klucz Google z ustawień modeli; ponad darmowy limit płatne według cennika Google.")}</small>
 
       <div className="web-search-url">
