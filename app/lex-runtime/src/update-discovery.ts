@@ -1,5 +1,5 @@
 export const CURRENT_APPLICATION_VERSION =
-  "0.1.77";
+  "0.1.78";
 
 export type UpdateAvailability =
   | "NO_RELEASE"
@@ -215,7 +215,8 @@ function chooseAssets(
 
 // Instalatory aplikacji publikuje publish-windows-installers.yml w repozytorium
 // aplikacji, zawsze jako pre-release (instalatory bez podpisu Authenticode/Apple).
-// Repozytorium Lex-Machina trzyma skille; jego wydania kończą się na 0.1.11.
+// Repozytorium Lex-Machina trzyma skille; od 0.1.78 jego wydania v<RRRR>.<MDD>.<GGMMSS> to
+// paczki skilli (skillReleaseDiscovery niżej), nie instalatory.
 export const APPLICATION_RELEASE_REPOSITORY =
   "michaleiatrak-star/Lex-machina-aplikacja";
 
@@ -228,6 +229,25 @@ export function applicationUpdateDiscovery(
     fetchImpl,
     () => Date.now(),
     true
+  );
+}
+
+// Wydania skilli publikuje repozytorium skilli przy każdej zmianie w main
+// (.github/workflows/publish-skills-release.yml): tag v<RRRR>.<MDD>.<GGMMSS>, paczka
+// LexMachina-Skills-<wersja>.zip i indeks z wersją oraz SHA-256 każdego skilla. Wersja wydania
+// tylko porządkuje wydania; o instalacji decydują wersje skilli (maintenance-service.ts).
+export const SKILLS_RELEASE_REPOSITORY =
+  "michaleiatrak-star/Lex-Machina";
+
+export function skillReleaseDiscovery(
+  fetchImpl: typeof fetch = fetch
+): GitHubReleaseUpdateDiscovery {
+  return new GitHubReleaseUpdateDiscovery(
+    "0.0.0",
+    SKILLS_RELEASE_REPOSITORY,
+    fetchImpl,
+    () => Date.now(),
+    false
   );
 }
 

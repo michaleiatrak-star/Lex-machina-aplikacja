@@ -48,6 +48,10 @@ export class LexSkillRegistry {
     facades = new Set();
     offeredCache = null;
     scans = 0;
+    /** Every skill of the corpus, whatever the chosen legal system (skill updates replace the whole corpus). */
+    get everySkill() {
+        return this.allSkills;
+    }
     /** The skills the chosen legal system offers: another country's package and domain skills are left out. */
     get skills() {
         const key = `${this.scans}|${activeJurisdictionPack()}|${activeCountry()}`;

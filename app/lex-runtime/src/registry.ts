@@ -93,6 +93,11 @@ export class LexSkillRegistry {
   private offeredCache: { key: string; skills: Map<string, LexSkillRecord> } | null = null;
   private scans = 0;
 
+  /** Every skill of the corpus, whatever the chosen legal system (skill updates replace the whole corpus). */
+  get everySkill(): ReadonlyMap<string, LexSkillRecord> {
+    return this.allSkills;
+  }
+
   /** The skills the chosen legal system offers: another country's package and domain skills are left out. */
   get skills(): Map<string, LexSkillRecord> {
     const key = `${this.scans}|${activeJurisdictionPack()}|${activeCountry()}`;
