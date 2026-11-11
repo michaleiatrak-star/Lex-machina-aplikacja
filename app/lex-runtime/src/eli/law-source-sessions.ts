@@ -62,9 +62,37 @@ function keeps(host: string): boolean {
 // Google: its "unusual traffic" page (/sorry/, reCAPTCHA) and the consent page before the first search.
 const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare|google\.com\/sorry\/|unusual traffic from your computer|nietypowy ruch|g-recaptcha|consent\.google\.com|Zanim przejdziesz do Google|Before you continue to Google/iu;
 
+// Auxiliary pages (R2B/R3: articles, commentaries, authorities' and chambers' sites) behind a bot
+// check, met while answering: the page the runtime itself tried to read, never one named by the
+// browser. Kept for this run, at most PAGE_CHECKS_MAX hosts.
+const pageChecks = new Map<string, VerifiedLawSource>();
+const PAGE_CHECKS_MAX = 50;
+
+/** Registers an auxiliary page the runtime could not read past a bot check; its host as a source. */
+export function registerPageCheck(rawUrl: string): VerifiedLawSource | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !/^[a-z0-9.-]+$/u.test(url.hostname)) return null;
+  const host = url.hostname.toLowerCase();
+  const fixed = LAW_SOURCES_WITH_CHECK.find((item) => item.host === host);
+  if (fixed) return fixed;
+  const source: VerifiedLawSource = { host, code: "PAGE", url: url.toString(), label: host };
+  pageChecks.delete(host);
+  pageChecks.set(host, source);
+  while (pageChecks.size > PAGE_CHECKS_MAX) pageChecks.delete(pageChecks.keys().next().value!);
+  return source;
+}
+
 export function lawSourceWithCheck(host: string): VerifiedLawSource | undefined {
   const name = host.toLowerCase();
-  return LAW_SOURCES_WITH_CHECK.find((item) => item.host === name || item.host === `www.${name}` || `www.${item.host}` === name);
+  return (
+    LAW_SOURCES_WITH_CHECK.find((item) => item.host === name || item.host === `www.${name}` || `www.${item.host}` === name) ??
+    pageChecks.get(name)
+  );
 }
 
 export function isChallengePage(status: number, text: string): boolean {

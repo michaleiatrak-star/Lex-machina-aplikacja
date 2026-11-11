@@ -1,3 +1,8 @@
+import { clearLawSourceSession, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders, registerPageCheck } from "./eli/law-source-sessions.js";
+
+// A bot check's own page answered with 200 (Cloudflare "Just a moment…", DataDome): small and with
+// the check's markers. A page with a contact form's reCAPTCHA is not one.
+const BOT_CHECK_PAGE = /<title>Just a moment\.\.\.<\/title>|cf-chl-|\/cdn-cgi\/challenge-platform\/|captcha-delivery\.com|Attention Required! \| Cloudflare/iu;
 import { isBlockedHost } from "./blocked-jurisdictions.js";
 import {
   createHash
@@ -70,6 +75,8 @@ export type AuxiliaryResolvedTarget = {
   // Further public addresses of the host, tried when a connection fails
   // (an IPv6 answer first on a machine without IPv6).
   fallbacks?: AuxiliaryDnsAddress[];
+  // The session of the browser window in which the user passed the page's bot check.
+  headers?: Record<string, string>;
 };
 
 export type AuxiliaryTransportResponse = {
@@ -117,6 +124,7 @@ export class AuxiliarySourceFetchError
       | "AUX_SOURCE_REDIRECT_INVALID"
       | "AUX_SOURCE_TIMEOUT"
       | "AUX_SOURCE_HTTP_FAILED"
+      | "AUX_SOURCE_BROWSER_CHECK"
       | "AUX_SOURCE_TOO_LARGE"
       | "AUX_SOURCE_CONTENT_TYPE_UNSUPPORTED"
       | "AUX_SOURCE_EMPTY"
@@ -553,7 +561,9 @@ const defaultTransport:
                   "Accept-Encoding":
                     "identity",
                   "User-Agent":
-                    "Lex-Machina/0.1.7 AuxiliaryLegalResearch"
+                    "Lex-Machina/0.1.7 AuxiliaryLegalResearch",
+                  ...(target.headers?.cookie ? { Cookie: target.headers.cookie } : {}),
+                  ...(target.headers?.["user-agent"] ? { "User-Agent": target.headers["user-agent"] } : {})
                 }
               },
               (response) => {
@@ -1039,15 +1049,30 @@ export class SafeAuxiliarySourceFetcher {
       0;
 
     while (true) {
-      const target =
+      const resolved =
         await resolveAuxiliarySourceTarget(
           current,
           this.resolver
         );
+      const session = lawSourceSessionHeaders(resolved.url.hostname);
+      const target = session ? { ...resolved, headers: session } : resolved;
       const response =
         await this.connect(
           target
         );
+      // A bot check (Cloudflare, DataDome, a firewall) instead of the page: the user passes it in
+      // the application's window; this page's host becomes a source with a check for this run.
+      const challenged =
+        [401, 403, 429, 503].includes(response.statusCode) ||
+        (response.statusCode >= 200 && response.statusCode < 300 && response.body.byteLength < 60_000 && BOT_CHECK_PAGE.test(new TextDecoder().decode(response.body.subarray(0, 20_000))));
+      if (challenged) {
+        if (session) clearLawSourceSession(resolved.url.hostname);
+        registerPageCheck(current);
+        throw new AuxiliarySourceFetchError(
+          `${LAW_SOURCE_VERIFICATION_REQUIRED}:${resolved.url.hostname}`,
+          "AUX_SOURCE_BROWSER_CHECK"
+        );
+      }
 
       if (
         REDIRECT_STATUSES.has(

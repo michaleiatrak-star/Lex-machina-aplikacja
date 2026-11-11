@@ -1415,7 +1415,9 @@ export class LegalFederationToolRuntime {
               error:
                 message,
               instruction:
-                /LAW_SOURCE_VERIFICATION_REQUIRED/.test(message)
+                error instanceof AuxiliarySourceFetchError && error.code === "AUX_SOURCE_BROWSER_CHECK"
+                  ? "Strona jest za weryfikacją przeglądarki (antybot). Aplikacja otwiera użytkownikowi jej okno w tle; gdy weryfikacja przejdzie, pytanie zostanie ponowione i strona będzie czytelna. Teraz odpowiedz bez tej strony: nie przypisuj jej treści ani cytatów, oznacz trop jako niesprawdzony (⚠️)."
+                  : /LAW_SOURCE_VERIFICATION_REQUIRED/.test(message)
                   ? "Oficjalne źródło jest za weryfikacją przeglądarki (antybot), której aplikacja sama nie przechodzi. Aplikacja pokazuje użytkownikowi okno tego źródła; po przejściu weryfikacji pytanie zostanie ponowione. Nie podawaj brzmienia przepisu z pamięci ani z innej strony jako urzędowego."
                   : jurisdictionBlocked
                   ? "Prawo i źródła Federacji Rosyjskiej są poza systemem Lex Machina (blokada techniczna): nie pobieraj, nie wyszukuj i nie cytuj ich. Powiedz użytkownikowi wprost, że ta jurysdykcja nie jest obsługiwana."

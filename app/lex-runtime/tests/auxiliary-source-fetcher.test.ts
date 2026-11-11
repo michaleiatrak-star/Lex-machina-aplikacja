@@ -368,3 +368,41 @@ describe(
     );
   }
 );
+
+describe("auxiliary page behind a bot check (R2B/R3)", () => {
+  const resolver: AuxiliaryDnsResolver = async () => [{ address: "93.184.216.34", family: 4 }];
+
+  it("asks for the page's window and reads the page with that window's session afterwards", async () => {
+    const { lawSourceWithCheck, setLawSourceSession, LAW_SOURCE_VERIFICATION_REQUIRED } = await import("../src/eli/law-source-sessions.js");
+    const seenCookies: Array<string | undefined> = [];
+    const transport: AuxiliaryTransport = async (target) => {
+      seenCookies.push(target.headers?.cookie);
+      return target.headers?.cookie
+        ? { statusCode: 200, contentType: "text/html; charset=utf-8", body: Buffer.from("<html><body>Komentarz do art. 278 k.k.</body></html>") }
+        : { statusCode: 403, contentType: "text/html", body: Buffer.from("<title>Just a moment...</title>") };
+    };
+    const fetcher = new SafeAuxiliarySourceFetcher(resolver, transport, () => "2026-11-11T12:00:00.000Z");
+
+    const blocked = await fetcher.fetch("https://komentarze.example.pl/kk/278").catch((error: unknown) => error);
+    expect(blocked).toBeInstanceOf(AuxiliarySourceFetchError);
+    expect((blocked as AuxiliarySourceFetchError).code).toBe("AUX_SOURCE_BROWSER_CHECK");
+    expect((blocked as Error).message).toBe(`${LAW_SOURCE_VERIFICATION_REQUIRED}:komentarze.example.pl`);
+    // The page is now a source with a check, opened in the application's window.
+    expect(lawSourceWithCheck("komentarze.example.pl")).toMatchObject({ code: "PAGE", url: "https://komentarze.example.pl/kk/278" });
+
+    setLawSourceSession("komentarze.example.pl", "cf_clearance=abc", "Mozilla/5.0");
+    const read = await fetcher.fetch("https://komentarze.example.pl/kk/278");
+    expect(read.text).toContain("Komentarz do art. 278");
+    expect(seenCookies).toEqual([undefined, "cf_clearance=abc"]);
+  });
+
+  it("a contact form's reCAPTCHA on a normal page is not a bot check", async () => {
+    const transport: AuxiliaryTransport = async () => ({
+      statusCode: 200,
+      contentType: "text/html; charset=utf-8",
+      body: Buffer.from('<html><body>Artykuł o przedawnieniu<div class="g-recaptcha"></div></body></html>')
+    });
+    const result = await new SafeAuxiliarySourceFetcher(resolver, transport).fetch("https://blog.example.pl/a");
+    expect(result.text).toContain("Artykuł o przedawnieniu");
+  });
+});

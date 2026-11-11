@@ -490,6 +490,39 @@ fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
     }
 }
 
+// An auxiliary page (R2B/R3: an article, a commentary, an authority's or a chamber's site) whose bot
+// check the runtime met while answering: any public https site by its name, never an address, a
+// local name or another port. The window stays on that site and only its cookies are read.
+fn page_check_url(raw: &str) -> Result<(tauri::Url, String), String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|_| "LAW_SOURCE_URL_INVALID".to_string())?;
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let public_name = !host.is_empty()
+        && !host.starts_with('[')
+        && host.parse::<std::net::IpAddr>().is_err()
+        && host.contains('.')
+        && !host.ends_with(".local")
+        && !host.ends_with(".localhost")
+        && !host.ends_with(".internal")
+        && host != "localhost"
+        && host
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-');
+    if url.scheme() != "https" || url.port().is_some() || !url.username().is_empty() || !public_name {
+        return Err("LAW_SOURCE_URL_INVALID".to_string());
+    }
+    Ok((url, host))
+}
+
+// A listed law source (its fixed host) or an auxiliary page met while answering.
+fn verification_page_url(raw: &str) -> Result<(tauri::Url, String), String> {
+    match law_source_url(raw) {
+        Ok((url, item)) => Ok((url, item.to_string())),
+        Err(_) => page_check_url(raw),
+    }
+}
+
 fn law_source_same_site(next: &tauri::Url, item: &str) -> bool {
     let host = next.host_str().unwrap_or_default().to_ascii_lowercase();
     let bare = item.strip_prefix("www.").unwrap_or(item);
@@ -502,7 +535,7 @@ async fn law_source_verification_open(
     url: String,
     minimized: Option<bool>,
 ) -> Result<(), String> {
-    let (target, item) = law_source_url(&url)?;
+    let (target, item) = verification_page_url(&url)?;
     if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
         let _ = window.close();
     }
@@ -516,7 +549,7 @@ async fn law_source_verification_open(
     .inner_size(1000.0, 760.0)
     .focused(!quiet)
     // The check's own pages load from other hosts inside the page; top-level navigation stays on the source.
-    .on_navigation(move |next| law_source_same_site(next, item))
+    .on_navigation(move |next| law_source_same_site(next, &item))
     .build()
     .map_err(|error| format!("LAW_SOURCE_VERIFICATION_WINDOW_FAILED:{error}"))?;
     if quiet {
@@ -528,7 +561,7 @@ async fn law_source_verification_open(
 // Cookies of the source's window for that source, as a Cookie header (the window stays open).
 #[tauri::command]
 async fn law_source_verification_cookies(app: tauri::AppHandle, url: String) -> Result<String, String> {
-    let (target, _) = law_source_url(&url)?;
+    let (target, _) = verification_page_url(&url)?;
     let window = app
         .get_webview_window(LAW_SOURCE_VERIFICATION_LABEL)
         .ok_or_else(|| "LAW_SOURCE_VERIFICATION_WINDOW_MISSING".to_string())?;
@@ -898,6 +931,7 @@ mod tests {
         court_host,
         law_source_same_site,
         law_source_url,
+        verification_page_url,
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
@@ -1008,6 +1042,19 @@ mod tests {
         assert!(law_source_url("https://www.google.com/search?q=kodeks+karny&hl=pl").is_ok());
         assert!(law_source_url("https://www.google.evil.example/").is_err());
         assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());
+        // Auxiliary pages met while answering: public https names only.
+        assert!(verification_page_url("https://www.gazetaprawna.pl/artykuly/1.html").is_ok());
+        assert!(verification_page_url("https://www.nysenate.gov/").is_ok());
+        assert!(verification_page_url("http://www.gazetaprawna.pl/").is_err());
+        assert!(verification_page_url("https://127.0.0.1/").is_err());
+        assert!(verification_page_url("https://[::1]/").is_err());
+        assert!(verification_page_url("https://localhost/").is_err());
+        assert!(verification_page_url("https://printer.local/").is_err());
+        assert!(verification_page_url("https://intranet/").is_err());
+        assert!(verification_page_url("https://example.pl:8443/").is_err());
+        assert!(verification_page_url("https://user@example.pl/").is_err());
+        let (_, page) = verification_page_url("https://Sub.Example.pl/x").unwrap();
+        assert_eq!(page, "sub.example.pl");
         let (_, item) = law_source_url("https://www.nysenate.gov/").unwrap();
         assert!(law_source_same_site(&"https://www.nysenate.gov/legislation".parse().unwrap(), item));
         assert!(!law_source_same_site(&"https://example.com/".parse().unwrap(), item));
