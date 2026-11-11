@@ -2,7 +2,9 @@
  * Official law sources behind a bot check (Cloudflare, DataDome), handled as sn.pl and the courts'
  * wokanda: the application never passes the check itself. The user passes it in the application's
  * window of that source; the window's cookies and the browser's User-Agent then serve this user's
- * reads of that source. Kept in memory only, for a limited time; never returned or logged.
+ * reads of that source. Kept in memory for a limited time, never returned or logged; a source whose
+ * session the user chose to keep (Google, Ustawienia > Wyszukiwarka internetowa) is also sealed on disk
+ * by the store set with configureLawSourceSessionStore and survives a restart.
  *
  * Only the hosts below: an official source whose text the app reads once the check is passed.
  */
@@ -30,7 +32,31 @@ export const LAW_SOURCES_WITH_CHECK: readonly VerifiedLawSource[] = [
 export const LAW_SOURCE_VERIFICATION_REQUIRED = "LAW_SOURCE_VERIFICATION_REQUIRED";
 
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
-const sessions = new Map<string, { cookie: string; userAgent: string; at: number }>();
+// A kept session: until the source asks again (captcha) or 30 days pass.
+const KEPT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type LawSourceSession = { cookie: string; userAgent: string; at: number };
+const sessions = new Map<string, LawSourceSession>();
+
+/** Disk store of the sessions the user chose to keep (sealed; web-search-settings.ts). */
+export type LawSourceSessionStore = {
+  keeps(host: string): boolean;
+  load(host: string): LawSourceSession | null;
+  save(host: string, session: LawSourceSession | null): void;
+};
+let store: LawSourceSessionStore | null = null;
+
+export function configureLawSourceSessionStore(next: LawSourceSessionStore | null): void {
+  store = next;
+}
+
+function keeps(host: string): boolean {
+  try {
+    return Boolean(store?.keeps(host));
+  } catch {
+    return false;
+  }
+}
 
 // The check's own page, not the source's (Cloudflare "Just a moment…", DataDome's captcha frame).
 // Google: its "unusual traffic" page (/sorry/, reCAPTCHA) and the consent page before the first search.
@@ -49,20 +75,56 @@ export function setLawSourceSession(host: string, cookie: string, userAgent: str
   const source = lawSourceWithCheck(host);
   if (!source) throw new Error("LAW_SOURCE_UNKNOWN");
   if (!cookie.trim() || cookie.length > 16_384 || /[\r\n]/u.test(cookie + userAgent) || userAgent.length > 512) throw new Error("LAW_SOURCE_SESSION_INVALID");
-  sessions.set(source.host, { cookie: cookie.trim(), userAgent: userAgent.trim(), at: Date.now() });
+  const session = { cookie: cookie.trim(), userAgent: userAgent.trim(), at: Date.now() };
+  sessions.set(source.host, session);
+  if (keeps(source.host)) {
+    try {
+      store!.save(source.host, session);
+    } catch {
+      // The session still serves this run from memory.
+    }
+  }
 }
 
 /** Headers of the session the user opened for this source, or null (none, or expired). */
 export function lawSourceSessionHeaders(host: string): Record<string, string> | null {
   const source = lawSourceWithCheck(host);
-  const session = source ? sessions.get(source.host) : undefined;
-  if (!session || Date.now() - session.at > SESSION_TTL_MS) return null;
+  if (!source) return null;
+  const kept = keeps(source.host);
+  let session = sessions.get(source.host);
+  if (!session && kept) {
+    try {
+      session = store!.load(source.host) ?? undefined;
+    } catch {
+      session = undefined;
+    }
+    if (session) sessions.set(source.host, session);
+  }
+  if (!session || Date.now() - session.at > (kept ? KEPT_SESSION_TTL_MS : SESSION_TTL_MS)) return null;
   return { cookie: session.cookie, ...(session.userAgent ? { "user-agent": session.userAgent } : {}) };
+}
+
+/** Saves the live session of a source the user just chose to keep (no new window needed). */
+export function keepLawSourceSession(host: string): void {
+  const source = lawSourceWithCheck(host);
+  const session = source ? sessions.get(source.host) : undefined;
+  if (!source || !session || Date.now() - session.at > SESSION_TTL_MS || !keeps(source.host)) return;
+  try {
+    store!.save(source.host, session);
+  } catch {
+    // Kept in memory for this run.
+  }
 }
 
 export function clearLawSourceSession(host: string): void {
   const source = lawSourceWithCheck(host);
-  if (source) sessions.delete(source.host);
+  if (!source) return;
+  sessions.delete(source.host);
+  try {
+    store?.save(source.host, null);
+  } catch {
+    // Nothing kept to remove.
+  }
 }
 
 export type FetchPage = (url: string, headers: Record<string, string>) => Promise<{ status: number; text: string }>;

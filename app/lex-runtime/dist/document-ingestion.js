@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { compareWithTextLayer } from "./ocr-layer-check.js";
 // Put before a stamp's line in the page text (the same mark as the OCR worker's).
 export const STAMP_MARK = "[PIECZĘĆ lub kolorowy tusz]";
 /** A line of an OCR page as the page text carries it (a stamp's line marked). */
@@ -168,8 +169,10 @@ export class CompleteDocumentIngestor {
             // A foreign OCR layer gives way to the local engine's reading (line scores, boxes for
             // masking the page image); a real digital layer gives way only to a longer OCR text.
             const preferOcr = page.ocrTextLayer === true && ocrText.length > 0;
+            const layerMismatch = preferOcr && digital && ocr?.lines?.length ? compareWithTextLayer(ocr.lines, digital) : null;
             if (ocr && (preferOcr || ocrText.length > digital.length)) {
                 return {
+                    ...(layerMismatch ? { layerMismatch } : {}),
                     page: page.page,
                     text: ocrText,
                     source: "OCR",

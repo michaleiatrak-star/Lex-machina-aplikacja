@@ -1504,6 +1504,37 @@ export function exportBlockedMessage(error: unknown): string | null {
             ? t("w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)")
             : t("kontrola zgodności pliku nie przeszła"), code: error.code });
   }
+  // G99 FILE CHECK (T33): the file built from the stored draft lost or changed its figures.
+  if (error instanceof ApiError && error.code === "DOCUMENT_FILE_CHECK_FAILED") {
+    const findings = (error.reason ?? "")
+      .split(";")
+      .filter(Boolean)
+      .map((entry) => {
+        const [code, value = ""] = entry.split("=");
+        const [given, computed] = value.split("/");
+        switch (code) {
+          case "P1":
+            return t("kwota {value} z projektu nie występuje w pliku", { value });
+          case "P2":
+            return t("kwota {value} w pliku, której nie ma w projekcie", { value });
+          case "P3":
+            return t("data {value} różni się między projektem a plikiem", { value });
+          case "P4":
+            return t("rachunek z wynikiem {given} się nie zgadza (powinno być {computed})", { given: given ?? "", computed: computed ?? "" });
+          case "P5":
+            return t("liczba załączników: w projekcie {draft}, w pliku {file}", { draft: given ?? "", file: computed ?? "" });
+          case "P6":
+            return t("numeracja załączników w pliku: {value}", { value });
+          case "P7":
+            return t("odwołanie do załącznika nr {value}, którego nie ma w spisie", { value });
+          case "P8":
+            return t("załącznik z projektu nie występuje w pliku: {value}", { value });
+          default:
+            return entry;
+        }
+      });
+    return t("Plik nie został zapisany: nie zgadza się z zapisanym projektem pisma ({value}). Wygeneruj dokument ponownie; plik ma przenieść kwoty, daty i załączniki projektu bez zmian.", { value: findings.join("; ") });
+  }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
   const listed = references

@@ -618,7 +618,7 @@ export type DocumentReviewResponse = {
     // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
     // Lines to check against the scan (handwriting, stamps, doubtful reading).
-    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" }>;
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" | "LAYER_MISMATCH" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
@@ -4207,6 +4207,9 @@ export type WebSearchSettings = {
   firecrawlConfigured: boolean;
   firecrawlKeyForced: boolean;
   googleSession: boolean;
+  /** Keep the Google session after a restart (cookies sealed on this computer). */
+  googleSessionKeep: boolean;
+  googleSessionSaved: boolean;
   providerForced: string | null;
 };
 
@@ -4224,6 +4227,10 @@ export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSe
 
 export function setGoogleSession(googleSession: boolean): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSession }) });
+}
+
+export function setGoogleSessionKeep(googleSessionKeep: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSessionKeep }) });
 }
 
 export function runWebSearchTest(): Promise<WebSearchSettings> {
