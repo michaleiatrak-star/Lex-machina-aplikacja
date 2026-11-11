@@ -23,6 +23,8 @@ function journalPosition(url) {
  * stands; the older text's doubt is about a past state, not today's wording.
  */
 export const QUOTE_NOT_IN_UNIT = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
+// The quote has words or numbers the provision does not have: it contradicts the text.
+export const QUOTE_CONTRADICTS_UNIT = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI (inne słowa lub liczby niż w przepisie).";
 function newerVerifiedSource(records) {
     const last = records.at(-1);
     if (!last || last.status === "VERIFIED")
@@ -31,8 +33,9 @@ function newerVerifiedSource(records) {
     if (!lastPosition)
         return undefined;
     // A later call with a paraphrased quote ("od 2 do 15 lat" for "od lat 2 do 15", art. 280 § 1 KK,
-    // user report 2026-11-11) failed only on the quote: the provision read from the same text stays
-    // verified; the paraphrase is not a quotation and is not presented as one.
+    // user report 2026-11-11: the same words and numbers in another order) failed only on the quote:
+    // the provision read from the same text stays verified. A quote with other words or numbers
+    // (QUOTE_CONTRADICTS_UNIT, "od 2 do 12 lat") still wins over the earlier verification.
     const quoteOnly = last.evidence === QUOTE_NOT_IN_UNIT;
     return [...records].reverse().find((record) => {
         if (record.status !== "VERIFIED")

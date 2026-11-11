@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QUOTE_NOT_IN_UNIT, VerificationLedger } from "../src/verification-ledger.js";
+import { QUOTE_CONTRADICTS_UNIT, QUOTE_NOT_IN_UNIT, VerificationLedger } from "../src/verification-ledger.js";
 
 const base = { kind: "statute" as const, sourceTier: "R1" as const, fetchedAt: "2026-10-31T16:40:00Z", toolCallId: "t" };
 
@@ -24,6 +24,9 @@ describe("a provision read in two consolidated texts", () => {
     ledger.add({ ...base, claim: "art. 280 § 1 KK", status: "VERIFIED", sourceUrl: url, verificationMethod: "file_read" } as never);
     ledger.add({ ...base, claim: "art. 280 § 1 KK", status: "UNVERIFIED", sourceUrl: url, evidence: QUOTE_NOT_IN_UNIT, verificationMethod: "file_read" } as never);
     expect(ledger.latest("art. 280 § 1 KK")?.status).toBe("VERIFIED");
+    // A quote with other words or numbers ("od 2 do 12 lat") still wins over the verification.
+    ledger.add({ ...base, claim: "art. 280 § 1 KK", status: "UNVERIFIED", sourceUrl: url, evidence: QUOTE_CONTRADICTS_UNIT, verificationMethod: "file_read" } as never);
+    expect(ledger.latest("art. 280 § 1 KK")?.status).toBe("UNVERIFIED");
     // Any other doubt from the same text still wins.
     ledger.add({ ...base, claim: "art. 280 § 1 KK", status: "UNVERIFIED", sourceUrl: url, evidence: "Ta jednostka jest w aktualnym tekście jednolitym uchylona.", verificationMethod: "file_read" } as never);
     expect(ledger.latest("art. 280 § 1 KK")?.status).toBe("UNVERIFIED");

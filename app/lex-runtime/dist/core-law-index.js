@@ -59,11 +59,10 @@ const OCR_MIN_PAGE_CHARS = 40;
 const OCR_BATCH_PAGES = 25;
 const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
-// Przy użyciu kopii relacje aktu są sprawdzane w ELI raz na dobę: pierwsze użycie aktu
-// potwierdza aktualność, kolejne czytają kopię bez sieci (zgłoszenie 2026-11-11: weryfikacja
-// tego samego aktu co kwadrans spowalniała rozmowę). Dz.U. ogłasza nowelizacje z vacatio legis,
-// a pełne odświeżenie kopii działa niezależnie w tle.
-const USE_CHECK_AFTER_MS = 24 * 60 * 60 * 1000;
+// Przy użyciu kopii relacje aktu są sprawdzane w ELI co kwadrans (jak dotąd), ale w tle:
+// odpowiedź nie czeka na ELI (zgłoszenie 2026-11-11), a wykryta zmiana kieruje kolejne odczyty
+// do ELI. Czekanie tylko przy pierwszym użyciu aktu albo kopii niesprawdzanej ponad limit świeżości.
+const USE_CHECK_AFTER_MS = 15 * 60 * 1000;
 const USE_CHECK_TIMEOUT_MS = 8_000;
 // Nieudane sprawdzenie (ELI wolne lub niedostępne) nie jest ponawiane przy każdym przepisie
 // tego aktu: przez ten czas kolejne użycia dostają od razu UNREACHABLE.
@@ -787,6 +786,11 @@ export class CoreLawIndex {
             if (!this.backgroundUseChecks.has(eli)) {
                 this.backgroundUseChecks.add(eli);
                 void this.liveUseCheck(eli, ref, state).finally(() => this.backgroundUseChecks.delete(eli));
+            }
+            // The last check failed a moment ago: the copy still answers, with the outage stated.
+            const failed = this.failedUseChecks.get(eli);
+            if (failed && this.now() - failed.at < USE_CHECK_RETRY_AFTER_MS) {
+                return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: failed.error };
             }
             return result();
         }

@@ -5,7 +5,7 @@ import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
 import { claimedUnitState } from "./legal-source-verifier.js";
-import { FRESHNESS_MAX_AGE_MS, QUOTE_NOT_IN_UNIT } from "./verification-ledger.js";
+import { FRESHNESS_MAX_AGE_MS, QUOTE_CONTRADICTS_UNIT, QUOTE_NOT_IN_UNIT } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
 function articleToken(claim) {
@@ -214,8 +214,13 @@ export function verifyFromCoreLaw(args) {
         }
         else if (args.quote?.trim() &&
             !comparable(evidence).includes(comparable(args.quote))) {
+            // A quote with the provision's own words and numbers in another order ("od 2 do 15 lat"
+            // for "od lat 2 do 15") is a paraphrase: QUOTE_NOT_IN_UNIT, which does not undo the
+            // provision's verification. Other words or numbers ("od 2 do 12 lat") contradict the text.
+            const words = (value) => comparable(value).match(/[\p{L}\p{N}]+/gu) ?? [];
+            const textWords = new Set(words(evidence));
             evidence = undefined;
-            failure = QUOTE_NOT_IN_UNIT;
+            failure = words(args.quote).every((word) => textWords.has(word)) ? QUOTE_NOT_IN_UNIT : QUOTE_CONTRADICTS_UNIT;
         }
     }
     else if (args.kind === "journal") {

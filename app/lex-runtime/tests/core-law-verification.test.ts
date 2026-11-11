@@ -148,6 +148,14 @@ function verify(
 }
 
 describe("verifyFromCoreLaw", () => {
+  it("a quote with the provision's words in another order is a paraphrase; other words or numbers contradict it (2026-11-11)", async () => {
+    const { QUOTE_CONTRADICTS_UNIT, QUOTE_NOT_IN_UNIT } = await import("../src/verification-ledger.js");
+    const paraphrase = verify(index(kw()), { quote: "podlega karze grzywny, ograniczenia wolności albo aresztu" });
+    expect(paraphrase).toMatchObject({ decision: "RECORD", record: { status: "UNVERIFIED", evidence: QUOTE_NOT_IN_UNIT } });
+    const wrong = verify(index(kw()), { quote: "podlega karze pozbawienia wolności do lat 2" });
+    expect(wrong).toMatchObject({ decision: "RECORD", record: { status: "UNVERIFIED", evidence: QUOTE_CONTRADICTS_UNIT } });
+  });
+
   it("VERIFIED offline when the provision exists in the consolidated ELI text", () => {
     const outcome = verify(index(kw()));
     expect(outcome.decision).toBe("RECORD");
