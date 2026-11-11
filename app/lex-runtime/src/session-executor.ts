@@ -98,6 +98,7 @@ import type {
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
+import { instructionAttemptNote, scanForInstructions } from "./prompt-injection-scan.js";
 import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
@@ -2418,9 +2419,22 @@ export class SafeSessionExecutor implements SessionExecutor {
             imagesDelivered ? evidence : []
           )
         : undefined;
-    const documentContext = direct.length
-      ? [attachedContext, directImageNote(direct, directDelivered)].filter(Boolean).join("\n\n---\n\n")
-      : attachedContext;
+    // Text written as instructions to a model in the files (Gauntlet T37): recorded, and the model
+    // is told it is data and to tell the user, not left to notice it by itself.
+    const instructionHits = scanForInstructions(
+      attachments.flatMap((attachment) => attachment.chunks.map((chunk) => ({ documentId: attachment.documentId, index: chunk.index, text: chunk.text })))
+    );
+    if (instructionHits.length) {
+      audit.record("gate", "DOCUMENT_INSTRUCTION_ATTEMPT", "DEGRADED", {
+        detail: instructionHits.map((hit) => `${hit.documentId}:${hit.chunk}:${hit.pattern}`).join(";")
+      });
+      step("PREPARE", `w aktach wykryto tekst w formie poleceń dla modelu: ${instructionHits.length} (traktowany jako dane)`);
+    }
+    const documentContext = [
+      instructionHits.length ? instructionAttemptNote(instructionHits) : undefined,
+      attachedContext,
+      direct.length ? directImageNote(direct, directDelivered) : undefined
+    ].filter(Boolean).join("\n\n---\n\n") || undefined;
     const modelImages: LlmImage[] = [
       ...(imagesDelivered ? evidence.map((image) => ({ mediaType: image.mediaType, data: image.data })) : []),
       ...(directDelivered ? direct.map((image) => ({ mediaType: image.mediaType, data: image.data })) : [])

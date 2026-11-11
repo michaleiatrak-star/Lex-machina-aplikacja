@@ -158,7 +158,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   function unmaskHealth(item: { page: number; start: number; end: number }): void {
     setDirectives((current) => current.filter((directive) => !(directive.page === item.page && directive.action === "LABEL" && overlaps(directive, item))));
   }
-  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP" })));
+  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP", layer: line.reason === "LAYER_MISMATCH" })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
     ? 0
@@ -530,7 +530,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       onClick={() => setSnippetKey(snippetKey === key ? null : key)}
                       title={scanned ? t("Pokaż ten fragment skanu") : undefined}
                     >
-                      s. {line.page} · {line.stamp ? t("pieczęć · ") : ""}„{line.text}”
+                      s. {line.page} · {line.stamp ? t("pieczęć · ") : ""}{line.layer ? t("liczba inna niż w warstwie tekstowej PDF · ") : ""}„{line.text}”
                     </button>
                     {scanned && snippetKey === key ? (
                       <ScanSnippet caseId={props.caseId} documentId={review.documentId} page={line.page} line={line.line} onClose={() => setSnippetKey(null)} />

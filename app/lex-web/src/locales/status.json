@@ -3836,19 +3836,19 @@
   },
   {
    "component": "PrivacyPreview",
-   "translatable": 69,
+   "translatable": 70,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 69,
-    "de": 69,
-    "en": 69,
-    "es": 69,
-    "fr": 69,
-    "it": 69,
-    "lb": 69,
-    "nl": 69,
-    "pt": 69,
-    "sv": 69
+    "ca": 70,
+    "de": 70,
+    "en": 70,
+    "es": 70,
+    "fr": 70,
+    "it": 70,
+    "lb": 70,
+    "nl": 70,
+    "pt": 70,
+    "sv": 70
    },
    "state": {
     "pl": "całość",

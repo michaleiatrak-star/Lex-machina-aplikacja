@@ -16,6 +16,8 @@ export type { OcrReviewLine };
 
 // Put before a flagged line in the text, so a model reading the document does not take it as written.
 export const REVIEW_MARK = "[OCR: odczyt niepewny, sprawdź w skanie]";
+// A line whose number differs from the PDF's own text layer (a foreign OCR): one of them misread a digit.
+export const LAYER_MARK = "[OCR: liczba inna niż w warstwie tekstowej PDF, sprawdź w skanie]";
 
 export type KnownWords = (words: string[]) => Promise<boolean[]>;
 
@@ -34,7 +36,12 @@ export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords)
   const flags = vocabulary.length ? await knownWords(vocabulary) : [];
   const known = new Set(vocabulary.filter((_, index) => flags[index]));
   const found: OcrReviewLine[] = [];
+  const layerLines = new Set(page.layerMismatch?.lines ?? []);
   lines.forEach((line, index) => {
+    if (layerLines.has(index) && !line.stamp) {
+      found.push({ line: index, text: line.text, ...(typeof line.score === "number" ? { score: line.score } : {}), reason: "LAYER_MISMATCH" });
+      return;
+    }
     const score = typeof line.score === "number" ? line.score : undefined;
     if (line.stamp) {
       found.push({ line: index, text: line.text, ...(score !== undefined ? { score } : {}), reason: "STAMP" });
@@ -66,11 +73,12 @@ export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords)
 export async function markOcrReview(page: IngestedPage, knownWords: KnownWords): Promise<IngestedPage> {
   const review = await ocrReviewLines(page, knownWords);
   if (!review.length) return page;
-  const flagged = new Set(review.filter((item) => item.reason !== "STAMP").map((item) => item.line));
+  const flagged = new Set(review.filter((item) => item.reason !== "STAMP" && item.reason !== "LAYER_MISMATCH").map((item) => item.line));
+  const layer = new Set(review.filter((item) => item.reason === "LAYER_MISMATCH").map((item) => item.line));
   // A stamp's line is only on the review list (ocrPageText), unless kept in the text.
   const stamps = stampLinesInText();
   const text = page.lines!
-    .flatMap((line, index) => (line.stamp && !stamps ? [] : [flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line)]))
+    .flatMap((line, index) => (line.stamp && !stamps ? [] : [layer.has(index) ? `${LAYER_MARK} ${line.text}` : flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line)]))
     .join("\n");
   return { ...page, text, review };
 }

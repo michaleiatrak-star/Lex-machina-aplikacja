@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { compareWithTextLayer, type LayerMismatch } from "./ocr-layer-check.js";
 import type { ProgressReporter } from "./processing-progress.js";
 
 export type DocumentPageSourceName =
@@ -84,6 +85,8 @@ export type IngestedPage = {
   editedByUser?: boolean;
   // Lines to check against the scan (handwriting, stamps, doubtful reading).
   review?: OcrReviewLine[];
+  // A foreign text layer whose numbers differ from the local reading of the scan (ocr-layer-check.ts).
+  layerMismatch?: LayerMismatch;
   // The scan of a page whose text the user corrected by hand: shown next to the text in the
   // preview, never sent (it no longer matches the text, so it cannot be masked).
   scan?: OcrPageImage;
@@ -93,7 +96,7 @@ export type OcrReviewLine = {
   line: number;
   text: string;
   score?: number;
-  reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP";
+  reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" | "LAYER_MISMATCH";
 };
 
 // Put before a stamp's line in the page text (the same mark as the OCR worker's).
@@ -368,8 +371,10 @@ export class CompleteDocumentIngestor {
       // A foreign OCR layer gives way to the local engine's reading (line scores, boxes for
       // masking the page image); a real digital layer gives way only to a longer OCR text.
       const preferOcr = page.ocrTextLayer === true && ocrText.length > 0;
+      const layerMismatch = preferOcr && digital && ocr?.lines?.length ? compareWithTextLayer(ocr.lines, digital) : null;
       if (ocr && (preferOcr || ocrText.length > digital.length)) {
         return {
+          ...(layerMismatch ? { layerMismatch } : {}),
           page: page.page,
           text: ocrText,
           source: "OCR" as const,
