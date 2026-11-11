@@ -88,7 +88,7 @@ import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, googleSessionStore } from "../web-search-settings.js";
-import { configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
+import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -666,6 +666,8 @@ export async function startLocalServer(options?: {
     new LexMcpConnectorStore(
       connectorCorpusRoot(runtimeRoot, baseRuntimeRoot)
     );
+  // Sessions of the verification windows reach the connectors (R2A sources behind a bot check).
+  configureBrowserSessionsFile(mcpConnectors.browserSessionsFile);
   const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
   const legalFederationTools =
     new LegalFederationToolRuntime(

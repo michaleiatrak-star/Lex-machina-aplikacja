@@ -1,6 +1,7 @@
 import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
-import { probeWokandaSession } from "./api.js";
+import { attemptWokandaSessionOnServer, probeWokandaSession } from "./api.js";
+import { ServerSessionVerification } from "./LawSourceVerification.js";
 import { AUTO_TRIES, desktopInvoke, openExternalUrl } from "./SnVerification.js";
 
 /**
@@ -100,15 +101,26 @@ export function WokandaVerification({
         <strong>{t("Strona sądu wymaga weryfikacji przeglądarki.")}</strong>{" "}
         {verification.savedSession ? t("Sesja z poprzedniej weryfikacji wygasła.") : t("Aplikacja sama jej nie przechodzi.")}
       </p>
-      <p className="field-help">
-        {invoke
-          ? t("Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem.")
-          : t("W przeglądarce: otwórz wokandę sądu i wyszukaj sygnaturę samodzielnie.")}
-      </p>
-      {quiet ? <p className="field-help">{t("Sprawdzam stronę sądu w tle (do ok. 20 s)…")}</p> : null}
-      <button type="button" className="chat-primary-action" onClick={() => void start(false)}>
-        {invoke ? (open ? t("Okno sądu otwarte…") : t("Otwórz okno sądu")) : t("Otwórz wokandę sądu")}
-      </button>
+      {invoke ? (
+        <>
+          <p className="field-help">
+            {t("Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem.")}
+          </p>
+          {quiet ? <p className="field-help">{t("Sprawdzam stronę sądu w tle (do ok. 20 s)…")}</p> : null}
+          <button type="button" className="chat-primary-action" onClick={() => void start(false)}>
+            {open ? t("Okno sądu otwarte…") : t("Otwórz okno sądu")}
+          </button>
+        </>
+      ) : (
+        // Server mode: the server's own headless browser first, then a session pasted from a browser.
+        <ServerSessionVerification
+          url={verification.url}
+          autoStart
+          attempt={() => attemptWokandaSessionOnServer(verification.domain)}
+          probe={(cookie) => probeWokandaSession(verification.domain, cookie, navigator.userAgent)}
+          onVerified={() => onVerifiedRef.current()}
+        />
+      )}
       {message ? <p className="field-help">{message}</p> : null}
     </div>
   );

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 /**
  * Official law sources behind a bot check (Cloudflare, DataDome), handled as sn.pl and the courts'
  * wokanda: the application never passes the check itself. The user passes it in the application's
@@ -48,6 +50,33 @@ let store: LawSourceSessionStore | null = null;
 
 export function configureLawSourceSessionStore(next: LawSourceSessionStore | null): void {
   store = next;
+}
+
+// The MCP connectors (R2A sources: courts' portals, CBOSA, TK, KIO, UODO, EUREKA...) are processes of
+// their own: the sessions of the verification windows reach them through this file (0600, read by
+// the connectors' shared layer, wspolne/sesja-przegladarki.mjs). Values are never logged.
+let sessionsFile: string | null = null;
+
+export function configureBrowserSessionsFile(file: string | null): void {
+  sessionsFile = file;
+  writeSessionsFile();
+}
+
+function writeSessionsFile(): void {
+  if (!sessionsFile) return;
+  const hosts: Record<string, { cookie: string; userAgent: string; saved_at: string }> = {};
+  for (const [host, session] of sessions) {
+    if (Date.now() - session.at > (keeps(host) ? KEPT_SESSION_TTL_MS : SESSION_TTL_MS)) continue;
+    hosts[host] = { cookie: session.cookie, userAgent: session.userAgent, saved_at: new Date(session.at).toISOString() };
+  }
+  try {
+    fs.mkdirSync(path.dirname(sessionsFile), { recursive: true });
+    const temp = `${sessionsFile}.${process.pid}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify({ hosts }) + "\n", { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temp, sessionsFile);
+  } catch {
+    // The connectors then ask for the check again; the runtime's own reads keep the session.
+  }
 }
 
 function keeps(host: string): boolean {
@@ -105,6 +134,7 @@ export function setLawSourceSession(host: string, cookie: string, userAgent: str
   if (!cookie.trim() || cookie.length > 16_384 || /[\r\n]/u.test(cookie + userAgent) || userAgent.length > 512) throw new Error("LAW_SOURCE_SESSION_INVALID");
   const session = { cookie: cookie.trim(), userAgent: userAgent.trim(), at: Date.now() };
   sessions.set(source.host, session);
+  writeSessionsFile();
   if (keeps(source.host)) {
     try {
       store!.save(source.host, session);
@@ -148,6 +178,7 @@ export function clearLawSourceSession(host: string): void {
   const source = lawSourceWithCheck(host);
   if (!source) return;
   sessions.delete(source.host);
+  writeSessionsFile();
   try {
     store?.save(source.host, null);
   } catch {

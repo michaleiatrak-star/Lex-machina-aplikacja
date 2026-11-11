@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { clearLawSourceSession, keepLawSourceSession } from "../eli/law-source-sessions.js";
+import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
+import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
@@ -291,6 +293,41 @@ export function registerMcpConnectorRoutes(
                   : "SN_SERVER_REJECTED"
             })
       });
+    }
+  );
+
+  // Server mode: the server tries a source's bot check in its own headless browser (Playwright with
+  // the MCP connectors); without success the user pastes the session from a browser in its network.
+  app.post(
+    "/api/law-sources/session/server-attempt",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const host = typeof req.body?.host === "string" ? req.body.host : "";
+      res.json(await attemptServerBrowserSession(host, connectors.serversDirectory));
+    }
+  );
+
+  // The same for a court's wokanda behind a browser check (server mode, no court window).
+  app.post(
+    "/api/courts/wokanda/session/server-attempt",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const domain = typeof req.body?.domain === "string" ? req.body.domain.toLowerCase().replace(/^www\./u, "") : "";
+      const court = wokandaRegister().sady.find((item) => item.domena === domain);
+      if (!court) {
+        res.json({ ready: false, reason: "LAW_SOURCE_UNKNOWN" });
+        return;
+      }
+      res.json(
+        await passCheckInServerBrowser(
+          court.url ?? `https://${court.domena}/wokanda`,
+          connectors.serversDirectory,
+          (cookie, userAgent) => probeWokandaSession(court.domena, cookie, userAgent),
+          undefined,
+          undefined,
+          (html) => /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge|cf-chl-|Just a moment/iu.test(html)
+        )
+      );
     }
   );
 
