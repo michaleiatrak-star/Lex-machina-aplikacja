@@ -16,7 +16,11 @@ export type WorkspaceFolder = {
   createdAt: string;
   // Firm know-how: ticked in every conversation (the firm's choice).
   chatDefault?: boolean;
+  // Firm library: what the folder holds (subfolders inherit it).
+  purpose?: WorkspaceFolderPurpose;
 };
+
+export type WorkspaceFolderPurpose = "TEMPLATES" | "CASE_LAW" | "RULES";
 
 export type WorkspaceItem = {
   kind: "UPLOAD" | "TEMPLATE" | "ARTIFACT";
@@ -161,6 +165,29 @@ export function setWorkspaceFolderChatDefault(
     method: "PATCH",
     body: JSON.stringify({ chatDefault })
   });
+}
+
+export function setWorkspaceFolderPurpose(
+  caseId: string,
+  folderId: string,
+  purpose: WorkspaceFolderPurpose | null
+): Promise<{ folder: WorkspaceFolder }> {
+  return workspaceJson(`/api/cases/${caseId}/workspace/folders/${folderId}/purpose`, {
+    method: "PATCH",
+    body: JSON.stringify({ purpose })
+  });
+}
+
+/** The folder's purpose, or the nearest parent's. */
+export function inheritedFolderPurpose(folders: readonly WorkspaceFolder[], folderId: string | null): WorkspaceFolderPurpose | null {
+  const seen = new Set<string>();
+  let current = folders.find((folder) => folder.folderId === folderId);
+  while (current && !seen.has(current.folderId)) {
+    if (current.purpose) return current.purpose;
+    seen.add(current.folderId);
+    current = folders.find((folder) => folder.folderId === current!.parentId);
+  }
+  return null;
 }
 
 export function deleteWorkspaceFolder(

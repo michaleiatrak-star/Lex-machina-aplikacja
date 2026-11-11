@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firmKnowledgeDocumentIds, firmKnowledgeItems, parseFirmKnowledgeSelection } from "../src/firm-knowledge-scope.js";
+import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems, folderPurpose, parseFirmKnowledgeSelection } from "../src/firm-knowledge-scope.js";
 
 const f = (n: string) => `folder_${n.repeat(32)}`;
 const u = (n: string) => `upload_${n.repeat(32)}`;
@@ -36,5 +36,43 @@ describe("zakres know-how kancelarii", () => {
   it("odrzuca błędne identyfikatory", () => {
     expect(parseFirmKnowledgeSelection({ folderIds: ["x"] })).toBeNull();
     expect(parseFirmKnowledgeSelection(undefined)).toEqual({ folderIds: [], itemIds: [] });
+  });
+});
+
+describe("rodzaje folderów kancelarii (wzory, orzeczenia, zasady)", () => {
+  const typed = {
+    folders: [
+      { folderId: f("a"), parentId: null, name: "Wzory", createdAt: "", purpose: "TEMPLATES" as const },
+      { folderId: f("b"), parentId: null, name: "Orzeczenia", createdAt: "", purpose: "CASE_LAW" as const },
+      { folderId: f("c"), parentId: f("b"), name: "NSA", createdAt: "" },
+      { folderId: f("d"), parentId: null, name: "Zasady", createdAt: "", purpose: "RULES" as const },
+      { folderId: f("e"), parentId: null, name: "Inne", createdAt: "" }
+    ],
+    itemLocations: { [u("1")]: f("a"), [u("2")]: f("c"), [u("3")]: f("d"), [u("4")]: f("e") }
+  };
+
+  it("podfolder dziedziczy rodzaj; folder bez rodzaju to wiedza ogólna", () => {
+    expect(folderPurpose(typed, f("c"))).toBe("CASE_LAW");
+    expect(folderPurpose(typed, f("e"))).toBeNull();
+    expect(folderPurpose(typed, null)).toBeNull();
+  });
+
+  it("zasady trafiają do każdej rozmowy bez wyboru", () => {
+    expect([...firmKnowledgeItems(typed, { folderIds: [], itemIds: [] })]).toEqual([u("3")]);
+  });
+
+  it("rodzaj każdego dokumentu po folderze", () => {
+    const sha = (n: string) => n.repeat(64);
+    const purposes = firmDocumentPurposes(typed, [
+      { uploadId: u("1"), sha256: sha("1") },
+      { uploadId: u("2"), sha256: sha("2") },
+      { uploadId: u("3"), sha256: sha("3") },
+      { uploadId: u("4"), sha256: sha("4") }
+    ]);
+    expect(Object.fromEntries(purposes)).toEqual({
+      [`doc_${sha("1").slice(0, 24)}`]: "TEMPLATES",
+      [`doc_${sha("2").slice(0, 24)}`]: "CASE_LAW",
+      [`doc_${sha("3").slice(0, 24)}`]: "RULES"
+    });
   });
 });

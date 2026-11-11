@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
-import { getWorkspace, type WorkspaceResponse } from "./workspace-client.js";
+import { getWorkspace, inheritedFolderPurpose, type WorkspaceResponse } from "./workspace-client.js";
 
 export type FirmKnowledgeSelection = { folderIds: string[]; itemIds: string[] };
 
@@ -49,7 +49,11 @@ export function FirmKnowledgePicker({
   };
   // A folder is covered by a default or picked ancestor (itself included).
   const covered = useMemo(() => {
-    const roots = new Set([...folders.filter((folder) => folder.chatDefault).map((folder) => folder.folderId), ...selection.folderIds]);
+    // Default folders and the firm's rules (in every conversation) are always covered.
+    const roots = new Set([
+      ...folders.filter((folder) => folder.chatDefault || folder.purpose === "RULES").map((folder) => folder.folderId),
+      ...selection.folderIds
+    ]);
     const all = new Set(roots);
     let grew = true;
     while (grew) {
@@ -65,7 +69,7 @@ export function FirmKnowledgePicker({
   }, [folders, selection.folderIds]);
   const files = (workspace?.items ?? []).filter((item) => item.kind === "UPLOAD");
   const locationOf = (itemId: string) => workspace?.itemLocations[itemId] ?? null;
-  const defaults = folders.filter((folder) => folder.chatDefault).length;
+  const defaults = folders.filter((folder) => folder.chatDefault || folder.purpose === "RULES").length;
   const coveredFiles = files.filter((file) => {
     const folder = locationOf(file.itemId);
     return (folder && covered.has(folder)) || selection.itemIds.includes(file.itemId);
@@ -86,7 +90,8 @@ export function FirmKnowledgePicker({
       {folders.length === 0 && files.length === 0 ? <small className="firm-picker-note">{t("Baza know-how jest pusta.")}</small> : null}
       <ul className="firm-picker-list">
         {folders.map((folder) => {
-          const fixed = folder.chatDefault === true;
+          const fixed = folder.chatDefault === true || folder.purpose === "RULES";
+          const purpose = inheritedFolderPurpose(folders, folder.folderId);
           const inherited = !fixed && !selection.folderIds.includes(folder.folderId) && covered.has(folder.folderId);
           return (
             <li key={folder.folderId} style={{ paddingLeft: `${depth(folder.folderId) * 16}px` }}>
@@ -98,7 +103,14 @@ export function FirmKnowledgePicker({
                   onChange={(event) => toggle("folderIds", folder.folderId, event.target.checked)}
                 />
                 <span>📁 {folder.name}</span>
-                {fixed ? <small>{t("domyślny kancelarii")}</small> : inherited ? <small>{t("w wybranym folderze")}</small> : null}
+                {folder.purpose === "RULES" ? (
+                  <small>{t("zasady kancelarii · zawsze")}</small>
+                ) : fixed ? (
+                  <small>{t("domyślny kancelarii")}</small>
+                ) : inherited ? (
+                  <small>{t("w wybranym folderze")}</small>
+                ) : null}
+                {purpose === "TEMPLATES" ? <small>{t("wzory · tylko do wypełnienia")}</small> : purpose === "CASE_LAW" ? <small>{t("orzeczenia · kopia kancelarii")}</small> : null}
               </label>
             </li>
           );

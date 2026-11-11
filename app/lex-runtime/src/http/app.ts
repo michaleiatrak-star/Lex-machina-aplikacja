@@ -211,7 +211,8 @@ import {
   storedDocumentMediaType
 } from "../stored-document-source.js";
 import type {
-  EncryptedCaseWorkspaceStore
+  EncryptedCaseWorkspaceStore,
+  WorkspaceFolderPurpose
 } from "../case-workspace-store.js";
 import type {
   DocumentGenerationStateStore
@@ -635,6 +636,7 @@ export type LexHttpAppOptions = {
   // Firm know-how in a conversation: the documents of the picked files and folders and of the
   // firm's default folders (firm-knowledge-scope.ts); absent = the firm library is not searched.
   firmKnowledgeScope?: (args: { caseId: string; caseDataKey: Buffer; keyVersion: number; selection: FirmKnowledgeSelection }) => Promise<Set<string>>;
+  firmDocumentPurposes?: (args: { caseId: string; caseDataKey: Buffer; keyVersion: number }) => Promise<Map<string, WorkspaceFolderPurpose>>;
   // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
   caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
   // Tests: the court sites of the wokanda check (courts/wokanda.ts).
@@ -9726,6 +9728,19 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   // templates), resolved with access checks. Used to send them and to
   // estimate whether they fit the model before sending. Null: response sent.
   const templateTextCache = new Map<string, ReturnType<typeof templateChunks>>();
+  // The purposes of the firm library's documents (by folder), for files picked in a conversation.
+  const firmPurposesOf = async (res: express.Response, firmCaseId: string): Promise<Map<string, WorkspaceFolderPurpose>> => {
+    if (!options.firmDocumentPurposes || !options.caseAccessService) return new Map();
+    try {
+      const context = responseAuthContext(res);
+      const view = options.caseAccessService.openCase(context, firmCaseId);
+      return await options.caseAccessService.withCaseDataKey(context, firmCaseId, "ANALYZE", async (caseDataKey) =>
+        await options.firmDocumentPurposes!({ caseId: firmCaseId, caseDataKey, keyVersion: view.keyVersion })
+      );
+    } catch {
+      return new Map();
+    }
+  };
   const resolveSelectedAttachments = async (
     res: express.Response,
     attachments: Array<DocumentChunkSelection & { caseId?: string }>,
@@ -9818,14 +9833,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   selection
                     .chunkIndices
               }, { remote, ...(evidence ? { images: evidence } : {}) });
+          const pickedPurpose = caseId === firmCaseId ? (await firmPurposesOf(res, caseId)).get(resolved.documentId) : undefined;
           picked.push({
             caseId,
             documentId:
               resolved.documentId,
             sourceScope:
               caseId === firmCaseId
-                ? "FIRM_KNOWLEDGE"
+                ? pickedPurpose === "TEMPLATES"
+                  ? "FIRM_TEMPLATE"
+                  : "FIRM_KNOWLEDGE"
                 : "MANUAL",
+            ...(pickedPurpose && pickedPurpose !== "TEMPLATES" ? { firmPurpose: pickedPurpose } : {}),
             selectedByUser: true,
             ...(resolved.grammar
               ? { grammar: resolved.grammar }
@@ -10464,7 +10483,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               | "CASE_KNOWLEDGE"
               | "FIRM_KNOWLEDGE";
             documentIds?: ReadonlySet<string>;
+            // The firm's rules: their best passages go first, whatever the question's wording.
+            priority?: boolean;
           }> = [];
+        let firmPurposeMap = new Map<string, WorkspaceFolderPurpose>();
 
         if (
           knowledge.includeCase &&
@@ -10499,14 +10521,27 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 await options.firmKnowledgeScope!({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion, selection: knowledge.firmSelection })
               )
             : new Set<string>();
+          const firmPurposes: Map<string, WorkspaceFolderPurpose> = options.firmDocumentPurposes
+            ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) =>
+                await options.firmDocumentPurposes!({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion })
+              )
+            : new Map<string, WorkspaceFolderPurpose>();
+          firmPurposeMap = firmPurposes;
+          // Templates are filled in, never searched as knowledge; the firm's rules get their own
+          // search so they reach every conversation whatever the question's wording.
+          const searched = new Set([...firmDocuments].filter((documentId) => !firmPurposes.has(documentId) || firmPurposes.get(documentId) === "CASE_LAW"));
+          const rules = new Set([...firmDocuments].filter((documentId) => firmPurposes.get(documentId) === "RULES"));
           request.onStep?.("PREPARE", `know-how kancelarii: ${firmDocuments.size} dokumentów z wybranych i domyślnych folderów`);
-          if (firmDocuments.size > 0) {
+          if (rules.size > 0) {
+            knowledgeSources.push({ caseId: firm.caseId, sourceScope: "FIRM_KNOWLEDGE", documentIds: rules, priority: true });
+          }
+          if (searched.size > 0) {
             knowledgeSources.push({
               caseId:
                 firm.caseId,
               sourceScope:
                 "FIRM_KNOWLEDGE",
-              documentIds: firmDocuments
+              documentIds: searched
             });
           }
         }
@@ -10523,6 +10558,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             pageEnd: number;
             score: number;
             text: string;
+            priority?: boolean;
           }> = [];
 
         for (
@@ -10563,11 +10599,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     })
               );
           ranked.push(
-            ...hits.map(
+            ...(source.priority ? hits.slice(0, 2) : hits).map(
               (hit) => ({
                 ...hit,
                 sourceScope:
-                  source.sourceScope
+                  source.sourceScope,
+                ...(source.priority ? { priority: true } : {})
               })
             )
           );
@@ -10575,6 +10612,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         ranked.sort(
           (left, right) =>
+            Number(Boolean(right.priority)) - Number(Boolean(left.priority)) ||
             right.score -
               left.score ||
             left.caseId
@@ -10620,6 +10658,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             ) {
               continue;
             }
+            const firmPurpose = hit.sourceScope === "FIRM_KNOWLEDGE" ? firmPurposeMap.get(hit.documentId) : undefined;
             attachment = {
               caseId:
                 hit.caseId,
@@ -10627,6 +10666,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 hit.documentId,
               sourceScope:
                 hit.sourceScope,
+              ...(firmPurpose ? { firmPurpose } : {}),
               chunks: []
             };
             grouped.set(

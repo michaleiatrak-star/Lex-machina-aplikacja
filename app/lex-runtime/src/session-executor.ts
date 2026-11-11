@@ -337,6 +337,8 @@ export type SessionDocumentAttachment = {
     | "FIRM_TEMPLATE";
   // Shown to the model for firm templates (a filename, no case data).
   title?: string;
+  // Firm library: the purpose of the document's folder (the firm's judgments, the firm's rules).
+  firmPurpose?: "TEMPLATES" | "CASE_LAW" | "RULES";
   // Picked by the user (not retrieved): sent whole or not at all.
   selectedByUser?: boolean;
   // Page images (photos; text pages on request), personal data masked.
@@ -1418,6 +1420,21 @@ export const EVIDENCE_IMAGE_NOTE = [
   "Nazwy i dane z dokumentu bierz z tekstu z symbolami [PII:...], nie z obrazu."
 ].join("\n");
 
+// The firm's own copies of judgments and interpretations: a lead, never a verified source.
+export const FIRM_CASE_LAW_NOTE = [
+  "ORZECZENIA I INTERPRETACJE · KOPIA KANCELARII (HARD GATE):",
+  "To kopie z bazy kancelarii, nie źródło urzędowe. Orzeczenie albo interpretację z tej kopii powołaj dopiero po sprawdzeniu w oficjalnym źródle (SN, SAOS, CBOSA, EUREKA) narzędziem weryfikacji; bez tego oznacz je jako niezweryfikowane.",
+  "Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień w źródle = OUT_OF_SCOPE, nie brak orzeczenia.",
+  "Sygnaturę, sąd i datę bierz z tekstu kopii, nie z pamięci."
+].join("\n");
+
+// The firm's rules: how the firm works, below the rules of legal sources.
+export const FIRM_RULES_NOTE = [
+  "ZASADY KANCELARII:",
+  "Stosuj metodykę, regulaminy i rozwiązania kancelarii z tych dokumentów (forma pism, kolejność, styl, wymagania kancelarii).",
+  "Nie uchylają one zasad źródeł prawa ani bramek aplikacji: przepisy tylko z ELI, nigdy z pamięci; orzeczenia tylko po weryfikacji. Przy sprzeczności pierwszeństwo mają te zasady źródeł."
+].join("\n");
+
 function buildDocumentContext(
   attachments: SessionDocumentAttachment[],
   images: SelectedEvidenceImage[] = []
@@ -1427,8 +1444,12 @@ function buildDocumentContext(
       const sourceLabel =
         attachment.sourceScope === "FIRM_TEMPLATE"
           ? "WZÓR KANCELARII"
-          : attachment.sourceScope === "FIRM_KNOWLEDGE"
-            ? "KNOW-HOW KANCELARII"
+          : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "CASE_LAW"
+            ? "ORZECZENIE/INTERPRETACJA · KOPIA KANCELARII"
+            : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "RULES"
+              ? "ZASADY KANCELARII"
+              : attachment.sourceScope === "FIRM_KNOWLEDGE"
+                ? "KNOW-HOW KANCELARII"
             : attachment.sourceScope === "CASE_KNOWLEDGE"
               ? "CASE KNOWLEDGE"
               : "DOCUMENT";
@@ -1467,7 +1488,15 @@ function buildDocumentContext(
         )
       ].join("\n")
     : null;
-  return [...(firm ? [FIRM_MATERIAL_NOTE] : []), ...sections, ...(imageIndex ? [imageIndex] : [])].join("\n\n---\n\n");
+  const caseLaw = attachments.some((attachment) => attachment.firmPurpose === "CASE_LAW");
+  const rules = attachments.some((attachment) => attachment.firmPurpose === "RULES");
+  return [
+    ...(firm ? [FIRM_MATERIAL_NOTE] : []),
+    ...(caseLaw ? [FIRM_CASE_LAW_NOTE] : []),
+    ...(rules ? [FIRM_RULES_NOTE] : []),
+    ...sections,
+    ...(imageIndex ? [imageIndex] : [])
+  ].join("\n\n---\n\n");
 }
 
 export const buildDocumentContextForTest = buildDocumentContext;
