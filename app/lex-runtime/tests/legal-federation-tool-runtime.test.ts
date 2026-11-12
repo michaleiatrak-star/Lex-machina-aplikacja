@@ -31,12 +31,12 @@ describe(
           "assess_legal_source",
           "fetch_auxiliary_legal_source",
           "web_search",
-          "federated_legal_coverage"
-          // read_national_legislation: only when another country is the chosen legal system (Polish law here).
+          "federated_legal_coverage",
+          "read_national_legislation"
         ]);
         expect(
           [...FEDERATED_LEGAL_TOOL_NAMES]
-        ).toEqual([...names, "read_national_legislation"]);
+        ).toEqual(names);
 
         const search =
           runtime.schemas().find(

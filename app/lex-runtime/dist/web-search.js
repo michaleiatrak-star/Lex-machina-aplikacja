@@ -1,3 +1,4 @@
+import { isBlockedUrl } from "./blocked-jurisdictions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
 export class WebSearchError extends Error {
@@ -25,6 +26,12 @@ export function assertPublicWebSearchQuery(raw) {
     if (/\[(?:LM)?PII:/iu.test(query) ||
         /\[(?:DOCUMENT|CASE KNOWLEDGE|FIRM KNOWLEDGE)\s/iu.test(query)) {
         throw new WebSearchError("WEB_SEARCH_CASE_DATA_FORBIDDEN");
+    }
+    // site: on a jurisdiction outside the system (technical block).
+    for (const match of query.matchAll(/\bsite:(\S+)/giu)) {
+        if (isBlockedUrl(`https://${match[1].replace(/^https?:\/\//iu, "")}`)) {
+            throw new WebSearchError("WEB_SEARCH_JURISDICTION_BLOCKED");
+        }
     }
     return query;
 }
@@ -122,7 +129,7 @@ export class PublicWebSearch {
         if (braveKey &&
             (provider === "auto" || provider === "brave")) {
             try {
-                const hits = await this.searchBrave(query, maxResults, braveKey);
+                const hits = withoutBlocked(await this.searchBrave(query, maxResults, braveKey));
                 if (hits.length > 0) {
                     return { provider: "brave", hits };
                 }
@@ -138,7 +145,7 @@ export class PublicWebSearch {
             // disciplinary courts' portals): one more try before "refused".
             for (let attempt = 1; attempt <= 2; attempt += 1) {
                 try {
-                    const hits = await this.searchDuckDuckGo(query, maxResults);
+                    const hits = withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
                     if (hits.length > 0) {
                         return { provider: "duckduckgo", hits };
                     }
@@ -259,4 +266,8 @@ export function classifyWebSearchHits(hits) {
                         : "Lead, not a source: verify every signature, Dz.U. reference and date it shows at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing; read the page with fetch_auxiliary_legal_source when the snippet is not enough. It can never be the sole legal basis."
         };
     });
+}
+/** Hits from jurisdictions outside the system never reach the model (technical block). */
+function withoutBlocked(hits) {
+    return hits.filter((hit) => !isBlockedUrl(hit.url));
 }
