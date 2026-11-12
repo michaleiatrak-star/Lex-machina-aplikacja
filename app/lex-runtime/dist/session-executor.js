@@ -63,6 +63,7 @@ import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
+import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -1538,18 +1539,49 @@ export class SafeSessionExecutor {
         // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
         // application in the WSD portal before the model answers, every one of them (RD 121/26: the
         // model read one of three and left the others "z materiałów sprawy").
-        const wsdSignatures = legalTurn && activeCountry() === "PL"
-            ? [...new Set(signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")).filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8)
-            : [];
+        const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
+        const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
+        // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
+        // (sn.pl often asks for its human check; RD 121/26 then had no text of SDI 9/12 at all).
+        const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
+        const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([]);
+        if (saosSignatures.length)
+            step("VERIFY", `SAOS (tekst orzeczeń z akt): ${saosSignatures.join(", ")}`);
         if (wsdSignatures.length) {
             step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
             const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
             pathSections.push(wsdPrefetchPrompt(found));
-            for (const result of found)
-                if (result.status === "FOUND")
-                    officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
+            for (const result of found) {
+                if (result.status !== "FOUND")
+                    continue;
+                officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
+                // The court's own publication: RZĄD 2A like sn.pl (HIERARCHIA-ZRODEL, 2026-11-12) -> ✅ [VER].
+                ledger.add({
+                    claim: result.signature,
+                    kind: "case",
+                    status: "VERIFIED",
+                    sourceUrl: result.url,
+                    sourceTier: "R2A",
+                    fetchedAt: new Date().toISOString(),
+                    verificationMethod: "web_fetch",
+                    sourceFormat: "TEXT",
+                    caseScope: "FULL_TEXT",
+                    caseSignature: result.signature,
+                    evidence: ["Wyższy Sąd Dyscyplinarny Adwokatury", result.signature, result.title].filter(Boolean).join(" · ")
+                });
+            }
             audit.record("gate", "WSD_PORTAL_PREFETCH", found.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
                 results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
+            });
+        }
+        const saosResults = await saosFound;
+        if (saosResults.length) {
+            pathSections.push(saosPrefetchPrompt(saosResults));
+            for (const result of saosResults)
+                if (result.status === "FOUND")
+                    leadCaseLawTexts.push(`${result.signature}\n${result.text}`);
+            audit.record("gate", "SAOS_TEXT_PREFETCH", saosResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+                results: saosResults.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : ` ${result.detail}`}`)
             });
         }
         // The kind of every document the user sent (court decision, pleading, contract,
