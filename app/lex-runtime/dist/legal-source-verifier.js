@@ -79,7 +79,31 @@ function readableText(value) {
 function escapeRegExp(value) {
     return value.replace(/[.*+?^$()|[\]\\{}]/g, (match) => "\\" + match);
 }
-function articleSection(claim, body) {
+// The structure heading of the next part ("Rozdział 1", "CZĘŚĆ WOJSKOWA" and its title) and a
+// stray journal note ("(Dz. U. poz. 1638).") at the end of an article are not its text
+// (legal-cite-pl b6113a5: k.p.c. art. 15, k.k. art. 316, k.c. art. 430 in older t.j.).
+const STRUCTURE_HEADING = /^(?:DZIAŁ|Dział|ROZDZIAŁ|Rozdział|ODDZIAŁ|Oddział|TYTUŁ|Tytuł|KSIĘGA|Księga|CZĘŚĆ|Część)(?=\s|$)[^\n]*$|^[A-ZĄĆĘŁŃÓŚŹŻ][A-ZĄĆĘŁŃÓŚŹŻ ]{3,60}$/u;
+const STRAY_JOURNAL_NOTE = /^\(Dz\.\s*U\.[^)]{0,60}\)\.?$/u;
+export function withoutTrailingStructure(section) {
+    const lines = section.replace(/\s+$/u, "").split("\n");
+    // From the end: a stray note, or a heading (and the short title lines after it).
+    for (let at = lines.length - 1; at > 0; at -= 1) {
+        const line = lines[at].trim();
+        if (STRAY_JOURNAL_NOTE.test(line)) {
+            lines.splice(at, 1);
+            continue;
+        }
+        const heading = lines.slice(0, at + 1).findLastIndex((candidate, index) => index > 0 && STRUCTURE_HEADING.test(candidate.trim()));
+        if (heading > 0 && lines.slice(heading + 1, at + 1).every((title) => title.trim().length <= 120 && !/[.;:]$/u.test(title.trim()))) {
+            lines.splice(heading);
+            at = lines.length;
+            continue;
+        }
+        break;
+    }
+    return lines.join("\n");
+}
+export function articleSection(claim, body) {
     const article = articleToken(claim);
     if (!article)
         return null;
@@ -90,8 +114,26 @@ function articleSection(claim, body) {
     const fallbackHeading = new RegExp("\\bArt\\.?\\s+" +
         escapeRegExp(article) +
         "(?=\\s*(?:\\.|§|$))", "u");
+    // A consolidated text of ELI may swap "l" and "1" in the number ("Art. 5891." for art. 589l,
+    // "Art. 61ls." for art. 611s; legal-cite-pl b6113a5, k.p.k. t.j. 2016). Tried only when the
+    // number itself is not printed, and only as an article heading at the start of a line.
+    const variants = [
+        article.replace(/l/gu, "1"),
+        ...[...article.matchAll(/1/gu)].map((one) => article.slice(0, one.index) + "l" + article.slice(one.index + 1))
+    ].filter((variant) => variant !== article &&
+        // Never a number an ordinary article may have ("70l" is not art. 701): above 1500, or an "l" inside the digits.
+        (Number(/^\d+/u.exec(variant)?.[0] ?? 0) > 1500 || /^\d+l[a-z]+$/u.test(variant)));
+    const swapped = () => {
+        for (const variant of variants) {
+            const found = new RegExp("(?:^|\\n)\\s*Art\\.?\\s+" + escapeRegExp(variant) + "(?=\\s*(?:\\.|§|$))", "u").exec(readable);
+            if (found)
+                return found;
+        }
+        return null;
+    };
     const match = strictHeading.exec(readable) ??
-        fallbackHeading.exec(readable);
+        fallbackHeading.exec(readable) ??
+        swapped();
     if (!match)
         return null;
     const start = match.index +
@@ -101,7 +143,7 @@ function articleSection(claim, body) {
     const end = nextHeading
         ? afterHeading + nextHeading.index
         : readable.length;
-    const section = readable.slice(start, end).trim();
+    const section = withoutTrailingStructure(readable.slice(start, end)).trim();
     return section ? section.slice(0, MAX_EVIDENCE_CHARS) : null;
 }
 function normalize(value) {
