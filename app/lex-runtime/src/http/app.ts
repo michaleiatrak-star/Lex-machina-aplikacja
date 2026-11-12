@@ -50,6 +50,7 @@ import {
   PLEADING_START,
   pleadingContinuationPrompt,
   pleadingStepText,
+  withCheckpointFinding,
   withoutDraftRemarks,
   writesPleading
 } from "../process-pleading-draft.js";
@@ -9905,7 +9906,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     const latest = latestDraftVersion(draft);
     return {
       ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
-      ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {})
+      ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {}),
+      ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {})
     };
   }
 
@@ -9934,6 +9936,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (step?.kind === "PARTIAL") problems.push(`pismo niedokończone po ${PLEADING_CONTINUATIONS_MAX} rundach dalszego ciągu: nowa wersja nie została zapisana`);
         const text = step?.kind === "FULL" ? step.text : null;
         if (text) next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
+        // Every passed step keeps what it established for the later stages (fact map, evidence
+        // matrix, anomalies, verification), apart from the pleading text itself.
+        next = withCheckpointFinding(next, checkpoint, stage, answer);
         if (next.remarks?.checkpoint === checkpoint) next = withoutDraftRemarks(next);
         if (next.revision === (current?.revision ?? 0)) return null;
         await store.saveProcessPleadingDraft!({

@@ -1492,6 +1492,61 @@ describe(
       current.auth.close();
     });
 
+    it("collects what each gate established by stages and gives it to the later steps (long documents)", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner", displayName: "Owner", password: "G39I findings strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const caseId = String(
+        (await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Findings" }).expect(201)).body.caseId
+      );
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/initialize`).set("Authorization", authorization).send({ mode: "AUTO" }).expect(201);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`).set("Authorization", authorization).send({}).expect(200);
+      const FINDINGS: Record<string, string> = {
+        "CP-1c-lancuch": "ŁAŃCUCH: dowód D3 (umowa, s. 4) potwierdza fakt F2 (termin zapłaty 10 dni).",
+        "CP-1d-anomalie": "ANOMALIA A1: faktura nr 7 nosi datę wcześniejszą niż umowa.",
+        "CP-PRE-W2": "GATE-OK: art. 455 KC zweryfikowany w ELI."
+      };
+      current.execute.mockImplementation(async (input) => {
+        const checkpoint = input.processWorkflowContext?.checkpoint ?? "";
+        const answer = ["CP-ATAK", "CP-PODMIOT", "CP-QUALITY", "CP-AUDYT", "CP-PEER"].includes(checkpoint)
+          ? [`Raport ${checkpoint}.`, "=== PISMO ===", `Pozew o zapłatę. Wersja ${checkpoint}.`, "=== KONIEC PISMA ===", ...(checkpoint === "CP-PEER" ? ["RAPORT W3", "STATUS PISMA: do decyzji", "UWAGI REDAKCYJNE PRZED ZŁOŻENIEM", "REJESTR KROKÓW"] : [])].join("\n")
+          : FINDINGS[checkpoint] ?? `Raport ${checkpoint}.`;
+        return {
+          sessionId: "session-findings",
+          status: "DRAFT_PRESENTABLE",
+          provider: input.provider,
+          model: input.model,
+          primarySkill: input.primarySkill,
+          answer,
+          finalization: "PASS",
+          blockedReferences: [],
+          verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+          evidence: [],
+          audit: { result: "PASS", eventCount: 1, closed: true },
+          workflow: { id: "PROCESS_PLEADING_V1", result: "PASS", requiredResources: [], missingResources: [] }
+        };
+      });
+      const body = { query: "Przygotuj pismo procesowe w trybie automatycznym.", provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } };
+      let stage = "";
+      for (let round = 0; round < 20 && stage !== "FINAL"; round += 1) {
+        stage = (await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(body).expect(200)).body.processWorkflow.stage;
+      }
+      expect(stage).toBe("FINAL");
+      const contexts = current.execute.mock.calls.map((call) => call[0].processWorkflowContext);
+      // A step gets the findings of the steps before it, never its own or later ones.
+      const atak = contexts.find((context) => context?.checkpoint === "CP-ATAK");
+      expect(atak?.findings?.["CP-1c-lancuch"]?.text).toBe(FINDINGS["CP-1c-lancuch"]);
+      expect(atak?.findings?.["CP-PRE-W2"]?.text).toBe(FINDINGS["CP-PRE-W2"]);
+      const peer = contexts.find((context) => context?.checkpoint === "CP-PEER");
+      expect(peer?.findings?.["CP-1d-anomalie"]?.text).toBe(FINDINGS["CP-1d-anomalie"]);
+      // A writing step keeps its report, not the pleading (the draft holds the pleading).
+      expect(peer?.findings?.["CP-ATAK"]?.text).toBe("Raport CP-ATAK.");
+      expect(contexts.find((context) => context?.checkpoint === "CP-1a")?.findings).toBeUndefined();
+    });
+
     it("sends a step back with remarks and gives them to its next run", async () => {
       const current = fixture();
       const bootstrap = await request(current.app)

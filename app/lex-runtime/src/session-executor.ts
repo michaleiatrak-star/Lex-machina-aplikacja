@@ -440,6 +440,8 @@ export type SessionExecutionRequest = {
     // sent back for correction (process-pleading-draft.ts).
     draft?: { version: number; source: "PIPELINE" | "USER"; stage: ProcessPleadingStage; text: string };
     remarks?: string;
+    // What the earlier checkpoints of this case established (process-pleading-draft.ts findings).
+    findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
   };
   courtWorkflowContext?: {
     stage: Exclude<
@@ -2115,10 +2117,18 @@ export class SafeSessionExecutor implements SessionExecutor {
 
         // The stored pleading draft and remarks reach the model like the chat text:
         // pseudonymized with the same vault (restored in the answer).
-        if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+        if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks || request.processWorkflowContext?.findings) {
           const context = request.processWorkflowContext;
+          const findings = context.findings
+            ? Object.fromEntries(
+                await Promise.all(
+                  Object.entries(context.findings).map(async ([checkpoint, finding]) => [checkpoint, { ...finding!, text: (await chatPseudonymizer.pseudonymize(finding!.text)).text }] as const)
+                )
+              )
+            : undefined;
           protectedProcessContext = {
             ...context,
+            ...(findings ? { findings } : {}),
             ...(context.draft
               ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
               : {}),
