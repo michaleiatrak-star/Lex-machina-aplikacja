@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useState
@@ -29,35 +30,35 @@ function errorMessage(
     failure.code ===
       "USER_DELETE_REQUIRES_CASE_CLEANUP"
   ) {
-    return "Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy.";
+    return t("Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy.");
   }
   if (
     failure.code ===
       "ACCOUNT_LOGIN_EXISTS"
   ) {
-    return "Taki login już istnieje.";
+    return t("Taki login już istnieje.");
   }
   if (
     failure.code ===
       "INVALID_USER_REQUEST"
   ) {
-    return "Sprawdź login, nazwę i hasło. Hasło musi spełniać politykę bezpieczeństwa.";
+    return t("Sprawdź login, nazwę i hasło. Hasło musi spełniać politykę bezpieczeństwa.");
   }
   if (
     failure.code ===
       "SELF_ADMIN_MUTATION_DENIED"
   ) {
-    return "Nie można wyłączyć ani usunąć własnego konta administracyjnego.";
+    return t("Nie można wyłączyć ani usunąć własnego konta administracyjnego.");
   }
   if (failure.code === "LAST_ADMIN_REQUIRED") {
-    return "Musi zostać co najmniej jeden aktywny administrator.";
+    return t("Musi zostać co najmniej jeden aktywny administrator.");
   }
   return failure.code;
 }
 
 const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
-  ["PROFESSIONAL", "Kancelaria (sprawy i narzędzia)"],
-  ["INDIVIDUAL", "Użytkownik indywidualny (sam czat)"]
+  ["PROFESSIONAL", t("Kancelaria (sprawy i narzędzia)")],
+  ["INDIVIDUAL", t("Użytkownik indywidualny (sam czat)")]
 ];
 
 function accountKindLabel(kind: AccountKind | undefined): string {
@@ -133,7 +134,7 @@ export function AdminUsersPanel({
       setPassword("");
       await refresh();
       setMessage(
-        "Użytkownik został utworzony."
+        t("Użytkownik został utworzony.")
       );
     } catch (failure) {
       setError(
@@ -152,17 +153,18 @@ export function AdminUsersPanel({
     <section className="admin-users-panel">
       <div>
         <p className="eyebrow">
-          Administracja
+          {t("Administracja")}
         </p>
-        <h3>Użytkownicy</h3>
+        <h3>{t("Użytkownicy")}</h3>
         <p className="field-help">
-          Dezaktywacja natychmiast unieważnia sesje. Trwałe usunięcie jest dozwolone dopiero po dezaktywacji i tylko bez powiązań ze sprawami.
+          {t("Dezaktywacja natychmiast unieważnia sesje. Trwałe usunięcie jest dozwolone dopiero po dezaktywacji i tylko bez powiązań ze sprawami.")}
         </p>
       </div>
 
-      <div className="admin-user-create">
+      <fieldset className="admin-user-create">
+        <legend>{t("Nowe konto")}</legend>
         <label>
-          Login
+          {t("Login")}
           <input
             value={loginName}
             maxLength={64}
@@ -175,7 +177,7 @@ export function AdminUsersPanel({
           />
         </label>
         <label>
-          Nazwa użytkownika
+          {t("Imię i nazwisko")}
           <input
             value={displayName}
             maxLength={160}
@@ -188,7 +190,7 @@ export function AdminUsersPanel({
           />
         </label>
         <label>
-          Hasło początkowe
+          {t("Hasło początkowe")}
           <input
             type="password"
             value={password}
@@ -202,7 +204,7 @@ export function AdminUsersPanel({
           />
         </label>
         <label>
-          Typ konta
+          {t("Typ konta")}
           <select
             value={accountKind}
             onChange={(event) => setNewAccountKind(event.target.value as AccountKind)}
@@ -214,6 +216,7 @@ export function AdminUsersPanel({
         </label>
         <button
           type="button"
+          className="primary-button"
           disabled={
             busy ||
             !loginName.trim() ||
@@ -224,9 +227,14 @@ export function AdminUsersPanel({
             void createUser();
           }}
         >
-          Dodaj użytkownika
+          {t("Dodaj użytkownika")}
         </button>
-      </div>
+        <small className="admin-user-create-help">
+          {!loginName.trim() || !displayName.trim() || !password
+            ? t("Uzupełnij login, nazwę i hasło początkowe. Hasło przekaż osobie — po zalogowaniu ustawi własne.")
+            : t("Hasło przekaż osobie — po zalogowaniu ustawi własne.")}
+        </small>
+      </fieldset>
 
       {error && (
         <div className="alert alert-error">
@@ -249,7 +257,7 @@ export function AdminUsersPanel({
               <button
                 type="button"
                 className="admin-user-name"
-                title="Ustawienia konta: dane, typ, uprawnienia, hasło, blokada, usunięcie"
+                title={t("Ustawienia konta: dane, typ, uprawnienia, hasło, blokada, usunięcie")}
                 onClick={() => setOpenUserId(user.userId)}
               >
                 {user.displayName}
@@ -259,7 +267,7 @@ export function AdminUsersPanel({
               </span>
             </div>
             <button type="button" className="chat-secondary-action" onClick={() => setOpenUserId(user.userId)}>
-              Ustawienia konta
+              {t("Ustawienia konta")}
             </button>
           </article>
         ))}

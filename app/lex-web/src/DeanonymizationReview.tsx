@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useMemo } from "react";
 import type { DeanonymizationPreview, DocumentRestoration } from "./api.js";
 import { RestorationReview, type ReviewMark } from "./RestorationReview.js";
@@ -69,10 +70,9 @@ export function DeanonymizationReview(props: {
   return (
     <div className="deanonymization-review">
       <p>
-        Sprawdź przywrócone dane przed utworzeniem pliku. Poprawka formy zmienia wszystkie wystąpienia
-        tego samego symbolu w dokumencie. {toReview.length > 0
-          ? `Do sprawdzenia: ${toReview.length}.`
-          : "Wszystkie formy pochodzą ze słownika, reguł lub dokumentu."}
+        {t("Sprawdź przywrócone dane przed utworzeniem pliku. Poprawka formy zmienia wszystkie wystąpienia tego samego symbolu w dokumencie.")} {toReview.length > 0
+          ? t("Do sprawdzenia: {count}.", { count: toReview.length })
+          : t("Wszystkie formy pochodzą ze słownika, reguł lub dokumentu.")}
       </p>
       <RestorationReview
         content={props.preview.text}
@@ -91,10 +91,10 @@ export function DeanonymizationReview(props: {
           disabled={props.busy || unresolved.length > 0}
           onClick={props.onConfirm}
         >
-          {props.busy ? "Tworzę dokument…" : "Utwórz finalny dokument"}
+          {props.busy ? t("Tworzę dokument…") : t("Utwórz finalny dokument")}
         </button>
         <button type="button" className="chat-secondary-action" disabled={props.busy} onClick={props.onCancel}>
-          Anuluj
+          {t("Anuluj")}
         </button>
       </div>
     </div>

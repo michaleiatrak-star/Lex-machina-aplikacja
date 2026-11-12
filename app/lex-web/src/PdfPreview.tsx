@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 // Legacy build: the modern one needs Map.prototype.getOrInsertComputed, which
@@ -114,19 +115,19 @@ export function PdfPreview(props: {
   if (error) {
     return (
       <p className="workspace-preview-error" role="alert">
-        Nie udało się wyświetlić PDF: {error}
+        {t("Nie udało się wyświetlić PDF:")} {error}
       </p>
     );
   }
 
   return (
     <div className="pdf-preview">
-      <div className="pdf-preview-toolbar" role="toolbar" aria-label="Nawigacja PDF">
-        <button type="button" disabled={!pdf || page <= 1} onClick={() => goTo(page - 1)} aria-label="Poprzednia strona">
+      <div className="pdf-preview-toolbar" role="toolbar" aria-label={t("Nawigacja PDF")}>
+        <button type="button" disabled={!pdf || page <= 1} onClick={() => goTo(page - 1)} aria-label={t("Poprzednia strona")}>
           ‹
         </button>
         <label>
-          Strona{" "}
+          {t("Strona")}{" "}
           <input
             type="number"
             min={1}
@@ -145,17 +146,17 @@ export function PdfPreview(props: {
           type="button"
           disabled={!pdf || page >= pdf.numPages}
           onClick={() => goTo(page + 1)}
-          aria-label="Następna strona"
+          aria-label={t("Następna strona")}
         >
           ›
         </button>
         <span className="pdf-preview-spacer" />
-        <button type="button" disabled={!pdf} onClick={() => zoomBy(-1)} aria-label="Pomniejsz">−</button>
+        <button type="button" disabled={!pdf} onClick={() => zoomBy(-1)} aria-label={t("Pomniejsz")}>−</button>
         <span>{Math.round(zoom * 100)}%</span>
-        <button type="button" disabled={!pdf} onClick={() => zoomBy(1)} aria-label="Powiększ">+</button>
+        <button type="button" disabled={!pdf} onClick={() => zoomBy(1)} aria-label={t("Powiększ")}>+</button>
       </div>
       <div className="pdf-preview-page">
-        {pdf ? null : <p>Wczytywanie PDF…</p>}
+        {pdf ? null : <p>{t("Wczytywanie PDF…")}</p>}
         <canvas ref={canvas} aria-label={`${props.filename}, strona ${page}`} />
       </div>
     </div>

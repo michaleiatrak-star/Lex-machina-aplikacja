@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { ReactNode } from "react";
 
 // Co aplikacja weryfikowała pod danym adresem (z listy źródeł odpowiedzi).
@@ -191,7 +192,7 @@ export function SourceLinkedText({
       const claim = verifiedClaimLabel(verUrl, before + normalized.slice(0, match.index), sources);
       nodes.push(
         <span key={`source-ver-${match.index}`} className="source-ver">
-          [VER:{" "}
+          {t("[VER:")}{" "}
           <a
             className="source-inline-link"
             href={verUrl}

@@ -1,3 +1,4 @@
+import { lawSourceWithCheck, registerPageCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock, type ChatTurnRecord } from "./chat-turn-journal.js";
 import type { LlmImage } from "./providers/types.js";
 import { directImageNote, type DirectImage } from "./direct-images.js";
@@ -11,6 +12,7 @@ import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
+  expectedVerificationMarker,
   addMissingVerificationMarkers,
   verifiedLedgerMarkers,
   markUnverifiedReferences
@@ -95,6 +97,8 @@ import type {
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CASE_FILE_READ_TOOL, CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
+import { instructionAttemptNote, scanForInstructions } from "./prompt-injection-scan.js";
 import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
@@ -292,6 +296,8 @@ import { peselCheckText } from "./privacy/pesel-check.js";
 import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } from "./quote-source-check.js";
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
+import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
+import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
@@ -337,6 +343,8 @@ export type SessionDocumentAttachment = {
     | "FIRM_TEMPLATE";
   // Shown to the model for firm templates (a filename, no case data).
   title?: string;
+  // Firm library: the purpose of the document's folder (the firm's judgments, the firm's rules).
+  firmPurpose?: "TEMPLATES" | "CASE_LAW" | "RULES";
   // Picked by the user (not retrieved): sent whole or not at all.
   selectedByUser?: boolean;
   // Page images (photos; text pages on request), personal data masked.
@@ -1178,7 +1186,7 @@ export type SessionExecutionResponse = {
   auxiliarySources?:
     PublicAuxiliarySourceItem[];
   // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik).
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: { source: "sn"; url: string } | { source: "law"; url: string; host: string; label: string };
   // Widgety pokazane narzędziem show_widget (czat renderuje je w izolowanej ramce).
   widgets?: WidgetSpec[];
   audit: {
@@ -1420,6 +1428,21 @@ export const EVIDENCE_IMAGE_NOTE = [
   "Nazwy i dane z dokumentu bierz z tekstu z symbolami [PII:...], nie z obrazu."
 ].join("\n");
 
+// The firm's own copies of judgments and interpretations: a lead, never a verified source.
+export const FIRM_CASE_LAW_NOTE = [
+  "ORZECZENIA I INTERPRETACJE · KOPIA KANCELARII (HARD GATE):",
+  "To kopie z bazy kancelarii, nie źródło urzędowe. Orzeczenie albo interpretację z tej kopii powołaj dopiero po sprawdzeniu w oficjalnym źródle (SN, SAOS, CBOSA, EUREKA) narzędziem weryfikacji; bez tego oznacz je jako niezweryfikowane.",
+  "Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień w źródle = OUT_OF_SCOPE, nie brak orzeczenia.",
+  "Sygnaturę, sąd i datę bierz z tekstu kopii, nie z pamięci."
+].join("\n");
+
+// The firm's rules: how the firm works, below the rules of legal sources.
+export const FIRM_RULES_NOTE = [
+  "ZASADY KANCELARII:",
+  "Stosuj metodykę, regulaminy i rozwiązania kancelarii z tych dokumentów (forma pism, kolejność, styl, wymagania kancelarii).",
+  "Nie uchylają one zasad źródeł prawa ani bramek aplikacji: przepisy tylko z ELI, nigdy z pamięci; orzeczenia tylko po weryfikacji. Przy sprzeczności pierwszeństwo mają te zasady źródeł."
+].join("\n");
+
 function buildDocumentContext(
   attachments: SessionDocumentAttachment[],
   images: SelectedEvidenceImage[] = []
@@ -1429,8 +1452,12 @@ function buildDocumentContext(
       const sourceLabel =
         attachment.sourceScope === "FIRM_TEMPLATE"
           ? "WZÓR KANCELARII"
-          : attachment.sourceScope === "FIRM_KNOWLEDGE"
-            ? "KNOW-HOW KANCELARII"
+          : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "CASE_LAW"
+            ? "ORZECZENIE/INTERPRETACJA · KOPIA KANCELARII"
+            : attachment.sourceScope === "FIRM_KNOWLEDGE" && attachment.firmPurpose === "RULES"
+              ? "ZASADY KANCELARII"
+              : attachment.sourceScope === "FIRM_KNOWLEDGE"
+                ? "KNOW-HOW KANCELARII"
             : attachment.sourceScope === "CASE_KNOWLEDGE"
               ? "CASE KNOWLEDGE"
               : "DOCUMENT";
@@ -1469,7 +1496,15 @@ function buildDocumentContext(
         )
       ].join("\n")
     : null;
-  return [...(firm ? [FIRM_MATERIAL_NOTE] : []), ...sections, ...(imageIndex ? [imageIndex] : [])].join("\n\n---\n\n");
+  const caseLaw = attachments.some((attachment) => attachment.firmPurpose === "CASE_LAW");
+  const rules = attachments.some((attachment) => attachment.firmPurpose === "RULES");
+  return [
+    ...(firm ? [FIRM_MATERIAL_NOTE] : []),
+    ...(caseLaw ? [FIRM_CASE_LAW_NOTE] : []),
+    ...(rules ? [FIRM_RULES_NOTE] : []),
+    ...sections,
+    ...(imageIndex ? [imageIndex] : [])
+  ].join("\n\n---\n\n");
 }
 
 export const buildDocumentContextForTest = buildDocumentContext;
@@ -1807,7 +1842,7 @@ export class SafeSessionExecutor implements SessionExecutor {
    */
   async summarizeThread(request: ThreadSummaryRequest): Promise<string> {
     const vault = new PseudonymizationVault(request.privacySeed);
-    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
+    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms(request.model));
     const transcript = [
       ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
       "[WIADOMOŚCI DO STRESZCZENIA]",
@@ -1815,7 +1850,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     ].join("\n\n");
     const protectedText = (await pseudonymizer.pseudonymize(transcript)).text;
     const ledger = new VerificationLedger();
-    if (request.threadEvidence?.provisions.length && this.actFreshness) {
+    if (request.threadEvidence?.provisions.length && this.actFreshness && !offlineTurn(request.model)) {
       for (const record of (await revalidateThreadEvidence(request.threadEvidence, this.actFreshness)).reused) ledger.add(record);
     }
     const key = placeholderKeyPrompt(placeholderGrammar(protectedText, vault));
@@ -1836,7 +1871,10 @@ export class SafeSessionExecutor implements SessionExecutor {
   // not also wait for local-model PII detection before answering.
   // One register cache per executor: a NIP/KRS is looked up once, not per message.
   private registryEnrichment: RegistryEnrichment | undefined | null = null;
-  private registryForms(): RegistryEnrichment | undefined {
+  // Offline turn of a local model (local-offline-mode.ts): no register lookup (KRS, VAT white
+  // list) either; those go to external services.
+  private registryForms(model: string): RegistryEnrichment | undefined {
+    if (offlineTurn(model)) return undefined;
     if (this.registryEnrichment === null) this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
     return this.registryEnrichment;
   }
@@ -1888,7 +1926,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           request.model
         ),
         this.personMorphology,
-        this.registryForms()
+        this.registryForms(request.model)
       );
     let protectedQuery: string;
     try {
@@ -2017,7 +2055,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           request.model
         ),
         this.personMorphology,
-        this.registryForms()
+        this.registryForms(request.model)
       );
     let protectedQuery:
       string;
@@ -2190,6 +2228,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Evidence memory: provisions verified in earlier messages are reused only
     // when ELI still has the same consolidated text and no amendment after it.
     let evidencePrompt: string | null = null;
+    // Tryb offline modelu lokalnego (local-offline-mode.ts): no external source in this turn.
+    const offline = offlineTurn(request.model);
+    if (offline) {
+      step("PREPARE", "tryb offline: źródła zewnętrzne wyłączone, przepisy z lokalnej kopii ELI");
+      audit.record("gate", "LOCAL_OFFLINE_MODE", "OK", { model: request.model });
+    }
     const memory = request.threadEvidence;
     // Signatures of the case's materials named in earlier turns: still from the case, here too.
     for (const signature of memory?.caseReferences ?? []) ledger.addCaseReference(signature);
@@ -2199,9 +2243,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.conversationalOnly &&
       (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)
     ) {
-      const reuse = this.actFreshness
+      // Offline: no ELI round trip — the provisions go back to the local copy.
+      const reuse = this.actFreshness && !offline
         ? await revalidateThreadEvidence(memory, this.actFreshness)
-        : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: "ELI_CHECK_UNAVAILABLE" })) };
+        : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: offline ? "OFFLINE_MODE" : "ELI_CHECK_UNAVAILABLE" })) };
       for (const record of reuse.reused) ledger.add(record);
       evidencePrompt = threadEvidencePrompt(memory, reuse);
       step("VERIFY", `pamięć sprawy: ${reuse.reused.length} przepisów aktualnych w ELI, ${reuse.recheck.length} do ponownej weryfikacji`);
@@ -2212,7 +2257,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
     const verificationTools = this.verificationToolFactory?.(ledger, {
-      localModel: request.model.startsWith("local/")
+      localModel: request.model.startsWith("local/"),
+      offline
     });
     // Open issues of the case (references left unverified earlier): to verification first,
     // without waiting for the model to cite them again.
@@ -2248,7 +2294,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
     // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
     // Local models get the sources too (a smaller tool set and the short map of sources).
-    const federationTools = this.legalFederationTools;
+    // Offline: no federation (MCP connectors, SAOS, courts' portals, web search, page reads).
+    const federationTools = offline ? undefined : this.legalFederationTools;
     const localFederation = request.model.startsWith("local/");
     // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
     const federationEvents:
@@ -2258,6 +2305,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       PublicAuxiliarySourceItem[] =
       [];
     let snVerificationRequired = false;
+    // A law source behind a bot check asked the user to pass it (law-source-sessions.ts).
+    let lawSourceVerification: VerifiedLawSource | undefined;
     // Texts the source tools returned in this turn (judgments, hit lists): what the
     // answer may say a judgment is about (case-content-grounding).
     const caseSourceTexts: string[] = [];
@@ -2415,9 +2464,22 @@ export class SafeSessionExecutor implements SessionExecutor {
             imagesDelivered ? evidence : []
           )
         : undefined;
-    const documentContext = direct.length
-      ? [attachedContext, directImageNote(direct, directDelivered)].filter(Boolean).join("\n\n---\n\n")
-      : attachedContext;
+    // Text written as instructions to a model in the files (Gauntlet T37): recorded, and the model
+    // is told it is data and to tell the user, not left to notice it by itself.
+    const instructionHits = scanForInstructions(
+      attachments.flatMap((attachment) => attachment.chunks.map((chunk) => ({ documentId: attachment.documentId, index: chunk.index, text: chunk.text })))
+    );
+    if (instructionHits.length) {
+      audit.record("gate", "DOCUMENT_INSTRUCTION_ATTEMPT", "DEGRADED", {
+        detail: instructionHits.map((hit) => `${hit.documentId}:${hit.chunk}:${hit.pattern}`).join(";")
+      });
+      step("PREPARE", `w aktach wykryto tekst w formie poleceń dla modelu: ${instructionHits.length} (traktowany jako dane)`);
+    }
+    const documentContext = [
+      instructionHits.length ? instructionAttemptNote(instructionHits) : undefined,
+      attachedContext,
+      direct.length ? directImageNote(direct, directDelivered) : undefined
+    ].filter(Boolean).join("\n\n---\n\n") || undefined;
     const modelImages: LlmImage[] = [
       ...(imagesDelivered ? evidence.map((image) => ({ mediaType: image.mediaType, data: image.data })) : []),
       ...(directDelivered ? direct.map((image) => ({ mediaType: image.mediaType, data: image.data })) : [])
@@ -2481,6 +2543,28 @@ export class SafeSessionExecutor implements SessionExecutor {
               : {})
           })
         : undefined;
+    // Independent review in an isolated call (LEGAL GAUNTLET v3 II.4): with the matter's files,
+    // for the models that get the case-file tools.
+    const independentReview =
+      caseFileTools && request.caseFiles
+        ? new IndependentReviewToolRuntime({
+            gateway: this.providers,
+            provider: request.provider,
+            model: request.model,
+            caseFiles: request.caseFiles,
+            aliasText: (documentId, text) =>
+              request.caseFiles!.sharedKey(documentId) ? text : namespaceChunkTokens(text, aliasRegistry.prefixFor(documentId)),
+            marker: newAuthorMarker(),
+            reviewerInstructions: reviewerInstructions((resource) => {
+              const resolved = this.registry.resolveResource("shared", resource);
+              try {
+                return resolved ? fs.readFileSync(resolved, "utf8") : null;
+              } catch {
+                return null;
+              }
+            })
+          })
+        : undefined;
     // Local 11-12B models call tools unreliably: they get the most relevant
     // core law articles in the prompt (retrieval, not training).
     const coreLawRag =
@@ -2494,7 +2578,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       this.providers.nativeCorpusAccess(request.provider, request.model);
     // The court of a party's address (a letter's addressee): the alias restored from the case's
     // local vaults (the chat's own key and the documents' D01.. keys), never shown to the model.
-    const courtTools = request.conversationalOnly
+    const courtTools = request.conversationalOnly || offline
       ? undefined
       : new CourtToolRuntime((token) => {
           const match = /^\[(?:LMPII:D(\d{2})|PII):([A-Z_]+):(\d{4})\]$/u.exec(token);
@@ -2520,6 +2604,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? coreLawTools.schemas()
         : []),
       ...(caseFileTools ? caseFileTools.schemas() : []),
+      ...(independentReview ? independentReview.schemas() : []),
       ...reportTools.schemas(),
       ...(widgetTools ? widgetTools.schemas() : []),
       ...(federationTools
@@ -2734,7 +2819,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the KRS and NIP of both parties belonged to other firms, the app did not). The registers
     // are the ones that answer for these numbers; nothing else of the case goes out.
     if (legalTurn) {
-      const registry = this.registryForms();
+      const registry = this.registryForms(request.model);
       const material = [
         chatPrivacyVault.deanonymize(request.query),
         ...attachments
@@ -2940,9 +3025,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Sections the skill's author marked as executed by the application go to the
     // model as a one-line reference (skill-sections.ts); the audit names them.
     // KROK 7 is the application's only where it appends the canonical text after the
-    // gates (free-text answer of a non-local model, not a report or a pipeline document).
+    // gates (free-text answer of any model, a local one included — Bielik left it out when
+    // asked to write it itself; not a report or a pipeline document).
     const appendsDisclaimer =
-      !request.model.startsWith("local/") &&
       !request.documentAstOutput &&
       !request.processWorkflowContext &&
       !/^raport-/u.test(request.primarySkill);
@@ -3212,6 +3297,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     ].join("\n\n");
     const toolPromptTurn = [
       ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      // Per turn (a new marker each time), so the stable prompt stays cached.
+      ...(independentReview ? [independentReview.systemPromptAppendix()] : []),
       ...[stageTailPrompt(stageTail.sections)].filter((block): block is string => Boolean(block)),
       ...pathSections.filter((section) => !stablePath(section)),
       ...(evidencePrompt ? [evidencePrompt] : []),
@@ -3455,7 +3542,20 @@ export class SafeSessionExecutor implements SessionExecutor {
                 ...(citedLaw ? [citedLaw] : []),
                 coreLawRag ??
                   "# LOKALNE TEKSTY USTAW\nDla tego pytania nie dobrano automatycznie artykułów. Znajdź przepis search_core_law, a jego brzmienie weź z read_core_law_article; bez tego nie podawaj treści przepisu."
-              ].join("\n\n")
+              ].join("\n\n"),
+              articlesForAnswer: (answer: string) => {
+                const index = this.coreLawIndex;
+                if (!index) return null;
+                return citedArticlesPrompt(
+                  index,
+                  citedArticles(
+                    answer,
+                    resolveActModulesWithChecks(this.registry, pathFacts.query).modules.flatMap((module) => (module.basis ? [module.basis] : [])),
+                    provisionsForDetection
+                  ),
+                  1_800
+                );
+              }
             }
           }
         : {}),
@@ -3528,6 +3628,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
         const courtCalls = calls.filter((call) => courtTools?.handles(call.name) ?? false);
         const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
+        const reviewCalls = calls.filter((call) => independentReview?.handles(call.name) ?? false);
         const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
         const federationCalls = calls.filter(
           (call) =>
@@ -3548,6 +3649,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             !reportTools.handles(call.name) &&
             !(courtTools?.handles(call.name) ?? false) &&
             !(caseFileTools?.handles(call.name) ?? false) &&
+            !(independentReview?.handles(call.name) ?? false) &&
             !(widgetTools?.handles(call.name) ?? false) &&
             !(federationTools?.handles(call.name) ?? false)
         );
@@ -3578,6 +3680,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         const caseFileResults = caseFileTools && caseFileCalls.length > 0
           ? await caseFileTools.runTools(caseFileCalls)
           : [];
+        const reviewResults = independentReview && reviewCalls.length > 0
+          ? await independentReview.runTools(reviewCalls)
+          : [];
         const widgetResults = widgetTools && widgetCalls.length > 0
           ? await widgetTools.runTools(widgetCalls)
           : [];
@@ -3593,6 +3698,12 @@ export class SafeSessionExecutor implements SessionExecutor {
 
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
+        }
+        for (const result of federationResults) {
+          const host = /LAW_SOURCE_VERIFICATION_REQUIRED:([a-z0-9.-]+)/u.exec(result.content)?.[1];
+          // A connector's source (R2A) behind a bot check is not on the fixed list: its host becomes
+          // a source with a check for this run (its main page probed with the window's session).
+          if (host) lawSourceVerification ??= lawSourceWithCheck(host) ?? registerPageCheck(`https://${host}/`) ?? undefined;
         }
         for (const result of federationResults) {
           caseSourceTexts.push(result.content);
@@ -3657,6 +3768,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...corpusResults,
             ...coreLawResults,
             ...caseFileResults,
+            ...reviewResults,
             ...reportResults,
             ...courtResults,
             ...widgetResults,
@@ -3776,6 +3888,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     }
 
+    for (const event of independentReview?.auditEvents() ?? []) {
+      audit.record("gate", "INDEPENDENT_REVIEW", event.error ? "DEGRADED" : "OK", {
+        detail: `round=${event.round};isolation=${event.isolation};verdict=${event.verdict};documents=${event.documents};chars=${event.sourceChars}${event.reasons.length ? `;reasons=${event.reasons.join(",")}` : ""}${event.error ? `;error=${event.error}` : ""}`
+      });
+    }
     for (const event of caseFileTools?.auditEvents() ?? []) {
       audit.record(
         event.tool === "read_case_file" ? "resource_read" : "tool_decision",
@@ -4192,7 +4309,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       };
       const judge = async (answer: string) => {
         const documents = citedDocuments(answer, caseSourceTexts);
-        if (!documents.length || request.model.startsWith("local/")) return null;
+        // A local model judges too (2026-11-09: without it Bielik's claims passed on the lexical check only).
+        if (!documents.length) return null;
         try {
           const verdict = await this.providers.stream(request.provider, {
             model: request.model,
@@ -4350,7 +4468,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // It is cut off before the gates and put back after them (the canonical text, or
     // the model's own when the application adds none).
     const modelDisclaimer =
-      legalTurn && !request.documentAstOutput && !request.model.startsWith("local/")
+      legalTurn && !request.documentAstOutput
         ? splitTrailingDisclaimer(modelOutput)
         : { body: modelOutput, disclaimer: null };
     if (modelDisclaimer.disclaimer) modelOutput = modelDisclaimer.body;
@@ -4358,28 +4476,117 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the end (ast-text-lines.ts): the act, the quote and the markers of a provision are its own.
     const astLines = request.documentAstOutput ? astTextLines(modelOutput) : null;
     if (astLines) modelOutput = astLines.text;
-    const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
-    const automaticVerificationPlan =
-      planAutomaticLegalVerification(
-        // A document AST is one line of JSON: the act of a provision is read from its line, so
-        // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
-        // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
-        request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text,
-        ledger,
-        requestedHistoricalAsOf
-      );
+    let releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+    let automaticVerificationPlan = planAutomaticLegalVerification("", ledger, requestedHistoricalAsOf);
     let automaticVerificationExecuted = 0;
-
-    if (
-      automaticVerificationPlan.calls.length > 0 &&
-      verificationTools
-    ) {
-      const results =
-        await verificationTools.runTools(
-          automaticVerificationPlan.calls
+    const verifyDraft = async () => {
+      releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+      automaticVerificationPlan =
+        planAutomaticLegalVerification(
+          // A document AST is one line of JSON: the act of a provision is read from its line, so
+          // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+          // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
+          request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text,
+          ledger,
+          requestedHistoricalAsOf
         );
-      automaticVerificationExecuted =
-        results.length;
+      if (
+        automaticVerificationPlan.calls.length > 0 &&
+        verificationTools
+      ) {
+        const results =
+          await verificationTools.runTools(
+            automaticVerificationPlan.calls
+          );
+        automaticVerificationExecuted +=
+          results.length;
+      }
+    };
+    await verifyDraft();
+
+    // Kontrola treści przepisów: the application verified a provision (ELI/RAG) — does its wording
+    // say what the answer claims? The same model judges (a local one too); every verdict quotes the
+    // wording and the quote is checked. A claim the provision does not carry: one correcting round
+    // (the corrected text is verified anew); still wrong: the mark says so instead of ✅.
+    const statuteWarnings = new Map<string, string>();
+    if (legalTurn && !request.documentAstOutput && !astLines && verificationTools && !waitsForUser(modelOutput)) {
+      const alreadyJudged = claimsWithWording(caseSourceTexts);
+      // A local model takes its provisions in one call (one request at a time anyway); a cloud
+      // model's batches run side by side.
+      const statuteBatch = request.model.startsWith("local/") ? STATUTE_JUDGE_BATCH_LOCAL : STATUTE_JUDGE_BATCH;
+      const judgeStatutes = async (answer: string) => {
+        const items = statuteItems(answer, ledger.all(), alreadyJudged);
+        const batches: Array<typeof items> = [];
+        for (let start = 0; start < items.length; start += statuteBatch) batches.push(items.slice(start, start + statuteBatch));
+        const judged = await Promise.all(
+          batches.map(async (group) => {
+            const batch = group.map((item) => item.document);
+            try {
+              const verdict = await this.providers.stream(request.provider, {
+                model: request.model,
+                systemPrompt: STATUTE_JUDGE_SYSTEM,
+                messages: [{ role: "user", content: statuteJudgePrompt(batch) }],
+                accountContinuity: "none",
+                reasoning: "none"
+              });
+              return statuteProblems(parseStatuteVerdicts(verdict.fullText, batch));
+            } catch {
+              // no verdict: the provision keeps its ✅ for existence and wording
+              return [] as SemanticVerdict[];
+            }
+          })
+        );
+        return { items, problems: judged.flat() };
+      };
+      const first = await judgeStatutes(releasedDraft.text);
+      let remaining = first;
+      if (first.problems.length) {
+        step("MODEL", `kontrola treści przepisów: ${first.problems.map((item) => item.signature).join(", ")}`);
+        const before = modelOutput;
+        let corrected = "";
+        try {
+          corrected = (
+            await this.providers.stream(request.provider, {
+              model: request.model,
+              ...correctingRound(modelOutput, statuteCorrectionPrompt(first.problems)),
+              accountContinuity: "none",
+              reasoning: "none"
+            })
+          ).fullText.trim();
+        } catch {
+          corrected = "";
+        }
+        if (corrected && !emptyDeferral(corrected)) {
+          const correctedParts = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected));
+          modelOutput = correctedParts.body;
+          await verifyDraft();
+          const second = await judgeStatutes(releasedDraft.text);
+          if (second.problems.length < first.problems.length) {
+            corrections.push(
+              answerCorrection(
+                "STATUTE_CONTENT",
+                first.problems.map((item) => `${item.signature}: ${item.claim} — ${item.reason}`),
+                before,
+                modelOutput
+              )
+            );
+            remaining = second;
+          } else {
+            modelOutput = before;
+            await verifyDraft();
+          }
+        }
+      }
+      for (const problem of remaining.problems) {
+        const item = remaining.items.find((candidate) => candidate.document.signature === problem.signature);
+        if (item) statuteWarnings.set(item.record.claim, statuteContentWarning(problem));
+      }
+      audit.record("gate", "STATUTE_CONTENT_CHECK", remaining.problems.length ? "DEGRADED" : "OK", {
+        judged: first.items.length,
+        problems: first.problems.map((item) => `${item.signature}:${item.claim}`),
+        corrected: remaining !== first,
+        remaining: remaining.problems.map((item) => `${item.signature}:${item.claim}`)
+      });
     }
 
     // Model-written ✅ markers are claims, not verification: only the ledger
@@ -4394,7 +4601,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       applyAutomaticVerificationMarkers(
         ledgerBackedOutput.text,
         ledger,
-        requestedHistoricalAsOf
+        requestedHistoricalAsOf,
+        statuteWarnings
       );
 
     audit.record(
@@ -5241,7 +5449,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // KROK 4: provisions verified in their current wording, checked again on the
     // event date from the question (separate ledger: answer markers stay as they are).
     const dates =
-      mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
+      mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf && !offline
         ? eventDates(pathFacts.query, todayWarsaw())
         : [];
     const eventDateCheck = dates.length
@@ -5263,16 +5471,29 @@ export class SafeSessionExecutor implements SessionExecutor {
     const mode = request.modeDecision?.mode ?? request.mode;
     // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
     const freeText = !request.documentAstOutput && !reportBlueprint;
+    // Kontrola treści przepisów: a thesis the provision does not carry keeps the source link, not ✅.
+    const demotedText = demoteContradictedMarkers(
+      processedDocumentCitations.text,
+      ledger
+        .all()
+        .filter((record) => statuteWarnings.has(record.claim))
+        .flatMap((record) => {
+          const marker = expectedVerificationMarker(record);
+          return marker ? [{ warning: statuteWarnings.get(record.claim)!, marker }] : [];
+        })
+    );
+    // Offline: the answer says what it rests on (the local copy, no ELI check), before the disclaimer.
+    const closingText = offline && freeText && legalAnswer(demotedText) ? `${demotedText.trimEnd()}\n\n_${OFFLINE_ANSWER_NOTE}_` : demotedText;
     const disclaimerTexts =
       // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
-      (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+      (legalAnswer(closingText) || Boolean(modelDisclaimer.disclaimer)) && freeText ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? (({ text, appended }) => ({ text: withOneClosingDisclaimer(text), appended }))(
-          withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
+          withDisclaimer(closingText, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
         )
       : modelDisclaimer.disclaimer
-        ? { text: `${processedDocumentCitations.text.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
-        : { text: processedDocumentCitations.text, appended: false };
+        ? { text: `${closingText.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
+        : { text: closingText, appended: false };
     const disclaimerBy = modelDisclaimer.disclaimer ? "MODEL" : disclaimed.appended ? "APLIKACJA" : "MODEL";
     if (disclaimed.appended) audit.record("gate", "DISCLAIMER_LAST", "OK", { by: disclaimerBy, mode, canonical: true });
 
@@ -5601,7 +5822,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       ...(snVerificationRequired
         ? { sourceVerification: { source: "sn" as const, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
-        : {}),
+        : lawSourceVerification
+          ? { sourceVerification: { source: "law" as const, url: lawSourceVerification.url, host: lawSourceVerification.host, label: lawSourceVerification.label } }
+          : {}),
       ...((widgetTools?.widgets().length ?? 0) + answerWidgets.length > 0
         ? { widgets: [...(widgetTools?.widgets() ?? []), ...answerWidgets] }
         : {}),

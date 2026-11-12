@@ -281,9 +281,15 @@ fn cookie_header<'a>(pairs: impl Iterator<Item = (&'a str, &'a str)>) -> String 
         .join("; ")
 }
 
+// `minimized`: the window opens minimized and unfocused; a check that passes on its own in a real
+// browser engine needs nothing from the user. The application shows it (verification_window_show)
+// only when the check waits for the user (a captcha). Without `minimized` the window is shown.
 #[tauri::command]
-async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
+async fn sn_verification_open(app: tauri::AppHandle, minimized: Option<bool>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(SN_VERIFICATION_LABEL) {
+        if minimized.unwrap_or(false) {
+            return Ok(());
+        }
         let _ = window.unminimize();
         return window
             .set_focus()
@@ -292,17 +298,40 @@ async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
     let url = SN_VERIFICATION_URL
         .parse::<tauri::Url>()
         .map_err(|_| "SN_VERIFICATION_URL_INVALID".to_string())?;
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         SN_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(url),
     )
     .title("Weryfikacja sn.pl - rozwiaz captcha, potem kliknij Gotowe w Lex Machina")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     .on_navigation(is_sn_url)
     .build()
     .map_err(|error| format!("SN_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
+}
+
+// A verification window opened minimized, brought to the front: its check waits for the user.
+#[tauri::command]
+async fn verification_window_show(app: tauri::AppHandle, kind: String) -> Result<(), String> {
+    let label = match kind.as_str() {
+        "sn" => SN_VERIFICATION_LABEL,
+        "wokanda" => WOKANDA_VERIFICATION_LABEL,
+        "law-source" => LAW_SOURCE_VERIFICATION_LABEL,
+        _ => return Err("VERIFICATION_WINDOW_UNKNOWN".to_string()),
+    };
+    let window = app
+        .get_webview_window(label)
+        .ok_or_else(|| "VERIFICATION_WINDOW_MISSING".to_string())?;
+    let _ = window.unminimize();
+    window
+        .set_focus()
+        .map_err(|_| "VERIFICATION_WINDOW_FAILED".to_string())
 }
 
 // Odczyt ciasteczek okna sn.pl jako nagłówek Cookie. Async: na Windows odczyt WebView2
@@ -376,27 +405,38 @@ fn wokanda_court_url(raw: &str) -> Result<tauri::Url, String> {
     Ok(url)
 }
 
+// `minimized`: as sn_verification_open (most courts' browser check passes on its own).
 #[tauri::command]
-async fn wokanda_verification_open(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn wokanda_verification_open(
+    app: tauri::AppHandle,
+    url: String,
+    minimized: Option<bool>,
+) -> Result<(), String> {
     let target = wokanda_court_url(&url)?;
     let court = target.host_str().and_then(court_host).unwrap_or_default();
     if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
         let _ = window.close();
     }
-    tauri::WebviewWindowBuilder::new(
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         WOKANDA_VERIFICATION_LABEL,
         tauri::WebviewUrl::External(target),
     )
     .title("Weryfikacja wokandy sadu - przejdz weryfikacje, sprawdzenie ponowi sie samo")
     .inner_size(1000.0, 760.0)
+    .focused(!quiet)
     .on_navigation(move |next| {
         next.scheme() == "https" && next.host_str().and_then(court_host).as_deref() == Some(court.as_str())
     })
     .build()
     .map_err(|error| format!("WOKANDA_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
     Ok(())
 }
+
 
 // Ciasteczka okna sądu dla adresu tego sądu, jako nagłówek Cookie (bez zamykania okna).
 #[tauri::command]
@@ -416,6 +456,126 @@ async fn wokanda_verification_cookies(app: tauri::AppHandle, url: String) -> Res
 #[tauri::command]
 async fn wokanda_verification_close(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
+}
+
+// Official law sources behind a bot check (as sn.pl and the courts' wokanda): the user passes the check
+// in the source's own window; the application reads only that host's cookies. Closed list of hosts,
+// kept in step with lex-runtime/src/eli/law-source-sessions.ts; the window stays on that host.
+const LAW_SOURCE_VERIFICATION_LABEL: &str = "law-source-verification";
+const LAW_SOURCE_HOSTS: &[&str] = &[
+    "www.nysenate.gov",
+    "nmonesource.com",
+    "leginfo.legislature.ca.gov",
+    "www.oscn.net",
+    "www.capitol.hawaii.gov",
+    // Google search on the user's session (consent page and captcha passed by the user).
+    "www.google.com",
+];
+
+fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|_| "LAW_SOURCE_URL_INVALID".to_string())?;
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let known = LAW_SOURCE_HOSTS
+        .iter()
+        .find(|item| host == **item || host == format!("www.{item}") || format!("www.{host}") == **item)
+        .copied();
+    match known {
+        Some(item) if url.scheme() == "https" => Ok((url, item)),
+        _ => Err("LAW_SOURCE_URL_INVALID".to_string()),
+    }
+}
+
+// An auxiliary page (R2B/R3: an article, a commentary, an authority's or a chamber's site) whose bot
+// check the runtime met while answering: any public https site by its name, never an address, a
+// local name or another port. The window stays on that site and only its cookies are read.
+fn page_check_url(raw: &str) -> Result<(tauri::Url, String), String> {
+    let url = raw
+        .parse::<tauri::Url>()
+        .map_err(|_| "LAW_SOURCE_URL_INVALID".to_string())?;
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let public_name = !host.is_empty()
+        && !host.starts_with('[')
+        && host.parse::<std::net::IpAddr>().is_err()
+        && host.contains('.')
+        && !host.ends_with(".local")
+        && !host.ends_with(".localhost")
+        && !host.ends_with(".internal")
+        && host != "localhost"
+        && host
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-');
+    if url.scheme() != "https" || url.port().is_some() || !url.username().is_empty() || !public_name {
+        return Err("LAW_SOURCE_URL_INVALID".to_string());
+    }
+    Ok((url, host))
+}
+
+// A listed law source (its fixed host) or an auxiliary page met while answering.
+fn verification_page_url(raw: &str) -> Result<(tauri::Url, String), String> {
+    match law_source_url(raw) {
+        Ok((url, item)) => Ok((url, item.to_string())),
+        Err(_) => page_check_url(raw),
+    }
+}
+
+fn law_source_same_site(next: &tauri::Url, item: &str) -> bool {
+    let host = next.host_str().unwrap_or_default().to_ascii_lowercase();
+    let bare = item.strip_prefix("www.").unwrap_or(item);
+    next.scheme() == "https" && (host == bare || host.ends_with(&format!(".{bare}")))
+}
+
+#[tauri::command]
+async fn law_source_verification_open(
+    app: tauri::AppHandle,
+    url: String,
+    minimized: Option<bool>,
+) -> Result<(), String> {
+    let (target, item) = verification_page_url(&url)?;
+    if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    let quiet = minimized.unwrap_or(false);
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        LAW_SOURCE_VERIFICATION_LABEL,
+        tauri::WebviewUrl::External(target),
+    )
+    .title("Weryfikacja zrodla prawa - przejdz weryfikacje, pytanie ponowi sie samo")
+    .inner_size(1000.0, 760.0)
+    .focused(!quiet)
+    // The check's own pages load from other hosts inside the page; top-level navigation stays on the source.
+    .on_navigation(move |next| law_source_same_site(next, &item))
+    .build()
+    .map_err(|error| format!("LAW_SOURCE_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    if quiet {
+        let _ = window.minimize();
+    }
+    Ok(())
+}
+
+// Cookies of the source's window for that source, as a Cookie header (the window stays open).
+#[tauri::command]
+async fn law_source_verification_cookies(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    let (target, _) = verification_page_url(&url)?;
+    let window = app
+        .get_webview_window(LAW_SOURCE_VERIFICATION_LABEL)
+        .ok_or_else(|| "LAW_SOURCE_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let cookies = window
+        .cookies_for_url(target)
+        .map_err(|_| "LAW_SOURCE_VERIFICATION_COOKIES_FAILED".to_string())?;
+    Ok(cookie_header(
+        cookies.iter().map(|cookie| (cookie.name(), cookie.value())),
+    ))
+}
+
+#[tauri::command]
+async fn law_source_verification_close(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(LAW_SOURCE_VERIFICATION_LABEL) {
         let _ = window.close();
     }
     Ok(())
@@ -687,6 +847,10 @@ pub fn run() {
                 wokanda_verification_open,
                 wokanda_verification_cookies,
                 wokanda_verification_close,
+                verification_window_show,
+                law_source_verification_open,
+                law_source_verification_cookies,
+                law_source_verification_close,
                 runtime_start_status,
                 runtime_repair,
                 component_setup_status,
@@ -716,7 +880,25 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 app.manage(Arc::new(macos_setup::SetupState::default()));
-                if macos_setup::needed(&resource_dir) { return Ok(()); }
+                if macos_setup::needed(&resource_dir) {
+                    // The .pkg opens the app before the components exist; they may then be prepared
+                    // outside this window (a headless bootstrap, a terminal). A second "open" only
+                    // brings this instance forward, so it starts the runtime itself once they are ready.
+                    let bridge = Arc::clone(&setup_bridge);
+                    let resources = resource_dir.clone();
+                    std::thread::spawn(move || {
+                        while !macos_setup::ready(&resources) {
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                        }
+                        let started = bridge
+                            .start(&resources)
+                            .and_then(|_| bridge.ensure_managed_identity().map(|_| ()));
+                        if let Err(error) = started {
+                            bridge.record_start_error(error);
+                        }
+                    });
+                    return Ok(());
+                }
             }
             // A runtime that does not start (macOS: components missing for this user,
             // a failed bootstrap) is reported on the sign-in screen with its log, not
@@ -747,6 +929,9 @@ mod tests {
     use super::{
         cookie_header,
         court_host,
+        law_source_same_site,
+        law_source_url,
+        verification_page_url,
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
@@ -843,6 +1028,36 @@ mod tests {
         assert!(!is_allowed_external_url("http://example.com"));
         assert!(!is_allowed_external_url("file:///C:/secret.txt"));
         assert!(!is_allowed_external_url("https://example.com\r\nX-Test: 1"));
+    }
+
+    #[test]
+    fn law_source_verification_only_for_listed_sources() {
+        assert!(law_source_url("https://www.nysenate.gov/legislation/laws/PEN/125.27").is_ok());
+        assert!(law_source_url("https://nmonesource.com/nmos/nmsa/en/nav_date.do").is_ok());
+        assert!(law_source_url("https://leginfo.legislature.ca.gov/faces/codes.xhtml").is_ok());
+        assert!(law_source_url("https://www.oscn.net/applications/oscn/index.asp").is_ok());
+        assert!(law_source_url("https://www.capitol.hawaii.gov/docs/HRS.htm").is_ok());
+        assert!(law_source_url("http://www.nysenate.gov/").is_err());
+        assert!(law_source_url("https://evil.example/").is_err());
+        assert!(law_source_url("https://www.google.com/search?q=kodeks+karny&hl=pl").is_ok());
+        assert!(law_source_url("https://www.google.evil.example/").is_err());
+        assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());
+        // Auxiliary pages met while answering: public https names only.
+        assert!(verification_page_url("https://www.gazetaprawna.pl/artykuly/1.html").is_ok());
+        assert!(verification_page_url("https://www.nysenate.gov/").is_ok());
+        assert!(verification_page_url("http://www.gazetaprawna.pl/").is_err());
+        assert!(verification_page_url("https://127.0.0.1/").is_err());
+        assert!(verification_page_url("https://[::1]/").is_err());
+        assert!(verification_page_url("https://localhost/").is_err());
+        assert!(verification_page_url("https://printer.local/").is_err());
+        assert!(verification_page_url("https://intranet/").is_err());
+        assert!(verification_page_url("https://example.pl:8443/").is_err());
+        assert!(verification_page_url("https://user@example.pl/").is_err());
+        let (_, page) = verification_page_url("https://Sub.Example.pl/x").unwrap();
+        assert_eq!(page, "sub.example.pl");
+        let (_, item) = law_source_url("https://www.nysenate.gov/").unwrap();
+        assert!(law_source_same_site(&"https://www.nysenate.gov/legislation".parse().unwrap(), item));
+        assert!(!law_source_same_site(&"https://example.com/".parse().unwrap(), item));
     }
 
     #[test]

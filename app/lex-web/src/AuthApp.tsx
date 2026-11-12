@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -123,7 +124,7 @@ function AuthPanel({
     return new Date(
       timestamp
     ).toLocaleTimeString(
-      "pl-PL"
+      currentLocale()
     );
   }, [retryAfter]);
 
@@ -175,7 +176,7 @@ function AuthPanel({
           "AUTH_BACKOFF_ACTIVE"
       ) {
         setError(
-          "Zbyt wiele nieudanych prób. Logowanie jest chwilowo wstrzymane."
+          t("Zbyt wiele nieudanych prób. Logowanie jest chwilowo wstrzymane.")
         );
         setRetryAfter(
           failure.retryAfter
@@ -186,19 +187,19 @@ function AuthPanel({
           "INVALID_BOOTSTRAP_REQUEST"
       ) {
         setError(
-          "Sprawdź login, nazwę użytkownika i hasło. Nowe hasło musi mieć co najmniej 10 znaków."
+          t("Sprawdź login, nazwę użytkownika i hasło. Nowe hasło musi mieć co najmniej 10 znaków.")
         );
       } else if (!(failure instanceof ApiError)) {
         // The request never reached the runtime (zgłoszenie 2026-10-09, macOS: this
         // showed as a wrong password).
         setError(
-          "Brak połączenia z lokalnym silnikiem Lex Machina — logowanie nie zostało sprawdzone. Uruchom aplikację ponownie; jeśli to się powtarza, zgłoś błąd."
+          t("Brak połączenia z lokalnym silnikiem Lex Machina — logowanie nie zostało sprawdzone. Uruchom aplikację ponownie; jeśli to się powtarza, zgłoś błąd.")
         );
       } else {
         setError(
           phase === "bootstrap"
-            ? "Nie udało się utworzyć konta właściciela."
-            : "Nieprawidłowa nazwa użytkownika lub hasło."
+            ? t("Nie udało się utworzyć konta właściciela.")
+            : t("Nieprawidłowa nazwa użytkownika lub hasło.")
         );
       }
     } finally {
@@ -218,10 +219,10 @@ function AuthPanel({
               LEX MACHINA
             </span>
             <h2>
-              Od akt do zweryfikowanej odpowiedzi.
+              {t("Od akt do zweryfikowanej odpowiedzi.")}
             </h2>
             <p>
-              Dokumenty, źródła prawa i kontrolowany proces analizy w jednym lokalnym środowisku.
+              {t("Dokumenty, źródła prawa i kontrolowany proces analizy w jednym lokalnym środowisku.")}
             </p>
           </div>
 
@@ -234,7 +235,7 @@ function AuthPanel({
             </div>
             <div className="auth-document auth-document-front">
               <div className="auth-document-head">
-                <span>AKTA · ŹRÓDŁA</span>
+                <span>{t("AKTA · ŹRÓDŁA")}</span>
                 <strong>✓</strong>
               </div>
               <i />
@@ -254,9 +255,9 @@ function AuthPanel({
           </div>
 
           <div className="auth-visual-foot">
-            <span>lokalny runtime</span>
-            <span>szyfrowane akta</span>
-            <span>weryfikacja źródeł</span>
+            <span>{t("lokalna usługa aplikacji")}</span>
+            <span>{t("szyfrowane akta")}</span>
+            <span>{t("weryfikacja źródeł")}</span>
           </div>
         </section>
 
@@ -270,39 +271,39 @@ function AuthPanel({
             />
             <div>
               <strong>Lex Machina</strong>
-              <span>Lokalny warsztat prawny</span>
+              <span>{t("Lokalny warsztat prawny")}</span>
             </div>
           </div>
           <p className="eyebrow">
-            Bezpieczny dostęp
+            {t("Bezpieczny dostęp")}
           </p>
         <h1>
           {phase === "bootstrap"
-            ? "Utwórz konto właściciela"
+            ? t("Utwórz konto właściciela")
             : phase === "locked"
-              ? "Lex Machina jest zablokowana"
-              : "Zaloguj się"}
+              ? t("Lex Machina jest zablokowana")
+              : t("Zaloguj się")}
           <InfoTip>
             {phase === "bootstrap"
-              ? "Pierwsze konto administruje aplikacją; dostęp do spraw nadaje się osobno."
-              : "Sesja i odblokowane klucze są tylko w pamięci lokalnego runtime."}
+              ? t("Pierwsze konto administruje aplikacją; dostęp do spraw nadaje się osobno.")
+              : t("Sesja i odblokowane klucze są tylko w pamięci lokalnej usługi aplikacji.")}
           </InfoTip>
         </h1>
 
         {phase !== "bootstrap" && runtimeUnreachable && (
           <div className="auth-onboarding-note" role="alert">
-            <strong>Brak połączenia z lokalnym silnikiem</strong>
+            <strong>{t("Brak połączenia z lokalnym silnikiem")}</strong>
             <span>
-              Aplikacja nie otrzymała odpowiedzi od lokalnego runtime, więc nie może sprawdzić logowania ani danych pierwszego logowania. Uruchom aplikację ponownie.
+              {t("Aplikacja nie otrzymała odpowiedzi od lokalnej usługi aplikacji, więc nie może sprawdzić logowania ani danych pierwszego logowania. Uruchom aplikację ponownie.")}
             </span>
             {runtimeStatus?.error && (
               <span>
-                Przyczyna: <code>{runtimeStatus.error}</code>
+                {t("Przyczyna:")} <code>{runtimeStatus.error}</code>
               </span>
             )}
             {runtimeStatus?.logPath && (
               <span>
-                Dziennik błędów: <code>{runtimeStatus.logPath}</code>
+                {t("Dziennik błędów:")} <code>{runtimeStatus.logPath}</code>
               </span>
             )}
             {runtimeStatus?.repairAvailable && (
@@ -312,11 +313,11 @@ function AuthPanel({
                 onClick={() => {
                   setRepairMessage("");
                   repairDesktopRuntime()
-                    .then(() => setRepairMessage("Otwarto okno Terminala z naprawą instalacji. Po komunikacie „Gotowe” uruchom Lex Machina ponownie."))
+                    .then(() => setRepairMessage(t("Otwarto okno Terminala z naprawą instalacji. Po komunikacie „Gotowe” uruchom Lex Machina ponownie.")))
                     .catch((failure) => setRepairMessage(failure instanceof ApiError ? failure.code : String(failure)));
                 }}
               >
-                Napraw instalację (pobierz brakujące komponenty)
+                {t("Napraw instalację (pobierz brakujące komponenty)")}
               </button>
             )}
             {repairMessage && <span>{repairMessage}</span>}
@@ -331,16 +332,16 @@ function AuthPanel({
             className="auth-onboarding-note"
             role="status"
           >
-            <strong>Pierwsze logowanie</strong>
+            <strong>{t("Pierwsze logowanie")}</strong>
             <span>
-              Login <b>admin</b>, hasło <b>admin</b>. Dane są tymczasowe i znikną z tego ekranu po ustawieniu własnego hasła.
+              {t("Login: admin, hasło: admin. Dane są tymczasowe i znikną z tego ekranu po ustawieniu własnego hasła.")}
             </span>
           </div>
         )}
 
         {phase === "bootstrap" && (
           <label>
-            Nazwa wyświetlana
+            {t("Nazwa wyświetlana")}
             <input
               value={displayName}
               autoComplete="name"
@@ -355,7 +356,7 @@ function AuthPanel({
         )}
 
         <label>
-          {serverLogin ? "Adres e-mail lub login" : "Login"}
+          {serverLogin ? t("Adres e-mail lub login") : t("Login")}
           <input
             value={loginName}
             autoComplete="username"
@@ -374,12 +375,12 @@ function AuthPanel({
 
         {nativeUnlock ? (
           <p className="auth-copy">
-            Konto odblokowuje systemowy magazyn poświadczeń; hasło aplikacji nie jest potrzebne.
-            <InfoTip>Windows: Menedżer poświadczeń, macOS: pęk kluczy.</InfoTip>
+            {t("Konto odblokowuje systemowy magazyn poświadczeń; hasło aplikacji nie jest potrzebne.")}
+            <InfoTip>{t("Windows: Menedżer poświadczeń, macOS: pęk kluczy.")}</InfoTip>
           </p>
         ) : (
           <label>
-            Hasło
+            {t("Hasło")}
             <input
               type="password"
               value={password}
@@ -407,7 +408,7 @@ function AuthPanel({
           <div className="alert alert-error auth-alert">
             {error}
             {retryLabel
-              ? ` Ponowna próba po ${retryLabel}.`
+              ? t(" {value}", { value: t("Ponowna próba po {time}.", { time: retryLabel }) })
               : ""}
           </div>
         )}
@@ -434,8 +435,8 @@ function AuthPanel({
           {submitting
             ? "Weryfikuję…"
             : phase === "bootstrap"
-              ? "Utwórz konto"
-              : "Zaloguj"}
+              ? t("Utwórz konto")
+              : t("Zaloguj")}
         </button>
 
         {phase !== "bootstrap" && (
@@ -444,7 +445,7 @@ function AuthPanel({
             className="secondary-button auth-change-user"
             onClick={onRecover}
           >
-            Odzyskaj konto kodem recovery
+            {t("Odzyskaj konto kodem odzyskiwania")}
           </button>
         )}
 
@@ -456,14 +457,14 @@ function AuthPanel({
               className="secondary-button auth-change-user"
               onClick={onForgotPassword}
             >
-              Nie pamiętam hasła
+              {t("Nie pamiętam hasła")}
             </button>
             <button
               type="button"
               className="secondary-button auth-change-user"
               onClick={onRegister}
             >
-              Załóż konto
+              {t("Załóż konto")}
             </button>
           </>
         )}
@@ -474,12 +475,12 @@ function AuthPanel({
             className="secondary-button auth-change-user"
             onClick={onChangeUser}
           >
-            Zmień użytkownika
+            {t("Zmień użytkownika")}
           </button>
         )}
 
         <p className="auth-footnote">
-          Hasło nie jest zapisywane. Zamknięcie procesu aplikacji unieważnia wszystkie sesje.
+          {t("Hasło nie jest zapisywane. Zamknięcie procesu aplikacji unieważnia wszystkie sesje.")}
         </p>
         </section>
       </div>
@@ -795,7 +796,7 @@ export default function AuthenticatedApp() {
               Lex Machina
             </p>
             <h1>
-              Uruchamianie lokalnego runtime…
+              {t("Uruchamianie lokalnej usługi aplikacji…")}
             </h1>
           </section>
         </main>
@@ -952,7 +953,7 @@ export default function AuthenticatedApp() {
               role="alert"
             >
               <span>
-                Konto korzysta jeszcze z hasła początkowego. Możesz pracować, ale ustaw własne hasło mające co najmniej 10 znaków.
+                {t("Konto korzysta jeszcze z hasła początkowego. Możesz pracować, ale ustaw własne hasło mające co najmniej 10 znaków.")}
               </span>
               <button
                 type="button"
@@ -963,7 +964,7 @@ export default function AuthenticatedApp() {
                   })
                 }
               >
-                Zmień hasło
+                {t("Zmień hasło")}
               </button>
             </div>
           )}
@@ -973,7 +974,7 @@ export default function AuthenticatedApp() {
               className="session-warning"
               role="status"
             >
-              Sesja zbliża się do blokady z powodu bezczynności. Backend pozostaje źródłem prawdy o czasie wygaśnięcia.
+              {t("Sesja zbliża się do blokady z powodu bezczynności. O czasie wygaśnięcia rozstrzyga usługa aplikacji.")}
             </div>
           )}
 
@@ -990,7 +991,7 @@ export default function AuthenticatedApp() {
                 }}
               />
               <button type="button" className="chat-secondary-action" onClick={() => { void logout(); }}>
-                Wyloguj
+                {t("Wyloguj")}
               </button>
             </main>
           )}

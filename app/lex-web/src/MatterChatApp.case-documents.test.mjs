@@ -8,7 +8,7 @@ const source = readFileSync(
 
 describe("MatterChatApp case documents UI", () => {
   it("keeps case documents in one tab (Akta i dokumenty) without a duplicate Akta tab", () => {
-    expect(source).toContain('["case", "Akta i dokumenty"]');
+    expect(source).toContain('["case", N_("Akta i dokumenty")]');
     expect(source).not.toContain('["files", "Akta"]');
     expect(source).not.toContain('activeTab === "files"');
     expect(source).not.toContain('| "files"');
@@ -22,8 +22,9 @@ describe("MatterChatApp case documents UI", () => {
   });
 
   it("keeps upload controls inside the merged Sprawa view", () => {
-    expect(source).toContain('<p className="eyebrow">Dokumenty sprawy</p>');
-    expect(source).toContain("Kliknij lub przeciągnij pliki");
+    expect(source).toContain('<strong>{t("Dokumenty sprawy")}</strong>');
+    expect(source).toContain("przeciągnij pliki tutaj");
+    expect(source).toContain("onDrop={handleDrop}");
     // "+" next to the message box opens the checklist of case files to send; adding files is inside it.
     expect(source).toContain("Dodaj pliki do sprawy");
     expect(source).toContain('onClick={() => openFilePicker("case")}');

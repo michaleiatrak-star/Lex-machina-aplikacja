@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, confirmPasswordReset, registerAccount, requestPasswordReset, verifyEmail } from "./api.js";
 
@@ -19,26 +20,26 @@ export function clearEmailLinkHash(): void {
 }
 
 function errorText(failure: unknown): string {
-  if (!(failure instanceof ApiError)) return "Brak połączenia z serwerem. Spróbuj ponownie.";
+  if (!(failure instanceof ApiError)) return t("Brak połączenia z serwerem. Spróbuj ponownie.");
   switch (failure.code) {
     case "MAIL_NOT_CONFIGURED":
-      return "Wysyłka poczty nie jest skonfigurowana. Skontaktuj się z administratorem.";
+      return t("Wysyłka poczty nie jest skonfigurowana. Skontaktuj się z administratorem.");
     case "RATE_LIMITED":
-      return "Zbyt wiele prób. Spróbuj ponownie później.";
+      return t("Zbyt wiele prób. Spróbuj ponownie później.");
     case "INVALID_EMAIL":
       return "Podaj poprawny adres e-mail.";
     case "PASSWORD_TOO_SHORT":
-      return "Hasło musi mieć co najmniej 10 znaków.";
+      return t("Hasło musi mieć co najmniej 10 znaków.");
     case "PASSWORD_TOO_COMMON":
-      return "To hasło jest zbyt popularne. Wybierz inne.";
+      return t("To hasło jest zbyt popularne. Wybierz inne.");
     case "INVALID_OR_EXPIRED_TOKEN":
-      return "Link jest nieprawidłowy, wygasł albo został już użyty.";
+      return t("Link jest nieprawidłowy, wygasł albo został już użyty.");
     case "INVALID_PASSWORD":
-      return "To nie jest hasło podane przy zakładaniu konta.";
+      return t("To nie jest hasło podane przy zakładaniu konta.");
     case "MAIL_DELIVERY_FAILED":
-      return "Nie udało się wysłać wiadomości. Spróbuj ponownie później.";
+      return t("Nie udało się wysłać wiadomości. Spróbuj ponownie później.");
     default:
-      return "Operacja nie powiodła się.";
+      return t("Operacja nie powiodła się.");
   }
 }
 
@@ -50,7 +51,7 @@ function Shell({ title, children, onBack }: { title: string; children: ReactNode
         <h1>{title}</h1>
         {children}
         <button type="button" className="secondary-button auth-change-user" onClick={onBack}>
-          Wróć do logowania
+          {t("Wróć do logowania")}
         </button>
       </section>
     </main>
@@ -68,7 +69,7 @@ export function RegisterPanel({ onBack }: { onBack: () => void }) {
 
   async function submit(): Promise<void> {
     if (password !== repeat) {
-      setError("Hasła nie są takie same.");
+      setError(t("Hasła nie są takie same."));
       return;
     }
     setBusy(true);
@@ -86,31 +87,30 @@ export function RegisterPanel({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <Shell title="Załóż konto" onBack={onBack}>
+    <Shell title={t("Załóż konto")} onBack={onBack}>
       {sent ? (
         <div className="auth-onboarding-note" role="status">
-          <strong>Sprawdź skrzynkę</strong>
+          <strong>{t("Sprawdź skrzynkę")}</strong>
           <span>
-            Jeśli adres może zostać użyty, wysłaliśmy na niego wiadomość z linkiem aktywacyjnym (ważny 24 godziny). Logowanie będzie możliwe po
-            potwierdzeniu adresu.
+            {t("Jeśli adres może zostać użyty, wysłaliśmy na niego wiadomość z linkiem aktywacyjnym (ważny 24 godziny). Logowanie będzie możliwe po potwierdzeniu adresu.")}
           </span>
         </div>
       ) : (
         <>
           <label>
-            Adres e-mail
+            {t("Adres e-mail")}
             <input type="email" value={email} autoComplete="email" maxLength={254} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
-            Imię i nazwisko (opcjonalnie)
+            {t("Imię i nazwisko (opcjonalnie)")}
             <input value={displayName} autoComplete="name" maxLength={120} onChange={(event) => setDisplayName(event.target.value)} />
           </label>
           <label>
-            Hasło (co najmniej 10 znaków)
+            {t("Hasło (co najmniej 10 znaków)")}
             <input type="password" value={password} autoComplete="new-password" maxLength={128} onChange={(event) => setPassword(event.target.value)} />
           </label>
           <label>
-            Powtórz hasło
+            {t("Powtórz hasło")}
             <input type="password" value={repeat} autoComplete="new-password" maxLength={128} onChange={(event) => setRepeat(event.target.value)} />
           </label>
           {error && <div className="alert alert-error auth-alert">{error}</div>}
@@ -120,7 +120,7 @@ export function RegisterPanel({ onBack }: { onBack: () => void }) {
             disabled={busy || !email.trim() || !password || !repeat}
             onClick={() => void submit()}
           >
-            {busy ? "Wysyłanie…" : "Załóż konto"}
+            {busy ? "Wysyłanie…" : t("Załóż konto")}
           </button>
         </>
       )}
@@ -152,22 +152,22 @@ export function VerifyEmailPanel({ token, onBack }: { token: string; onBack: () 
   }
 
   return (
-    <Shell title="Potwierdzenie adresu e-mail" onBack={onBack}>
+    <Shell title={t("Potwierdzenie adresu e-mail")} onBack={onBack}>
       {state === "done" ? (
         <div className="auth-onboarding-note" role="status">
-          <strong>Adres potwierdzony</strong>
-          <span>Konto jest aktywne. Zaloguj się adresem e-mail i hasłem.</span>
+          <strong>{t("Adres potwierdzony")}</strong>
+          <span>{t("Konto jest aktywne. Zaloguj się adresem e-mail i hasłem.")}</span>
         </div>
       ) : (
         <>
-          <p className="auth-copy">Aby aktywować konto, podaj hasło ustawione przy jego zakładaniu.</p>
+          <p className="auth-copy">{t("Aby aktywować konto, podaj hasło ustawione przy jego zakładaniu.")}</p>
           <label>
-            Hasło
+            {t("Hasło")}
             <input type="password" value={password} autoComplete="current-password" maxLength={128} onChange={(event) => setPassword(event.target.value)} />
           </label>
           {error && <div className="alert alert-error auth-alert">{error}</div>}
           <button type="button" className="primary-button auth-submit" disabled={busy || !password} onClick={() => void submit()}>
-            {busy ? "Sprawdzanie…" : "Aktywuj konto"}
+            {busy ? "Sprawdzanie…" : t("Aktywuj konto")}
           </button>
         </>
       )}
@@ -195,21 +195,21 @@ export function ForgotPasswordPanel({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <Shell title="Nie pamiętam hasła" onBack={onBack}>
+    <Shell title={t("Nie pamiętam hasła")} onBack={onBack}>
       {sent ? (
         <div className="auth-onboarding-note" role="status">
-          <strong>Sprawdź skrzynkę</strong>
-          <span>Jeśli konto o tym adresie istnieje, wysłaliśmy link do ustawienia nowego hasła (ważny 1 godzinę).</span>
+          <strong>{t("Sprawdź skrzynkę")}</strong>
+          <span>{t("Jeśli konto o tym adresie istnieje, wysłaliśmy link do ustawienia nowego hasła (ważny 1 godzinę).")}</span>
         </div>
       ) : (
         <>
           <label>
-            Adres e-mail konta
+            {t("Adres e-mail konta")}
             <input type="email" value={email} autoComplete="email" maxLength={254} onChange={(event) => setEmail(event.target.value)} />
           </label>
           {error && <div className="alert alert-error auth-alert">{error}</div>}
           <button type="button" className="primary-button auth-submit" disabled={busy || !email.trim()} onClick={() => void submit()}>
-            {busy ? "Wysyłanie…" : "Wyślij link"}
+            {busy ? "Wysyłanie…" : t("Wyślij link")}
           </button>
         </>
       )}
@@ -230,7 +230,7 @@ export function ResetPasswordPanel({ token, onBack }: { token: string; onBack: (
 
   async function submit(): Promise<void> {
     if (password !== repeat) {
-      setError("Hasła nie są takie same.");
+      setError(t("Hasła nie są takie same."));
       return;
     }
     setBusy(true);
@@ -248,25 +248,25 @@ export function ResetPasswordPanel({ token, onBack }: { token: string; onBack: (
   }
 
   return (
-    <Shell title="Ustaw nowe hasło" onBack={onBack}>
+    <Shell title={t("Ustaw nowe hasło")} onBack={onBack}>
       {done ? (
         <div className="auth-onboarding-note" role="status">
-          <strong>Hasło zmienione</strong>
-          <span>Wszystkie sesje konta zostały wylogowane. Zaloguj się nowym hasłem.</span>
+          <strong>{t("Hasło zmienione")}</strong>
+          <span>{t("Wszystkie sesje konta zostały wylogowane. Zaloguj się nowym hasłem.")}</span>
         </div>
       ) : (
         <>
           <label>
-            Nowe hasło (co najmniej 10 znaków)
+            {t("Nowe hasło (co najmniej 10 znaków)")}
             <input type="password" value={password} autoComplete="new-password" maxLength={128} onChange={(event) => setPassword(event.target.value)} />
           </label>
           <label>
-            Powtórz nowe hasło
+            {t("Powtórz nowe hasło")}
             <input type="password" value={repeat} autoComplete="new-password" maxLength={128} onChange={(event) => setRepeat(event.target.value)} />
           </label>
           {error && <div className="alert alert-error auth-alert">{error}</div>}
           <button type="button" className="primary-button auth-submit" disabled={busy || !password || !repeat} onClick={() => void submit()}>
-            {busy ? "Zapisywanie…" : "Ustaw hasło"}
+            {busy ? "Zapisywanie…" : t("Ustaw hasło")}
           </button>
         </>
       )}

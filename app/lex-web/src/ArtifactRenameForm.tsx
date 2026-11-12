@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import { renameCaseArtifact } from "./api.js";
 import {
@@ -48,7 +49,7 @@ export function ArtifactRenameForm(props: {
       }}
     >
       <label>
-        Nowa nazwa pliku{" "}
+        {t("Nowa nazwa pliku")}{" "}
         <input
           value={stem}
           autoFocus
@@ -61,8 +62,8 @@ export function ArtifactRenameForm(props: {
         />
         {extension ? <span className="artifact-rename-extension">{extension}</span> : null}
       </label>
-      <button type="submit" disabled={busy || Boolean(problem)}>Zapisz nazwę</button>
-      <button type="button" disabled={busy} onClick={props.onCancel}>Anuluj</button>
+      <button type="submit" disabled={busy || Boolean(problem)}>{t("Zapisz nazwę")}</button>
+      <button type="button" disabled={busy} onClick={props.onCancel}>{t("Anuluj")}</button>
       {problem && stem !== initialStem ? <p className="chat-inline-error">{problem}</p> : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}
     </form>

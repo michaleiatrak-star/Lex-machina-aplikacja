@@ -59,6 +59,19 @@ describe("Dz.U. of the text read in ELI and the act-name round", () => {
     expect(addVerifiedJournalAddresses("Zob. art. 415 KC (t.j. Dz.U. 2025 poz. 1071).", records).added).toEqual([]);
   });
 
+  it("replaces the address of another verified act written after a code (KW with the KK t.j., report 2026-11-11)", async () => {
+    const { addVerifiedJournalAddresses } = await import("../src/finalization-gate.js");
+    const records = new VerificationLedger();
+    records.add({ ...base, claim: "art. 280 § 1 KK", toolCallId: "a", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/1342/text.pdf", currentEli: "DU/2026/1342" });
+    records.add({ ...base, claim: "art. 119 § 1 KW", toolCallId: "b", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/1372/text.pdf", currentEli: "DU/2026/1372" });
+    const out = addVerifiedJournalAddresses("CN-GATE: art. 280 § 1 KK (Dz.U. 2026 poz. 1342) albo art. 119 § 1 KW (Dz.U. 2026 poz. 1342).", records);
+    expect(out.text).toBe("CN-GATE: art. 280 § 1 KK (Dz.U. 2026 poz. 1342) albo art. 119 § 1 KW (Dz.U. 2026 poz. 1372).");
+    // Written as a link to the text read (the reported answer).
+    expect(addVerifiedJournalAddresses("[art. 119 § 1 KW](https://api.sejm.gov.pl/eli/acts/DU/2026/1372/text.pdf#page=26) (Dz.U. 2026 poz. 1342).", records).text).toContain("KW](https://api.sejm.gov.pl/eli/acts/DU/2026/1372/text.pdf#page=26) (Dz.U. 2026 poz. 1372)");
+    // An address of no verified act (an older t.j.) stays for G8.
+    expect(addVerifiedJournalAddresses("Zob. art. 119 § 1 KW (Dz.U. 2025 poz. 734) i art. 280 KK (Dz.U. 2026 poz. 1342).", records).text).toContain("KW (Dz.U. 2025 poz. 734)");
+  });
+
   it("lists a bare article verified in two acts for the act-name round, not one verified in one", async () => {
     const { ambiguousBareArticles } = await import("../src/finalization-gate.js");
     expect(ambiguousBareArticles("Zob. art. 11.", ledger({ claim: "art. 11 KC" }, { claim: "art. 11 Prawa upadłościowego" })).map((item) => item.acts)).toEqual([["KC", "Prawa upadłościowego"]]);

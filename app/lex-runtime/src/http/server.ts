@@ -1,3 +1,6 @@
+import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
+import { SkillAutoUpdater } from "../skill-auto-update.js";
+import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
@@ -62,7 +65,8 @@ import {
 } from "../providers/account-session.js";
 import { ProviderGateway } from "../providers/gateway.js";
 import {
-  applicationUpdateDiscovery
+  applicationUpdateDiscovery,
+  skillReleaseDiscovery
 } from "../update-discovery.js";
 import {
   applyAccountSkills
@@ -76,12 +80,17 @@ import {
 import {
   MaintenanceService,
   commitSkillOverlayRuntimeHealth,
-  recoverSkillOverlayForStartup
+  recoverSkillOverlayForStartup,
+  skillAutoUpdateSettingsPath
 } from "../maintenance-service.js";
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
+import { configureLocalOfflineMode } from "../local-offline-mode.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, googleSessionStore, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { configureWokandaSessionStore } from "../courts/wokanda.js";
+import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -299,6 +308,18 @@ export function bundledRuntimeRoot(): string {
   );
 }
 
+/**
+ * The corpus whose MCP connector package is used: the account's or channel's skills first, then the
+ * installer's own corpus (desktop: LEX_BUNDLED_SKILLS_PATH, runtime\\corpus), then the repository's.
+ * Skills updated from a channel without mcp-servers (the stable folder of 07.10.2026 predates them)
+ * keep the connectors this way instead of "Brak pakietu … lex-mcp.mjs".
+ */
+export function connectorCorpusRoot(runtimeRoot: string, baseRuntimeRoot: string): string {
+  const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+  return [runtimeRoot, baseRuntimeRoot, ...(bundled ? [path.resolve(bundled)] : []), bundledRuntimeRoot()]
+    .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
+}
+
 export function resolveRuntimeRoot(): string {
   const explicitlyConfigured =
     process.env
@@ -405,6 +426,12 @@ export async function startLocalServer(options?: {
   configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
   // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
+  configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
+  configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
+  // A Google session the user chose to keep survives a restart (sealed next to the settings).
+  configureLawSourceSessionStore(googleSessionStore);
+  // Courts' wokanda sessions from the user's verification windows survive a restart (sealed).
+  configureWokandaSessionStore(wokandaSessionDiskStore);
   configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
   const authStore =
     new LocalAuthStore({
@@ -559,6 +586,12 @@ export async function startLocalServer(options?: {
     new MaintenanceService(
       updateDiscovery
     );
+  // Skills update from the skills repository's releases, against the versions of the skills in use.
+  maintenance.useSkillReleases(skillReleaseDiscovery(), () =>
+    new Map([...registry.everySkill].map(([name, skill]) => [name, typeof skill.frontmatter.version === "string" ? skill.frontmatter.version.trim() : ""]))
+  );
+  const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
+  if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off") skillAutoUpdate.start();
   const localModels =
     new LocalModelRuntime();
   const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
@@ -575,6 +608,8 @@ export async function startLocalServer(options?: {
     { forceEnv: process.env.LEX_SERVER_MODE_FORCE }
   );
   // Server mode: the admin's global API keys for every account.
+  // RAG of the acts (core law): the chosen jurisdiction on a desktop, every jurisdiction in server mode.
+  setCoreLawScope(() => (serverMode.isEnabled() ? "all" : "active"));
   const environmentCredentials =
     new EnvironmentCredentialResolver();
   const credentials =
@@ -585,6 +620,8 @@ export async function startLocalServer(options?: {
       environmentCredentials,
       serverMode
     );
+  // Internet search through Gemini with Google Search uses the Google key saved for the models.
+  configureGeminiSearchKey(() => credentials.getApiKey("google"));
   const accountSessions =
     new AccountSessionManager();
   const providerRegistry = createLiveProviderRegistry(
@@ -635,17 +672,10 @@ export async function startLocalServer(options?: {
   // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
   const mcpConnectors =
     new LexMcpConnectorStore(
-      [
-        runtimeRoot,
-        baseRuntimeRoot,
-        bundledRuntimeRoot()
-      ].find(
-        (root) =>
-          fs.existsSync(
-            lexMcpPackagePath(root)
-          )
-      ) ?? runtimeRoot
+      connectorCorpusRoot(runtimeRoot, baseRuntimeRoot)
     );
+  // Sessions of the verification windows reach the connectors (R2A sources behind a bot check).
+  configureBrowserSessionsFile(mcpConnectors.browserSessionsFile);
   const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
   const legalFederationTools =
     new LegalFederationToolRuntime(
@@ -682,6 +712,12 @@ export async function startLocalServer(options?: {
         });
       // Daily ELI check while the application runs, not only at start.
       coreLawIndex.startSchedule();
+      // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
+      // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
+      mcpConnectors.onJurisdictionChange(() => {
+        coreLawIndex.reloadMapsIfChanged();
+        void coreLawIndex.refresh().catch(() => undefined);
+      });
     }
   } catch (error) {
     process.stderr.write(
@@ -712,7 +748,8 @@ export async function startLocalServer(options?: {
           coreLawIndex,
           undefined,
           (act) => coreLawIndex.adopt(act),
-          context?.localModel === true
+          context?.localModel === true,
+          context?.offline === true
         ),
       privacyNamedEntities,
       legalFederationTools,
@@ -850,6 +887,18 @@ export async function startLocalServer(options?: {
       workspaceStore,
     caseMemoryStore:
       workspaceStore,
+    // Firm know-how: only the picked files and folders and the firm's default folders.
+    firmKnowledgeScope: async ({ caseId, caseDataKey, keyVersion, selection }) => {
+      const index = await workspaceStore.readIndex({ caseId, caseDataKey, keyVersion });
+      const uploads = await secureCaseUploadStore.listUploads({ caseId, caseDataKey, keyVersion });
+      return firmKnowledgeDocumentIds(firmKnowledgeItems(index, selection), uploads);
+    },
+    // How the model uses each firm document: by the purpose of its folder.
+    firmDocumentPurposes: async ({ caseId, caseDataKey, keyVersion }) => {
+      const index = await workspaceStore.readIndex({ caseId, caseDataKey, keyVersion });
+      const uploads = await secureCaseUploadStore.listUploads({ caseId, caseDataKey, keyVersion });
+      return firmDocumentPurposes(index, uploads);
+    },
     documentGenerationState,
     caseFileStore,
     secureCaseUploadStore,
@@ -949,6 +998,7 @@ export async function startLocalServer(options?: {
       authService,
       localModels,
       maintenance,
+      skillAutoUpdate,
       anomalyJournal,
       transcriptionModel,
       ocrAcceleration,
@@ -1029,6 +1079,7 @@ export async function startLocalServer(options?: {
         gazetteerRecognizer.close();
         personMorphology.close();
         credentials.close();
+        skillAutoUpdate.stop();
         serverMode.close();
         supportService.close();
         unsubscribeGuideRevocation();
@@ -1089,6 +1140,7 @@ export async function startLocalServer(options?: {
               gazetteerRecognizer.close();
               personMorphology.close();
               credentials.close();
+              skillAutoUpdate.stop();
               serverMode.close();
               supportService.close();
               unsubscribeGuideRevocation();

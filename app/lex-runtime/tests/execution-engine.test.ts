@@ -643,13 +643,19 @@ describe("local quick lane: provisions only from ELI texts", () => {
     return rescanned;
   }
 
-  const request = (providers: ProviderRegistry) =>
+  const request = (
+    providers: ProviderRegistry,
+    articlesForAnswer?: (answer: string) => string | null
+  ) =>
     new LexExecutionEngine(quickRegistry(), new ProviderGateway(providers)).executePolishLegalQuery({
       query: "czy kradzież 600 złotych to przestępstwo czy wykroczenie?",
       provider: "openai",
       model: "local/mistral-nemo-12b-q4km",
       route: { jurisdiction: "PL", primarySkill: DR03, mode: "LAIK" },
-      quickLocalLegal: { toolPrompt: "# LOKALNE TEKSTY USTAW\n\n[DU/2025/734] Kodeks wykroczeń — art. 119\nArt. 119. § 1. Kto kradnie" }
+      quickLocalLegal: {
+        toolPrompt: "# LOKALNE TEKSTY USTAW\n\n[DU/2025/734] Kodeks wykroczeń — art. 119\nArt. 119. § 1. Kto kradnie",
+        ...(articlesForAnswer ? { articlesForAnswer } : {})
+      }
     });
 
   it("asks once to fetch or drop a provision cited from memory", async () => {
@@ -663,9 +669,27 @@ describe("local quick lane: provisions only from ELI texts", () => {
     expect(result.output).toBe("Wykroczenie (art. 119 KW).");
   });
 
-  it("blocks an answer that still cites a provision without its text", async () => {
+  it("reads the cited articles itself and gives their wording to the correcting round", async () => {
+    const { calls, providers } = scriptedEngine([
+      "Przestępstwo z art. 278 KK.",
+      "Przestępstwo kradzieży (art. 278 § 1 KK)."
+    ]);
+    const fetched = "# BRZMIENIE\n\n[DU/2025/383] Kodeks karny — art. 278 (tekst z ELI z dnia 2026-11-01)\nArt. 278. § 1. Kto zabiera w celu przywłaszczenia cudzą rzecz ruchomą";
+    const result = await request(providers, (answer) => (answer.includes("278") ? fetched : null));
+    expect(calls).toHaveLength(2);
+    const correction = String(calls[1]!.messages.at(-1)!.content);
+    expect(correction).toContain("Art. 278. § 1.");
+    expect(correction).not.toContain("odwołania bez źródła");
+    expect(result.output).toBe("Przestępstwo kradzieży (art. 278 § 1 KK).");
+  });
+
+  it("shows an answer that still cites a provision without its text, with a warning", async () => {
     const { providers } = scriptedEngine(["Przestępstwo z art. 278 KK."]);
-    await expect(request(providers)).rejects.toMatchObject({ target: "QUICK_LEGAL_UNSOURCED_PROVISION" });
+    const result = await request(providers);
+    expect(result.output.startsWith("Przestępstwo z art. 278 KK.")).toBe(true);
+    expect(result.output).toContain("bez potwierdzenia w ELI w tej odpowiedzi:** art. 278");
+    expect(result.events.some((event) => event.target === "QUICK_LEGAL_SOURCES" && event.detail?.startsWith("unsourced_warning="))).toBe(true);
+    expect(result.events.some((event) => event.status === "BLOCKED")).toBe(false);
   });
 });
 

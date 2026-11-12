@@ -11,6 +11,12 @@ const workflow = read(".github/workflows/lex-installer.yml");
 const acceptance = read("app/installer/windows-installer-acceptance.ps1");
 const selftest = read("app/installer/windows-payload-selftest.ps1");
 const hooks = read("app/lex-desktop/src-tauri/windows/hooks.nsh");
+// Tauri includes the hooks file by path (it rewrites only language files with a BOM): NSIS reads a
+// file without the UTF-8 BOM in the system code page, so every Polish stage message showed garbled.
+const hooksUtf8Bom = fs
+  .readFileSync(path.join(repo, "app/lex-desktop/src-tauri/windows/hooks.nsh"))
+  .subarray(0, 3)
+  .equals(Buffer.from([0xef, 0xbb, 0xbf]));
 const bootstrap = read("app/installer/windows-online-bootstrap.ps1");
 const packageVerifier = read("app/installer/verify-python-package-set.py");
 const tauriConfig = JSON.parse(
@@ -32,6 +38,12 @@ const checks = {
   artifactPublished:
     workflow.includes("actions/upload-artifact") &&
     workflow.includes("LexMachina-Windows-Online-Installer"),
+  installerHooksUtf8Bom: hooksUtf8Bom,
+  // The worker writes the progress file as UTF-8 without a BOM; PowerShell 5.1 reads such a file
+  // in the ANSI code page unless told otherwise ("Sprawdzanie gotowości" showed garbled).
+  progressWindowReadsUtf8: read("app/installer/bootstrap-progress-window.ps1").includes(
+    "Get-Content -Raw -Encoding UTF8 -LiteralPath $StatusPath"
+  ),
   installedCopyBootstrappedAndTested:
     acceptance.includes("/S") &&
     acceptance.includes("component-lock.json") &&

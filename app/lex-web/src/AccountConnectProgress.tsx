@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { AccountClientProvisionProgress } from "./api.js";
 
 export type AccountConnectPhase =
@@ -7,10 +8,10 @@ export type AccountConnectPhase =
   | { kind: "failed"; message: string };
 
 const STEPS = [
-  "Sprawdzanie klienta",
+  t("Sprawdzanie klienta"),
   "Pobieranie klienta (npm)",
-  "Sprawdzanie pobranego klienta",
-  "Logowanie w oknie dostawcy"
+  t("Sprawdzanie pobranego klienta"),
+  t("Logowanie w oknie dostawcy")
 ] as const;
 
 function stepIndex(phase: AccountConnectPhase): number {
@@ -68,7 +69,7 @@ export function AccountConnectProgress(props: {
             {index === 1 && index === current && progress ? (
               <small>
                 {" "}
-                · pakiety: {progress.packagesFetched} · {megabytes(progress.bytesOnDisk)} MB ·{" "}
+                {t("· pakiety:")} {progress.packagesFetched} · {megabytes(progress.bytesOnDisk)} MB ·{" "}
                 {clock(progress.elapsedMs)}
               </small>
             ) : null}
@@ -76,13 +77,13 @@ export function AccountConnectProgress(props: {
         ))}
       </ol>
       {phase.kind === "provision" && current <= 1 ? (
-        <small>Jednorazowo, zwykle 1–5 minut. Okno logowania otworzy się po pobraniu.</small>
+        <small>{t("Jednorazowo, zwykle 1–5 minut. Okno logowania otworzy się po pobraniu.")}</small>
       ) : phase.kind === "login" ? (
         <small>
-          Dokończ logowanie w otwartym oknie lub przeglądarce. Gemini CLI: po zalogowaniu wpisz /quit.
+          {t("Dokończ logowanie w otwartym oknie lub przeglądarce. Gemini CLI: po zalogowaniu wpisz /quit.")}
         </small>
       ) : phase.kind === "done" ? (
-        <small>Konto połączone.</small>
+        <small>{t("Konto połączone.")}</small>
       ) : null}
     </div>
   );

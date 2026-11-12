@@ -1,3 +1,4 @@
+import { currentLocale, t, N_ } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
@@ -14,21 +15,21 @@ import { InfoTip } from "./InfoTip";
 import { openExternalUrl } from "./SnVerification.js";
 
 const ERRORS: Record<string, string> = {
-  MICROSOFT_NOT_CONFIGURED: "Brak aplikacji Microsoft (identyfikator klienta Entra ID) — integracja jest wyłączona w tej instalacji.",
-  MICROSOFT_NOT_CONNECTED: "Konto Microsoft nie jest połączone — połącz je w Ustawieniach → Integracje.",
-  MICROSOFT_RECONNECT_REQUIRED: "Microsoft cofnął dostęp (zmiana hasła, odwołanie zgody albo wygaśnięcie). Połącz konto ponownie.",
-  MICROSOFT_CONSENT_DENIED: "Odmówiono zgody w oknie Microsoft (albo administrator organizacji jej nie udzielił).",
-  MICROSOFT_SCOPE_DENIED: "Nie udzielono dostępu do plików.",
-  MICROSOFT_ACCESS_DENIED: "Brak dostępu do tego miejsca w OneDrive lub SharePoint.",
-  MICROSOFT_ACCOUNT_UNREADABLE: "Zapisanego połączenia nie da się odczytać (zmiana klucza konta). Rozłącz i połącz ponownie.",
-  MICROSOFT_NETWORK_ERROR: "Brak połączenia z Microsoft.",
-  MICROSOFT_IMPORT_TOO_MANY: "Naraz można dodać do 20 plików lub folderów.",
-  MICROSOFT_FLOW_NOT_FOUND: "Okno łączenia wygasło — spróbuj ponownie."
+  MICROSOFT_NOT_CONFIGURED: N_("Brak aplikacji Microsoft (identyfikator klienta Entra ID) — integracja jest wyłączona w tej instalacji."),
+  MICROSOFT_NOT_CONNECTED: N_("Konto Microsoft nie jest połączone — połącz je w Ustawieniach → Integracje."),
+  MICROSOFT_RECONNECT_REQUIRED: N_("Microsoft cofnął dostęp (zmiana hasła, odwołanie zgody albo wygaśnięcie). Połącz konto ponownie."),
+  MICROSOFT_CONSENT_DENIED: N_("Odmówiono zgody w oknie Microsoft (albo administrator organizacji jej nie udzielił)."),
+  MICROSOFT_SCOPE_DENIED: N_("Nie udzielono dostępu do plików."),
+  MICROSOFT_ACCESS_DENIED: N_("Brak dostępu do tego miejsca w OneDrive lub SharePoint."),
+  MICROSOFT_ACCOUNT_UNREADABLE: N_("Zapisanego połączenia nie da się odczytać (zmiana klucza konta). Rozłącz i połącz ponownie."),
+  MICROSOFT_NETWORK_ERROR: N_("Brak połączenia z Microsoft."),
+  MICROSOFT_IMPORT_TOO_MANY: N_("Naraz można dodać do 20 plików lub folderów."),
+  MICROSOFT_FLOW_NOT_FOUND: N_("Okno łączenia wygasło — spróbuj ponownie.")
 };
 
 export function microsoftErrorText(error: unknown): string {
   const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error);
-  return ERRORS[code] ?? code;
+  return ERRORS[code] ? t(ERRORS[code]) : code;
 }
 
 /** Ustawienia -> Integracje: konto Microsoft 365 każdego użytkownika, tylko odczyt (shown when configured). */
@@ -52,7 +53,7 @@ export function MicrosoftIntegrationPanel() {
     try {
       const flow = await startMicrosoftConnect();
       await openExternalUrl(flow.authorizationUrl);
-      setMessage("Dokończ logowanie w przeglądarce.");
+      setMessage(t("Dokończ logowanie w przeglądarce."));
       const until = Date.now() + 10 * 60 * 1000;
       while (!cancelled.current && Date.now() < until) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -64,7 +65,7 @@ export function MicrosoftIntegrationPanel() {
         }
         if (result.status === "FAILED") throw new ApiError(result.error ?? "MICROSOFT_FLOW_FAILED", 409);
       }
-      if (!cancelled.current) setMessage("Nie dokończono logowania w 10 minut — spróbuj ponownie.");
+      if (!cancelled.current) setMessage(t("Nie dokończono logowania w 10 minut — spróbuj ponownie."));
     } catch (error) {
       setMessage(microsoftErrorText(error));
     } finally {
@@ -87,28 +88,26 @@ export function MicrosoftIntegrationPanel() {
   if (!status?.configured) return null;
   return (
     <article className="chat-card">
-      <p className="eyebrow">Konto Microsoft 365</p>
+      <p className="eyebrow">{t("Konto Microsoft 365")}</p>
       <h2>
-        OneDrive i SharePoint
+        {t("OneDrive i SharePoint")}
         <InfoTip>
-          Tylko odczyt. Do akt trafiają wyłącznie pliki i foldery, które sam wskażesz w „Importuj z OneDrive/SharePoint” w
-          plikach sprawy; potem przechodzą zwykły OCR i anonimizację. Aplikacja nie zmienia plików. Dostęp jest zaszyfrowany
-          kluczem Twojego konta i działa tylko po zalogowaniu. Dostęp aplikacji usuniesz też w myapps.microsoft.com.
+          {t("Tylko odczyt. Do akt trafiają wyłącznie pliki i foldery, które sam wskażesz w „Importuj z OneDrive/SharePoint” w plikach sprawy; potem przechodzą zwykły OCR i anonimizację. Aplikacja nie zmienia plików. Dostęp jest zaszyfrowany kluczem Twojego konta i działa tylko po zalogowaniu. Dostęp aplikacji usuniesz też w myapps.microsoft.com.")}
         </InfoTip>
       </h2>
       {status.connected ? (
         <>
           <p>
-            Połączono: <strong>{status.email}</strong> · SharePoint: {status.sharepoint ? "tak" : "nie"}
-            {status.connectedAt ? ` · od ${new Date(status.connectedAt).toLocaleDateString("pl-PL")}` : ""}
+            {t("Połączono:")} <strong>{status.email}</strong> {t("· SharePoint:")} {status.sharepoint ? "tak" : "nie"}
+            {status.connectedAt ? t(" · od {value}", { value: new Date(status.connectedAt).toLocaleDateString(currentLocale()) }) : ""}
           </p>
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void disconnect()}>
-            Rozłącz konto Microsoft
+            {t("Rozłącz konto Microsoft")}
           </button>
         </>
       ) : (
         <button type="button" className="chat-primary-action" disabled={busy} onClick={() => void connect()}>
-          {busy ? "Czekam na Microsoft…" : "Zaloguj kontem Microsoft"}
+          {busy ? t("Czekam na Microsoft…") : t("Zaloguj kontem Microsoft")}
         </button>
       )}
       {message ? <p role="status">{message}</p> : null}
@@ -135,8 +134,8 @@ export function useMicrosoftConnected(): boolean {
 type Crumb = { place?: string; name: string };
 
 const ROOTS: Array<{ key: string; label: string; crumb: Crumb }> = [
-  { key: "onedrive", label: "Mój OneDrive", crumb: { place: "onedrive", name: "Mój OneDrive" } },
-  { key: "shared", label: "Udostępnione dla mnie", crumb: { place: "shared", name: "Udostępnione" } },
+  { key: "onedrive", label: N_("Mój OneDrive"), crumb: { place: "onedrive", name: t("Mój OneDrive") } },
+  { key: "shared", label: N_("Udostępnione dla mnie"), crumb: { place: "shared", name: t("Udostępnione") } },
   { key: "sites", label: "SharePoint", crumb: { place: "sites", name: "SharePoint" } }
 ];
 
@@ -210,13 +209,13 @@ export function MicrosoftImportDialog({
   const root = path[0]?.place;
   const searchable = root === "onedrive" || root === "sites";
   return (
-    <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-label="Importuj z OneDrive lub SharePoint">
+    <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-label={t("Importuj z OneDrive lub SharePoint")}>
       <div className="chat-card google-import-dialog">
-        <p className="eyebrow">Importuj z OneDrive / SharePoint</p>
+        <p className="eyebrow">{t("Importuj z OneDrive / SharePoint")}</p>
         <nav className="chat-settings-nav">
           {ROOTS.map((entry) => (
             <button key={entry.key} type="button" className={root === entry.crumb.place ? "active" : ""} disabled={busy} onClick={() => void open([entry.crumb])}>
-              {entry.label}
+              {t(entry.label)}
             </button>
           ))}
         </nav>
@@ -228,11 +227,11 @@ export function MicrosoftImportDialog({
               void open(path, query.trim());
             }}
           >
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={root === "sites" ? "Nazwa witryny SharePoint" : "Szukaj po nazwie pliku"} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={root === "sites" ? t("Nazwa witryny SharePoint") : t("Szukaj po nazwie pliku")} />
             <button type="submit" className="chat-secondary-action" disabled={busy}>
-              Szukaj
+              {t("Szukaj")}
             </button>
-            <InfoTip>Zaznaczony folder dodaje pliki z trzech poziomów (do 100, każdy do 50 MB). Notesy OneNote są pomijane.</InfoTip>
+            <InfoTip>{t("Zaznaczony folder dodaje pliki z trzech poziomów (do 100, każdy do 50 MB). Notesy OneNote są pomijane.")}</InfoTip>
           </form>
         ) : null}
         <p>
@@ -262,20 +261,20 @@ export function MicrosoftImportDialog({
               </label>
             </li>
           ))}
-          {!busy && !items.length ? <li>Pusto.</li> : null}
+          {!busy && !items.length ? <li>{t("Pusto.")}</li> : null}
         </ul>
         {next ? (
           <button type="button" className="chat-link-button" disabled={busy} onClick={() => void more()}>
-            Więcej…
+            {t("Więcej…")}
           </button>
         ) : null}
         {message ? <p role="alert">{message}</p> : null}
         <div className="google-import-actions">
           <button type="button" className="chat-secondary-action" disabled={busy} onClick={onClose}>
-            Anuluj
+            {t("Anuluj")}
           </button>
           <button type="button" className="chat-primary-action" disabled={busy || !picked.size} onClick={() => void submit()}>
-            {busy ? "Pracuję…" : `Dodaj do akt (${picked.size})`}
+            {busy ? "Pracuję…" : t("Dodaj do akt ({count})", { count: picked.size })}
           </button>
         </div>
       </div>

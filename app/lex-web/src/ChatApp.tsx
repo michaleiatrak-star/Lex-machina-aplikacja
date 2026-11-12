@@ -1,3 +1,5 @@
+import { currentLocale, t } from "./i18n";
+import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -28,7 +30,8 @@ import {
   type EvidenceItem,
   type ModelDescriptor,
   type ProviderId,
-  type SessionExecutionResponse
+  type SessionExecutionResponse,
+  type SourceVerification
 } from "./api.js";
 import {
   DOCUMENT_FILE_ACCEPT,
@@ -47,6 +50,7 @@ import {
 import { MarkdownContent } from "./MarkdownContent.js";
 import { SourceLinkedText } from "./SourceLinkedText.js";
 import { SnVerification } from "./SnVerification.js";
+import { LawSourceVerification } from "./LawSourceVerification.js";
 import "./chat.css";
 
 type TabId = "chat" | "files" | "skills" | "case" | "settings";
@@ -57,7 +61,7 @@ type ChatMessage = {
   evidence?: EvidenceItem[];
   meta?: string;
   // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik w oknie sn.pl).
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: SourceVerification;
 };
 
 const PROVIDERS: Array<{
@@ -93,6 +97,7 @@ function messageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Kept in Polish: the conversation as the model receives it.
 function conversationForProvider(
   messages: ChatMessage[],
   next: string
@@ -104,9 +109,8 @@ function conversationForProvider(
       `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}`
     )
     .join("\n\n");
-  const combined = history
-    ? `${history}\n\nUżytkownik: ${next}`
-    : next;
+  // Kept in Polish: the conversation sent to the model.
+  const combined = history ? `${history}\n\nUżytkownik: ${next}` : next;
   return combined.length > 27_000
     ? combined.slice(-27_000)
     : combined;
@@ -174,7 +178,7 @@ export function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      "HARD GATE zatrzymał odpowiedź przed prezentacją, ponieważ wymagany ślad weryfikacji nie był kompletny.",
+      t("HARD GATE zatrzymał odpowiedź przed prezentacją, ponieważ wymagany ślad weryfikacji nie był kompletny."),
     evidence: execution.evidence,
     ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
     meta:
@@ -226,7 +230,7 @@ export default function ChatApp({
       id: "welcome",
       role: "system",
       content:
-        "Opisz sprawę albo zadanie. Lex Machina dobierze routing i potrzebne skille automatycznie. Prawny router i shared są zawsze aktywne."
+        t("Opisz sprawę albo zadanie. Lex Machina dobierze routing i potrzebne skille automatycznie. Prawny router i shared są zawsze aktywne.")
     }
   ]);
   const [query, setQuery] = useState("");
@@ -464,7 +468,7 @@ export default function ChatApp({
     ) {
       return selectedCase.caseId;
     }
-    return await createLocalCase("Nowa sprawa");
+    return await createLocalCase(t("Nowa sprawa"));
   }
 
   async function acceptFiles(
@@ -481,7 +485,7 @@ export default function ChatApp({
       setActiveTab("files");
     } catch {
       setExecutionError(
-        "Nie udało się utworzyć aktywnej sprawy dla dodawanych plików."
+        t("Nie udało się utworzyć aktywnej sprawy dla dodawanych plików.")
       );
     }
   }
@@ -542,8 +546,8 @@ export default function ChatApp({
       await refreshProviderStatus();
       setProviderKeyMessage(
         isDesktopShell()
-          ? "Klucz zapisano w systemowym magazynie poświadczeń."
-          : "Klucz jest aktywny w pamięci procesu."
+          ? t("Klucz zapisano w systemowym magazynie poświadczeń.")
+          : t("Klucz jest aktywny w pamięci procesu.")
       );
     } catch (error) {
       setProviderKeyMessage(
@@ -560,7 +564,7 @@ export default function ChatApp({
     try {
       await clearProviderApiKey(provider);
       await refreshProviderStatus();
-      setProviderKeyMessage("Klucz został usunięty.");
+      setProviderKeyMessage(t("Klucz został usunięty."));
     } catch (error) {
       setProviderKeyMessage(
         error instanceof Error ? error.message : String(error)
@@ -645,14 +649,14 @@ export default function ChatApp({
         error instanceof Error ? error.message : String(error);
       const friendly =
         code === "PROVIDER_NOT_CONFIGURED"
-          ? "Brak lokalnego klucza API dla wybranego dostawcy."
+          ? t("Brak lokalnego klucza API dla wybranego dostawcy.")
           : code === "PROVIDER_EXECUTION_FAILED"
-            ? "Provider odrzucił lub przerwał wykonanie."
+            ? t("Provider odrzucił lub przerwał wykonanie.")
             : code === "DOCUMENT_NOT_REVIEWED"
-              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
+              ? t("Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu.")
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
-              ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
-              : `Nie udało się wykonać sesji: ${code}`;
+              ? t("Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu.")
+              : t("Nie udało się wykonać sesji: {code}", { code: code });
       setExecutionError(friendly);
       setMessages((current) => [
         ...current,
@@ -679,20 +683,20 @@ export default function ChatApp({
     <div className="chat-app-shell">
       <aside className="chat-sidebar">
         <div className="chat-brand">
-          <span className="chat-brand-mark">LM</span>
+          <img className="chat-brand-mark" src={LEX_MACHINA_BRAND_ICON} alt="" aria-hidden="true" />
           <div>
             <strong>Lex Machina</strong>
-            <small>chat prawny · local-first</small>
+            <small>{t("czat prawny · najpierw lokalnie")}</small>
           </div>
         </div>
 
-        <nav className="chat-tabs" aria-label="Sekcje aplikacji">
+        <nav className="chat-tabs" aria-label={t("Sekcje aplikacji")}>
           {([
-            ["chat", "Czat"],
-            ["files", "Pliki"],
-            ["skills", "Skille"],
-            ["case", "Sprawa"],
-            ["settings", "Model i API"]
+            ["chat", t("Czat")],
+            ["files", t("Pliki")],
+            ["skills", t("Skille")],
+            ["case", t("Sprawa")],
+            ["settings", t("Model i API")]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
               key={id}
@@ -725,7 +729,7 @@ export default function ChatApp({
               }
             />
             <strong>
-              {runtimeOnline ? "Runtime aktywny" : "Runtime offline"}
+              {runtimeOnline ? t("Usługa aplikacji działa") : t("Usługa aplikacji niedostępna")}
             </strong>
           </div>
           <small>
@@ -735,8 +739,8 @@ export default function ChatApp({
         </div>
 
         <div className="chat-sidebar-foot">
-          <span>prawny-router-v3 ✓</span>
-          <span>shared ✓</span>
+          <span>{t("prawny-router-v3 ✓")}</span>
+          <span>{t("shared ✓")}</span>
         </div>
       </aside>
 
@@ -746,14 +750,14 @@ export default function ChatApp({
             <p className="eyebrow">Lex Machina</p>
             <h1>
               {activeTab === "chat"
-                ? "Czat prawny"
+                ? t("Czat prawny")
                 : activeTab === "files"
-                  ? "Pliki i prywatność"
+                  ? t("Pliki i prywatność")
                   : activeTab === "skills"
-                    ? "Skille"
+                    ? t("Skille")
                     : activeTab === "case"
-                      ? "Sprawa i wiedza"
-                      : "Model i klucz API"}
+                      ? t("Sprawa i wiedza")
+                      : t("Model i klucz API")}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -762,7 +766,7 @@ export default function ChatApp({
               className="chat-secondary-action"
               onClick={() => fileInputRef.current?.click()}
             >
-              + Dodaj pliki
+              {t("+ Dodaj pliki")}
             </button>
             <input
               ref={fileInputRef}
@@ -782,12 +786,12 @@ export default function ChatApp({
 
         {runtimeError ? (
           <div className="chat-alert chat-alert-error">
-            Backend lokalny jest niedostępny: {runtimeError}
+            {t("Lokalna usługa aplikacji jest niedostępna:")} {runtimeError}
           </div>
         ) : null}
         {caseError ? (
           <div className="chat-alert chat-alert-error">
-            Operacja na sprawie nie powiodła się: {caseError}
+            {t("Operacja na sprawie nie powiodła się:")} {caseError}
           </div>
         ) : null}
 
@@ -856,9 +860,23 @@ export default function ChatApp({
                       {message.meta}
                     </small>
                   ) : null}
-                  {message.sourceVerification ? (
+                  {message.sourceVerification?.source === "law" ? (
+                    <LawSourceVerification
+                      verification={message.sourceVerification}
+                      autoStart={message.id === messages.at(-1)?.id}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages
+                          .slice(0, index)
+                          .reverse()
+                          .find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeQuery(question);
+                      }}
+                    />
+                  ) : message.sourceVerification ? (
                     <SnVerification
                       verification={{ url: message.sourceVerification.url }}
+                      autoStart={message.id === messages.at(-1)?.id}
                       onVerified={() => {
                         const index = messages.findIndex((item) => item.id === message.id);
                         const question = messages
@@ -872,7 +890,7 @@ export default function ChatApp({
                   {message.evidence?.length ? (
                     <details className="chat-evidence">
                       <summary>
-                        Źródła i weryfikacja ({message.evidence.length})
+                        {t("Źródła i weryfikacja (")}{message.evidence.length})
                       </summary>
                       <ul>
                         {message.evidence.map((item, index) => (
@@ -891,7 +909,7 @@ export default function ChatApp({
                                   )
                                 }
                               >
-                                Otwórz źródło ↗
+                                {t("Otwórz źródło ↗")}
                               </button>
                             ) : null}
                           </li>
@@ -905,7 +923,7 @@ export default function ChatApp({
                 <article className="chat-message chat-message-assistant chat-thinking">
                   <div className="chat-message-role">Lex Machina</div>
                   <div className="chat-message-content">
-                    Analizuję i dobieram skille…
+                    {t("Analizuję i dobieram skille…")}
                   </div>
                 </article>
               ) : null}
@@ -915,24 +933,24 @@ export default function ChatApp({
             <div className="chat-composer">
               {dropActive ? (
                 <div className="chat-drop-overlay">
-                  Upuść pliki, aby dodać je do sprawy
+                  {t("Upuść pliki, aby dodać je do sprawy")}
                 </div>
               ) : null}
               <div className="chat-composer-meta">
                 <span>
-                  Auto skille: {automaticSkills ? "włączone" : "wyłączone"}
+                  {t("Skille automatycznie:")} {automaticSkills ? "włączone" : "wyłączone"}
                 </span>
                 <span>
                   DR: {currentPrimaryRoute
                     ? labelForSkill(currentPrimaryRoute)
                     : "—"}
                 </span>
-                <span>Załączniki: {documentAttachments.length}</span>
+                <span>{t("Załączniki:")} {documentAttachments.length}</span>
               </div>
               <textarea
                 value={query}
                 maxLength={20_000}
-                placeholder="Napisz wiadomość, opisz stan faktyczny lub zleć analizę…"
+                placeholder={t("Napisz wiadomość, opisz stan faktyczny lub zleć analizę…")}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (
@@ -952,14 +970,14 @@ export default function ChatApp({
                   className="chat-secondary-action"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  📎 Pliki
+                  {t("📎 Pliki")}
                 </button>
                 <button
                   type="button"
                   className="chat-secondary-action"
                   onClick={() => setActiveTab("skills")}
                 >
-                  ⚙ Skille
+                  {t("⚙ Skille")}
                   {manualSkills.length > 0
                     ? ` (${manualSkills.length})`
                     : ""}
@@ -971,7 +989,7 @@ export default function ChatApp({
                   disabled={!canSend}
                   onClick={() => void sendMessage()}
                 >
-                  {executing ? "Wysyłanie…" : "Wyślij"}
+                  {executing ? "Wysyłanie…" : t("Wyślij")}
                 </button>
               </div>
               {executionError ? (
@@ -992,10 +1010,10 @@ export default function ChatApp({
               onDrop={handleDrop}
             >
               <div>
-                <p className="eyebrow">Dodawanie plików</p>
+                <p className="eyebrow">{t("Dodawanie plików")}</p>
                 <h2>
-                  Kliknij lub przeciągnij
-                  <InfoTip>Pliki z eksploratora i przeciągnięte trafiają do tej samej lokalnej kolejki prywatności.</InfoTip>
+                  {t("Kliknij lub przeciągnij")}
+                  <InfoTip>{t("Pliki z eksploratora i przeciągnięte trafiają do tej samej lokalnej kolejki prywatności.")}</InfoTip>
                 </h2>
               </div>
               <button
@@ -1003,7 +1021,7 @@ export default function ChatApp({
                 className="chat-primary-action"
                 onClick={() => fileInputRef.current?.click()}
               >
-                Otwórz eksplorator
+                {t("Otwórz eksplorator")}
               </button>
             </article>
 
@@ -1011,17 +1029,17 @@ export default function ChatApp({
               <article className="chat-card">
                 <div className="chat-card-heading">
                   <div>
-                    <p className="eyebrow">Kolejka</p>
+                    <p className="eyebrow">{t("Kolejka")}</p>
                     <h2>
                       {documentDropQueue.completed}/{documentDropQueue.total}
-                      {" "}przetworzono
+                      {" "}{t("przetworzono")}
                     </h2>
                   </div>
-                  <span>limit {MAX_DOCUMENT_DROP_QUEUE}</span>
+                  <span>{t("limit")} {MAX_DOCUMENT_DROP_QUEUE}</span>
                 </div>
                 {documentDropQueue.rejected > 0 ? (
                   <p className="chat-inline-error">
-                    Pominięto {documentDropQueue.rejected} plików.
+                    {t("Pominięto")} {documentDropQueue.rejected} {t("plików.")}
                   </p>
                 ) : null}
                 <ul className="chat-file-list">
@@ -1033,7 +1051,7 @@ export default function ChatApp({
                       >
                         <strong>{file.name}</strong>
                         <small>
-                          {index === 0 ? "Przetwarzanie" : "Oczekuje"}
+                          {index === 0 ? t("Przetwarzanie") : t("Oczekuje")}
                           {" · "}{describeDocumentFile(file)}
                         </small>
                       </li>
@@ -1076,10 +1094,10 @@ export default function ChatApp({
             <article className="chat-card">
               <div className="chat-card-heading">
                 <div>
-                  <p className="eyebrow">Routing</p>
+                  <p className="eyebrow">{t("Routing")}</p>
                   <h2>
-                    Automatyczny dobór skilli
-                    <InfoTip>Moduły są dobierane do treści każdej wiadomości. Ręczny wybór dodaje skille do obowiązkowego rdzenia.</InfoTip>
+                    {t("Automatyczny dobór skilli")}
+                    <InfoTip>{t("Moduły są dobierane do treści każdej wiadomości. Ręczny wybór dodaje skille do obowiązkowego rdzenia.")}</InfoTip>
                   </h2>
                 </div>
                 <label className="chat-switch">
@@ -1090,17 +1108,17 @@ export default function ChatApp({
                       setAutomaticSkills(event.target.checked)
                     }
                   />
-                  <span>Auto</span>
+                  <span>{t("Automatycznie")}</span>
                 </label>
               </div>
               <div className="chat-mandatory-grid">
                 <div>
-                  <strong>✓ prawny-router-v3</strong>
-                  <small>obowiązkowy · nie można odznaczyć</small>
+                  <strong>{t("✓ prawny-router-v3")}</strong>
+                  <small>{t("obowiązkowy · nie można odznaczyć")}</small>
                 </div>
                 <div>
-                  <strong>✓ shared</strong>
-                  <small>obowiązkowy · nie można odznaczyć</small>
+                  <strong>{t("✓ shared")}</strong>
+                  <small>{t("obowiązkowy · nie można odznaczyć")}</small>
                 </div>
               </div>
             </article>
@@ -1108,13 +1126,13 @@ export default function ChatApp({
             <article className="chat-card">
               <div className="chat-card-heading">
                 <div>
-                  <p className="eyebrow">Ręczny wybór</p>
-                  <h2>Dodatkowe skille</h2>
+                  <p className="eyebrow">{t("Ręczny wybór")}</p>
+                  <h2>{t("Dodatkowe skille")}</h2>
                 </div>
                 <input
                   className="chat-search"
                   value={skillFilter}
-                  placeholder="Filtruj skille…"
+                  placeholder={t("Filtruj skille…")}
                   onChange={(event) => setSkillFilter(event.target.value)}
                 />
               </div>
@@ -1154,14 +1172,14 @@ export default function ChatApp({
         {activeTab === "case" ? (
           <section className="chat-card-stack">
             <article className="chat-card">
-              <p className="eyebrow">Sprawa</p>
-              <h2>Wybierz albo utwórz sprawę</h2>
+              <p className="eyebrow">{t("Sprawa")}</p>
+              <h2>{t("Wybierz albo utwórz sprawę")}</h2>
               <div className="chat-form-row">
                 <select
                   value={caseId}
                   onChange={(event) => setCaseId(event.target.value)}
                 >
-                  <option value="">— wybierz sprawę —</option>
+                  <option value="">{t("— wybierz sprawę —")}</option>
                   {matterCases.map((item) => (
                     <option key={item.caseId} value={item.caseId}>
                       {item.displayName || item.caseId} · {item.role}
@@ -1172,7 +1190,7 @@ export default function ChatApp({
                 <input
                   value={newCaseName}
                   maxLength={160}
-                  placeholder="Nazwa nowej sprawy"
+                  placeholder={t("Nazwa nowej sprawy")}
                   onChange={(event) => setNewCaseName(event.target.value)}
                 />
                 <button
@@ -1181,15 +1199,15 @@ export default function ChatApp({
                   disabled={caseBusy}
                   onClick={() => void createLocalCase(newCaseName)}
                 >
-                  {caseBusy ? "Tworzę…" : "Utwórz"}
+                  {caseBusy ? "Tworzę…" : t("Utwórz")}
                 </button>
               </div>
             </article>
 
             <article className="chat-card">
               <p className="eyebrow">
-                Wiedza w sesji
-                <InfoTip>Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam czytać całe akta sprawy (tekst spseudonimizowany).</InfoTip>
+                {t("Wiedza w sesji")}
+                <InfoTip>{t("Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam czytać całe akta sprawy (tekst spseudonimizowany).")}</InfoTip>
               </p>
               <div className="chat-check-row">
                 <label>
@@ -1205,7 +1223,7 @@ export default function ChatApp({
                       setIncludeCaseKnowledge(event.target.checked)
                     }
                   />
-                  Przeszukuj dokumenty bieżącej sprawy
+                  {t("Przeszukuj dokumenty bieżącej sprawy")}
                 </label>
                 <label>
                   <input
@@ -1219,7 +1237,7 @@ export default function ChatApp({
                       setIncludeFirmKnowledge(event.target.checked)
                     }
                   />
-                  Przeszukuj know-how kancelarii
+                  {t("Przeszukuj know-how kancelarii")}
                 </label>
               </div>
             </article>
@@ -1244,10 +1262,10 @@ export default function ChatApp({
         {activeTab === "settings" ? (
           <section className="chat-settings-grid">
             <article className="chat-card">
-              <p className="eyebrow">Dostawca</p>
-              <h2>Model</h2>
+              <p className="eyebrow">{t("Dostawca")}</p>
+              <h2>{t("Model")}</h2>
               <label>
-                Provider
+                {t("Dostawca")}
                 <select
                   value={provider}
                   onChange={(event) => {
@@ -1270,14 +1288,14 @@ export default function ChatApp({
                 </select>
               </label>
               <label>
-                Model
+                {t("Model")}
                 <select
                   value={model}
                   disabled={models.length === 0}
                   onChange={(event) => setModel(event.target.value)}
                 >
                   {models.length === 0 ? (
-                    <option value="">Brak dostępnych modeli</option>
+                    <option value="">{t("Brak dostępnych modeli")}</option>
                   ) : null}
                   {models.map((item) => (
                     <option
@@ -1286,7 +1304,7 @@ export default function ChatApp({
                       disabled={!item.selectable}
                     >
                       {item.displayName}
-                      {!item.selectable ? " · nieobsługiwany" : ""}
+                      {!item.selectable ? t(" · nieobsługiwany") : ""}
                     </option>
                   ))}
                 </select>
@@ -1294,14 +1312,14 @@ export default function ChatApp({
               {modelError ? (
                 <p className="chat-inline-error">
                   {modelError === "PROVIDER_NOT_CONFIGURED"
-                    ? "Najpierw dodaj klucz API dla tego dostawcy."
+                    ? t("Najpierw dodaj klucz API dla tego dostawcy.")
                     : modelError}
                 </p>
               ) : null}
               {selectedModel?.contextWindow ? (
                 <small>
-                  Kontekst: {selectedModel.contextWindow.toLocaleString("pl-PL")}
-                  {" "}tokenów
+                  {t("Kontekst:")} {selectedModel.contextWindow.toLocaleString(currentLocale())}
+                  {" "}{t("tokenów")}
                 </small>
               ) : null}
               {providerDefinition ? (
@@ -1313,22 +1331,22 @@ export default function ChatApp({
                   }
                 >
                   {model
-                    ? `Klucz API dla ${providerDefinition.label} ↗`
-                    : `Utwórz / pobierz klucz ${providerDefinition.label} ↗`}
+                    ? t("Klucz API dla {label} ↗", { label: providerDefinition.label })
+                    : t("Utwórz / pobierz klucz {label} ↗", { label: providerDefinition.label })}
                 </button>
               ) : null}
             </article>
 
             <article className="chat-card">
-              <p className="eyebrow">Klucz API</p>
-              <h2>Konfiguracja lokalna</h2>
+              <p className="eyebrow">{t("Klucz API")}</p>
+              <h2>{t("Konfiguracja lokalna")}</h2>
               {user.appRole === "ADMIN" ? (
                 <>
                   <input
                     type="password"
                     autoComplete="off"
                     value={providerApiKey}
-                    placeholder="Wklej klucz API"
+                    placeholder={t("Wklej klucz API")}
                     onChange={(event) =>
                       setProviderApiKeyInput(event.target.value)
                     }
@@ -1344,8 +1362,8 @@ export default function ChatApp({
                       onClick={() => void saveApiKey()}
                     >
                       {isDesktopShell()
-                        ? "Zapisz w systemie"
-                        : "Użyj w sesji"}
+                        ? t("Zapisz w systemie")
+                        : t("Użyj w sesji")}
                     </button>
                     <button
                       type="button"
@@ -1353,7 +1371,7 @@ export default function ChatApp({
                       disabled={providerKeyBusy}
                       onClick={() => void removeApiKey()}
                     >
-                      Usuń klucz
+                      {t("Usuń klucz")}
                     </button>
                   </div>
                   {providerKeyMessage ? (
@@ -1361,7 +1379,7 @@ export default function ChatApp({
                   ) : null}
                 </>
               ) : (
-                <p>Klucz API może zmieniać administrator aplikacji.</p>
+                <p>{t("Klucz API może zmieniać administrator aplikacji.")}</p>
               )}
             </article>
           </section>

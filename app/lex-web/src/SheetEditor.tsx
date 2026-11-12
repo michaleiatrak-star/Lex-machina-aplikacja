@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { useState } from "react";
 import { columnLabel, normalizeRows, trimRows, withExtension } from "./office-editing.js";
@@ -61,10 +62,10 @@ export function SheetEditor(props: {
         sheets: chosen.map((entry) => ({ name: entry.name, rows: trimRows(entry.rows) }))
       });
       setDirty(false);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }
@@ -73,7 +74,7 @@ export function SheetEditor(props: {
   return (
     <div className="text-editor office-editor">
       {sheets.length > 1 ? (
-        <div className="sheet-tabs" role="tablist" aria-label="Arkusze">
+        <div className="sheet-tabs" role="tablist" aria-label={t("Arkusze")}>
           {sheets.map((entry, index) => (
             <button
               key={`${entry.name}-${index}`}
@@ -91,39 +92,38 @@ export function SheetEditor(props: {
         </div>
       ) : null}
       {editable ? (
-        <div className="text-editor-toolbar" role="toolbar" aria-label="Edycja arkusza">
+        <div className="text-editor-toolbar" role="toolbar" aria-label={t("Edycja arkusza")}>
           <button type="button" onClick={() => update((rows) => [...rows, Array<string>(width).fill("")])}>
-            + Wiersz
+            {t("+ Wiersz")}
           </button>
           <button type="button" onClick={() => update((rows) => rows.map((cells) => [...cells, ""]))}>
-            + Kolumna
+            {t("+ Kolumna")}
           </button>
           <button
             type="button"
             disabled={sheet.rows.length <= 1}
             onClick={() => update((rows) => rows.slice(0, -1))}
           >
-            − Ostatni wiersz
+            {t("− Ostatni wiersz")}
           </button>
           <button
             type="button"
             disabled={width <= 1}
             onClick={() => update((rows) => rows.map((cells) => cells.slice(0, -1)))}
           >
-            − Ostatnia kolumna
+            {t("− Ostatnia kolumna")}
           </button>
         </div>
       ) : null}
       {props.model.truncated ? (
         <p className="office-editor-note">
-          Arkusz jest większy niż limit edycji w aplikacji; pokazano jego początek tylko do odczytu.
-          Użyj „Otwórz w systemie”, aby edytować całość.
+          {t("Arkusz jest większy niż limit edycji w aplikacji; pokazano jego początek tylko do odczytu. Użyj „Otwórz w systemie”, aby edytować całość.")}
         </p>
       ) : editable ? (
         <p className="office-editor-note">
-          Formatowanie, scalenia, wykresy{props.macros ? " i makra" : ""} nie są przenoszone.
-          {format !== "xlsx" && sheets.length > 1 ? " CSV/TSV zapisuje tylko bieżący arkusz." : ""}
-          <InfoTip>Zapis tworzy nowy plik z wartościami i formułami (od „=”). Oryginał pozostaje bez zmian.</InfoTip>
+          {t("Formatowanie, scalenia, wykresy")}{props.macros ? t(" i makra") : ""} {t("nie są przenoszone.")}
+          {format !== "xlsx" && sheets.length > 1 ? t(" CSV/TSV zapisuje tylko bieżący arkusz.") : ""}
+          <InfoTip>{t("Zapis tworzy nowy plik z wartościami i formułami (od „=”). Oryginał pozostaje bez zmian.")}</InfoTip>
         </p>
       ) : null}
       <div className="sheet-grid-wrap">
@@ -161,24 +161,24 @@ export function SheetEditor(props: {
       </div>
       {pages > 1 ? (
         <div className="sheet-pages">
-          <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>Poprzednie</button>
-          <small>Wiersze {firstRow + 1}–{firstRow + visible.length} z {sheet.rows.length}</small>
-          <button type="button" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>Następne</button>
+          <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>{t("Poprzednie")}</button>
+          <small>{t("Wiersze")} {firstRow + 1}–{firstRow + visible.length} z {sheet.rows.length}</small>
+          <button type="button" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>{t("Następne")}</button>
         </div>
       ) : null}
       <div className="text-editor-footer">
         <small>
-          {sheet.rows.length} wierszy · {width} kolumn{dirty ? " · niezapisane zmiany" : ""}
+          {sheet.rows.length} {t("wierszy ·")} {width} {t("kolumn")}{dirty ? " · niezapisane zmiany" : ""}
         </small>
         {editable ? (
           <div className="text-editor-save">
             <input
-              aria-label="Nazwa zapisywanego pliku"
+              aria-label={t("Nazwa zapisywanego pliku")}
               value={saveAs}
               onChange={(event) => setSaveAs(event.target.value)}
             />
             <select
-              aria-label="Format zapisu"
+              aria-label={t("Format zapisu")}
               value={format}
               onChange={(event) => setFormat(event.target.value as SheetFormat)}
             >
@@ -191,11 +191,11 @@ export function SheetEditor(props: {
               disabled={(!dirty && format === props.format && !props.macros) || saving || !saveAs.trim()}
               onClick={() => void save()}
             >
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
           </div>
         ) : props.readOnly ? (
-          <small>Sprawa tylko do odczytu.</small>
+          <small>{t("Sprawa tylko do odczytu.")}</small>
         ) : null}
       </div>
       {status ? <p className="text-editor-status" role="status">{status}</p> : null}

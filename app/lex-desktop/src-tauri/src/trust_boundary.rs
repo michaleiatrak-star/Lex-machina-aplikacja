@@ -39,7 +39,7 @@ const DOCUMENT_PROCESSING_PROXY_READ_TIMEOUT_SECS: u64 = 1_200;
 // Every non-safelisted header the web UI sends must be listed here, otherwise
 // the webview preflight fails and fetch() rejects with "Failed to fetch".
 const CORS_ALLOWED_REQUEST_HEADERS: &str =
-    "Accept, Content-Type, Cache-Control, X-Lex-Filename, X-Lex-Case-Id, X-Lex-Execution-Id, X-Lex-Progress, X-Lex-Processing, X-Lex-Keep-Alive, X-Lex-Document-Password";
+    "Accept, Content-Type, Cache-Control, X-Lex-Filename, X-Lex-Case-Id, X-Lex-Execution-Id, X-Lex-Progress, X-Lex-Processing, X-Lex-Keep-Alive, X-Lex-Document-Password, X-Lex-Language";
 const MANAGED_LOGIN: &str = "local-admin";
 const MANAGED_KEYRING_SERVICE: &str = "LexMachina/Desktop";
 const PROVIDER_KEYRING_SERVICE: &str = "LexMachina/ProviderCredential";
@@ -1500,10 +1500,15 @@ fn route_allowed(method: &str, path: &str) -> bool {
         }
         "/api/skills/channel/status" => method == "GET",
         "/api/skills/channel/refresh" => method == "POST",
+        // Automatyczna aktualizacja skilli: stan, włączenie, sprawdzenie teraz (administrator).
+        "/api/skills/auto-update" => method == "GET" || method == "PUT",
+        "/api/skills/auto-update/run" => method == "POST",
         // Wokandy of the common courts: re-checked from this computer (administrator).
         "/api/courts/wokanda/recheck" => method == "POST",
         // A court's browser verification passed by the user in the court's window (as for sn.pl).
-        "/api/courts/wokanda/session/probe" => method == "POST",
+        "/api/courts/wokanda/session/probe" | "/api/courts/wokanda/session/server-attempt" => method == "POST",
+        // A law source behind a bot check passed by the user in the source's window (as for sn.pl).
+        "/api/law-sources/session/probe" | "/api/law-sources/session/server-attempt" => method == "POST",
         "/api/update/download"
         | "/api/local-models/provision"
         | "/api/local-models/repair"
@@ -1558,6 +1563,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/core-law/settings" => method == "PUT",
         // Model zapasowy routingu dziedzin (Ustawienia; lex-web api.ts).
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
+        // Tryb offline modelu lokalnego (bez źródeł zewnętrznych).
+        "/api/settings/local-offline" => matches!(method, "GET" | "PUT"),
+        // Wyszukiwarka internetowa: adres SearXNG i test porównawczy (zmiana tylko administrator — runtime).
+        "/api/settings/web-search" => matches!(method, "GET" | "PUT"),
+        "/api/settings/web-search/test" => method == "POST",
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         "/api/settings/legal-sources/legi" => method == "GET",
@@ -1759,7 +1769,9 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
         );
     }
 
-    if method == "POST" && path == "/api/mcp-search/query" {
+    if method == "POST"
+        && matches!(path, "/api/mcp-search/query" | "/api/settings/web-search/test")
+    {
         return Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS);
     }
 
@@ -1783,6 +1795,7 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
                 | "/api/local-models/repair"
                 | "/api/local-models/update/apply"
                 | "/api/skills/channel/refresh"
+                | "/api/skills/auto-update/run"
         )
     {
         return Duration::from_secs(
@@ -2252,6 +2265,13 @@ mod tests {
         assert!(route_allowed("GET", "/api/settings/domain-fallback"));
         assert!(route_allowed("PUT", "/api/settings/domain-fallback"));
         assert!(!route_allowed("DELETE", "/api/settings/domain-fallback"));
+        assert!(route_allowed("PUT", "/api/settings/local-offline"));
+        assert!(!route_allowed("POST", "/api/settings/local-offline"));
+        assert!(route_allowed("GET", "/api/settings/web-search"));
+        assert!(route_allowed("PUT", "/api/settings/web-search"));
+        assert!(!route_allowed("DELETE", "/api/settings/web-search"));
+        assert!(route_allowed("POST", "/api/settings/web-search/test"));
+        assert!(!route_allowed("GET", "/api/settings/web-search/test"));
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));
@@ -2318,6 +2338,10 @@ mod tests {
         assert!(route_allowed("GET", "/api/courts/wokanda"));
         assert!(route_allowed("POST", "/api/courts/wokanda/recheck"));
         assert!(route_allowed("POST", "/api/courts/wokanda/session/probe"));
+        assert!(route_allowed("POST", "/api/courts/wokanda/session/server-attempt"));
+        assert!(route_allowed("POST", "/api/law-sources/session/probe"));
+        assert!(route_allowed("POST", "/api/law-sources/session/server-attempt"));
+        assert!(!route_allowed("GET", "/api/law-sources/session/probe"));
         assert!(route_allowed("PATCH", "/api/cases/case_1/court"));
         assert!(route_allowed("POST", "/api/cases/case_1/wokanda"));
         assert!(route_allowed("GET", "/api/local-models/transcription-acceleration"));
@@ -2452,6 +2476,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/skills/channel/refresh"));
         assert!(!route_allowed("POST", "/api/skills/channel/status"));
         assert!(!route_allowed("GET", "/api/skills/channel/refresh"));
+        assert!(route_allowed("GET", "/api/skills/auto-update"));
+        assert!(route_allowed("PUT", "/api/skills/auto-update"));
+        assert!(!route_allowed("DELETE", "/api/skills/auto-update"));
+        assert!(route_allowed("POST", "/api/skills/auto-update/run"));
+        assert!(!route_allowed("GET", "/api/skills/auto-update/run"));
     }
 
     #[test]

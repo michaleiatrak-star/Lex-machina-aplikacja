@@ -19,7 +19,7 @@ function archive(build: (root: string) => void): Buffer {
 
 function setup(engine: Buffer, model: Buffer, modelSha = sha(model)) {
   const manifest = {
-    applicationVersion: "0.1.71",
+    applicationVersion: "0.1.73",
     runtime: { llamaCpp: { version: "b1", backends: [{ id: MAC_BACKEND, url: "https://engine.test/llama.tar.gz", sha256: sha(engine), gpuOffload: true }] } },
     models: {
       localLlm: [

@@ -56,10 +56,10 @@ const issues = [
     ...registry.scan(),
     ...registry.validateDeclarations()
 ];
-if (registry.skills.size === 0 || issues.length > 0) {
+if (registry.everySkill.size === 0 || issues.length > 0) {
     fail(`SKILL_RELEASE_CORPUS_INVALID:${JSON.stringify(issues)}`);
 }
-const skills = [...registry.skills.values()]
+const skills = [...registry.everySkill.values()]
     .map((skill) => {
     const version = typeof skill.frontmatter.version === "string"
         ? skill.frontmatter.version.trim()

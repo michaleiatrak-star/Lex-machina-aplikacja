@@ -107,8 +107,8 @@ export class LocalCaseKnowledgeSearch {
             limit > 16) {
             throw new Error("INVALID_KNOWLEDGE_LIMIT");
         }
-        const documentIds = await this.documents
-            .listDocumentIds(args.caseId);
+        const documentIds = (await this.documents
+            .listDocumentIds(args.caseId)).filter((documentId) => !args.documentIds || args.documentIds.has(documentId));
         if (documentIds.length >
             this.maxDocuments) {
             throw new Error("KNOWLEDGE_DOCUMENT_LIMIT_EXCEEDED");

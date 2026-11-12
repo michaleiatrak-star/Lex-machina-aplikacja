@@ -399,6 +399,8 @@ describe("common law and mixed systems: statutes and judgments", () => {
     expect(familyMethod(eliCountry("GB"))).toContain("ratio decidendi");
     expect(familyMethod(eliCountry("US"))).toContain("prawo federalne i stanowe");
     expect(familyMethod(eliCountry("MT"))).toContain("tekst maltański");
+    expect(familyMethod(eliCountry("SE"))).toContain("RODZINA-PRAWA-NORDYCKIE.md");
+    expect(familyMethod(eliCountry("FI"))).toContain("bez formalnego stare decisis");
     expect(familyMethod(eliCountry("DE"))).toBe("");
   });
 });

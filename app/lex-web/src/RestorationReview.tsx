@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState, type ReactNode } from "react";
 import {
   TONE_LABEL,
@@ -66,10 +67,10 @@ export function RestorationReview(props: {
     setStatus("");
     try {
       await props.onCorrect(selected, draft, remember);
-      setStatus(remember ? "Poprawiono i zapamiętano formę dla tego nazwiska." : "Poprawiono w tym miejscu.");
+      setStatus(remember ? t("Poprawiono i zapamiętano formę dla tego nazwiska.") : t("Poprawiono w tym miejscu."));
       setSelected(null);
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setBusy(false);
     }
@@ -84,7 +85,7 @@ export function RestorationReview(props: {
       <mark
         key={`m${index}`}
         className={`restored restored-${tone}${selected === index ? " restored-selected" : ""}`}
-        title={`${mark.kind}${mark.case ? ` · ${caseLabel(mark.case)}` : ""} · ${TONE_LABEL[tone]} · pewność ${Math.round(mark.confidence * 100)}%`}
+        title={t("{kind}{value} · {value2} · pewność {value3}%", { kind: mark.kind, value: mark.case ? ` · ${caseLabel(mark.case)}` : "", value2: TONE_LABEL[tone], value3: Math.round(mark.confidence * 100) })}
         role="button"
         tabIndex={0}
         onClick={() => select(index)}
@@ -103,13 +104,13 @@ export function RestorationReview(props: {
   parts.push(<span key="tail">{props.content.slice(cursor)}</span>);
 
   return (
-    <section className="restoration-review" aria-label="Przywrócone dane">
+    <section className="restoration-review" aria-label={t("Przywrócone dane")}>
       <div className="restoration-review-head">
         <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-          {open ? "Ukryj" : "Pokaż"} przywrócone dane ({props.marks.length})
+          {open ? t("Ukryj") : t("Pokaż")} {t("przywrócone dane (")}{props.marks.length})
         </button>
         <small>
-          {counts.review > 0 ? `do sprawdzenia: ${counts.review}` : "wszystkie formy pewne lub regułowe"}
+          {counts.review > 0 ? t("do sprawdzenia: {review}", { review: counts.review }) : t("wszystkie formy pewne lub regułowe")}
           {counts.manual > 0 ? ` · poprawione: ${counts.manual}` : ""}
           {unresolved.length > 0 ? ` · nieodtworzone symbole: ${unresolved.length}` : ""}
         </small>
@@ -125,15 +126,15 @@ export function RestorationReview(props: {
           </div>
           <div className="restoration-text">{parts}</div>
           <details className="substitution-key">
-            <summary>Klucz podstawień: symbol z przypadkiem → odtworzone słowa ({keyRows.length})</summary>
+            <summary>{t("Klucz podstawień: symbol z przypadkiem → odtworzone słowa (")}{keyRows.length})</summary>
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Symbol od modelu</th>
-                  <th scope="col">Przypadek</th>
-                  <th scope="col">Odtworzono jako</th>
-                  <th scope="col">Wystąpienia</th>
-                  <th scope="col">Źródło formy</th>
+                  <th scope="col">{t("Symbol od modelu")}</th>
+                  <th scope="col">{t("Przypadek")}</th>
+                  <th scope="col">{t("Odtworzono jako")}</th>
+                  <th scope="col">{t("Wystąpienia")}</th>
+                  <th scope="col">{t("Źródło formy")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,7 +143,7 @@ export function RestorationReview(props: {
                     <td><code>{row.placeholder}</code></td>
                     <td>
                       {row.caseMissing
-                        ? "brak - model nie podał przypadku, przyjęto mianownik"
+                        ? t("brak - model nie podał przypadku, przyjęto mianownik")
                         : caseLabel(row.case) || "-"}
                     </td>
                     <td>{row.text}</td>
@@ -160,12 +161,12 @@ export function RestorationReview(props: {
                 {current.case ? ` · ${caseLabel(current.case)}` : ""}
                 {current.canonical ? ` · osoba: ${current.canonical}` : ""}
                 {` · ${TONE_LABEL[restorationTone(current)]}`}
-                {current.status === "gender_ambiguous" ? " · niepewna płeć" : ""}
-                {current.caseMissing ? " · model nie podał przypadku" : ""}
+                {current.status === "gender_ambiguous" ? t(" · niepewna płeć") : ""}
+                {current.caseMissing ? t(" · model nie podał przypadku") : ""}
                 {current.agreement ? ` · ${current.agreement}` : ""}
               </div>
               <input
-                aria-label="Poprawiona forma"
+                aria-label={t("Poprawiona forma")}
                 value={draft}
                 readOnly={props.readOnly}
                 onChange={(event) => setDraft(event.target.value)}
@@ -177,28 +178,28 @@ export function RestorationReview(props: {
               {props.readOnly ? null : (
                 <>
                   <button type="button" disabled={busy || !draft.trim()} onClick={() => void correct(false)}>
-                    Popraw tylko tutaj
+                    {t("Popraw tylko tutaj")}
                   </button>
                   {current.kind === "PERSON" && current.canonical && current.case && current.gender ? (
                     <button
                       type="button"
                       disabled={busy || !draft.trim()}
-                      title="Zapamiętuje formę każdego słowa (np. Müller → Müllerowi) na tym komputerze"
+                      title={t("Zapamiętuje formę każdego słowa (np. Müller → Müllerowi) na tym komputerze")}
                       onClick={() => void correct(true)}
                     >
-                      Popraw i zapamiętaj formę
+                      {t("Popraw i zapamiętaj formę")}
                     </button>
                   ) : null}
                 </>
               )}
-              <button type="button" onClick={() => setSelected(null)}>Anuluj</button>
+              <button type="button" onClick={() => setSelected(null)}>{t("Anuluj")}</button>
             </div>
           ) : (
-            <small className="restoration-hint">Kliknij oznaczone słowo, aby je poprawić.</small>
+            <small className="restoration-hint">{t("Kliknij oznaczone słowo, aby je poprawić.")}</small>
           )}
           {unresolved.length > 0 ? (
             <div className="restoration-unresolved" role="alert">
-              Nieodtworzone symbole (brak w kluczu tej sprawy): {unresolved.join(", ")}
+              {t("Nieodtworzone symbole (brak w kluczu tej sprawy):")} {unresolved.join(", ")}
             </div>
           ) : null}
           {status ? <p className="restoration-status" role="status">{status}</p> : null}

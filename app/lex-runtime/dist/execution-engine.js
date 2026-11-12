@@ -19,7 +19,7 @@ import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput,
 import path from "node:path";
 import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
-import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources } from "./quick-legal-question.js";
+import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources, unsourcedWarning } from "./quick-legal-question.js";
 import { assessMatterComplexity } from "./matter-complexity.js";
 import { mandatorySessionSkills, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills, threadUserText } from "./skill-selection.js";
 export { latestUserTurn };
@@ -1012,26 +1012,45 @@ export class LexExecutionEngine {
             const response = await quickRequest([question]);
             let missing = sources.unsourced(response.fullText);
             if (missing.length > 0) {
-                // One correcting round: fetch the text or drop the provision.
-                emit("gate", "QUICK_LEGAL_SOURCES", "OK", `correction=${missing.join("|")}`);
+                // The application reads the cited articles itself: a local model often answers
+                // from the provisions it knows and does not call read_core_law_article.
+                const fetched = args.quickLocalLegal.articlesForAnswer?.(response.fullText) ?? null;
+                if (fetched)
+                    sources.addPrompt(fetched);
+                missing = sources.unsourced(response.fullText);
+                // One correcting round: base the answer on the fetched wording, fetch the rest or drop it.
+                emit("gate", "QUICK_LEGAL_SOURCES", "OK", `correction=${missing.join("|") || "fetched"}`);
+                // A failed correcting round keeps the first answer; it no longer drops the whole turn
+                // (Bielik: the answer was on screen, then the turn failed as LOCAL_MODEL_INFERENCE_FAILED
+                // when this second call came back empty).
                 const corrected = await quickRequest([
                     question,
                     { role: "assistant", content: response.fullText },
                     {
                         role: "user",
-                        content: `Odpowiedź zawiera odwołania bez źródła w tej rozmowie: ${missing.join("; ")}. ` +
-                            "Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
+                        content: (fetched
+                            ? `${fetched}\n\nAplikacja odczytała powyżej brzmienie przepisów powołanych w Twojej odpowiedzi. Popraw odpowiedź tak, aby opierała się na tym brzmieniu (progi kwotowe, zagrożenie karą, znamiona). `
+                            : "") +
+                            (missing.length > 0
+                                ? `Odpowiedź zawiera odwołania bez źródła w tej rozmowie: ${missing.join("; ")}. Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. `
+                                : "") +
+                            "Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
                             CORRECTED_ANSWER_ONLY
                     }
-                ]);
-                if (corrected.fullText.trim()) {
+                ]).catch((error) => {
+                    emit("gate", "QUICK_LEGAL_SOURCES", "OK", `correction_failed=${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
+                    return null;
+                });
+                if (corrected?.fullText.trim()) {
                     response.fullText = withoutCorrectionPreface(corrected.fullText);
                 }
                 missing = sources.unsourced(response.fullText);
             }
             if (missing.length > 0) {
-                emit("gate", "QUICK_LEGAL_SOURCES", "BLOCKED", `unsourced=${missing.join("|")}`);
-                throw new LexExecutionError("The answer cites provisions without an ELI text in this turn.", "QUICK_LEGAL_UNSOURCED_PROVISION", [...events]);
+                // A missing source is a warning, not a missing answer: the answer is shown with the
+                // references the application could not confirm in ELI in this turn named under it.
+                emit("gate", "QUICK_LEGAL_SOURCES", "OK", `unsourced_warning=${missing.join("|")}`);
+                response.fullText = `${response.fullText.trimEnd()}\n\n${unsourcedWarning(missing)}`;
             }
             emit("gate", "QUICK_LEGAL_SOURCES", "OK", `sourcedArticles=${sources.articleCount}`);
             emit("provider_end", args.provider, "OK", args.model);
@@ -1680,8 +1699,12 @@ export class LexExecutionEngine {
                 runTools: args.runTools,
                 nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) },
                 reasoning: "none"
+            }).catch((error) => {
+                // A failed round keeps the first answer; the qualifier gate below still decides.
+                emit("gate", "CRIMINAL_QUALIFIER", "OK", `correction_failed=${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
+                return null;
             });
-            if (corrected.fullText.trim())
+            if (corrected?.fullText.trim())
                 response.fullText = withoutCorrectionPreface(corrected.fullText);
             if (native.missingQualifier()) {
                 emit("gate", "CRIMINAL_QUALIFIER", "BLOCKED", "QUALIFIER_NOT_READ");

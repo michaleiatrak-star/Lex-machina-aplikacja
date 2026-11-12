@@ -16,6 +16,8 @@ $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powersh
 
 . (Join-Path $PSScriptRoot "bootstrap-progress.ps1")
 $env:LEX_BOOTSTRAP_PROGRESS_PATH = Join-Path $installRoot ("bootstrap-progress-" + $PID + ".json")
+# The offline installer's third stage (1: extraction in the wrapper, 2: preparation in the installer).
+if ($BundlePath) { $env:LEX_BOOTSTRAP_STAGE = "Etap 3 z 3: właściwa instalacja" }
 Set-BootstrapProgress "Sprawdzanie potrzebnych narzędzi…"
 $window = $null
 if ($env:LEX_BOOTSTRAP_NO_UI -ne "1" -and [Environment]::UserInteractive) {

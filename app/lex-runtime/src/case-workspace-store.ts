@@ -45,11 +45,26 @@ import {
   type OrderedCaseWorkflowState
 } from "./ordered-case-workflow-state.js";
 
+/**
+ * What a firm library folder holds; it decides how the model uses its files (subfolders inherit):
+ * TEMPLATES - documents to fill in, never a source of facts or knowledge;
+ * CASE_LAW - the firm's own judgments and interpretations (a copy, verified in the official source
+ * before it is cited);
+ * RULES - the firm's methods and rules, in every conversation, below the rules of legal sources.
+ * No purpose: general know-how.
+ */
+export type WorkspaceFolderPurpose = "TEMPLATES" | "CASE_LAW" | "RULES";
+export const WORKSPACE_FOLDER_PURPOSES: readonly WorkspaceFolderPurpose[] = ["TEMPLATES", "CASE_LAW", "RULES"];
+
 export type WorkspaceFolder = {
   folderId: string;
   parentId: string | null;
   name: string;
   createdAt: string;
+  // Firm know-how: the folder is ticked in every conversation (the firm's choice); without it
+  // a folder is used only when picked in the conversation.
+  chatDefault?: boolean;
+  purpose?: WorkspaceFolderPurpose;
 };
 
 export type WorkspaceDocumentCitation = {
@@ -885,6 +900,52 @@ export class EncryptedCaseWorkspaceStore {
     index.folders.push(folder);
     await this.write(index, args.caseDataKey, args.keyVersion);
     return folder;
+  }
+
+  async setFolderChatDefault(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    folderId: string;
+    chatDefault: boolean;
+  }): Promise<WorkspaceFolder> {
+    if (!FOLDER_ID.test(args.folderId)) {
+      throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+    }
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const folder = index.folders.find((item) => item.folderId === args.folderId);
+    if (!folder) throw new Error("WORKSPACE_FOLDER_NOT_FOUND");
+    if (args.chatDefault) folder.chatDefault = true;
+    else delete folder.chatDefault;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return folder;
+  }
+
+  async setFolderPurpose(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    folderId: string;
+    purpose: WorkspaceFolderPurpose | null;
+  }): Promise<WorkspaceFolder> {
+    if (!FOLDER_ID.test(args.folderId)) {
+      throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+    }
+    if (args.purpose !== null && !WORKSPACE_FOLDER_PURPOSES.includes(args.purpose)) {
+      throw new Error("WORKSPACE_FOLDER_PURPOSE_INVALID");
+    }
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const folder = index.folders.find((item) => item.folderId === args.folderId);
+    if (!folder) throw new Error("WORKSPACE_FOLDER_NOT_FOUND");
+    if (args.purpose) folder.purpose = args.purpose;
+    else delete folder.purpose;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return folder;
+  }
+
+  /** The index as stored (folders, item locations), without reconciling items. */
+  async readIndex(args: { caseId: string; caseDataKey: Buffer; keyVersion: number }): Promise<CaseWorkspaceIndex> {
+    return await this.read(args.caseId, args.caseDataKey, args.keyVersion);
   }
 
   async deleteFolder(args: {

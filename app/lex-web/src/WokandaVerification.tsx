@@ -1,6 +1,8 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
-import { probeWokandaSession } from "./api.js";
-import { desktopInvoke, openExternalUrl } from "./SnVerification.js";
+import { attemptWokandaSessionOnServer, probeWokandaSession } from "./api.js";
+import { ServerSessionVerification } from "./LawSourceVerification.js";
+import { AUTO_TRIES, desktopInvoke, openExternalUrl } from "./SnVerification.js";
 
 /**
  * A court's wokanda behind a browser verification, as sn.pl: the user passes it in the court's
@@ -17,8 +19,12 @@ export function WokandaVerification({
 }) {
   const invoke = desktopInvoke();
   const [open, setOpen] = useState(false);
+  // The court's window opens by itself, minimized: a browser check that passes on its own
+  // (most courts) needs nothing from the user; after AUTO_TRIES probes the window is shown.
+  const [quiet, setQuiet] = useState(false);
   const [message, setMessage] = useState("");
   const done = useRef(false);
+  const quietRef = useRef(false);
   const onVerifiedRef = useRef(onVerified);
   onVerifiedRef.current = onVerified;
 
@@ -44,7 +50,12 @@ export function WokandaVerification({
       } catch {
         // the window was closed or the session is not set yet: try again up to the limit
       }
-      if (tries >= 45) setMessage("Weryfikacja trwa: dokończ ją w oknie sądu albo otwórz okno ponownie.");
+      if (quietRef.current && tries >= AUTO_TRIES && !cancelled && !done.current) {
+        quietRef.current = false;
+        setQuiet(false);
+        await invoke!("verification_window_show", { kind: "wokanda" }).catch(() => undefined);
+      }
+      if (tries >= 45) setMessage(t("Weryfikacja trwa: dokończ ją w oknie sądu albo otwórz okno ponownie."));
     }
     const timer = window.setInterval(() => void tick(), 4000);
     const first = window.setTimeout(() => void tick(), 1500);
@@ -55,35 +66,61 @@ export function WokandaVerification({
     };
   }, [invoke, open, verification.domain, verification.url]);
 
-  async function start(): Promise<void> {
+  async function start(minimized: boolean): Promise<void> {
     setMessage("");
     done.current = false;
     if (!invoke) {
       await openExternalUrl(verification.url);
       return;
     }
+    if (open && !minimized) {
+      // Already open (also minimized in the background): bring it to the front.
+      quietRef.current = false;
+      setQuiet(false);
+      await invoke("verification_window_show", { kind: "wokanda" }).catch(() => undefined);
+      return;
+    }
     try {
-      await invoke("wokanda_verification_open", { url: verification.url });
+      await invoke("wokanda_verification_open", { url: verification.url, minimized });
+      quietRef.current = minimized;
+      setQuiet(minimized);
       setOpen(true);
     } catch (failure) {
       setMessage(String(failure));
     }
   }
 
+  useEffect(() => {
+    if (invoke) void start(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verification.url]);
+
   return (
     <div className="alert">
       <p>
-        <strong>Strona sądu wymaga weryfikacji przeglądarki.</strong>{" "}
-        {verification.savedSession ? "Sesja z poprzedniej weryfikacji wygasła." : "Aplikacja sama jej nie przechodzi."}
+        <strong>{t("Strona sądu wymaga weryfikacji przeglądarki.")}</strong>{" "}
+        {verification.savedSession ? t("Sesja z poprzedniej weryfikacji wygasła.") : t("Aplikacja sama jej nie przechodzi.")}
       </p>
-      <p className="field-help">
-        {invoke
-          ? "Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem."
-          : "W przeglądarce: otwórz wokandę sądu i wyszukaj sygnaturę samodzielnie."}
-      </p>
-      <button type="button" className="chat-primary-action" onClick={() => void start()}>
-        {invoke ? (open ? "Okno sądu otwarte…" : "Otwórz okno sądu") : "Otwórz wokandę sądu"}
-      </button>
+      {invoke ? (
+        <>
+          <p className="field-help">
+            {t("Otwórz okno sądu i przejdź weryfikację, jeśli się pojawi. Sprawdzenie wokandy ponowi się samo; nie zamykaj okna przed wynikiem.")}
+          </p>
+          {quiet ? <p className="field-help">{t("Sprawdzam stronę sądu w tle (do ok. 20 s)…")}</p> : null}
+          <button type="button" className="chat-primary-action" onClick={() => void start(false)}>
+            {open ? t("Okno sądu otwarte…") : t("Otwórz okno sądu")}
+          </button>
+        </>
+      ) : (
+        // Server mode: the server's own headless browser first, then a session pasted from a browser.
+        <ServerSessionVerification
+          url={verification.url}
+          autoStart
+          attempt={() => attemptWokandaSessionOnServer(verification.domain)}
+          probe={(cookie) => probeWokandaSession(verification.domain, cookie, navigator.userAgent)}
+          onVerified={() => onVerifiedRef.current()}
+        />
+      )}
       {message ? <p className="field-help">{message}</p> : null}
     </div>
   );

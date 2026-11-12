@@ -12,6 +12,7 @@ import {
   ProviderGatewayError
 } from "../src/providers/gateway.js";
 import { LexSkillRegistry } from "../src/registry.js";
+import { LexExecutionError } from "../src/execution-engine.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionExecutor,
@@ -487,7 +488,7 @@ describe("session execution HTTP API", () => {
       execute: vi.fn(
         async () => {
           throw new Error(
-            "fetch failed"
+            "generation stopped unexpectedly"
           );
         }
       )
@@ -528,8 +529,28 @@ describe("session execution HTTP API", () => {
         reason:
           "LOCAL_MODEL_INFERENCE_FAILED",
         description:
-          "fetch failed"
+          "generation stopped unexpectedly"
       });
+  });
+
+  it("reports an application gate on a local model as a workflow stop, not a llama.cpp failure", async () => {
+    // Bielik answered (the answer was on screen), then the source gate stopped the turn; the user
+    // saw LOCAL_MODEL_INFERENCE_FAILED ("generation did not finish") instead of the gate.
+    for (const [error, status, reason] of [
+      [new LexExecutionError("The answer cites provisions without an ELI text in this turn.", "QUICK_LEGAL_UNSOURCED_PROVISION", []), 422, "QUICK_LEGAL_UNSOURCED_PROVISION"],
+      [new LexExecutionError("Provider returned an empty deterministic-workflow result.", "G39H_WORKFLOW_PROVIDER_COMPLETE", []), 503, "LOCAL_MODEL_EMPTY_ANSWER"]
+    ] as const) {
+      const app = createLexHttpApp({
+        registry: registry(),
+        modelCatalog: { list: vi.fn(async () => []) },
+        sessionExecutor: { execute: vi.fn(async () => { throw error; }) }
+      });
+      const response = await request(app)
+        .post("/api/sessions/execute")
+        .send({ query: "Jaką odpowiedzialność karną ponosi sprawca?", provider: "openai", model: "local/bielik-11b-v3-q4km", primarySkill: DR, mode: "PRAWNIK" });
+      expect(response.status, reason).toBe(status);
+      expect(response.body.reason, reason).toBe(reason);
+    }
   });
 
   it("reports the fail-closed chat privacy gate instead of a generic failure", async () => {

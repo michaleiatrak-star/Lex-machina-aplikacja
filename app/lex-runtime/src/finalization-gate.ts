@@ -293,6 +293,25 @@ export function addVerifiedJournalAddresses(text: string, ledger: VerificationLe
     lines[reference.line - 1] = `${lineText.slice(0, end)} (${journal})${lineText.slice(end)}`;
     added.push(`${act}: ${journal}`);
   }
+  // An address of another act verified in this turn written after a code ("art. 119 § 1 KW
+  // (Dz.U. 2026 poz. 1342)", 1342 being the KK t.j.; user report 2026-11-11): the model mixed
+  // the two acts up, so the address is replaced with the one the provision was read from.
+  // An address of no verified act stays as written (G8 checks it).
+  const actByJournal = new Map([...journalByAct].map(([name, journal]) => [journal, name]));
+  for (let index = 0; index < lines.length; index += 1) {
+    lines[index] = lines[index]!.replace(
+      /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|k\.c\.|k\.p\.c\.|k\.k\.|k\.p\.k\.|k\.p\.a\.|k\.p\.|k\.r\.o\.|k\.s\.h\.|k\.w\.|k\.p\.w\.)((?:\]\([^)\s]{1,400}\))?(?:\s*(?:✅|⚠️)\s*\[[^\]\n]{0,300}\])?\s*\((?:t\.\s?j\.\s*)?)Dz\.\s?U\.\s*(?:z\s*)?(\d{4})(?:\s*r\.)?,?\s*poz\.\s*(\d+)/gu,
+      (whole, written: string, between: string, year: string, position: string) => {
+        const code = Object.entries(DOTTED_CODE).find(([, dotted]) => dotted === written)?.[0] ?? written;
+        const own = journalByAct.get(code);
+        const cited = `Dz.U. ${year} poz. ${Number(position)}`;
+        const other = actByJournal.get(cited);
+        if (!own || own === cited || !other || other === code) return whole;
+        added.push(`${code}: ${cited} -> ${own}`);
+        return `${written}${between}${own}`;
+      }
+    );
+  }
   return added.length ? { text: lines.join("\n"), added } : { text, added };
 }
 

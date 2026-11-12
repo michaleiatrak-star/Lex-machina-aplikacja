@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { useEffect, useState } from "react";
 import {
@@ -91,43 +92,43 @@ export function InvoiceSettingsPanel() {
 
   return (
     <article className="chat-card invoice-settings">
-      <p className="eyebrow">Integracja</p>
+      <p className="eyebrow">{t("Integracja")}</p>
       <h2>
-        Faktury i KSeF
-        <InfoTip>Token KSeF, dane sprzedawcy i logo są zaszyfrowane Twoim kluczem konta. Zapisanego tokenu nie widać już w przeglądarce.</InfoTip>
+        {t("Faktury i KSeF")}
+        <InfoTip>{t("Token KSeF, dane sprzedawcy i logo są zaszyfrowane Twoim kluczem konta. Zapisanego tokenu nie widać już w przeglądarce.")}</InfoTip>
       </h2>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert">{message}</div> : null}
 
       <section>
-        <h3>KSeF</h3>
+        <h3>{t("KSeF")}</h3>
         <p className="alert" role="note">
-          <strong>Wysyłka do KSeF jest niedostępna w tej wersji.</strong> Faktury wystawiasz i drukujesz w programie.
-          <InfoTip>Token ani środowisko KSeF nie są teraz potrzebne do pracy.</InfoTip>
+          <strong>{t("Wysyłka do KSeF jest niedostępna w tej wersji.")}</strong> {t("Faktury wystawiasz i drukujesz w programie.")}
+          <InfoTip>{t("Token ani środowisko KSeF nie są teraz potrzebne do pracy.")}</InfoTip>
         </p>
         <details className="ksef-later">
-          <summary>Ustawienia KSeF na czas, gdy wysyłka będzie dostępna</summary>
+          <summary>{t("Ustawienia KSeF na czas, gdy wysyłka będzie dostępna")}</summary>
         <section>
-          <h3>Token KSeF</h3>
+          <h3>{t("Token KSeF")}</h3>
           <p className="field-help">
             {ksef?.tokenConfigured
-              ? `Token zapisany (${ksef.tokenHint ?? ""}${ksef.tokenSetAt ? `, ${new Date(ksef.tokenSetAt).toLocaleString("pl-PL")}` : ""}).`
+              ? `Token zapisany (${ksef.tokenHint ?? ""}${ksef.tokenSetAt ? `, ${new Date(ksef.tokenSetAt).toLocaleString(currentLocale())}` : ""}).`
               : "Brak tokenu."}
           </p>
           <div className="invoice-grid">
             <label>
-              Token
+              {t("Token")}
               <input
                 type="password"
                 autoComplete="off"
                 value={token}
-                placeholder={ksef?.tokenConfigured ? "Wklej nowy token, aby zastąpić" : "Wklej token wygenerowany w KSeF"}
+                placeholder={ksef?.tokenConfigured ? t("Wklej nowy token, aby zastąpić") : t("Wklej token wygenerowany w KSeF")}
                 onChange={(event) => setToken(event.target.value)}
               />
             </label>
             <label>
-              NIP kontekstu (podmiotu w KSeF)
+              {t("NIP kontekstu (podmiotu w KSeF)")}
               <input
                 inputMode="numeric"
                 value={contextNip}
@@ -148,7 +149,7 @@ export function InvoiceSettingsPanel() {
                 }, "Token KSeF zapisany.")
               }
             >
-              Zapisz token
+              {t("Zapisz token")}
             </button>
             {ksef?.tokenConfigured ? (
               <button
@@ -159,21 +160,21 @@ export function InvoiceSettingsPanel() {
                   void run(async () => {
                     const next = await clearKsefToken();
                     setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                  }, "Token KSeF usunięty.")
+                  }, t("Token KSeF usunięty."))
                 }
               >
-                Usuń token
+                {t("Usuń token")}
               </button>
             ) : null}
           </div>
         </section>
 
         <section>
-          <h3>Środowisko KSeF</h3>
+          <h3>{t("Środowisko KSeF")}</h3>
           <p className={ksef?.environment === "production" ? "alert alert-error" : "field-help"}>
             {ksef?.environment === "production"
-              ? "Środowisko PRODUKCYJNE: gdy wysyłka zostanie udostępniona, faktury będą trafiać do produkcyjnego systemu KSeF."
-              : "Środowisko TESTOWE (domyślne)."}
+              ? t("Środowisko PRODUKCYJNE: gdy wysyłka zostanie udostępniona, faktury będą trafiać do produkcyjnego systemu KSeF.")
+              : t("Środowisko TESTOWE (domyślne).")}
           </p>
           {ksef?.environment === "production" ? (
             <button
@@ -184,16 +185,15 @@ export function InvoiceSettingsPanel() {
                 void run(async () => {
                   const next = await setKsefEnvironment("test");
                   setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                }, "Przełączono na środowisko testowe.")
+                }, t("Przełączono na środowisko testowe."))
               }
             >
-              Wróć na środowisko testowe
+              {t("Wróć na środowisko testowe")}
             </button>
           ) : askProduction ? (
             <div className="invoice-confirm">
               <p>
-                Aby przełączyć na produkcję, wpisz <strong>{PRODUCTION_PHRASE}</strong>. Każda przyszła wysyłka
-                będzie wymagać osobnego potwierdzenia.
+                {t("Aby przełączyć na produkcję, wpisz")} <strong>{PRODUCTION_PHRASE}</strong>{t(". Każda przyszła wysyłka będzie wymagać osobnego potwierdzenia.")}
               </p>
               <div className="chat-form-row">
                 <input value={productionPhrase} onChange={(event) => setProductionPhrase(event.target.value)} />
@@ -207,19 +207,19 @@ export function InvoiceSettingsPanel() {
                       setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
                       setAskProduction(false);
                       setProductionPhrase("");
-                    }, "Przełączono na środowisko produkcyjne.")
+                    }, t("Przełączono na środowisko produkcyjne."))
                   }
                 >
-                  Przełącz na produkcję
+                  {t("Przełącz na produkcję")}
                 </button>
                 <button type="button" className="chat-secondary-action" onClick={() => setAskProduction(false)}>
-                  Anuluj
+                  {t("Anuluj")}
                 </button>
               </div>
             </div>
           ) : (
             <button type="button" className="chat-secondary-action" disabled={busy || !settings} onClick={() => setAskProduction(true)}>
-              Przełącz na produkcję…
+              {t("Przełącz na produkcję…")}
             </button>
           )}
         </section>
@@ -228,17 +228,17 @@ export function InvoiceSettingsPanel() {
 
       <section>
         <h3>
-          Dane sprzedawcy
-          <InfoTip>Wstawiane do każdej nowej faktury.</InfoTip>
+          {t("Dane sprzedawcy")}
+          <InfoTip>{t("Wstawiane do każdej nowej faktury.")}</InfoTip>
         </h3>
         <div className="invoice-grid">
           <label>
-            Nazwa
+            {t("Nazwa")}
             <input value={seller.name} onChange={(event) => setSeller({ ...seller, name: event.target.value })} />
           </label>
           <CompanyNipField party={seller} onChange={setSeller} />
           <label className="invoice-wide">
-            Adres
+            {t("Adres")}
             <input value={seller.address} onChange={(event) => setSeller({ ...seller, address: event.target.value })} />
           </label>
         </div>
@@ -253,21 +253,21 @@ export function InvoiceSettingsPanel() {
             }, "Dane sprzedawcy zapisane.")
           }
         >
-          Zapisz dane sprzedawcy
+          {t("Zapisz dane sprzedawcy")}
         </button>
       </section>
 
       <section>
         <h3>
-          Domyślne na nowej fakturze
-          <InfoTip>Na fakturze każdą wartość można zmienić.</InfoTip>
+          {t("Domyślne na nowej fakturze")}
+          <InfoTip>{t("Na fakturze każdą wartość można zmienić.")}</InfoTip>
         </h3>
         <p className="field-help">
           {settings?.defaults ? "Zapisane ustawienia." : "Ustawienia fabryczne (niezapisane)."}
         </p>
         <div className="invoice-grid">
           <label>
-            Sposób płatności
+            {t("Sposób płatności")}
             <select
               value={defaults.paymentMethod}
               onChange={(event) => setDefaults({ ...defaults, paymentMethod: event.target.value as InvoiceDefaults["paymentMethod"] })}
@@ -276,19 +276,19 @@ export function InvoiceSettingsPanel() {
             </select>
           </label>
           <label>
-            Termin płatności przelewu
+            {t("Termin płatności przelewu")}
             <select
               value={defaults.paymentTermDays}
               disabled={defaults.paymentMethod !== "przelew"}
               onChange={(event) => setDefaults({ ...defaults, paymentTermDays: Number(event.target.value) })}
             >
               {[...new Set([...PAYMENT_TERMS, defaults.paymentTermDays])].sort((a, b) => a - b).map((days) => (
-                <option key={days} value={days}>{days} dni od wystawienia</option>
+                <option key={days} value={days}>{days} {t("dni od wystawienia")}</option>
               ))}
             </select>
           </label>
           <label>
-            Stawka VAT
+            {t("Stawka VAT")}
             <select value={defaults.vatRate} onChange={(event) => setDefaults({ ...defaults, vatRate: event.target.value })}>
               {VAT_RATES.map(([rate, label]) => <option key={rate} value={rate}>{label}</option>)}
             </select>
@@ -303,28 +303,28 @@ export function InvoiceSettingsPanel() {
               void run(async () => {
                 const next = await setInvoiceDefaults(defaults);
                 setSettings((current) => (current ? { ...current, defaults: next.defaults } : current));
-              }, "Ustawienia domyślne zapisane.")
+              }, t("Ustawienia domyślne zapisane."))
             }
           >
-            Zapisz domyślne
+            {t("Zapisz domyślne")}
           </button>
           <button
             type="button"
             className="chat-secondary-action"
             disabled={busy}
-            title="Fragmenty aktualnego tekstu ustawy o VAT z wyszukiwania w Sejm ELI"
+            title={t("Fragmenty aktualnego tekstu ustawy o VAT z wyszukiwania w Sejm ELI")}
             onClick={() =>
               void run(async () => {
                 const basis = await getInvoiceLegalBasis("vat-rate");
                 const result = basis.result as { tekst?: string; text?: string; fragmenty?: unknown };
                 setRateBasis(
-                  `Ustawa o VAT, ELI ${basis.eli}, wyszukiwanie „${basis.search}” (pobrano ${new Date(basis.retrievedAt).toLocaleString("pl-PL")})\n\n` +
+                  `Ustawa o VAT, ELI ${basis.eli}, wyszukiwanie „${basis.search}” (pobrano ${new Date(basis.retrievedAt).toLocaleString(currentLocale())})\n\n` +
                     (result.tekst ?? result.text ?? JSON.stringify(basis.result, null, 2))
                 );
               }, "")
             }
           >
-            Sprawdź stawkę w ELI
+            {t("Sprawdź stawkę w ELI")}
           </button>
         </div>
         {rateBasis ? <pre className="invoice-legal-basis">{rateBasis}</pre> : null}
@@ -332,34 +332,34 @@ export function InvoiceSettingsPanel() {
 
       <section>
         <h3>
-          Autonumeracja
+          {t("Autonumeracja")}
           <InfoTip>
-            Puste pole numeru dostaje kolejny numer. Tokeny wzoru: {"{NR}"} licznik, {"{DD}"} dzień, {"{MM}"} miesiąc, {"{RRRR}"} albo {"{RR}"} rok (z daty wystawienia).
+            {t("Puste pole numeru dostaje kolejny numer. Znaczniki wzoru:")} {"{NR}"} {t("licznik,")} {"{DD}"} {t("dzień,")} {"{MM}"} {t("miesiąc,")} {"{RRRR}"} {t("albo")} {"{RR}"} {t("rok (z daty wystawienia).")}
           </InfoTip>
         </h3>
         <p className="field-help">
           {settings?.numbering
-            ? `Włączona: ${settings.numbering.pattern}.`
-            : "Wyłączona: numer wpisujesz ręcznie."}
+            ? t("Włączona: {pattern}.", { pattern: settings.numbering.pattern })
+            : t("Wyłączona: numer wpisujesz ręcznie.")}
         </p>
         <div className="invoice-grid">
           <label>
-            Wzór numeru
+            {t("Wzór numeru")}
             <input value={numbering.pattern} onChange={(event) => setNumbering({ ...numbering, pattern: event.target.value })} />
           </label>
           <label>
-            Licznik od nowa
+            {t("Licznik od nowa")}
             <select
               value={numbering.reset}
               onChange={(event) => setNumbering({ ...numbering, reset: event.target.value as NumberingSettings["reset"] })}
             >
-              <option value="monthly">co miesiąc</option>
-              <option value="yearly">co rok</option>
-              <option value="never">nigdy</option>
+              <option value="monthly">{t("co miesiąc")}</option>
+              <option value="yearly">{t("co rok")}</option>
+              <option value="never">{t("nigdy")}</option>
             </select>
           </label>
           <label>
-            Cyfry licznika (min.)
+            {t("Cyfry licznika (min.)")}
             <input
               type="number"
               min={1}
@@ -381,7 +381,7 @@ export function InvoiceSettingsPanel() {
               }, "Autonumeracja zapisana.")
             }
           >
-            Zapisz wzór
+            {t("Zapisz wzór")}
           </button>
           {settings?.numbering ? (
             <button
@@ -396,29 +396,29 @@ export function InvoiceSettingsPanel() {
                     const { numbering: _removed, ...rest } = current;
                     return rest;
                   });
-                }, "Autonumeracja wyłączona.")
+                }, t("Autonumeracja wyłączona."))
               }
             >
-              Wyłącz autonumerację
+              {t("Wyłącz autonumerację")}
             </button>
           ) : null}
         </div>
       </section>
 
       <section>
-        <h3>Logo na fakturze</h3>
+        <h3>{t("Logo na fakturze")}</h3>
         {settings?.logo ? (
           <img
             className="invoice-logo-preview"
-            alt="Logo na fakturze"
+            alt={t("Logo na fakturze")}
             src={`data:${settings.logo.mediaType};base64,${settings.logo.base64}`}
           />
         ) : (
-          <p className="field-help">Brak logo. PNG albo JPEG, najwyżej 512 KB.</p>
+          <p className="field-help">{t("Brak logo. PNG albo JPEG, najwyżej 512 KB.")}</p>
         )}
         <div className="chat-form-row">
           <label className="chat-secondary-action invoice-file-button">
-            {settings?.logo ? "Zmień logo" : "Wgraj logo"}
+            {settings?.logo ? t("Zmień logo") : t("Wgraj logo")}
             <input
               type="file"
               accept="image/png,image/jpeg"
@@ -452,10 +452,10 @@ export function InvoiceSettingsPanel() {
                     const { logo: _removed, ...rest } = current;
                     return rest;
                   });
-                }, "Logo usunięte.")
+                }, t("Logo usunięte."))
               }
             >
-              Usuń logo
+              {t("Usuń logo")}
             </button>
           ) : null}
         </div>

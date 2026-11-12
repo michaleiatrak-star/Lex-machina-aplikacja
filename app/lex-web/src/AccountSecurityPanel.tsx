@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useState
 } from "react";
@@ -51,7 +52,7 @@ export function AccountSecurityPanel({
         result.recoveryCode
       );
       setMessage(
-        "Nowy kod recovery został utworzony. Poprzedni kod recovery, jeśli istniał, został unieważniony."
+        t("Nowy kod odzyskiwania został utworzony. Poprzedni kod odzyskiwania, jeśli istniał, został unieważniony.")
       );
     } catch (failure) {
       setSetupPassword("");
@@ -59,8 +60,8 @@ export function AccountSecurityPanel({
         failure instanceof ApiError &&
         failure.code ===
           "INVALID_CREDENTIALS"
-          ? "Bieżące hasło jest nieprawidłowe."
-          : "Nie udało się utworzyć kodu recovery."
+          ? t("Bieżące hasło jest nieprawidłowe.")
+          : t("Nie udało się utworzyć kodu odzyskiwania.")
       );
     } finally {
       setBusy(false);
@@ -100,9 +101,9 @@ export function AccountSecurityPanel({
       setMessage(
         user.passwordSetupPending
           ? user.passwordChangeRequired === true
-            ? "Hasło zostało ustawione. Hasło jednorazowe przestało działać, a nowy kod recovery został wygenerowany: zapisz go."
-            : "Hasło zostało zmienione. Początkowe hasło admin przestało działać, a nowy kod recovery został wygenerowany."
-          : "Hasło zostało zmienione. Pozostałe sesje zostały unieważnione; sprawy zachowały te same klucze danych."
+            ? t("Hasło zostało ustawione. Hasło jednorazowe przestało działać, a nowy kod odzyskiwania został wygenerowany: zapisz go.")
+            : t("Hasło zostało zmienione. Początkowe hasło admin przestało działać, a nowy kod odzyskiwania został wygenerowany.")
+          : t("Hasło zostało zmienione. Pozostałe sesje zostały unieważnione; sprawy zachowały te same klucze danych.")
       );
     } catch (failure) {
       setCurrentPassword("");
@@ -113,7 +114,7 @@ export function AccountSecurityPanel({
           "INVALID_PASSWORD_CHANGE"
       ) {
         setError(
-          "Nowe hasło nie spełnia polityki: co najmniej 10 znaków, maksymalnie 128."
+          t("Nowe hasło nie spełnia polityki: co najmniej 10 znaków, maksymalnie 128.")
         );
       } else if (
         failure instanceof ApiError &&
@@ -121,11 +122,11 @@ export function AccountSecurityPanel({
           "INVALID_CREDENTIALS"
       ) {
         setError(
-          "Bieżące hasło jest nieprawidłowe."
+          t("Bieżące hasło jest nieprawidłowe.")
         );
       } else {
         setError(
-          "Nie udało się zmienić hasła."
+          t("Nie udało się zmienić hasła.")
         );
       }
     } finally {
@@ -137,34 +138,34 @@ export function AccountSecurityPanel({
     <section className="account-security-panel">
       <div>
         <p className="eyebrow">
-          Bezpieczeństwo konta
+          {t("Bezpieczeństwo konta")}
         </p>
         <h3>
           {user.passwordSetupPending
-            ? "Zmień początkowe hasło"
-            : "Hasło i odzyskiwanie"}
+            ? t("Zmień początkowe hasło")
+            : t("Hasło i odzyskiwanie")}
         </h3>
         {user.passwordChangeRequired === true && (
           <div className="alert">
-            Administrator ustawił hasło jednorazowe. Przed dalszą pracą ustaw własne hasło (co najmniej 10 znaków); w polu poniżej wpisz hasło jednorazowe.
+            {t("Administrator ustawił hasło jednorazowe. Przed dalszą pracą ustaw własne hasło (co najmniej 10 znaków); w polu poniżej wpisz hasło jednorazowe.")}
           </div>
         )}
         {user.passwordSetupPending && user.passwordChangeRequired !== true && (
           <div className="alert">
-            Początkowe dane logowania to admin / admin. Hasło admin jest tymczasowe i znane publicznie: możesz już pracować, ale do czasu jego zmiany u góry okna pozostaje ostrzeżenie. Nowe hasło musi mieć co najmniej 10 znaków.
+            {t("Początkowe dane logowania to admin / admin. Hasło admin jest tymczasowe i znane publicznie: możesz już pracować, ale do czasu jego zmiany u góry okna pozostaje ostrzeżenie. Nowe hasło musi mieć co najmniej 10 znaków.")}
           </div>
         )}
         <p className="field-help">
-          Kod recovery odblokowuje ten sam lokalny klucz użytkownika. Nie przechowuj go razem z komputerem.
+          {t("Kod odzyskiwania odblokowuje ten sam lokalny klucz użytkownika. Nie przechowuj go razem z komputerem.")}
         </p>
       </div>
 
       <div className="account-security-grid">
         {!user.passwordSetupPending && (
         <div>
-          <h4>Kod recovery</h4>
+          <h4>{t("Kod odzyskiwania")}</h4>
           <label>
-            Potwierdź bieżące hasło
+            {t("Potwierdź bieżące hasło")}
             <input
               type="password"
               autoComplete="current-password"
@@ -190,19 +191,19 @@ export function AccountSecurityPanel({
               void createCode();
             }}
           >
-            Wygeneruj nowy kod recovery
+            {t("Wygeneruj nowy kod odzyskiwania")}
           </button>
 
           {recoveryCode && (
             <div className="recovery-code-box">
               <strong>
-                Zapisz ten kod teraz
+                {t("Zapisz ten kod teraz")}
               </strong>
               <code>
                 {recoveryCode}
               </code>
               <p>
-                Kod jest pokazany tylko w pamięci tej sesji UI. Wygenerowanie kolejnego kodu unieważni ten.
+                {t("Kod jest pokazany tylko w pamięci tej sesji UI. Wygenerowanie kolejnego kodu unieważni ten.")}
               </p>
               <button
                 type="button"
@@ -211,7 +212,7 @@ export function AccountSecurityPanel({
                   setRecoveryCode("")
                 }
               >
-                Ukryj kod
+                {t("Ukryj kod")}
               </button>
             </div>
           )}
@@ -221,15 +222,15 @@ export function AccountSecurityPanel({
         <div>
           <h4>
             {user.passwordSetupPending
-              ? "Ustaw hasło"
-              : "Zmiana hasła"}
+              ? t("Ustaw hasło")
+              : t("Zmiana hasła")}
           </h4>
           <label>
             {user.passwordChangeRequired === true
-              ? "Hasło jednorazowe"
+              ? t("Hasło jednorazowe")
               : user.passwordSetupPending
-                ? "Początkowe hasło"
-                : "Bieżące hasło"}
+                ? t("Początkowe hasło")
+                : t("Bieżące hasło")}
             <input
               type="password"
               autoComplete="current-password"
@@ -245,7 +246,7 @@ export function AccountSecurityPanel({
             />
           </label>
           <label>
-            Nowe hasło
+            {t("Nowe hasło")}
             <input
               type="password"
               autoComplete="new-password"
@@ -270,7 +271,7 @@ export function AccountSecurityPanel({
               void updatePassword();
             }}
           >
-            Zmień hasło
+            {t("Zmień hasło")}
           </button>
         </div>
       </div>

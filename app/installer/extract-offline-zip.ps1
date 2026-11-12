@@ -1,6 +1,10 @@
 param(
   [Parameter(Mandatory=$true)][string]$ArchivePath,
-  [Parameter(Mandatory=$true)][string]$DestinationPath
+  [Parameter(Mandatory=$true)][string]$DestinationPath,
+  # Optional: the share of the caller's progress bar this extraction fills (Set-StageProgress).
+  [string]$ProgressText = "",
+  [double]$ProgressFrom = -1,
+  [double]$ProgressTo = -1
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +44,10 @@ try {
       [StringComparer]::OrdinalIgnoreCase
     )
     $fileCount = 0
+    $report = $ProgressFrom -ge 0 -and (Get-Command Set-StageProgress -ErrorAction SilentlyContinue)
+    $totalBytes = 0L
+    if ($report) { foreach ($item in $zip.Entries) { $totalBytes += $item.Length } }
+    $doneBytes = 0L
 
     foreach ($entry in $zip.Entries) {
       $name = $entry.FullName.Replace('\', '/')
@@ -101,6 +109,8 @@ try {
       }
 
       $fileCount++
+      $doneBytes += $entry.Length
+      if ($report -and $totalBytes -gt 0) { Set-StageProgress $ProgressText $ProgressFrom $ProgressTo ($doneBytes / [double]$totalBytes) }
     }
 
     if ($fileCount -lt 1) {

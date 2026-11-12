@@ -176,6 +176,10 @@ function localAppDataRoot(): string {
   return path.resolve(os.homedir(), ".lex-machina");
 }
 
+export function skillAutoUpdateSettingsPath(): string {
+  return path.join(localAppDataRoot(), "skills", "auto-update.json");
+}
+
 export function installedSkillOverlayRoot(): string {
   return path.join(localAppDataRoot(), "skills", "current");
 }
@@ -759,8 +763,9 @@ export function validateSkillCandidateAgainstIndex(
   registry: LexSkillRegistry,
   index: SkillUpdateIndex
 ): void {
+  // The whole corpus is replaced: every skill, not only those of the chosen legal system.
   const actualIds = [
-    ...registry.skills.keys()
+    ...registry.everySkill.keys()
   ].sort();
   const indexedIds =
     index.skills
@@ -778,7 +783,7 @@ export function validateSkillCandidateAgainstIndex(
 
   for (const expected of index.skills) {
     const actual =
-      registry.get(expected.id);
+      registry.everySkill.get(expected.id);
     if (!actual) {
       throw new Error(
         "SKILL_UPDATE_INDEX_SKILL_SET_MISMATCH"
@@ -850,7 +855,70 @@ function locateSkillRoot(stage: string): string {
   throw new Error("SKILL_UPDATE_CORPUS_INVALID");
 }
 
+/** "6.85" vs "6.9": each dotted part as a number (85 > 9); a part that is not a number as text. */
+export function compareSkillVersions(left: string, right: string): number {
+  const a = left.trim().split(".");
+  const b = right.trim().split(".");
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const x = a[index] ?? "0";
+    const y = b[index] ?? "0";
+    const nx = /^\d+$/.test(x) ? Number(x) : null;
+    const ny = /^\d+$/.test(y) ? Number(y) : null;
+    const order = nx !== null && ny !== null ? Math.sign(nx - ny) : x.localeCompare(y, "en");
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
+/**
+ * A skills release against the skills in use (bundled with the application, installed earlier or
+ * from the model accounts): newer skills and skills that would go back to an older version. A
+ * release is installed only with something newer and nothing older, so a release published before
+ * the application's own skills never replaces them.
+ */
+export function skillReleaseComparison(
+  index: Pick<SkillUpdateIndex, "skills">,
+  active: ReadonlyMap<string, string>
+): { newer: string[]; older: string[] } {
+  const newer: string[] = [];
+  const older: string[] = [];
+  for (const skill of index.skills) {
+    const current = active.get(skill.id);
+    const order = current === undefined ? 1 : compareSkillVersions(skill.version, current);
+    if (order > 0) newer.push(skill.id);
+    else if (order < 0) older.push(skill.id);
+  }
+  return { newer, older };
+}
+
 export class MaintenanceService {
+  // Skills releases of the skills repository and the versions of the skills in use (server.ts);
+  // without them (tests, older callers) skill updates come from the application's releases.
+  private skillReleases: { discovery: UpdateDiscovery; activeVersions: () => ReadonlyMap<string, string> } | null = null;
+
+  useSkillReleases(discovery: UpdateDiscovery, activeVersions: () => ReadonlyMap<string, string>): void {
+    this.skillReleases = { discovery, activeVersions };
+  }
+
+  // The verified index of a skills release and how it compares with the skills in use.
+  private async skillReleaseIndex(status: UpdateDiscoveryResult): Promise<{ index: SkillUpdateIndex; indexSha256: string; signerKeyId: string; installable: boolean }> {
+    if (!status.skillsIndex) throw new Error("SKILL_UPDATE_INDEX_MISSING");
+    const indexBytes = await downloadVerified(status.skillsIndex, this.fetchImpl);
+    const signatureBytes = status.skillsSignature ? await downloadVerified(status.skillsSignature, this.fetchImpl) : new Uint8Array();
+    const verified = this.skillIndexVerifier(indexBytes, signatureBytes);
+    const index = verified.index;
+    const compatible =
+      compareVersions(CURRENT_APPLICATION_VERSION, index.compatibility.minAppVersion) >= 0 &&
+      !(index.compatibility.maxAppVersion && compareVersions(CURRENT_APPLICATION_VERSION, index.compatibility.maxAppVersion) > 0);
+    const comparison = skillReleaseComparison(index, this.skillReleases!.activeVersions());
+    return {
+      index,
+      indexSha256: verified.indexSha256,
+      signerKeyId: verified.signerKeyId,
+      installable: compatible && comparison.newer.length > 0 && comparison.older.length === 0
+    };
+  }
+
   private updateDownload: Promise<ApplicationUpdateDownload> | null = null;
   private updateProgress: DownloadProgress = { phase: "idle", received: 0 };
   applicationDownloadProgress(): DownloadProgress { return { ...this.updateProgress }; }
@@ -913,7 +981,7 @@ export class MaintenanceService {
       extractSkillChannelDirectory
   ) {}
 
-  private installedChannel(): SkillChannelInstalled | null {
+  installedChannel(): SkillChannelInstalled | null {
     const marker = readSkillHealthMarker(installedSkillOverlayRoot()) as
       | (Record<string, unknown> & SkillHealthMarker)
       | null;
@@ -1142,14 +1210,31 @@ export class MaintenanceService {
   }
 
   async skillStatus(): Promise<SkillUpdateStatus> {
-    const status = await this.discovery.check();
+    const status = await (this.skillReleases?.discovery ?? this.discovery).check();
     const currentVersion =
       installedSkillOverlayVersion() ??
       CURRENT_APPLICATION_VERSION;
     const latestVersion = status.latestVersion;
-    const available =
+    let available =
       Boolean(status.skillsBundle && latestVersion) &&
-      compareVersions(currentVersion, latestVersion!) < 0;
+      (this.skillReleases ? currentVersion !== latestVersion : compareVersions(currentVersion, latestVersion!) < 0);
+    if (available && this.skillReleases && status.skillsIndex) {
+      try {
+        available = (await this.skillReleaseIndex(status)).installable;
+      } catch (error) {
+        return {
+          currentVersion,
+          status: "UNAVAILABLE",
+          ...(latestVersion ? { latestVersion } : {}),
+          unavailableReason: error instanceof Error ? error.message : String(error),
+          ...(status.repository ? { repository: status.repository } : {}),
+          checkedAt: status.checkedAt,
+          bundleReady: false,
+          verificationReady: this.skillTrustReady(),
+          signatureMode: this.skillSignatureMode()
+        };
+      }
+    }
     const signatureMode =
       this.skillSignatureMode();
     const indexAssetsReady = Boolean(
@@ -1603,12 +1688,14 @@ export class MaintenanceService {
   }
 
   async applySkillUpdate(): Promise<SkillUpdateApplyResult> {
-    const status = await this.discovery.check();
+    const status = await (this.skillReleases?.discovery ?? this.discovery).check();
     const version = requireLatestVersion(status);
     const previousVersion =
       installedSkillOverlayVersion() ??
       CURRENT_APPLICATION_VERSION;
-    if (compareVersions(previousVersion, version) >= 0) {
+    // Skills releases: decided by the versions of the skills (skillReleaseComparison), checked
+    // once the index is verified; application releases: by the release version.
+    if (this.skillReleases ? previousVersion === version : compareVersions(previousVersion, version) >= 0) {
       throw new Error("SKILL_UPDATE_NOT_AVAILABLE");
     }
     if (!status.skillsBundle) {
@@ -1655,6 +1742,18 @@ export class MaintenanceService {
       );
     const index =
       verifiedIndex.index;
+    if (
+      this.skillReleases &&
+      !skillReleaseComparison(index, this.skillReleases.activeVersions()).newer.length
+    ) {
+      throw new Error("SKILL_UPDATE_NOT_AVAILABLE");
+    }
+    if (
+      this.skillReleases &&
+      skillReleaseComparison(index, this.skillReleases.activeVersions()).older.length
+    ) {
+      throw new Error("SKILL_UPDATE_WOULD_DOWNGRADE");
+    }
 
     if (index.version !== version) {
       throw new Error(

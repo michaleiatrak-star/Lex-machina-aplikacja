@@ -1,4 +1,5 @@
 import { reportUsage } from "./usage-meter.js";
+import { answerLanguageInstruction } from "./answer-language.js";
 import type {
   ProviderAdapter,
   ProviderId,
@@ -70,8 +71,14 @@ export class ProviderGateway {
 
   async stream(
     providerId: ProviderId,
-    params: ProviderStreamParams
+    requested: ProviderStreamParams
   ): Promise<ProviderStreamResult> {
+    // The interface language (a request in another language than Polish): appended after the
+    // prompt, so a cached prefix stays the same.
+    const language = answerLanguageInstruction();
+    const params: ProviderStreamParams = language
+      ? { ...requested, systemPrompt: requested.systemPrompt ? `${requested.systemPrompt}\n\n${language}` : language }
+      : requested;
     const provider = this.registry.get(providerId);
     if (!provider) {
       throw new ProviderGatewayError(

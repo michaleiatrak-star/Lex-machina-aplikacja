@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { courtByName } from "./court-base.js";
 import { WOKANDA_REGISTER } from "./wokanda-registry-data.js";
+import { isIncompleteChain, missingIntermediate, networkReason, requestWithIntermediate } from "./tls-chain.js";
 
 export type WokandaStatus = "PORTAL" | "BROWSER" | "NONE" | "UNREACHABLE";
 
@@ -79,24 +80,63 @@ const MAX_HEARINGS = 10;
 const GUARD = /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge/iu;
 
 export const defaultFetchText: FetchText = async (url, headers = {}, init) => {
-  const response = await fetch(url, {
-    headers: { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    redirect: "follow",
-    ...(init ? { method: init.method, body: init.body } : {})
-  });
-  const text = await response.text();
-  return { status: response.status, url: response.url || url, text: text.slice(0, 1_000_000) };
+  const allHeaders = { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers };
+  try {
+    const response = await fetch(url, {
+      headers: allHeaders,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      redirect: "follow",
+      ...(init ? { method: init.method, body: init.body } : {})
+    });
+    const text = await response.text();
+    return { status: response.status, url: response.url || url, text: text.slice(0, 1_000_000) };
+  } catch (error) {
+    // A court site without its intermediate certificate: fetched the way a browser does.
+    if (!isIncompleteChain(error)) throw error;
+    const intermediate = await missingIntermediate(new URL(url).hostname);
+    if (!intermediate) throw error;
+    return await requestWithIntermediate(url, intermediate, allHeaders, init);
+  }
 };
 
 // --- Sessions after a browser verification done by the user --------------------------------
 // As for sn.pl: the user passes the court's verification in the application's window of that
 // court; its cookies and the browser's User-Agent serve this user's wokanda queries to that
-// court. Kept in memory only; never returned or logged.
+// court. Never returned or logged; sealed on disk by the store set with
+// configureWokandaSessionStore, so a verification survives a restart (report 2026-11-11).
+// A court that no longer accepts the session asks for the window again.
 
 type WokandaSession = { cookie: string; userAgent: string; at: number };
 const sessions = new Map<string, WokandaSession>();
-const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type WokandaSessionStore = {
+  load(): Record<string, WokandaSession>;
+  save(all: Record<string, WokandaSession>): void;
+};
+let sessionStore: WokandaSessionStore | null = null;
+
+export function configureWokandaSessionStore(store: WokandaSessionStore | null): void {
+  sessionStore = store;
+  if (!store) return;
+  for (const [domain, session] of Object.entries(store.load())) {
+    if (Date.now() - session.at <= SESSION_TTL_MS && !sessions.has(domain)) sessions.set(domain, session);
+  }
+}
+
+function persistSessions(): void {
+  if (!sessionStore) return;
+  const all: Record<string, WokandaSession> = {};
+  for (const [domain, session] of sessions) {
+    if (Date.now() - session.at <= SESSION_TTL_MS) all[domain] = session;
+  }
+  sessionStore.save(all);
+}
+
+/** Courts with a kept verification session (names of domains only, never the cookies). */
+export function wokandaSessionDomains(): string[] {
+  return [...sessions].filter(([, session]) => Date.now() - session.at <= SESSION_TTL_MS).map(([domain]) => domain);
+}
 
 export function courtDomain(host: string): string {
   return host.toLowerCase().replace(/^www\./u, "");
@@ -111,10 +151,12 @@ function sessionHeaders(domain: string): Record<string, string> | null {
 export function setWokandaSession(domain: string, cookie: string, userAgent: string): void {
   if (!cookie.trim() || cookie.length > 16_384 || /[\r\n]/u.test(cookie + userAgent) || userAgent.length > 512) throw new Error("WOKANDA_SESSION_INVALID");
   sessions.set(courtDomain(domain), { cookie: cookie.trim(), userAgent: userAgent.trim() || WOKANDA_USER_AGENT, at: Date.now() });
+  persistSessions();
 }
 
 export function clearWokandaSessions(): void {
   sessions.clear();
+  persistSessions();
 }
 
 /** The court's wokanda page read with the window's cookies: the portal answered, the session is kept. */
@@ -404,7 +446,11 @@ export async function checkWokanda(
   const base = { court: courtByName(courtName)?.nazwa ?? courtName, signature, checkedAt };
   if (!court) return { ...base, state: "NO_WOKANDA", reason: "Sądu nie ma w rejestrze wokand (sądy powszechne)." };
   if (court.status === "NONE") return { ...base, state: "NO_WOKANDA", ...(court.url ? { url: court.url } : {}), reason: "Strona sądu nie publikuje wokandy." };
-  const verifiable = court.status === "PORTAL" || (court.status === "BROWSER" && court.powod === "weryfikacja przeglądarki");
+  // A browser check or a firewall that turns away the application's requests (403, 429): the
+  // court's window, a real browser engine, gets through and lends its session.
+  const verifiable =
+    court.status === "PORTAL" ||
+    (court.status === "BROWSER" && (court.powod === "weryfikacja przeglądarki" || Boolean(court.powod?.startsWith("strona blokuje zapytania aplikacji"))));
   const verification = (savedSession: boolean) => ({ domain: court.domena, url: court.url ?? `https://${court.domena}/wokanda`, savedSession });
   const session = verifiable ? sessionHeaders(court.domena) : null;
   if (court.status === "BROWSER" && !session) {
@@ -444,7 +490,7 @@ export async function checkWokanda(
         ...(court.system === "LIST" ? { note: "Wokanda tego sądu to jedna lista bez wyszukiwarki: sprawdzono tylko terminy, które są na niej teraz." } : {})
       };
     } catch (error) {
-      return { ...base, state: "UNREACHABLE", url: court.url ?? `https://${court.domena}`, reason: `Strona sądu nie odpowiedziała (${error instanceof Error ? error.name : "błąd"}).` };
+      return { ...base, state: "UNREACHABLE", url: court.url ?? `https://${court.domena}`, reason: `Strona sądu nie odpowiedziała (${networkReason(error)}).` };
     }
   }
   const searchUrl = portalSearchUrl(court.url ?? `https://${court.domena}/wokanda`, parsed);
@@ -452,9 +498,9 @@ export async function checkWokanda(
   try {
     page = await fetchPage(searchUrl);
   } catch (error) {
-    return { ...base, state: "UNREACHABLE", url: court.url ?? searchUrl, reason: `Strona sądu nie odpowiedziała (${error instanceof Error ? error.name : "błąd"}).` };
+    return { ...base, state: "UNREACHABLE", url: court.url ?? searchUrl, reason: `Strona sądu nie odpowiedziała (${networkReason(error)}).` };
   }
-  if (GUARD.test(page.text)) {
+  if (GUARD.test(page.text) || page.status === 403 || page.status === 429) {
     return {
       ...base,
       state: "BROWSER_ONLY",
@@ -482,6 +528,19 @@ export async function checkWokanda(
 export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchText = defaultFetchText): Promise<WokandaCourt> {
   const other = court.system && court.system !== "MS_PORTAL";
   const url = (court.status === "PORTAL" && !other) || !court.url ? `https://${court.domena}/wokanda` : court.url;
+  // A court passed in its window by the user: the portal read with that session (report 2026-11-11:
+  // the register kept "no access" after the user's verification).
+  const session = sessionHeaders(court.domena);
+  if (session) {
+    try {
+      const portal = await fetchText(`https://${court.domena}/wokanda`, session);
+      if (portal.status === 200 && !GUARD.test(portal.text) && portal.text.includes('name="nrspr"')) {
+        return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: portal.url, powod: "przez sesję z okna sądu" };
+      }
+    } catch {
+      // The session no longer serves: the check below says what the court answers without it.
+    }
+  }
   try {
     const page = await fetchText(url);
     // Another system that answers without a guard keeps its way of searching.
@@ -489,10 +548,13 @@ export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchT
     if (page.status === 200 && page.text.includes('name="nrspr"') && page.text.includes('value="cases"')) return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: page.url };
     if (GUARD.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: "weryfikacja przeglądarki" };
     if (page.status === 200 && /wokand/iu.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: court.powod ?? "inny system wokandy" };
+    // A firewall answering the application with 403 or 429 lets a browser through: the court's
+    // window (as for a browser check) opens it.
+    if (page.status === 403 || page.status === 429) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url || url, powod: `strona blokuje zapytania aplikacji (HTTP ${page.status})` };
     if (page.status === 200 || page.status === 404) return { nazwa: court.nazwa, domena: court.domena, status: court.status === "NONE" ? "NONE" : court.status, ...(court.url ? { url: court.url } : {}), ...(court.powod ? { powod: court.powod } : {}) };
     return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: `HTTP ${page.status}` };
   } catch (error) {
-    return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: error instanceof Error ? error.name : "błąd sieci" };
+    return { nazwa: court.nazwa, domena: court.domena, status: "UNREACHABLE", url, powod: networkReason(error) };
   }
 }
 
@@ -509,7 +571,15 @@ export function wokandaOverridesPath(env: NodeJS.ProcessEnv = process.env): stri
 function readOverrides(file: string): Record<string, WokandaCourt & { sprawdzono: string }> {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, WokandaCourt & { sprawdzono: string }>) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    // A re-check older than the register shipped with the application gives way to it: the release
+    // may correct the court's address (report 2026-11-11: addresses kept from an older re-check).
+    const shipped = Date.parse(WOKANDA_REGISTER.sprawdzono);
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, WokandaCourt & { sprawdzono: string }>).filter(
+        ([, court]) => !(Date.parse(court?.sprawdzono ?? "") < shipped)
+      )
+    );
   } catch {
     return {};
   }

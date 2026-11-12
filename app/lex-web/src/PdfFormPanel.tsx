@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { fillPdfForm, getPdfFormFields, type PdfFormField } from "./workspace-client.js";
 
@@ -6,11 +7,11 @@ type Value = string | boolean | null;
 /** Message for a form error code of the runtime (pdf_form_worker.py). */
 export function pdfFormError(code: string): string {
   const field = code.split(":").slice(1).join(":");
-  if (code.startsWith("PDF_FORM_VALUE_INVALID")) return `Niedozwolona wartość pola „${field}”.`;
-  if (code.startsWith("PDF_FORM_UNKNOWN_FIELD")) return `Formularz nie ma pola „${field}”.`;
-  if (code.startsWith("PDF_FORM_READ_ONLY")) return `Pole „${field}” jest tylko do odczytu.`;
-  if (code.startsWith("PDF_FORM_ENCRYPTED")) return "Formularz jest chroniony hasłem.";
-  return `Nie udało się wypełnić formularza (${code}).`;
+  if (code.startsWith("PDF_FORM_VALUE_INVALID")) return t("Niedozwolona wartość pola „{field}”.", { field: field });
+  if (code.startsWith("PDF_FORM_UNKNOWN_FIELD")) return t("Formularz nie ma pola „{field}”.", { field: field });
+  if (code.startsWith("PDF_FORM_READ_ONLY")) return t("Pole „{field}” jest tylko do odczytu.", { field: field });
+  if (code.startsWith("PDF_FORM_ENCRYPTED")) return t("Formularz jest chroniony hasłem.");
+  return t("Nie udało się wypełnić formularza ({code}).", { code: code });
 }
 
 function filledName(filename: string): string {
@@ -68,7 +69,7 @@ export function PdfFormPanel(props: {
       const blob = await fillPdfForm(props.caseId, props.itemId, { values: sent, flatten });
       const name = filledName(props.filename);
       await props.onSave(new File([blob], name, { type: "application/pdf" }));
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setChanged(new Set());
     } catch (failure) {
       setStatus(pdfFormError(failure instanceof Error ? failure.message : String(failure)));
@@ -79,11 +80,11 @@ export function PdfFormPanel(props: {
 
   const editable = !props.readOnly;
   return (
-    <section className="pdf-form-panel" aria-label="Pola formularza PDF">
+    <section className="pdf-form-panel" aria-label={t("Pola formularza PDF")}>
       <header>
-        <strong>Formularz PDF: {fields.length} pól</strong>
+        <strong>{t("Formularz PDF:")} {fields.length} {t("pól")}</strong>
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
-          {open ? "Zwiń" : "Wypełnij"}
+          {open ? t("Zwiń") : t("Wypełnij")}
         </button>
       </header>
       {open ? (
@@ -96,7 +97,7 @@ export function PdfFormPanel(props: {
               const label = (
                 <label htmlFor={id}>
                   {field.label}
-                  <small> (str. {field.page})</small>
+                  <small> {t("(str.")} {field.page})</small>
                 </label>
               );
               if (field.type === "checkbox") {
@@ -139,15 +140,15 @@ export function PdfFormPanel(props: {
           </div>
           {editable ? (
             <div className="pdf-form-actions">
-              <label title="Wartości wpisane na stałe w stronę; pól nie da się już edytować">
-                <input type="checkbox" checked={flatten} onChange={(event) => setFlatten(event.target.checked)} /> Spłaszcz (do wysłania)
+              <label title={t("Wartości wpisane na stałe w stronę; pól nie da się już edytować")}>
+                <input type="checkbox" checked={flatten} onChange={(event) => setFlatten(event.target.checked)} /> {t("Spłaszcz (do wysłania)")}
               </label>
               <button type="button" disabled={saving || changed.size === 0} onClick={() => void save()}>
-                {saving ? "Zapisywanie…" : "Zapisz wypełniony PDF"}
+                {saving ? "Zapisywanie…" : t("Zapisz wypełniony PDF")}
               </button>
             </div>
           ) : (
-            <small>Sprawa tylko do odczytu.</small>
+            <small>{t("Sprawa tylko do odczytu.")}</small>
           )}
           {status ? <p role="status">{status}</p> : null}
         </>

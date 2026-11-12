@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   editDocumentPage,
@@ -39,30 +40,30 @@ const overlaps = (a: { start: number; end: number }, b: { start: number; end: nu
 
 // A firm found in the VAT white list or KRS says so: the register match is visible.
 function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
-  if (mark.firm === "REGISTRY") return "Firma (biała lista VAT / KRS)";
-  if (mark.firm === "TEXT") return "Firma";
+  if (mark.firm === "REGISTRY") return t("Firma (biała lista VAT / KRS)");
+  if (mark.firm === "TEXT") return t("Firma");
   return KIND_LABEL[mark.kind] ?? mark.kind;
 }
 
 // Why a local recognizer is down, in words (the raw reason stays in the tooltip).
 export function recognizerReason(reason: string): string {
-  if (/No module named '?morfeusz2/iu.test(reason)) return "brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji";
-  if (/No module named '?stanza/iu.test(reason)) return "brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji";
-  if (/No module named/iu.test(reason)) return "brak składnika Pythona - uruchom naprawę instalacji";
-  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return "nie znaleziono Pythona - uruchom naprawę instalacji";
-  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return "nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie";
-  if (/SELF_TEST_NO_PERSON/u.test(reason)) return "uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji";
-  if (/MemoryError|out of memory/iu.test(reason)) return "za mało pamięci";
+  if (/No module named '?morfeusz2/iu.test(reason)) return t("brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji");
+  if (/No module named '?stanza/iu.test(reason)) return t("brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji");
+  if (/No module named/iu.test(reason)) return t("brak składnika Pythona - uruchom naprawę instalacji");
+  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return t("nie znaleziono Pythona - uruchom naprawę instalacji");
+  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return t("nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie");
+  if (/SELF_TEST_NO_PERSON/u.test(reason)) return t("uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji");
+  if (/MemoryError|out of memory/iu.test(reason)) return t("za mało pamięci");
   if (/DLL load failed|nie można odnaleźć określonego modułu|specified module could not be found|MSVCP|VCRUNTIME/iu.test(reason))
-    return "nie ładuje się biblioteka systemowa (Visual C++) - uruchom naprawę instalacji";
+    return t("nie ładuje się biblioteka systemowa (Visual C++) - uruchom naprawę instalacji");
   if (/FileNotFoundError|No such file|\.tsv|\.dict?\b|surnames_pesel|given_names_pesel|teryt/iu.test(reason))
-    return "brak pliku słownika (PESEL/TERYT) - uruchom naprawę instalacji";
+    return t("brak pliku słownika (PESEL/TERYT) - uruchom naprawę instalacji");
   if (/PermissionError|Access is denied|Odmowa dostępu|EACCES|EPERM/iu.test(reason))
-    return "brak uprawnień do plików programu (np. blokada antywirusa) - uruchom naprawę instalacji";
+    return t("brak uprawnień do plików programu (np. blokada antywirusa) - uruchom naprawę instalacji");
   if (/SyntaxError|ImportError|AttributeError|NameError/iu.test(reason))
-    return "niezgodna wersja skryptu - uruchom naprawę instalacji";
-  if (/UnicodeDecodeError|UnicodeEncodeError/iu.test(reason)) return "błąd kodowania znaków - zgłoś szczegóły techniczne";
-  return "błąd uruchomienia - zgłoś szczegóły techniczne";
+    return t("niezgodna wersja skryptu - uruchom naprawę instalacji");
+  if (/UnicodeDecodeError|UnicodeEncodeError/iu.test(reason)) return t("błąd kodowania znaków - zgłoś szczegóły techniczne");
+  return t("błąd uruchomienia - zgłoś szczegóły techniczne");
 }
 
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
@@ -157,7 +158,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   function unmaskHealth(item: { page: number; start: number; end: number }): void {
     setDirectives((current) => current.filter((directive) => !(directive.page === item.page && directive.action === "LABEL" && overlaps(directive, item))));
   }
-  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP" })));
+  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP", layer: line.reason === "LAYER_MISMATCH" })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
     ? 0
@@ -194,7 +195,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     if (!selection) return current;
     const label = markLabel.trim();
     if (markAction === "LABEL" && !label) {
-      setError("Wpisz etykietę, którą zastąpić zaznaczony fragment.");
+      setError(t("Wpisz etykietę, którą zastąpić zaznaczony fragment."));
       return null;
     }
     setError("");
@@ -281,7 +282,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       setScanRevision((value) => value + 1);
       return { review: nextReview, directives: nextDirectives };
     } catch (failure) {
-      setError(`Nie udało się zapisać tekstu strony: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setError(t("Nie udało się zapisać tekstu strony: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       return null;
     } finally {
       setSaving(false);
@@ -309,7 +310,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       setSelection(null);
       return true;
     } catch (failure) {
-      setError(`Nie udało się zapisać transkrypcji: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setError(t("Nie udało się zapisać transkrypcji: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
       return false;
     } finally {
       setSaving(false);
@@ -347,10 +348,10 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${("aiNotPerson" in mark && mark.aiNotPerson) || ("uncertain" in mark && mark.uncertain) ? " is-ai-hint" : ""}`}
               title={
                 mark.user
-                  ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
+                  ? t("{kind} - Twoje zaznaczenie; kliknij, aby cofnąć", { kind: KIND_LABEL[mark.kind] ?? mark.kind })
                   : open
-                    ? "Zostanie jawne - kliknij, aby zakryć"
-                    : `${suggestionLabel(mark)} - zostanie zakryte; kliknij, aby zostawić jawne`
+                    ? t("Zostanie jawne - kliknij, aby zakryć")
+                    : t("{mark} - zostanie zakryte; kliknij, aby zostawić jawne", { mark: suggestionLabel(mark) })
               }
               onClick={() =>
                 mark.user
@@ -374,53 +375,53 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   );
 
   return (
-    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
+    <section ref={previewRef} className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={t("Podgląd przed zatwierdzeniem: {fileName}", { fileName: props.fileName })}>
       <header className="privacy-preview-head">
         <div>
-          <strong>Podgląd przed zatwierdzeniem: {props.fileName}</strong>
+          <strong>{t("Podgląd przed zatwierdzeniem:")} {props.fileName}</strong>
           <small>
             {props.keepClear
-              ? "Tekst bez anonimizacji - sprawdź odczyt, zanim trafi do modelu."
-              : `Zakryte zostanie: ${masked} · zostawione jawne z Twojej decyzji: ${clear}.`}
+              ? t("Tekst bez anonimizacji - sprawdź odczyt, zanim trafi do modelu.")
+              : t("Zakryte zostanie: {masked} · zostawione jawne z Twojej decyzji: {clear}.", { masked: masked, clear: clear })}
           </small>
           {props.keepClear ? null : (
-            <InfoTip>Kliknij zaznaczenie, aby zostawić je jawne; zaznacz tekst myszą, aby go zakryć.</InfoTip>
+            <InfoTip>{t("Kliknij zaznaczenie, aby zostawić je jawne; zaznacz tekst myszą, aby go zakryć.")}</InfoTip>
           )}
         </div>
         <div className="privacy-preview-actions">
           {review.pages.length > 1 ? (
             <select
               id="privacy-preview-page-jump"
-              aria-label="Przejdź do strony"
+              aria-label={t("Przejdź do strony")}
               value=""
               onChange={(event) => {
                 showOnScan(Number(event.target.value), null, true);
               }}
             >
-              <option value="">Przejdź do strony…</option>
+              <option value="">{t("Przejdź do strony…")}</option>
               {review.pages.map((page) => (
                 <option key={page.page} value={page.page}>s. {page.page}</option>
               ))}
             </select>
           ) : null}
           <button type="button" onClick={props.onCancel} disabled={props.busy}>
-            Anuluj
+            {t("Anuluj")}
           </button>
           {props.onKeepClear && !props.keepClear ? (
             <button
               type="button"
               disabled={props.busy || saving || editing !== null}
-              title="Cały plik bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi"
+              title={t("Cały plik bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi")}
               onClick={() => props.onKeepClear!(review)}
             >
-              Bez anonimizacji
+              {t("Bez anonimizacji")}
             </button>
           ) : null}
           <button
             type="button"
             className="primary-button"
             disabled={props.busy || saving}
-            title={editing ? `Zapisze poprawiony tekst strony ${editing.page} i zatwierdzi plik` : undefined}
+            title={editing ? t("Zapisze poprawiony tekst strony {page} i zatwierdzi plik", { page: editing.page }) : undefined}
             onClick={() => void confirm()}
           >
             {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}
@@ -440,18 +441,17 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         <p className="field-error" role="alert">
           {review.recognizerWarnings.map((item) => (
             <span key={item.name} title={item.reason}>
-              Nie działa {item.name}: {recognizerReason(item.reason)}.{" "}
+              {t("Nie działa")} {item.name}: {recognizerReason(item.reason)}.{" "}
             </span>
           ))}
-          Mogły zostać pominięte pojedyncze nazwiska - sprawdź tekst i zaznacz je ręcznie. Po naprawie wczytaj plik
-          jeszcze raz.
-          <InfoTip>Adresy i pary imię-nazwisko z bazy PESEL są nadal wykrywane.</InfoTip>
+          {t("Mogły zostać pominięte pojedyncze nazwiska - sprawdź tekst i zaznacz je ręcznie. Po naprawie wczytaj plik jeszcze raz.")}
+          <InfoTip>{t("Adresy i pary imię-nazwisko z bazy PESEL są nadal wykrywane.")}</InfoTip>
         </p>
       ) : null}
       {!props.keepClear && review.recognizerWarnings?.length ? (
         // The error itself, readable and copyable: the cause without guessing.
         <details className="privacy-recognizer-details">
-          <summary>Szczegóły techniczne</summary>
+          <summary>{t("Szczegóły techniczne")}</summary>
           {review.recognizerWarnings.map((item) => (
             <pre key={item.name}>{`${item.name}: ${item.reason}`}</pre>
           ))}
@@ -459,13 +459,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       ) : null}
       {aiHints.length || doubtful.length || fixes.length || health.length ? (
         <div className="privacy-preview-todo">
-          <strong>Do decyzji</strong>
+          <strong>{t("Do decyzji")}</strong>
           {health.length ? (
             <details className="privacy-preview-group" open>
-              <summary>Dane o zdrowiu ({health.length})</summary>
+              <summary>{t("Dane o zdrowiu (")}{health.length})</summary>
               <small>
-                Szczególna kategoria danych (art. 9 RODO). Nie są zakrywane automatycznie, bo w sprawie o szkodę lub
-                zadośćuczynienie są jej istotą. Zakryj je, gdy analiza ich nie potrzebuje.
+                {t("Szczególna kategoria danych (art. 9 RODO). Nie są zakrywane automatycznie, bo w sprawie o szkodę lub zadośćuczynienie są jej istotą. Zakryj je, gdy analiza ich nie potrzebuje.")}
               </small>
               <ul>
                 {health.map((item) => (
@@ -474,25 +473,25 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}”
                     </span>
                     <button type="button" onClick={() => (healthMasked(item) ? unmaskHealth(item) : maskHealth([item]))}>
-                      {healthMasked(item) ? "Odkryj" : "Zakryj"}
+                      {healthMasked(item) ? t("Odkryj") : t("Zakryj")}
                     </button>
                   </li>
                 ))}
               </ul>
               {health.length > 1 && health.some((item) => !healthMasked(item)) ? (
                 <button type="button" onClick={() => maskHealth(health)}>
-                  Zakryj wszystkie
+                  {t("Zakryj wszystkie")}
                 </button>
               ) : null}
             </details>
           ) : null}
           {aiHints.length ? (
             <details className="privacy-preview-group">
-              <summary>Do przejrzenia ({aiHints.length})</summary>
+              <summary>{t("Do przejrzenia (")}{aiHints.length})</summary>
               <small>
-                {aiHints.some((item) => item.aiNotPerson) ? "Lokalne AI uznało część wykryć za nie-osoby. " : ""}
-                {aiHints.some((item) => item.uncertain) ? "Nazwisko znanej osoby w miejscu, gdzie może to być zwykłe słowo. " : ""}
-                Bez Twojej decyzji zostaną zakryte.
+                {aiHints.some((item) => item.aiNotPerson) ? t("Lokalne AI uznało część wykryć za nie-osoby. ") : ""}
+                {aiHints.some((item) => item.uncertain) ? t("Nazwisko znanej osoby w miejscu, gdzie może to być zwykłe słowo. ") : ""}
+                {t("Bez Twojej decyzji zostaną zakryte.")}
               </small>
               <ul>
                 {aiHints.map((item) => (
@@ -501,7 +500,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · {item.aiNotPerson ? `AI: ${item.aiNotPerson}` : item.uncertain}
                     </span>
                     <button type="button" onClick={() => toggleKeep(item)}>
-                      {kept(item.page, item) ? "Zakryj z powrotem" : "Odkryj"}
+                      {kept(item.page, item) ? t("Zakryj z powrotem") : t("Odkryj")}
                     </button>
                   </li>
                 ))}
@@ -510,12 +509,11 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           {doubtful.length ? (
             <details className="privacy-preview-group" open>
-              <summary>Niepewne ({doubtful.length})</summary>
+              <summary>{t("Niepewne (")}{doubtful.length})</summary>
               <small>
-                Odczyt niepewny: porównaj z oryginałem i popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony)
-                albo w całym tekście strony.
+                {t("Odczyt niepewny: porównaj z oryginałem i popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony) albo w całym tekście strony.")}
                 {doubtful.some((line) => line.stamp)
-                  ? " Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma: gdy niosą istotne dane (data wpływu, podpis, kwota), dopisz je przez „Popraw tekst strony”."
+                  ? t(" Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma: gdy niosą istotne dane (data wpływu, podpis, kwota), dopisz je przez „Popraw tekst strony”.")
                   : ""}
               </small>
               <ul>
@@ -530,9 +528,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       className="privacy-preview-line-label"
                       aria-expanded={scanned ? snippetKey === key : undefined}
                       onClick={() => setSnippetKey(snippetKey === key ? null : key)}
-                      title={scanned ? "Pokaż ten fragment skanu" : undefined}
+                      title={scanned ? t("Pokaż ten fragment skanu") : undefined}
                     >
-                      s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”
+                      s. {line.page} · {line.stamp ? t("pieczęć · ") : ""}{line.layer ? t("liczba inna niż w warstwie tekstowej PDF · ") : ""}„{line.text}”
                     </button>
                     {scanned && snippetKey === key ? (
                       <ScanSnippet caseId={props.caseId} documentId={review.documentId} page={line.page} line={line.line} onClose={() => setSnippetKey(null)} />
@@ -558,14 +556,14 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                           }}
                         />
                         <button type="button" disabled={saving || value.trim() === line.text} onClick={() => void saveLineFix(line, key)}>
-                          Zapisz
+                          {t("Zapisz")}
                         </button>
                       </span>
                     )}
                     <span className="privacy-preview-todo-actions">
                       {scanned ? (
                         <button type="button" onClick={() => showOnScan(line.page, { line: line.line }, true)}>
-                          Pokaż na skanie
+                          {t("Pokaż na skanie")}
                         </button>
                       ) : null}
                       <button
@@ -576,7 +574,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                           setEditLine(line.text);
                         }}
                       >
-                        Popraw tekst strony
+                        {t("Popraw tekst strony")}
                       </button>
                     </span>
                   </li>
@@ -587,15 +585,15 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           {fixes.length ? (
             <details className="privacy-preview-group">
-              <summary>Skorygowane ({fixes.length})</summary>
-              <small>Słowa poprawione po OCR (odstępy, ogonki, model wizyjny lub Bielik).</small>
+              <summary>{t("Skorygowane (")}{fixes.length})</summary>
+              <small>{t("Słowa poprawione po OCR (odstępy, ogonki, model wizyjny lub Bielik).")}</small>
               <ul>
                 {fixes.slice(0, 50).map((fix, index) => (
                   <li key={`fix-${fix.page}-${index}`}>
                     <span>s. {fix.page} · „{fix.from}” → „{fix.to}”</span>
                     {scanned ? (
                       <button type="button" onClick={() => showOnScan(fix.page, { line: fix.line }, true)}>
-                        Pokaż na skanie
+                        {t("Pokaż na skanie")}
                       </button>
                     ) : null}
                   </li>
@@ -603,7 +601,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               </ul>
               {props.onUndoOcrFixes ? (
                 <button type="button" onClick={props.onUndoOcrFixes}>
-                  Przetwórz ponownie bez korekt modelu
+                  {t("Przetwórz ponownie bez korekt modelu")}
                 </button>
               ) : null}
             </details>
@@ -616,15 +614,15 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           <span>„{review.pages.find((page) => page.page === selection.page)?.text.slice(selection.start, selection.end)}”</span>
           <select
             id="privacy-preview-action"
-            aria-label="Co zrobić z zaznaczeniem"
+            aria-label={t("Co zrobić z zaznaczeniem")}
             value={markAction}
             onChange={(event) => setMarkAction(event.target.value as "PSEUDONYMIZE" | "LABEL")}
           >
-            <option value="PSEUDONYMIZE">Zakryj symbolem</option>
-            <option value="LABEL">Zastąp etykietą</option>
+            <option value="PSEUDONYMIZE">{t("Zakryj symbolem")}</option>
+            <option value="LABEL">{t("Zastąp etykietą")}</option>
           </select>
           {markAction === "PSEUDONYMIZE" ? (
-            <select id="privacy-preview-kind" aria-label="Rodzaj danych" value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
+            <select id="privacy-preview-kind" aria-label={t("Rodzaj danych")} value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
               {Object.entries(KIND_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
@@ -632,13 +630,13 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           <input
             id="privacy-preview-label"
-            aria-label="Etykieta"
-            placeholder={markAction === "LABEL" ? "np. POWÓD" : "Własna etykieta (opcjonalnie)"}
+            aria-label={t("Etykieta")}
+            placeholder={markAction === "LABEL" ? t("np. POWÓD") : t("Własna etykieta (opcjonalnie)")}
             value={markLabel}
             onChange={(event) => setMarkLabel(event.target.value)}
           />
           <button type="button" onClick={maskSelection}>
-            {markAction === "LABEL" ? "Zastąp etykietą" : "Zakryj zaznaczenie"}
+            {markAction === "LABEL" ? t("Zastąp etykietą") : t("Zakryj zaznaczenie")}
           </button>
         </div>
       ) : null}
@@ -658,7 +656,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         <div className="privacy-preview-work">
           {editing ? (
             <div className="privacy-preview-edit">
-              <strong>Tekst strony {editing.page}</strong>
+              <strong>{t("Tekst strony")} {editing.page}</strong>
               <textarea
                 id="privacy-preview-page-text"
                 ref={editRef}
@@ -671,10 +669,10 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               />
               <div className="privacy-preview-actions">
                 <button type="button" onClick={() => setEditing(null)} disabled={saving}>
-                  Anuluj poprawkę
+                  {t("Anuluj poprawkę")}
                 </button>
                 <button type="button" className="primary-button" onClick={() => void savePage()} disabled={saving}>
-                  {saving ? "Zapisuję…" : "Zapisz tekst strony"}
+                  {saving ? "Zapisuję…" : t("Zapisz tekst strony")}
                 </button>
               </div>
             </div>

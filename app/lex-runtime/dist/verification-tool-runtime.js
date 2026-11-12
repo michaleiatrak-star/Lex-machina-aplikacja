@@ -15,6 +15,8 @@ import { describeEliAct } from "./eli-act-descriptor.js";
 import { euAct, verifyEuArticle } from "./eu-law-verifier.js";
 import { verificationMarker, verificationSourceLink } from "./source-anchor.js";
 const TOOL_NAME = "verify_legal_reference";
+const OFFLINE_NOTE = "Tryb offline: źródła zewnętrzne wyłączone. Przepis, którego nie potwierdza lokalna kopia ELI, oznacz ⚠️ [NIEWERYFIKOWANE]; orzeczenia tylko z biblioteki na dysku (search_case_law_library), inne jako do sprawdzenia.";
+const OFFLINE_VERIFICATION_APPENDIX = "TRYB OFFLINE (ustawienie administratora): aplikacja nie łączy się ze źródłami zewnętrznymi. verify_legal_reference sprawdza przepis wyłącznie w lokalnej kopii ELI (data kopii w wyniku); search_case_law_library przeszukuje orzeczenia zapisane na dysku. Nie powołuj orzeczeń ani interpretacji spoza biblioteki jako zweryfikowanych i nie podawaj brzmienia przepisu, którego kopia nie zawiera.";
 /** Wynik z lokalnej kopii ELI, gdy samo ELI nie odpowiada: data kopii i wyraźna informacja. */
 function withEliOutageNotice(payload, cause) {
     const copyDate = typeof payload.fetchedAt === "string" ? payload.fetchedAt.slice(0, 10) : null;
@@ -622,6 +624,7 @@ export class LegalVerificationToolRuntime {
     eliFetch;
     adoptAct;
     localModel;
+    offline;
     // Pobieranie źródła zastępczego (testy podstawiają własne).
     substituteFetcher = null;
     broker;
@@ -632,7 +635,10 @@ export class LegalVerificationToolRuntime {
     // gdy kopia jest zgodna).
     adoptAct = null, 
     // Model lokalny (Bielik, Mistral): lokalna kopia ELI (RAG) pierwsza.
-    localModel = false) {
+    localModel = false, 
+    // Tryb offline modelu lokalnego: tylko lokalna kopia ELI i biblioteka orzeczeń na dysku;
+    // żadnego zapytania do ELI, EUR-Lex, SN, SAOS, CBOSA ani EUREKA.
+    offline = false) {
         this.ledger = ledger;
         this.verifier = verifier;
         this.resolver = resolver;
@@ -643,6 +649,7 @@ export class LegalVerificationToolRuntime {
         this.eliFetch = eliFetch;
         this.adoptAct = adoptAct;
         this.localModel = localModel;
+        this.offline = offline;
         this.broker = new ToolBroker(new ToolPolicy({
             allowNetwork: true,
             allowedNetworkHosts: [
@@ -1052,6 +1059,8 @@ export class LegalVerificationToolRuntime {
         });
     }
     schemas() {
+        if (this.offline)
+            return [TOOL_SCHEMA, CASE_LIBRARY_TOOL_SCHEMA];
         return [
             TOOL_SCHEMA,
             INTERPRETATION_TOOL_SCHEMA,
@@ -1064,7 +1073,10 @@ export class LegalVerificationToolRuntime {
         ];
     }
     systemPromptAppendix() {
-        return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
+        return this.offline ? `${LEGAL_VERIFICATION_SYSTEM_APPENDIX}\n\n${OFFLINE_VERIFICATION_APPENDIX}` : LEGAL_VERIFICATION_SYSTEM_APPENDIX;
+    }
+    isOffline() {
+        return this.offline;
     }
     async verifyEu(toolCallId, claim, act) {
         try {
@@ -1427,6 +1439,11 @@ export class LegalVerificationToolRuntime {
     async runFresh(calls) {
         const results = [];
         for (const call of calls) {
+            if (this.offline && call.name !== CASE_LIBRARY_TOOL_NAME && call.name !== TOOL_NAME) {
+                this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: call.name, capability: "network", decision: "DENY", reason: "OFFLINE_MODE" });
+                results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "OUT_OF_SCOPE", error: "OFFLINE_MODE", note: OFFLINE_NOTE }) });
+                continue;
+            }
             if (call.name === CASE_LIBRARY_TOOL_NAME) {
                 results.push({ tool_use_id: call.id, content: searchCaseLawLibrary(call.input) });
                 continue;
@@ -1650,6 +1667,18 @@ export class LegalVerificationToolRuntime {
             const asOf = /^\d{4}-\d{2}-\d{2}$/u.test(requestedAsOf) && requestedAsOf >= todayWarsaw() ? "" : requestedAsOf;
             // EU law (RODO, AI Act, a regulation or directive by number or CELEX): the article from
             // Cellar/EUR-Lex, in its consolidated version applicable today, the act's in-force status.
+            // Tryb offline: wyłącznie lokalna kopia ELI, bez sprawdzenia w ELI i bez pobierania aktu.
+            if (this.offline) {
+                const local = this.coreLaw ? this.verifyWithCoreLaw(call, actInput, asOf, undefined) : { denied: "CORE_LAW_UNAVAILABLE", content: "" };
+                if (!local.denied) {
+                    results.push({ tool_use_id: call.id, content: local.content });
+                }
+                else {
+                    this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: TOOL_NAME, capability: "read", decision: "DENY", reason: `OFFLINE_MODE:${local.denied}` });
+                    results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "DENIED", error: "OFFLINE_MODE", localCopy: local.denied, note: OFFLINE_NOTE }) });
+                }
+                continue;
+            }
             const eu = euAct(actInput || (typeof call.input.claim === "string" ? call.input.claim : ""));
             if (eu && typeof call.input.claim === "string" && !asOf) {
                 results.push({ tool_use_id: call.id, content: await this.verifyEu(call.id, call.input.claim, eu) });
@@ -1657,8 +1686,8 @@ export class LegalVerificationToolRuntime {
             }
             // Modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG), także KC/KPC/KK/KPK.
             // Gdy kopia nie może odpowiedzieć, próba w źródle i dołączenie aktu do kopii.
-            // Modele w chmurze: kopia tylko wtedy, gdy ELI właśnie potwierdziło (metadane aktu, co
-            // najwyżej raz na 15 min), że to obowiązujący t.j. bez oczekujących zmian; reguły kopii
+            // Modele w chmurze: kopia, gdy ELI potwierdziło (metadane aktu, raz na dobę), że to
+            // obowiązujący t.j. bez oczekujących zmian, albo gdy ELI nie odpowiada; reguły kopii
             // (nowelizacje po t.j. nie dotykają przepisu, nie OCR, bez vacatio legis) jak dotąd.
             // Każda inna sytuacja: pobranie z ELI. Pomiar 2026-10-22: 11–16 s na przepis z PDF ELI.
             let localCopy;
@@ -1673,7 +1702,9 @@ export class LegalVerificationToolRuntime {
             }
             else if (this.coreLaw && !asOf && process.env.LEX_CLOUD_LOCAL_COPY?.trim() !== "0") {
                 const liveCheck = await this.checkCopyInEli(actInput);
-                if (liveCheck?.state === "CURRENT") {
+                // ELI nie odpowiada: pobranie przepisu z ELI też się nie uda (a trwa 11–16 s), więc kopia
+                // sprawdzona w ELI w ciągu FRESHNESS_MAX_AGE_MS, z informacją o niedostępności ELI.
+                if (liveCheck?.state === "CURRENT" || liveCheck?.state === "UNREACHABLE") {
                     const local = this.verifyWithCoreLaw(call, actInput, asOf, liveCheck);
                     if (!local.denied) {
                         results.push({ tool_use_id: call.id, content: local.content });

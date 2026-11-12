@@ -1,4 +1,6 @@
-import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister, type FetchText } from "../courts/wokanda.js";
+import type { SkillAutoUpdater } from "../skill-auto-update.js";
+import { probeLawSourceSession } from "../eli/law-source-sessions.js";
+import { probeWokandaSession, recheckWokandaCourts, wokandaCourtsView, wokandaRegister, wokandaSessionDomains, type FetchText } from "../courts/wokanda.js";
 import type { TranscriptionModelManager } from "../transcription.js";
 import type { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
 import { ChatTurnJournal } from "../chat-turn-journal.js";
@@ -85,6 +87,8 @@ export function registerMaintenanceRoutes(
     authService: AuthService;
     localModels: LocalModelRuntime;
     maintenance: MaintenanceService;
+    // Automatyczna aktualizacja skilli; ręczne zmiany nakładki idą przez jej kolejkę.
+    skillAutoUpdate?: SkillAutoUpdater;
     anomalyJournal?: AnomalyJournal;
     transcriptionModel?: TranscriptionModelManager;
     ocrAcceleration?: OcrAccelerationManager;
@@ -97,6 +101,7 @@ export function registerMaintenanceRoutes(
     authService,
     localModels,
     maintenance,
+    skillAutoUpdate,
     anomalyJournal,
     transcriptionModel,
     ocrAcceleration,
@@ -114,7 +119,9 @@ export function registerMaintenanceRoutes(
   app.get("/api/courts/wokanda", (req, res) => {
     try {
       authenticated(req, authService);
-      res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView() });
+      // "sesja": the court's verification window was passed and its session is kept (never the cookies).
+      const kept = new Set(wokandaSessionDomains());
+      res.json({ checkedAt: wokandaRegister().sprawdzono, courts: wokandaCourtsView().map((court) => (kept.has(court.domena) ? { ...court, sesja: true } : court)) });
     } catch (error) {
       if (error instanceof AuthError) {
         res.status(error.httpStatus).json({ error: error.code });
@@ -124,8 +131,19 @@ export function registerMaintenanceRoutes(
     }
   });
   app.post("/api/courts/wokanda/recheck", async (req, res) => {
-    if (!requireAdmin(req, res, authService)) return;
     const names = Array.isArray(req.body?.courts) ? (req.body.courts as unknown[]).filter((name): name is string => typeof name === "string").slice(0, 400) : null;
+    // One court after the user's own verification in its window: any signed-in user; more: administrator.
+    if (names?.length === 1) {
+      try {
+        authenticated(req, authService);
+      } catch (error) {
+        if (error instanceof AuthError) {
+          res.status(error.httpStatus).json({ error: error.code });
+          return;
+        }
+        throw error;
+      }
+    } else if (!requireAdmin(req, res, authService)) return;
     try {
       res.json({ courts: await recheckWokandaCourts(names && names.length ? names : null, dependencies.wokandaFetch) });
     } catch (error) {
@@ -153,6 +171,28 @@ export function registerMaintenanceRoutes(
       res.json(await probeWokandaSession(domain, cookie, userAgent, dependencies.wokandaFetch));
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WOKANDA_SESSION_INVALID" });
+    }
+  });
+
+  // A law source behind a bot check (law-source-sessions.ts): the check passed by the user in the
+  // source's window of the application; its cookies probed against the source and kept when it answers.
+  app.post("/api/law-sources/session/probe", async (req, res) => {
+    try {
+      authenticated(req, authService);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.httpStatus).json({ error: error.code });
+        return;
+      }
+      throw error;
+    }
+    const host = typeof req.body?.host === "string" ? req.body.host : "";
+    const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+    const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+    try {
+      res.json(await probeLawSourceSession(host, cookie, userAgent));
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "LAW_SOURCE_SESSION_INVALID" });
     }
   });
 
@@ -747,7 +787,10 @@ export function registerMaintenanceRoutes(
         return;
       }
       try {
-        res.json(await maintenance.refreshSkillsFromChannel(channel));
+        const work = () => maintenance.refreshSkillsFromChannel(channel);
+        const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+        skillAutoUpdate?.markInstalledManually();
+        res.json(result);
       } catch (error) {
         sendMaintenanceError(res, error);
       }
@@ -759,12 +802,49 @@ export function registerMaintenanceRoutes(
     async (req, res) => {
       if (!requireAdmin(req, res, authService)) return;
       try {
-        res.json(await maintenance.applySkillUpdate());
+        const work = () => maintenance.applySkillUpdate();
+        const result = skillAutoUpdate ? await skillAutoUpdate.exclusive(work) : await work();
+        skillAutoUpdate?.markInstalledManually();
+        res.json(result);
       } catch (error) {
         sendMaintenanceError(res, error);
       }
     }
   );
+
+  // Automatyczna aktualizacja skilli: stan, włączenie/wyłączenie, sprawdzenie teraz.
+  app.get("/api/skills/auto-update", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    res.json(skillAutoUpdate.state());
+  });
+
+  app.put("/api/skills/auto-update", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== "boolean") {
+      res.status(400).json({ error: "SKILL_AUTO_UPDATE_ENABLED_INVALID" });
+      return;
+    }
+    res.json(skillAutoUpdate.setEnabled(enabled));
+  });
+
+  app.post("/api/skills/auto-update/run", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (!skillAutoUpdate) {
+      res.status(404).json({ error: "SKILL_AUTO_UPDATE_UNAVAILABLE" });
+      return;
+    }
+    await skillAutoUpdate.runOnce();
+    res.json(skillAutoUpdate.state());
+  });
 
   app.get("/api/update/progress", (req, res) => {
     if (!requireAdmin(req, res, authService)) return;

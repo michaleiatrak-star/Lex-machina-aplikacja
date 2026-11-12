@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -311,26 +312,26 @@ export function FirmKnowledgePanel({
       <div className="firm-knowledge-head">
         <div>
           <p className="eyebrow">
-            Know-how kancelarii
+            {t("Know-how kancelarii")}
           </p>
           <h3>
-            Prywatna baza wiedzy
-            <InfoTip>Dokumenty są chronione jak akta sprawy: szyfrowanie, uprawnienia i rotacja klucza. Wyszukiwanie działa lokalnie.</InfoTip>
+            {t("Prywatna baza wiedzy")}
+            <InfoTip>{t("Dokumenty są chronione jak akta sprawy: szyfrowanie, uprawnienia i rotacja klucza. Wyszukiwanie działa lokalnie.")}</InfoTip>
           </h3>
         </div>
         <span className="security-pill">
-          ENCRYPTED + ACL
+          {t("ENCRYPTED + ACL")}
         </span>
       </div>
 
       {loading ? (
         <p className="workspace-empty">
-          Sprawdzanie bazy wiedzy…
+          {t("Sprawdzanie bazy wiedzy…")}
         </p>
       ) : !workspace ? (
         <div className="firm-knowledge-empty">
           <p>
-            Nie masz dostępu do bazy wiedzy kancelarii albo nie została jeszcze utworzona.
+            {t("Nie masz dostępu do bazy wiedzy kancelarii albo nie została jeszcze utworzona.")}
           </p>
           {user.appRole ===
             "ADMIN" && (
@@ -344,7 +345,7 @@ export function FirmKnowledgePanel({
             >
               {creating
                 ? "Tworzę…"
-                : "Utwórz szyfrowaną bazę wiedzy"}
+                : t("Utwórz szyfrowaną bazę wiedzy")}
             </button>
           )}
         </div>
@@ -356,7 +357,7 @@ export function FirmKnowledgePanel({
                 "Wiedza kancelarii"}
             </strong>
             <span>
-              Rola: {workspace.role} · klucz v{workspace.keyVersion}
+              {t("Rola:")} {workspace.role} {t("· klucz v")}{workspace.keyVersion}
             </span>
           </div>
 
@@ -369,7 +370,7 @@ export function FirmKnowledgePanel({
             ) && (
             <details className="firm-knowledge-ingest">
               <summary>
-                Dodaj wiedzę / dokument
+                {t("Dodaj wiedzę / dokument")}
               </summary>
               <DocumentPrivacyPanel
                 caseId={
@@ -404,10 +405,10 @@ export function FirmKnowledgePanel({
       <div className="knowledge-search-box">
         <div>
           <p className="eyebrow">
-            Retrieval lokalny
+            {t("Retrieval lokalny")}
           </p>
           <h4>
-            Przeszukaj wiedzę i akta
+            {t("Przeszukaj wiedzę i akta")}
           </h4>
         </div>
 
@@ -415,7 +416,7 @@ export function FirmKnowledgePanel({
           <input
             value={query}
             maxLength={500}
-            placeholder="np. kara umowna, cesja, przedawnienie, stanowisko klienta…"
+            placeholder={t("np. kara umowna, cesja, przedawnienie, stanowisko klienta…")}
             onChange={(event) =>
               setQuery(
                 event.target.value
@@ -442,13 +443,13 @@ export function FirmKnowledgePanel({
             }
           >
             <option value="BOTH">
-              Sprawa + wiedza kancelarii
+              {t("Sprawa + wiedza kancelarii")}
             </option>
             <option value="CURRENT">
-              Tylko bieżąca sprawa
+              {t("Tylko bieżąca sprawa")}
             </option>
             <option value="FIRM">
-              Tylko wiedza kancelarii
+              {t("Tylko wiedza kancelarii")}
             </option>
           </select>
           <button
@@ -467,7 +468,7 @@ export function FirmKnowledgePanel({
           >
             {searching
               ? "Szukam…"
-              : "Szukaj"}
+              : t("Szukaj")}
           </button>
         </div>
 
@@ -513,7 +514,7 @@ export function FirmKnowledgePanel({
                   </p>
                   <div className="knowledge-hit-actions">
                     <small>
-                      trafność {item.hit.score.toFixed(2)} · chunk {item.hit.chunkIndex}
+                      {t("trafność")} {item.hit.score.toFixed(2)} {t("· fragment")} {item.hit.chunkIndex}
                     </small>
                     <button
                       type="button"
@@ -539,8 +540,8 @@ export function FirmKnowledgePanel({
                       {canAnalyze(
                         item.caseRole
                       )
-                        ? "Dodaj do analizy"
-                        : "Tylko odczyt"}
+                        ? t("Dodaj do analizy")
+                        : t("Tylko odczyt")}
                     </button>
                   </div>
                 </article>
@@ -551,7 +552,7 @@ export function FirmKnowledgePanel({
 
         {refreshToken > 0 && (
           <p className="field-help">
-            Baza wiedzy została zmieniona; nowe dokumenty są już w wyszukiwaniu.
+            {t("Baza wiedzy została zmieniona; nowe dokumenty są już w wyszukiwaniu.")}
           </p>
         )}
       </div>

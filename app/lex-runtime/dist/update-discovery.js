@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.71";
+export const CURRENT_APPLICATION_VERSION = "0.1.79";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
@@ -78,9 +78,13 @@ function chooseAssets(release, repository) {
         : [];
     // macOS: the online .pkg of the same release (the Windows .exe never applies).
     const installer = process.platform === "darwin"
-        ? assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name))
+        ? assets.find((asset) => /lex.?machina.*macos.*online.*\.pkg$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name) && !/offline/i.test(asset.name))
+        // Windows: the online installer only. The offline package (1.5 GB, a self-extracting
+        // wrapper) also ends in "Setup.exe" and came first in the release's asset list: the update
+        // took it and failed with APPLICATION_UPDATE_VERSION_MISMATCH (2026-11-09, 0.1.73).
         : assets.find((asset) => /lexmachina.*windows.*online.*installer.*\.exe$/i.test(asset.name)) ??
-            assets.find((asset) => /lex.?machina.*setup.*\.exe$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*online.*setup.*\.exe$/i.test(asset.name)) ??
             assets.find((asset) => /lex.?machina.*\.exe$/i.test(asset.name) &&
                 !/offline/i.test(asset.name));
     const skillsBundle = assets.find((asset) => /lex.?machina.*skills.*\.zip$/i.test(asset.name));
@@ -99,10 +103,19 @@ function chooseAssets(release, repository) {
 }
 // Instalatory aplikacji publikuje publish-windows-installers.yml w repozytorium
 // aplikacji, zawsze jako pre-release (instalatory bez podpisu Authenticode/Apple).
-// Repozytorium Lex-Machina trzyma skille; jego wydania kończą się na 0.1.11.
+// Repozytorium Lex-Machina trzyma skille; od 0.1.78 jego wydania v<RRRR>.<MDD>.<GGMMSS> to
+// paczki skilli (skillReleaseDiscovery niżej), nie instalatory.
 export const APPLICATION_RELEASE_REPOSITORY = "michaleiatrak-star/Lex-machina-aplikacja";
 export function applicationUpdateDiscovery(fetchImpl = fetch) {
     return new GitHubReleaseUpdateDiscovery(CURRENT_APPLICATION_VERSION, APPLICATION_RELEASE_REPOSITORY, fetchImpl, () => Date.now(), true);
+}
+// Wydania skilli publikuje repozytorium skilli przy każdej zmianie w main
+// (.github/workflows/publish-skills-release.yml): tag v<RRRR>.<MDD>.<GGMMSS>, paczka
+// LexMachina-Skills-<wersja>.zip i indeks z wersją oraz SHA-256 każdego skilla. Wersja wydania
+// tylko porządkuje wydania; o instalacji decydują wersje skilli (maintenance-service.ts).
+export const SKILLS_RELEASE_REPOSITORY = "michaleiatrak-star/Lex-Machina";
+export function skillReleaseDiscovery(fetchImpl = fetch) {
+    return new GitHubReleaseUpdateDiscovery("0.0.0", SKILLS_RELEASE_REPOSITORY, fetchImpl, () => Date.now(), false);
 }
 export class GitHubReleaseUpdateDiscovery {
     currentVersion;

@@ -368,6 +368,58 @@ export class LocalCaseAccessService {
             };
         });
     }
+    /** Changes an event in place: kind, title, start, place and note; id and author stay. */
+    async updateCaseScheduleEvent(context, caseId, eventId, input) {
+        if (!this.schedule) {
+            throw new Error("CASE_SCHEDULE_UNAVAILABLE");
+        }
+        const kind = typeof input.kind === "string" && ["CLIENT_MEETING", "COURT_HEARING", "DEADLINE", "OTHER"].includes(input.kind)
+            ? input.kind
+            : null;
+        const title = cleanScheduleText(input.title, 180);
+        const startsAt = cleanScheduleStart(input.startsAt);
+        const location = cleanScheduleText(input.location, 180);
+        const notes = cleanScheduleText(input.notes, 2000);
+        if (!/^scheduleevent_[a-f0-9]{32}$/.test(eventId) || !kind || !title || !startsAt) {
+            throw new CaseAccessError("INVALID_CASE_ACCESS_REQUEST", 400);
+        }
+        return await this.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => {
+            const record = this.store.getCase(caseId);
+            if (!record) {
+                throw new CaseAccessError("CASE_NOT_FOUND", 404);
+            }
+            const events = await this.schedule.list({ caseId, caseDataKey, keyVersion: record.keyVersion });
+            const current = events.find((event) => event.eventId === eventId);
+            if (!current) {
+                throw new CaseAccessError("CASE_SCHEDULE_EVENT_NOT_FOUND", 404);
+            }
+            const updated = {
+                eventId: current.eventId,
+                kind,
+                title,
+                startsAt,
+                ...(location ? { location } : {}),
+                ...(notes ? { notes } : {}),
+                createdAt: current.createdAt,
+                createdByUserId: current.createdByUserId
+            };
+            await this.schedule.save({
+                caseId,
+                caseDataKey,
+                keyVersion: record.keyVersion,
+                events: events
+                    .map((event) => (event.eventId === eventId ? updated : event))
+                    .sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.createdAt.localeCompare(right.createdAt))
+            });
+            this.audit(context.user.userId, "case_schedule_event_updated", new Date().toISOString(), {
+                caseId,
+                eventId,
+                kind,
+                startsAt
+            });
+            return updated;
+        });
+    }
     /**
      * Events of every active case the user can read, from the start of today,
      * soonest first. A case whose key is unavailable is skipped, not fatal.

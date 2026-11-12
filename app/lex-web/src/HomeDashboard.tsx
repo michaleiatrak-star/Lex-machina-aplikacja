@@ -1,3 +1,5 @@
+import { InlineEdit } from "./InlineEdit";
+import { currentLocale, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { CASE_ROLE_LABEL } from "./api";
 import { useEffect, useState } from "react";
@@ -67,25 +69,6 @@ export function HomeDashboard({
   const [rename, setRename] = useState<{ caseId: string; value: string; error: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
 
-  async function saveRename(): Promise<void> {
-    if (!rename || !onRenameCase) return;
-    const value = rename.value.trim();
-    const current = cases.find((item) => item.caseId === rename.caseId);
-    if (!value || value === current?.displayName) {
-      setRename(null);
-      return;
-    }
-    setRenaming(true);
-    try {
-      await onRenameCase(rename.caseId, value);
-      setRename(null);
-    } catch (failure) {
-      setRename({ ...rename, error: failure instanceof Error ? failure.message : String(failure) });
-    } finally {
-      setRenaming(false);
-    }
-  }
-
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -112,19 +95,19 @@ export function HomeDashboard({
       <article className="chat-card lex-home-header">
         <div>
           <p className="eyebrow">
-            {new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            {new Date().toLocaleDateString(currentLocale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
           <h2>{greeting(new Date())}, {user.displayName}.</h2>
-          <small>Wróć do sprawy lub sprawdź, co wymaga uwagi. · @{user.loginName}</small>
+          <small>{t("Wróć do sprawy lub sprawdź, co wymaga uwagi. · @")}{user.loginName}</small>
         </div>
         <div>
           <p className="eyebrow">
-            Model domyślny<InfoTip>Ostatnio używany model; nowe rozmowy startują z nim.</InfoTip>
+            {t("Model domyślny")}<InfoTip>{t("Ostatnio używany model; nowe rozmowy startują z nim.")}</InfoTip>
           </p>
-          <strong>{modelLabel || "nie wybrano"}</strong>
+          <strong>{modelLabel || t("nie wybrano")}</strong>
           <small>{modelStatus}</small>
           <button type="button" className="chat-secondary-action" onClick={onOpenModels}>
-            Zmień model
+            {t("Zmień model")}
           </button>
         </div>
       </article>
@@ -132,9 +115,9 @@ export function HomeDashboard({
       {(() => {
         const attention = loading ? [] : homeAttention(events, invoices, new Date());
         return attention.length ? (
-          <article className="chat-card lex-home-attention" aria-label="Wymaga uwagi">
+          <article className="chat-card lex-home-attention" aria-label={t("Wymaga uwagi")}>
             <div className="lex-home-card-head">
-              <h2>Wymaga uwagi</h2>
+              <h2>{t("Wymaga uwagi")}</h2>
             </div>
             <ul>
               {attention.map((item) => (
@@ -156,17 +139,17 @@ export function HomeDashboard({
       <div className="lex-home-columns">
         <article className="chat-card">
           <div className="lex-home-card-head">
-            <h2>Najbliższe zdarzenia</h2>
+            <h2>{t("Najbliższe zdarzenia")}</h2>
             <button type="button" className="chat-secondary-action" onClick={onOpenCalendar}>
-              Kalendarz
+              {t("Kalendarz")}
             </button>
           </div>
           {loading ? (
-            <p>Ładuję zdarzenia…</p>
+            <p>{t("Ładuję zdarzenia…")}</p>
           ) : error ? (
             <p className="chat-error">{error}</p>
           ) : events.length === 0 ? (
-            <p>Brak zaplanowanych zdarzeń.</p>
+            <p>{t("Brak zaplanowanych zdarzeń.")}</p>
           ) : (
             <div className="matter-schedule-list">
               {events.map((event) => (
@@ -192,46 +175,39 @@ export function HomeDashboard({
 
         <article className="chat-card">
           <div className="lex-home-card-head">
-            <h2>Sprawy od najnowszych</h2>
+            <h2>{t("Sprawy od najnowszych")}</h2>
             <button type="button" className="chat-secondary-action" onClick={onNewCase}>
-              + Nowa sprawa
+              {t("+ Nowa sprawa")}
             </button>
           </div>
           {recent.length === 0 ? (
-            <p>Brak spraw.</p>
+            <p>{t("Brak spraw.")}</p>
           ) : (
             <div className="matter-schedule-list">
               {recent.map((item) =>
                 rename?.caseId === item.caseId ? (
-                  <form
-                    key={item.caseId}
-                    className="matter-thread-rename"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void saveRename();
-                    }}
-                  >
-                    <input
-                      autoFocus
-                      value={rename.value}
-                      maxLength={160}
-                      disabled={renaming}
-                      aria-label="Nowa nazwa sprawy"
-                      onChange={(event) => setRename({ ...rename, value: event.target.value, error: "" })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") setRename(null);
+                  <div key={item.caseId} className="matter-thread-rename">
+                    <InlineEdit
+                      value={item.displayName ?? ""}
+                      label={t("Nowa nazwa sprawy")}
+                      onCancel={() => setRename(null)}
+                      onSave={async (next) => {
+                        if (!onRenameCase) return false;
+                        setRenaming(true);
+                        try {
+                          await onRenameCase(item.caseId, next);
+                          setRename(null);
+                          return true;
+                        } catch (failure) {
+                          setRename({ caseId: item.caseId, value: next, error: failure instanceof Error ? failure.message : String(failure) });
+                          return false;
+                        } finally {
+                          setRenaming(false);
+                        }
                       }}
                     />
-                    <div className="matter-thread-rename-actions">
-                      <button type="submit" disabled={renaming || !rename.value.trim()}>
-                        Zapisz
-                      </button>
-                      <button type="button" disabled={renaming} onClick={() => setRename(null)}>
-                        Anuluj
-                      </button>
-                    </div>
                     {rename.error ? <small className="matter-thread-rename-error">{rename.error}</small> : null}
-                  </form>
+                  </div>
                 ) : (
                   <div key={item.caseId} className="matter-thread-row">
                     <button
@@ -242,7 +218,7 @@ export function HomeDashboard({
                       <span className="matter-schedule-item-main">
                         <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
                         <small>
-                          zmieniona {new Date(item.updatedAt || item.createdAt).toLocaleString("pl-PL")}
+                          {t("zmieniona")} {new Date(item.updatedAt || item.createdAt).toLocaleString(currentLocale())}
                           {" · "}
                           {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
                         </small>
@@ -253,8 +229,8 @@ export function HomeDashboard({
                         type="button"
                         className="matter-thread-edit"
                         disabled={renaming}
-                        title="Zmień nazwę sprawy"
-                        aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                        title={t("Zmień nazwę sprawy")}
+                        aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
                         onClick={() => setRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })}
                       >
                         <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -279,11 +255,11 @@ export function HomeDashboard({
       <article className="chat-card lex-home-card-head">
         <div>
           <h2>
-            Kancelaria<InfoTip>Wiedza kancelarii, wzory pism i materiały wspólne.</InfoTip>
+            {t("Kancelaria")}<InfoTip>{t("Wiedza kancelarii, wzory pism i materiały wspólne.")}</InfoTip>
           </h2>
         </div>
         <button type="button" className="chat-primary-action" onClick={onOpenFirm}>
-          Przejdź do modułu Kancelaria
+          {t("Przejdź do modułu Kancelaria")}
         </button>
       </article>
     </section>

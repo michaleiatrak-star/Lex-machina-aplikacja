@@ -1,6 +1,8 @@
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
+import { LAW_SOURCE_VERIFICATION_REQUIRED, clearLawSourceSession, isChallengePage, lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
+import { effectiveSearchOrder, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
 export class WebSearchError extends Error {
     code;
     constructor(code, detail) {
@@ -100,6 +102,84 @@ export function parseDuckDuckGoHtml(html, maxResults) {
     }
     return hits.slice(0, maxResults);
 }
+/** Organic results of a Google results page: a link with a heading (h3) inside; Google's own pages skipped. */
+export function parseGoogleHtml(html, maxResults) {
+    const hits = [];
+    const seen = new Set();
+    const anchor = /<a\b[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/giu;
+    let match;
+    while ((match = anchor.exec(html)) !== null && hits.length < maxResults) {
+        const heading = /<h3\b[^>]*>([\s\S]*?)<\/h3>/iu.exec(match[2] ?? "");
+        if (!heading)
+            continue;
+        let href = decodeEntities(match[1] ?? "");
+        if (href.startsWith("/url?")) {
+            href = new URLSearchParams(href.slice(5)).get("q") ?? new URLSearchParams(href.slice(5)).get("url") ?? "";
+        }
+        if (!/^https?:\/\//iu.test(href))
+            continue;
+        let host = "";
+        try {
+            host = new URL(href).hostname;
+        }
+        catch {
+            continue;
+        }
+        if (/(^|\.)google\.[a-z.]+$/iu.test(host) || seen.has(href))
+            continue;
+        seen.add(href);
+        // The snippet: the first text block after the link (Google's markup changes; best effort).
+        const after = html.slice(anchor.lastIndex, anchor.lastIndex + 4_000);
+        const snippet = /<(?:div|span)\b[^>]*(?:VwiC3b|data-sncf)[^>]*>([\s\S]*?)<\/(?:div|span)>/iu.exec(after)?.[1] ?? "";
+        hits.push({ title: decodeEntities(heading[1] ?? ""), url: href, snippet: decodeEntities(snippet).slice(0, 400) });
+    }
+    return hits;
+}
+/** Sources of a grounded Gemini answer: one hit per source, the passages it supports as snippet. */
+export function parseGeminiGrounding(payload, maxResults) {
+    const metadata = payload.candidates?.[0]?.groundingMetadata;
+    const chunks = Array.isArray(metadata?.groundingChunks) ? metadata.groundingChunks : [];
+    const snippets = new Map();
+    for (const support of Array.isArray(metadata?.groundingSupports) ? metadata.groundingSupports : []) {
+        const text = typeof support.segment?.text === "string" ? support.segment.text : "";
+        if (!text || !Array.isArray(support.groundingChunkIndices))
+            continue;
+        for (const index of support.groundingChunkIndices) {
+            if (typeof index === "number")
+                snippets.set(index, [...(snippets.get(index) ?? []), text]);
+        }
+    }
+    const seen = new Set();
+    return chunks
+        .map((chunk, index) => ({
+        title: typeof chunk.web?.title === "string" ? decodeEntities(chunk.web.title) : "",
+        url: typeof chunk.web?.uri === "string" ? chunk.web.uri.trim() : "",
+        snippet: (snippets.get(index) ?? []).join(" ").slice(0, 400)
+    }))
+        .filter((item) => item.title && /^https?:\/\//iu.test(item.url) && !seen.has(item.url) && seen.add(item.url))
+        .slice(0, maxResults);
+}
+export function parseFirecrawlResults(payload, maxResults) {
+    const items = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.data?.web) ? payload.data.web : [];
+    return items
+        .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.url === "string" ? item.url.trim() : "",
+        snippet: typeof item.description === "string" ? decodeEntities(item.description) : ""
+    }))
+        .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+        .slice(0, maxResults);
+}
+export function parseSearxngResults(payload, maxResults) {
+    return (Array.isArray(payload.results) ? payload.results : [])
+        .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.url === "string" ? item.url.trim() : "",
+        snippet: typeof item.content === "string" ? decodeEntities(item.content) : ""
+    }))
+        .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+        .slice(0, maxResults);
+}
 async function readLimitedText(response) {
     const buffer = Buffer.from(await response.arrayBuffer());
     return buffer
@@ -111,11 +191,13 @@ export class PublicWebSearch {
     fetchImpl;
     timeoutMs;
     botCheckPauseMs;
-    constructor(env = process.env, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, botCheckPauseMs = 2_500) {
+    settings;
+    constructor(env = process.env, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS, botCheckPauseMs = 2_500, settings = webSearchSettings) {
         this.env = env;
         this.fetchImpl = fetchImpl;
         this.timeoutMs = timeoutMs;
         this.botCheckPauseMs = botCheckPauseMs;
+        this.settings = settings;
     }
     async search(query, maxResults) {
         const provider = (this.env.LEX_WEB_SEARCH_PROVIDER ??
@@ -138,31 +220,196 @@ export class PublicWebSearch {
                 errors.push(`brave:${error instanceof Error ? error.message : String(error)}`);
             }
         }
-        if (provider === "auto" ||
-            provider === "duckduckgo" ||
-            provider === "ddg") {
-            // A bot check passes after a short pause more often than not (seen while checking the
-            // disciplinary courts' portals): one more try before "refused".
-            for (let attempt = 1; attempt <= 2; attempt += 1) {
-                try {
-                    const hits = withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
-                    if (hits.length > 0) {
-                        return { provider: "duckduckgo", hits };
-                    }
-                    break;
+        // Auto: the order measured by the comparison test (Ustawienia > Wyszukiwarka internetowa),
+        // then the remaining engines; a named provider runs alone.
+        const settings = this.settings();
+        const engines = provider === "auto"
+            ? effectiveSearchOrder(settings)
+            : provider === "searxng"
+                ? ["searxng"]
+                : provider === "firecrawl"
+                    ? ["firecrawl"]
+                    : provider === "gemini"
+                        ? ["gemini"]
+                        : provider === "google"
+                            ? ["google"]
+                            : provider === "duckduckgo" || provider === "ddg"
+                                ? ["duckduckgo"]
+                                : [];
+        let verificationRequired;
+        for (const engine of engines) {
+            try {
+                const hits = withoutBlocked(await this.searchEngine(engine, query, maxResults, settings));
+                if (hits.length > 0) {
+                    return { provider: engine, hits, ...(verificationRequired ? { verificationRequired } : {}) };
                 }
-                catch (error) {
-                    const message = error instanceof Error ? error.message : String(error);
-                    if (message === "BOT_CHECK" && attempt === 1) {
-                        await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
-                        continue;
-                    }
-                    errors.push(`duckduckgo:${message}`);
-                    break;
-                }
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (message.startsWith(LAW_SOURCE_VERIFICATION_REQUIRED))
+                    verificationRequired ??= message;
+                errors.push(`${engine}:${message}`);
             }
         }
         throw new WebSearchError("WEB_SEARCH_NO_RESULTS", errors.join("; ") || `provider=${provider}`);
+    }
+    /** One engine, no fallback (the comparison test and the auto order). */
+    async searchEngine(engine, query, maxResults, settings = this.settings()) {
+        if (engine === "searxng") {
+            if (!settings.searxngUrl)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchSearxng(query, maxResults, settings.searxngUrl);
+        }
+        if (engine === "google")
+            return this.searchGoogle(query, maxResults);
+        if (engine === "gemini") {
+            const key = await geminiSearchKey();
+            if (!key)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchGemini(query, maxResults, key);
+        }
+        if (engine === "firecrawl") {
+            const key = this.env.FIRECRAWL_API_KEY?.trim() || (settings.firecrawlConfigured ? firecrawlApiKey() : "");
+            if (!key)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchFirecrawl(query, maxResults, key);
+        }
+        // A bot check passes after a short pause more often than not (seen while checking the
+        // disciplinary courts' portals): one more try before "refused".
+        for (let attempt = 1;; attempt += 1) {
+            try {
+                return await this.searchDuckDuckGo(query, maxResults);
+            }
+            catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (message === "BOT_CHECK" && attempt === 1) {
+                    await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
+                    continue;
+                }
+                throw error;
+            }
+        }
+    }
+    /**
+     * Google on the user's session (as sn.pl): the cookies and User-Agent of the window in which the
+     * user passed Google's consent page and captcha. No session, or Google answers with its captcha:
+     * the session is dropped and the window is shown to the user again (LAW_SOURCE_VERIFICATION_REQUIRED).
+     */
+    async searchGoogle(query, maxResults) {
+        const required = `${LAW_SOURCE_VERIFICATION_REQUIRED}:www.google.com`;
+        const session = lawSourceSessionHeaders("www.google.com");
+        if (!session)
+            throw new Error(required);
+        const url = new URL("https://www.google.com/search");
+        url.searchParams.set("q", query);
+        url.searchParams.set("hl", "pl");
+        url.searchParams.set("num", String(Math.min(Math.max(maxResults, 1), 10)));
+        const response = await this.fetchImpl(url, {
+            headers: { Accept: "text/html", "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6", ...session },
+            redirect: "follow",
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        const html = await readLimitedText(response);
+        if (isChallengePage(response.status, html) || /\/sorry\//u.test(response.url)) {
+            clearLawSourceSession("www.google.com");
+            throw new Error(required);
+        }
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        return parseGoogleHtml(html, maxResults);
+    }
+    /** Firecrawl search API (v2): 2 credits per 10 results; the free plan has a monthly limit. */
+    async searchFirecrawl(query, maxResults, apiKey) {
+        const response = await this.fetchImpl("https://api.firecrawl.dev/v2/search", {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+                "User-Agent": USER_AGENT
+            },
+            body: JSON.stringify({ query, limit: Math.min(Math.max(maxResults, 1), 10), lang: "pl" }),
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        // 402: credits used up (free plan limit); 429: rate limit; 401: wrong key.
+        if (response.status === 402)
+            throw new Error("CREDITS_EXHAUSTED");
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
+        if (response.status === 401 || response.status === 403)
+            throw new Error("KEY_REJECTED");
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        return parseFirecrawlResults(JSON.parse(await readLimitedText(response)), maxResults);
+    }
+    /**
+     * Gemini with Grounding with Google Search: real Google results through the user's own Gemini
+     * API key. The model's answer is not used; only the sources it grounded on (title, address)
+     * and the passages they support, as leads. Grounding links are redirects: resolved to the page
+     * address without downloading the page.
+     */
+    async searchGemini(query, maxResults, apiKey) {
+        const model = (this.env.LEX_GEMINI_SEARCH_MODEL ?? "gemini-2.5-flash").trim();
+        const response = await this.fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey, "User-Agent": USER_AGENT },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: `Wyszukaj w Google strony na temat: ${query}. Podaj krótko, co zawierają.` }] }],
+                tools: [{ google_search: {} }]
+            }),
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
+        if (response.status === 401 || response.status === 403)
+            throw new Error("KEY_REJECTED");
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        const hits = parseGeminiGrounding(JSON.parse(await readLimitedText(response)), maxResults);
+        return Promise.all(hits.map(async (hit) => ({ ...hit, url: await this.resolveRedirect(hit.url) })));
+    }
+    async resolveRedirect(url) {
+        if (!/^https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\//u.test(url))
+            return url;
+        try {
+            const response = await this.fetchImpl(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(5_000) });
+            const location = response.headers.get("location");
+            return location && /^https?:\/\//iu.test(location) ? location : url;
+        }
+        catch {
+            return url;
+        }
+    }
+    async searchSearxng(query, maxResults, baseUrl) {
+        const url = new URL(`${baseUrl}/search`);
+        url.searchParams.set("q", query);
+        url.searchParams.set("format", "json");
+        url.searchParams.set("language", "pl");
+        url.searchParams.set("safesearch", "0");
+        const response = await this.fetchImpl(url, {
+            headers: {
+                Accept: "application/json",
+                "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6",
+                "User-Agent": USER_AGENT
+            },
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        // Public instances answer bots with 429 or a browser check; JSON output off gives 403.
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
+        if (response.status === 403)
+            throw new Error("JSON_FORMAT_DISABLED");
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        const text = await readLimitedText(response);
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        }
+        catch {
+            throw new Error("BOT_CHECK");
+        }
+        return parseSearxngResults(payload, maxResults);
     }
     async searchBrave(query, maxResults, apiKey) {
         const url = new URL("https://api.search.brave.com/res/v1/web/search");
@@ -239,8 +486,8 @@ export function webSearchLeads(text) {
         leads.entryIntoForce = [...new Set(inForce)].slice(0, 3);
     return leads;
 }
-const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
-function hostOf(url) {
+export const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
+export function hostOf(url) {
     try {
         return new URL(url).hostname.replace(/^www\./u, "");
     }

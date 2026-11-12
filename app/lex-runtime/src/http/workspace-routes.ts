@@ -40,9 +40,10 @@ import {
   documentIdFromSha256,
   purgeSecureCaseDocument
 } from "../case-document-purge.js";
-import type {
-  EncryptedCaseWorkspaceStore,
-  WorkspaceThreadMessage
+import {
+  WORKSPACE_FOLDER_PURPOSES,
+  type EncryptedCaseWorkspaceStore,
+  type WorkspaceThreadMessage
 } from "../case-workspace-store.js";
 import {
   PROCESS_PLEADING_CHECKPOINTS,
@@ -1731,6 +1732,62 @@ export function registerWorkspaceRoutes(
         })
       );
       res.status(201).json({ folder });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Firm know-how: the folder ticked in every conversation (the firm's choice, write access).
+  app.patch("/api/cases/:caseId/workspace/folders/:folderId/chat-default", async (req, res) => {
+    try {
+      const actor = actorFor(req);
+      const caseId = caseIdFrom(req);
+      const folderId = String(req.params.folderId ?? "");
+      if (!FOLDER_ID.test(folderId)) throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+      if (typeof req.body?.chatDefault !== "boolean") throw new Error("WORKSPACE_FOLDER_CHAT_DEFAULT_INVALID");
+      const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+      const folder = await dependencies.caseAccessService.withCaseDataKey(
+        actor,
+        caseId,
+        "WRITE",
+        (caseDataKey) => dependencies.workspace.setFolderChatDefault({
+          caseId,
+          caseDataKey,
+          keyVersion: caseView.keyVersion,
+          folderId,
+          chatDefault: req.body.chatDefault as boolean
+        })
+      );
+      res.json({ folder });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Firm library: what a folder holds (templates, the firm's judgments, the firm's rules).
+  app.patch("/api/cases/:caseId/workspace/folders/:folderId/purpose", async (req, res) => {
+    try {
+      const actor = actorFor(req);
+      const caseId = caseIdFrom(req);
+      const folderId = String(req.params.folderId ?? "");
+      if (!FOLDER_ID.test(folderId)) throw new Error("WORKSPACE_FOLDER_ID_INVALID");
+      const purpose = req.body?.purpose ?? null;
+      if (purpose !== null && !WORKSPACE_FOLDER_PURPOSES.includes(purpose)) throw new Error("WORKSPACE_FOLDER_PURPOSE_INVALID");
+      const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+      if (caseView.caseKind !== "FIRM_KNOWLEDGE") throw new Error("WORKSPACE_FOLDER_PURPOSE_INVALID");
+      const folder = await dependencies.caseAccessService.withCaseDataKey(
+        actor,
+        caseId,
+        "WRITE",
+        (caseDataKey) => dependencies.workspace.setFolderPurpose({
+          caseId,
+          caseDataKey,
+          keyVersion: caseView.keyVersion,
+          folderId,
+          purpose
+        })
+      );
+      res.json({ folder });
     } catch (error) {
       sendError(res, error);
     }

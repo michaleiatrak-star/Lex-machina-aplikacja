@@ -1,3 +1,4 @@
+import { currentLocale, t } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -13,26 +14,26 @@ import {
 } from "./api.js";
 
 const ACCOUNT_KINDS: Array<[AccountKind, string]> = [
-  ["PROFESSIONAL", "Kancelaria (sprawy i narzędzia)"],
-  ["INDIVIDUAL", "Użytkownik indywidualny (sam czat)"]
+  ["PROFESSIONAL", t("Kancelaria (sprawy i narzędzia)")],
+  ["INDIVIDUAL", t("Użytkownik indywidualny (sam czat)")]
 ];
 
 const APP_ROLES: Array<[AuthenticatedUser["appRole"], string]> = [
-  ["USER", "Użytkownik"],
-  ["ADMIN", "Administrator"]
+  ["USER", t("Użytkownik")],
+  ["ADMIN", t("Administrator")]
 ];
 
 const MESSAGES: Record<string, string> = {
   USER_DELETE_REQUIRES_DISABLE: "Najpierw zablokuj konto.",
-  USER_DELETE_REQUIRES_CASE_CLEANUP: "Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy.",
-  INVALID_USER_REQUEST: "Sprawdź nazwę i adres e-mail.",
-  SELF_ADMIN_MUTATION_DENIED: "Własne uprawnienia, blokadę i usunięcie zmienia inny administrator.",
-  LAST_ADMIN_REQUIRED: "Musi zostać co najmniej jeden aktywny administrator.",
-  USER_STATUS_CONFLICT: "Najpierw odbierz uprawnienia administratora (zablokowane konto nie może być administratorem).",
-  ACCOUNT_EMAIL_MISSING: "Konto nie ma adresu e-mail: wpisz go w polu E-mail i zapisz.",
-  PASSWORD_RESET_NOT_AVAILABLE: "Konto nie logowało się od włączenia trybu serwerowego: reset bez utraty danych nie jest jeszcze możliwy. Użytkownik może użyć kodu odzyskiwania.",
-  SMTP_NOT_CONFIGURED: "Poczta serwera nie jest skonfigurowana (Ustawienia serwera > SMTP).",
-  SERVER_MODE_DISABLED: "Reset hasła linkiem działa w trybie serwerowym."
+  USER_DELETE_REQUIRES_CASE_CLEANUP: t("Konto ma powiązania ze sprawami. Najpierw usuń lub przenieś jego uprawnienia i wykonaj wymagane rotacje kluczy."),
+  INVALID_USER_REQUEST: t("Sprawdź nazwę i adres e-mail."),
+  SELF_ADMIN_MUTATION_DENIED: t("Własne uprawnienia, blokadę i usunięcie zmienia inny administrator."),
+  LAST_ADMIN_REQUIRED: t("Musi zostać co najmniej jeden aktywny administrator."),
+  USER_STATUS_CONFLICT: t("Najpierw odbierz uprawnienia administratora (zablokowane konto nie może być administratorem)."),
+  ACCOUNT_EMAIL_MISSING: t("Konto nie ma adresu e-mail: wpisz go w polu E-mail i zapisz."),
+  PASSWORD_RESET_NOT_AVAILABLE: t("Konto nie logowało się od włączenia trybu serwerowego: reset bez utraty danych nie jest jeszcze możliwy. Użytkownik może użyć kodu odzyskiwania."),
+  SMTP_NOT_CONFIGURED: t("Poczta serwera nie jest skonfigurowana (Ustawienia serwera > SMTP)."),
+  SERVER_MODE_DISABLED: t("Reset hasła linkiem działa w trybie serwerowym.")
 };
 
 function errorMessage(failure: unknown): string {
@@ -92,48 +93,49 @@ export function UserAccountDialog({
   }
 
   const profileChanged = displayName.trim() !== user.displayName || email.trim() !== (user.email ?? "");
-  const relogin = self ? "Zmiana zadziała po ponownym zalogowaniu." : "Użytkownik zobaczy zmianę po ponownym zalogowaniu.";
+  const relogin = self ? t("Zmiana zadziała po ponownym zalogowaniu.") : t("Użytkownik zobaczy zmianę po ponownym zalogowaniu.");
 
   return (
     <div className="privacy-preview-overlay" role="dialog" aria-modal="true" aria-labelledby="user-account-dialog-title" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="chat-card user-account-dialog">
         <div className="user-account-dialog-head">
           <div>
-            <p className="eyebrow">Ustawienia konta</p>
+            <p className="eyebrow">{t("Ustawienia konta")}</p>
             <h3 id="user-account-dialog-title">{user.displayName}</h3>
             <p className="field-help">
               @{user.loginName} · {user.status === "ACTIVE" ? "aktywne" : "zablokowane"}
-              {user.lastLoginAt ? ` · ostatnie logowanie ${new Date(user.lastLoginAt).toLocaleString("pl-PL")}` : ""}
+              {user.lastLoginAt ? ` · ostatnie logowanie ${new Date(user.lastLoginAt).toLocaleString(currentLocale())}` : ""}
             </p>
           </div>
-          <button type="button" className="chat-secondary-action" onClick={onClose} aria-label="Zamknij">Zamknij</button>
+          <button type="button" className="chat-secondary-action" onClick={onClose} aria-label={t("Zamknij")}>{t("Zamknij")}</button>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
 
         <fieldset disabled={busy}>
-          <legend>Dane</legend>
+          <legend>{t("Dane")}</legend>
           <label>
-            Nazwa użytkownika
+            {t("Imię i nazwisko")}
             <input value={displayName} maxLength={160} onChange={(event) => setDisplayName(event.target.value)} />
           </label>
           <label>
-            E-mail
-            <input type="email" value={email} maxLength={254} placeholder="adres do kontaktu i resetu hasła" onChange={(event) => setEmail(event.target.value)} />
+            {t("E-mail")}
+            <input type="email" value={email} maxLength={254} placeholder={t("adres do kontaktu i resetu hasła")} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <button
             type="button"
+            className="primary-button user-account-save"
             disabled={!profileChanged || !displayName.trim()}
             onClick={() => void run(() => setAdminUserProfile(user.userId, { displayName: displayName.trim(), email: email.trim() }), "Dane konta zapisane.")}
           >
-            Zapisz dane
+            {t("Zapisz dane")}
           </button>
         </fieldset>
 
         <fieldset disabled={busy}>
-          <legend>Typ konta i uprawnienia</legend>
+          <legend>{t("Typ konta i uprawnienia")}</legend>
           <label>
-            Typ konta
+            {t("Typ konta")}
             <select
               value={user.accountKind ?? "PROFESSIONAL"}
               onChange={(event) => void run(() => setAccountKind(user.userId, event.target.value as AccountKind), `Typ konta zmieniony. ${relogin}`)}
@@ -142,7 +144,7 @@ export function UserAccountDialog({
             </select>
           </label>
           <label>
-            Uprawnienia
+            {t("Uprawnienia")}
             <select
               value={user.appRole}
               disabled={self}
@@ -150,7 +152,7 @@ export function UserAccountDialog({
                 const role = event.target.value as AuthenticatedUser["appRole"];
                 void run(
                   () => setAdminUserRole(user.userId, role),
-                  `${role === "ADMIN" ? "Nadano uprawnienia administratora" : "Odebrano uprawnienia administratora"}. Sesje konta zakończone: zmiana działa od następnego logowania.`
+                  t("{value}. Sesje konta zakończone: zmiana działa od następnego logowania.", { value: role === "ADMIN" ? "Nadano uprawnienia administratora" : "Odebrano uprawnienia administratora" })
                 );
               }}
             >
@@ -159,84 +161,87 @@ export function UserAccountDialog({
               ))}
             </select>
           </label>
-          {self && <p className="field-help">Własne uprawnienia zmienia inny administrator.</p>}
+          {self && <p className="field-help">{t("Własne uprawnienia zmienia inny administrator.")}</p>}
         </fieldset>
 
         <fieldset disabled={busy}>
-          <legend>Hasło</legend>
+          <legend>{t("Hasło")}</legend>
           {serverMode && !self ? (
             <>
               <p className="field-help">
-                Hasło jednorazowe: pokazane tylko tutaj, raz. Sesje konta kończą się, a po zalogowaniu użytkownik musi od razu ustawić własne hasło; do tego czasu aplikacja nie pozwala na nic innego. Dane konta zostają.
+                {t("Hasło jednorazowe: pokazane tylko tutaj, raz. Sesje konta kończą się, a po zalogowaniu użytkownik musi od razu ustawić własne hasło; do tego czasu aplikacja nie pozwala na nic innego. Dane konta zostają.")}
               </p>
               <div className="admin-user-actions">
                 <button
                   type="button"
+                  className="chat-secondary-action"
                   onClick={() => {
-                    if (!window.confirm(`Ustawić hasło jednorazowe dla @${user.loginName}? Obecne hasło przestanie działać.`)) return;
+                    if (!window.confirm(t("Ustawić hasło jednorazowe dla @{loginName}? Obecne hasło przestanie działać.", { loginName: user.loginName }))) return;
                     void run(async () => {
                       const result = await setAdminOneTimePassword(user.userId);
                       setOneTimePassword(result.oneTimePassword);
-                    }, "Ustawiono hasło jednorazowe. Przekaż je użytkownikowi bezpiecznym kanałem.");
+                    }, t("Ustawiono hasło jednorazowe. Przekaż je użytkownikowi bezpiecznym kanałem."));
                   }}
                 >
-                  Ustaw hasło jednorazowe
+                  {t("Ustaw hasło jednorazowe")}
                 </button>
                 <button
                   type="button"
+                  className="chat-secondary-action"
                   onClick={() => void run(async () => {
                     const sent = await sendAdminPasswordReset(user.userId);
-                    onChanged(`Link resetu hasła wysłany na ${sent.sentTo}.`);
+                    onChanged(t("Link resetu hasła wysłany na {sentTo}.", { sentTo: sent.sentTo }));
                   }, "")}
                 >
-                  Wyślij link resetu na e-mail
+                  {t("Wyślij link resetu na e-mail")}
                 </button>
               </div>
               {oneTimePassword && (
                 <div className="recovery-code-box">
-                  <strong>Hasło jednorazowe</strong>
+                  <strong>{t("Hasło jednorazowe")}</strong>
                   <code>{oneTimePassword}</code>
-                  <p>Po zamknięciu okna nie będzie można go ponownie wyświetlić.</p>
+                  <p>{t("Po zamknięciu okna nie będzie można go ponownie wyświetlić.")}</p>
                 </div>
               )}
             </>
           ) : self ? (
-            <p className="field-help">Własne hasło zmieniasz w Ustawienia &gt; Bezpieczeństwo.</p>
+            <p className="field-help">{t("Własne hasło zmieniasz w Ustawienia &gt; Bezpieczeństwo.")}</p>
           ) : (
             <p className="field-help">
-              Dane konta są zaszyfrowane kluczem z hasła użytkownika, więc w aplikacji na komputerze administrator nie może nadać nowego hasła bez utraty tych danych. Użytkownik zmienia hasło sam (Ustawienia &gt; Bezpieczeństwo) albo odzyskuje dostęp kodem odzyskiwania. Hasło jednorazowe i link resetu działają w trybie serwerowym, gdzie serwer przechowuje zabezpieczoną kopię klucza konta.
+              {t("Dane konta są zaszyfrowane kluczem z hasła użytkownika, więc w aplikacji na komputerze administrator nie może nadać nowego hasła bez utraty tych danych. Użytkownik zmienia hasło sam (Ustawienia &gt; Bezpieczeństwo) albo odzyskuje dostęp kodem odzyskiwania. Hasło jednorazowe i link resetu działają w trybie serwerowym, gdzie serwer przechowuje zabezpieczoną kopię klucza konta.")}
             </p>
           )}
         </fieldset>
 
         <fieldset disabled={busy || self}>
-          <legend>Blokada i usunięcie</legend>
+          <legend>{t("Blokada i usunięcie")}</legend>
           {self ? (
-            <p className="field-help">Własne konto blokuje lub usuwa inny administrator.</p>
+            <p className="field-help">{t("Własne konto blokuje lub usuwa inny administrator.")}</p>
           ) : user.appRole !== "USER" ? (
-            <p className="field-help">Konto administratora: najpierw zmień uprawnienia na „Użytkownik”.</p>
+            <p className="field-help">{t("Konto administratora: najpierw zmień uprawnienia na „Użytkownik”.")}</p>
           ) : (
             <div className="admin-user-actions">
               <button
                 type="button"
+                className="chat-secondary-action"
                 onClick={() => void run(
                   () => setAdminUserStatus(user.userId, user.status === "ACTIVE" ? "DISABLED" : "ACTIVE"),
-                  user.status === "ACTIVE" ? "Konto zablokowane, a jego sesje unieważnione." : "Konto odblokowane."
+                  user.status === "ACTIVE" ? t("Konto zablokowane, a jego sesje unieważnione.") : "Konto odblokowane."
                 )}
               >
-                {user.status === "ACTIVE" ? "Zablokuj konto" : "Odblokuj konto"}
+                {user.status === "ACTIVE" ? t("Zablokuj konto") : t("Odblokuj konto")}
               </button>
               <button
                 type="button"
                 className="danger-button"
                 disabled={user.status !== "DISABLED"}
-                title={user.status !== "DISABLED" ? "Usunąć można tylko zablokowane konto." : undefined}
+                title={user.status !== "DISABLED" ? t("Usunąć można tylko zablokowane konto.") : undefined}
                 onClick={() => {
-                  if (!window.confirm(`Trwale usunąć konto @${user.loginName}? Operacja jest możliwa tylko dla zablokowanego konta bez powiązań ze sprawami.`)) return;
-                  void run(() => deleteAdminUser(user.userId), "Konto zostało trwale usunięte.", true);
+                  if (!window.confirm(t("Trwale usunąć konto @{loginName}? Operacja jest możliwa tylko dla zablokowanego konta bez powiązań ze sprawami.", { loginName: user.loginName }))) return;
+                  void run(() => deleteAdminUser(user.userId), t("Konto zostało trwale usunięte."), true);
                 }}
               >
-                Usuń konto
+                {t("Usuń konto")}
               </button>
             </div>
           )}

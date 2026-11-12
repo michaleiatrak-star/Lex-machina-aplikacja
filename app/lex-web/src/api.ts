@@ -1,3 +1,4 @@
+import { currentLocale } from "./i18n";
 import type { ChatWidget, RestorationMark } from "./workspace-client.js";
 
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
@@ -617,7 +618,7 @@ export type DocumentReviewResponse = {
     // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
     // Lines to check against the scan (handwriting, stamps, doubtful reading).
-    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" }>;
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" | "LAYER_MISMATCH" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
@@ -1076,7 +1077,7 @@ export type DocumentCoverageEntry = {
   status: "FULL" | "PARTIAL";
 };
 
-export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE"; findings: string[]; removed: string[] };
+export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE" | "STATUTE_CONTENT"; findings: string[]; removed: string[] };
 
 export type SessionExecutionResponse = {
   sessionId: string;
@@ -1146,7 +1147,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
-  sourceVerification?: { source: "sn"; url: string };
+  sourceVerification?: SourceVerification;
   widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
@@ -2045,6 +2046,23 @@ export function addCaseScheduleEvent(
   );
 }
 
+export function updateCaseScheduleEvent(
+  caseId: string,
+  eventId: string,
+  input: {
+    kind: CaseScheduleKind;
+    title: string;
+    startsAt: string;
+    location?: string;
+    notes?: string;
+  }
+): Promise<CaseScheduleEvent> {
+  return json<CaseScheduleEvent>(`/api/cases/${caseId}/schedule/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
 export function deleteCaseScheduleEvent(
   caseId: string,
   eventId: string
@@ -2933,6 +2951,33 @@ export function refreshSkillsFromChannel(
   );
 }
 
+export type SkillAutoUpdateStateResponse = {
+  enabled: boolean;
+  running: boolean;
+  intervalHours: number;
+  lastResult: {
+    at: string;
+    outcome: "UP_TO_DATE" | "INSTALLED" | "BLOCKED" | "FAILED";
+    source: "channel" | "release";
+    channel?: SkillChannel;
+    target?: string;
+    detail?: string;
+  } | null;
+  pendingActivation: boolean;
+  nextCheckAt: string | null;
+};
+
+export function getSkillAutoUpdate(): Promise<SkillAutoUpdateStateResponse> {
+  return json<SkillAutoUpdateStateResponse>("/api/skills/auto-update");
+}
+
+export function setSkillAutoUpdate(enabled: boolean): Promise<SkillAutoUpdateStateResponse> {
+  return json<SkillAutoUpdateStateResponse>("/api/skills/auto-update", {
+    method: "PUT",
+    body: JSON.stringify({ enabled })
+  });
+}
+
 export function applySkillUpdate():
   Promise<SkillUpdateApplyResponse> {
   return json<SkillUpdateApplyResponse>(
@@ -3253,6 +3298,8 @@ export function executeSession(input: {
     includeCase?: boolean;
     includeFirm?: boolean;
     limit?: number;
+    // Firm know-how: the files and folders picked for this conversation.
+    firmSelection?: { folderIds: string[]; itemIds: string[] };
   };
 }, executionId?: string): Promise<SessionExecutionResponse> {
   return json<SessionExecutionResponse>("/api/sessions/execute", {
@@ -3260,6 +3307,8 @@ export function executeSession(input: {
     // A local model can answer for longer than the desktop proxy waits in silence.
     headers: {
       "X-Lex-Keep-Alive": "1",
+      // The model answers in the interface language (Polish adds nothing).
+      ...(currentLocale() !== "pl" ? { "X-Lex-Language": currentLocale() } : {}),
       ...(executionId ? { "X-Lex-Execution-Id": executionId } : {})
     },
     body: JSON.stringify({
@@ -4142,6 +4191,69 @@ export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean 
 
 export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
 
+export function getLocalOffline(): Promise<{ enabled: boolean; forced: boolean }> {
+  return json("/api/settings/local-offline");
+}
+
+export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }> {
+  return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
+
+export type SearchEngineScore = {
+  engine: SearchEngineName;
+  score: number;
+  availability: number;
+  officialSources: number;
+  freeSources?: number;
+  relevance: number;
+  medianMs: number | null;
+  queries: number;
+  answered: number;
+  error?: string;
+};
+
+export type WebSearchSettings = {
+  searxngUrl: string;
+  order: SearchEngineName[];
+  effectiveOrder: SearchEngineName[];
+  engines: SearchEngineName[];
+  lastTest: { testedAt: string; scores: SearchEngineScore[] } | null;
+  searxngUrlForced: boolean;
+  firecrawlConfigured: boolean;
+  firecrawlKeyForced: boolean;
+  googleSession: boolean;
+  /** Keep the Google session after a restart (cookies sealed on this computer). */
+  googleSessionKeep: boolean;
+  googleSessionSaved: boolean;
+  providerForced: string | null;
+};
+
+export function getWebSearchSettings(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search");
+}
+
+export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
+}
+
+export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ firecrawlApiKey }) });
+}
+
+export function setGoogleSession(googleSession: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSession }) });
+}
+
+export function setGoogleSessionKeep(googleSessionKeep: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSessionKeep }) });
+}
+
+export function runWebSearchTest(): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search/test", { method: "POST", body: "{}" });
+}
+
 export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {
   return json("/api/settings/domain-fallback");
 }
@@ -4925,6 +5037,8 @@ export type WokandaCourtInfo = {
   powod?: string;
   sprawdzono?: string;
   zrodlo?: "WYDANIE" | "TEN_KOMPUTER";
+  // The court's verification window was passed and its session is kept.
+  sesja?: boolean;
 };
 
 export type WokandaHearing = {
@@ -4974,6 +5088,23 @@ export function listWokandaCourts(): Promise<{ checkedAt: string; courts: Wokand
 
 export function recheckWokandaCourts(courts?: string[]): Promise<{ courts: WokandaCourtInfo[] }> {
   return json("/api/courts/wokanda/recheck", { method: "POST", body: JSON.stringify(courts ? { courts } : {}) });
+}
+
+/** A source the user has to verify in its window: sn.pl, or an official law source behind a bot check. */
+export type SourceVerification = { source: "sn"; url: string } | { source: "law"; url: string; host: string; label: string };
+
+export function probeLawSourceSession(host: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
+  return json("/api/law-sources/session/probe", { method: "POST", body: JSON.stringify({ host, cookie, userAgent }) });
+}
+
+/** Server mode: the server tries the source's bot check in its own headless browser. */
+export function attemptLawSourceSessionOnServer(host: string): Promise<{ ready: boolean; reason?: string }> {
+  return json("/api/law-sources/session/server-attempt", { method: "POST", body: JSON.stringify({ host }) });
+}
+
+/** Server mode: the server tries the court's wokanda check in its own headless browser. */
+export function attemptWokandaSessionOnServer(domain: string): Promise<{ ready: boolean; reason?: string }> {
+  return json("/api/courts/wokanda/session/server-attempt", { method: "POST", body: JSON.stringify({ domain }) });
 }
 
 export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {

@@ -1,5 +1,12 @@
+import { clearLawSourceSession, keepLawSourceSession } from "../eli/law-source-sessions.js";
+import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
+import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
+import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
+import { PublicWebSearch } from "../web-search.js";
+import { runWebSearchBenchmark } from "../web-search-benchmark.js";
+import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setGoogleSession, setGoogleSessionKeep, setSearxngUrl, webSearchSettings } from "../web-search-settings.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -207,6 +214,26 @@ export function registerMcpConnectorRoutes(app, dependencies) {
                             : "SN_SERVER_REJECTED"
                 })
         });
+    });
+    // Server mode: the server tries a source's bot check in its own headless browser (Playwright with
+    // the MCP connectors); without success the user pastes the session from a browser in its network.
+    app.post("/api/law-sources/session/server-attempt", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const host = typeof req.body?.host === "string" ? req.body.host : "";
+        res.json(await attemptServerBrowserSession(host, connectors.serversDirectory));
+    });
+    // The same for a court's wokanda behind a browser check (server mode, no court window).
+    app.post("/api/courts/wokanda/session/server-attempt", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const domain = typeof req.body?.domain === "string" ? req.body.domain.toLowerCase().replace(/^www\./u, "") : "";
+        const court = wokandaRegister().sady.find((item) => item.domena === domain);
+        if (!court) {
+            res.json({ ready: false, reason: "LAW_SOURCE_UNKNOWN" });
+            return;
+        }
+        res.json(await passCheckInServerBrowser(court.url ?? `https://${court.domena}/wokanda`, connectors.serversDirectory, (cookie, userAgent) => probeWokandaSession(court.domena, cookie, userAgent), undefined, undefined, (html) => /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge|cf-chl-|Just a moment/iu.test(html)));
     });
     app.delete("/api/mcp-search/sn-session", (req, res) => {
         if (!requireUser(req, res, authService))
@@ -484,6 +511,85 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         }
         setDomainFallbackChoice(choice);
         res.json({ choice: domainFallbackChoice() });
+    });
+    // Tryb offline modelu lokalnego (Ustawienia, domyślnie wyłączony): bez źródeł zewnętrznych.
+    app.get("/api/settings/local-offline", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json({ enabled: localOfflineMode(), forced: process.env.LEX_LOCAL_OFFLINE === "on" || process.env.LEX_LOCAL_OFFLINE === "off" });
+    });
+    app.put("/api/settings/local-offline", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const enabled = req.body?.enabled;
+        if (typeof enabled !== "boolean") {
+            res.status(400).json({ error: "LOCAL_OFFLINE_INVALID" });
+            return;
+        }
+        setLocalOfflineMode(enabled);
+        res.json({ enabled: localOfflineMode() });
+    });
+    // Wyszukiwarka internetowa (Ustawienia): adres SearXNG, test porównawczy z tego komputera, kolejność.
+    const webSearchView = () => {
+        const settings = webSearchSettings();
+        const provider = (process.env.LEX_WEB_SEARCH_PROVIDER ?? "auto").trim().toLowerCase();
+        return {
+            ...settings,
+            effectiveOrder: effectiveSearchOrder(settings),
+            engines: SEARCH_ENGINES,
+            searxngUrlForced: searxngUrlForced(),
+            firecrawlKeyForced: firecrawlKeyForced(),
+            providerForced: provider !== "auto" ? provider : null
+        };
+    };
+    app.get("/api/settings/web-search", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json(webSearchView());
+    });
+    app.put("/api/settings/web-search", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        try {
+            if (req.body && "searxngUrl" in req.body)
+                setSearxngUrl(req.body.searxngUrl ?? "");
+            if (req.body && "firecrawlApiKey" in req.body)
+                setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
+            if (req.body && "googleSession" in req.body)
+                setGoogleSession(req.body.googleSession);
+            if (req.body && "googleSessionKeep" in req.body) {
+                setGoogleSessionKeep(req.body.googleSessionKeep);
+                if (req.body.googleSessionKeep === true)
+                    keepLawSourceSession("www.google.com");
+            }
+            // Google turned off: its session is dropped now, not after its time runs out.
+            if (req.body?.googleSession === false)
+                clearLawSourceSession("www.google.com");
+        }
+        catch (error) {
+            res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
+            return;
+        }
+        res.json(webSearchView());
+    });
+    app.post("/api/settings/web-search/test", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const provider = (process.env.LEX_WEB_SEARCH_PROVIDER ?? "auto").trim().toLowerCase();
+        if (provider === "off" || provider === "disabled") {
+            res.status(409).json({ error: "WEB_SEARCH_DISABLED" });
+            return;
+        }
+        const search = new PublicWebSearch(process.env, fetch, 10_000, 1_500);
+        const settings = webSearchSettings();
+        try {
+            const result = await runWebSearchBenchmark(SEARCH_ENGINES, (engine, query, max) => search.searchEngine(engine, query, max, settings));
+            saveWebSearchTest(result);
+            res.json(webSearchView());
+        }
+        catch (error) {
+            res.status(500).json({ error: "WEB_SEARCH_TEST_FAILED", description: error instanceof Error ? error.message.slice(0, 200) : "" });
+        }
     });
     // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.
     app.get("/api/case-law/library", (req, res) => {

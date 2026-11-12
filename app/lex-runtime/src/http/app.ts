@@ -1,3 +1,7 @@
+import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
+import { astLines, compareFileWithDraft, draftLines, fileCheckReason } from "../file-consistency.js";
+import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
+import { classifyLocalInferenceFailure } from "../providers/ai-sdk-adapter.js";
 import { encryptedKind, passwordFromHeader, type DocumentDecryptor } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
@@ -208,7 +212,8 @@ import {
   storedDocumentMediaType
 } from "../stored-document-source.js";
 import type {
-  EncryptedCaseWorkspaceStore
+  EncryptedCaseWorkspaceStore,
+  WorkspaceFolderPurpose
 } from "../case-workspace-store.js";
 import type {
   DocumentGenerationStateStore
@@ -629,6 +634,10 @@ export type LexHttpAppOptions = {
     | "getContractAnalysisState"
     | "saveContractAnalysisState"
   >;
+  // Firm know-how in a conversation: the documents of the picked files and folders and of the
+  // firm's default folders (firm-knowledge-scope.ts); absent = the firm library is not searched.
+  firmKnowledgeScope?: (args: { caseId: string; caseDataKey: Buffer; keyVersion: number; selection: FirmKnowledgeSelection }) => Promise<Set<string>>;
+  firmDocumentPurposes?: (args: { caseId: string; caseDataKey: Buffer; keyVersion: number }) => Promise<Map<string, WorkspaceFolderPurpose>>;
   // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
   caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
   // Tests: the court sites of the wokanda check (courts/wokanda.ts).
@@ -771,7 +780,8 @@ export type LexHttpAppOptions = {
     | "listCaseContacts"
     | "addCaseContact"
     | "deleteCaseContact"
-  >;
+  > &
+    Partial<Pick<LocalCaseAccessService, "updateCaseScheduleEvent">>;
 };
 
 /** Steps the session audit recorded as BLOCKED (the targets, shortened). */
@@ -1457,6 +1467,8 @@ type SessionKnowledgeRequest = {
   includeCase: boolean;
   includeFirm: boolean;
   limit: number;
+  // Firm know-how: the files and folders picked in the conversation (firm-knowledge-scope.ts).
+  firmSelection: FirmKnowledgeSelection;
 };
 
 function parseSessionKnowledgeRequest(
@@ -1466,7 +1478,8 @@ function parseSessionKnowledgeRequest(
     return {
       includeCase: false,
       includeFirm: false,
-      limit: 8
+      limit: 8,
+      firmSelection: { folderIds: [], itemIds: [] }
     };
   }
   if (
@@ -1499,7 +1512,9 @@ function parseSessionKnowledgeRequest(
           record.limit
         );
 
+  const firmSelection = parseFirmKnowledgeSelection(record.firmSelection);
   if (
+    !firmSelection ||
     (
       caseId !== undefined &&
       !/^case_[a-f0-9]{32}$/
@@ -1524,7 +1539,8 @@ function parseSessionKnowledgeRequest(
       : {}),
     includeCase,
     includeFirm,
-    limit
+    limit,
+    firmSelection
   };
 }
 
@@ -4397,6 +4413,31 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
       }
     };
+
+  // Edit in place from the calendar (an older runtime without the method answers 503).
+  app.patch(
+    "/api/cases/:caseId/schedule/:eventId",
+    scheduleRoute("CASE_SCHEDULE_UPDATE_FAILED", async (service, req, res) => {
+      if (!service.updateCaseScheduleEvent) {
+        res.status(503).json({ error: "CASE_SCHEDULE_UNAVAILABLE" });
+        return;
+      }
+      res.json(
+        await service.updateCaseScheduleEvent(
+          responseAuthContext(res),
+          String(req.params.caseId ?? ""),
+          String(req.params.eventId ?? ""),
+          {
+            kind: req.body?.kind,
+            title: req.body?.title,
+            startsAt: req.body?.startsAt,
+            location: req.body?.location,
+            notes: req.body?.notes
+          }
+        )
+      );
+    })
+  );
 
   // Home screen and calendar: events of all the user's active cases.
   app.get(
@@ -8422,6 +8463,15 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             return;
           }
         }
+        const fileSource = longDocumentSource ? joinParts(longDocumentSource) : pleadingSource?.text;
+        if (fileSource !== undefined) {
+          // G99 FILE CHECK (T33): the amounts, dates, sums and attachments of the stored text.
+          const findings = compareFileWithDraft(draftLines(fileSource), astLines(generated.ast));
+          if (findings.length) {
+            res.status(422).json({ error: "DOCUMENT_FILE_CHECK_FAILED", reason: fileCheckReason(findings) });
+            return;
+          }
+        }
         if (processDocumentStatus === "DRAFT") {
           // pisma-procesowe-v3 CP-GATE: a draft file is marked as not for filing.
           (generated.ast as { blocks: unknown[] }).blocks.unshift({
@@ -9679,6 +9729,19 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   // templates), resolved with access checks. Used to send them and to
   // estimate whether they fit the model before sending. Null: response sent.
   const templateTextCache = new Map<string, ReturnType<typeof templateChunks>>();
+  // The purposes of the firm library's documents (by folder), for files picked in a conversation.
+  const firmPurposesOf = async (res: express.Response, firmCaseId: string): Promise<Map<string, WorkspaceFolderPurpose>> => {
+    if (!options.firmDocumentPurposes || !options.caseAccessService) return new Map();
+    try {
+      const context = responseAuthContext(res);
+      const view = options.caseAccessService.openCase(context, firmCaseId);
+      return await options.caseAccessService.withCaseDataKey(context, firmCaseId, "ANALYZE", async (caseDataKey) =>
+        await options.firmDocumentPurposes!({ caseId: firmCaseId, caseDataKey, keyVersion: view.keyVersion })
+      );
+    } catch {
+      return new Map();
+    }
+  };
   const resolveSelectedAttachments = async (
     res: express.Response,
     attachments: Array<DocumentChunkSelection & { caseId?: string }>,
@@ -9771,14 +9834,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   selection
                     .chunkIndices
               }, { remote, ...(evidence ? { images: evidence } : {}) });
+          const pickedPurpose = caseId === firmCaseId ? (await firmPurposesOf(res, caseId)).get(resolved.documentId) : undefined;
           picked.push({
             caseId,
             documentId:
               resolved.documentId,
             sourceScope:
               caseId === firmCaseId
-                ? "FIRM_KNOWLEDGE"
+                ? pickedPurpose === "TEMPLATES"
+                  ? "FIRM_TEMPLATE"
+                  : "FIRM_KNOWLEDGE"
                 : "MANUAL",
+            ...(pickedPurpose && pickedPurpose !== "TEMPLATES" ? { firmPurpose: pickedPurpose } : {}),
             selectedByUser: true,
             ...(resolved.grammar
               ? { grammar: resolved.grammar }
@@ -10071,6 +10138,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   });
 
   app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
+    // The interface language: every model call of this request answers in it.
+    enterAnswerLanguage(parseAnswerLanguage(req.get("X-Lex-Language")));
     if (keepAliveRequested(req)) keepResponseAlive(res);
     if (!options.sessionExecutor) {
       res.status(503).json({
@@ -10418,7 +10487,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             sourceScope:
               | "CASE_KNOWLEDGE"
               | "FIRM_KNOWLEDGE";
+            documentIds?: ReadonlySet<string>;
+            // The firm's rules: their best passages go first, whatever the question's wording.
+            priority?: boolean;
           }> = [];
+        let firmPurposeMap = new Map<string, WorkspaceFolderPurpose>();
 
         if (
           knowledge.includeCase &&
@@ -10446,12 +10519,36 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               403
             );
           }
-          knowledgeSources.push({
-            caseId:
-              firm.caseId,
-            sourceScope:
-              "FIRM_KNOWLEDGE"
-          });
+          // Only the picked files and folders and the firm's default folders, never the whole library.
+          const firmView = options.caseAccessService.openCase(context, firm.caseId);
+          const firmDocuments = options.firmKnowledgeScope
+            ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) =>
+                await options.firmKnowledgeScope!({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion, selection: knowledge.firmSelection })
+              )
+            : new Set<string>();
+          const firmPurposes: Map<string, WorkspaceFolderPurpose> = options.firmDocumentPurposes
+            ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) =>
+                await options.firmDocumentPurposes!({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion })
+              )
+            : new Map<string, WorkspaceFolderPurpose>();
+          firmPurposeMap = firmPurposes;
+          // Templates are filled in, never searched as knowledge; the firm's rules get their own
+          // search so they reach every conversation whatever the question's wording.
+          const searched = new Set([...firmDocuments].filter((documentId) => !firmPurposes.has(documentId) || firmPurposes.get(documentId) === "CASE_LAW"));
+          const rules = new Set([...firmDocuments].filter((documentId) => firmPurposes.get(documentId) === "RULES"));
+          request.onStep?.("PREPARE", `know-how kancelarii: ${firmDocuments.size} dokumentów z wybranych i domyślnych folderów`);
+          if (rules.size > 0) {
+            knowledgeSources.push({ caseId: firm.caseId, sourceScope: "FIRM_KNOWLEDGE", documentIds: rules, priority: true });
+          }
+          if (searched.size > 0) {
+            knowledgeSources.push({
+              caseId:
+                firm.caseId,
+              sourceScope:
+                "FIRM_KNOWLEDGE",
+              documentIds: searched
+            });
+          }
         }
 
         const ranked:
@@ -10466,6 +10563,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             pageEnd: number;
             score: number;
             text: string;
+            priority?: boolean;
           }> = [];
 
         for (
@@ -10501,15 +10599,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         request.query,
                       limit:
                         knowledge.limit,
-                      reviewedOnly: !localModel
+                      reviewedOnly: !localModel,
+                      ...(source.documentIds ? { documentIds: source.documentIds } : {})
                     })
               );
           ranked.push(
-            ...hits.map(
+            ...(source.priority ? hits.slice(0, 2) : hits).map(
               (hit) => ({
                 ...hit,
                 sourceScope:
-                  source.sourceScope
+                  source.sourceScope,
+                ...(source.priority ? { priority: true } : {})
               })
             )
           );
@@ -10517,6 +10617,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         ranked.sort(
           (left, right) =>
+            Number(Boolean(right.priority)) - Number(Boolean(left.priority)) ||
             right.score -
               left.score ||
             left.caseId
@@ -10562,6 +10663,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             ) {
               continue;
             }
+            const firmPurpose = hit.sourceScope === "FIRM_KNOWLEDGE" ? firmPurposeMap.get(hit.documentId) : undefined;
             attachment = {
               caseId:
                 hit.caseId,
@@ -10569,6 +10671,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 hit.documentId,
               sourceScope:
                 hit.sourceScope,
+              ...(firmPurpose ? { firmPurpose } : {}),
               chunks: []
             };
             grouped.set(
@@ -13317,10 +13420,20 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
 
-      const localFailureMessage =
+      // A workflow gate of the application (e.g. a provision without an ELI text, the criminal
+      // qualifier) is not a llama.cpp failure: it is reported as for a cloud model. Only an empty
+      // model answer stays a local-model diagnostic.
+      const localModelFailure =
         request.model.startsWith(
           "local/"
-        )
+        ) &&
+        !(
+          error instanceof Error &&
+          error.name === "LexExecutionError" &&
+          !/empty/i.test(error.message)
+        );
+      const localFailureMessage =
+        localModelFailure
           ? (
               error instanceof
                 ProviderGatewayError &&
@@ -13344,11 +13457,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           parsedLocalFailureReason
         )
           ? parsedLocalFailureReason
-          : "LOCAL_MODEL_INFERENCE_FAILED";
+          : classifyLocalInferenceFailure(
+              localFailureMessage
+            );
       if (
-        request.model.startsWith(
-          "local/"
-        )
+        localModelFailure
       ) {
         res.status(503).json({
           error:

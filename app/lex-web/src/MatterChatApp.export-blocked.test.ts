@@ -20,6 +20,13 @@ describe("odmowa zapisu pisma przez bramkę eksportu", () => {
     );
   });
 
+  it("wymienia niezgodności pliku z zapisanym projektem (FILE CHECK)", () => {
+    const error = new ApiError("DOCUMENT_FILE_CHECK_FAILED", 422, undefined, "P1=2 000,00;P4=12 400,00/12 000,00;P5=2/1;P7=2");
+    expect(exportBlockedMessage(error)).toBe(
+      "Plik nie został zapisany: nie zgadza się z zapisanym projektem pisma (kwota 2 000,00 z projektu nie występuje w pliku; rachunek z wynikiem 12 400,00 się nie zgadza (powinno być 12 000,00); liczba załączników: w projekcie 2, w pliku 1; odwołanie do załącznika nr 2, którego nie ma w spisie). Wygeneruj dokument ponownie; plik ma przenieść kwoty, daty i załączniki projektu bez zmian."
+    );
+  });
+
   it("nie proponuje projektu przy blokadzie i milczy dla innych błędów", () => {
     const blocked = new ApiError(
       "FINAL_DOCUMENT_EXPORT_GATE_BLOCKED:G8_FINALIZATION_BLOCKED",

@@ -1,3 +1,4 @@
+import { t, N_ } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { blocksFromDom, withExtension, type NodeLike } from "./office-editing.js";
 import { editedFilename } from "./text-editing.js";
@@ -69,16 +70,16 @@ type Command =
 
 const COMMANDS: Command[] = [
   { label: "B", title: "Pogrubienie (Ctrl+B)", command: "bold" },
-  { label: "I", title: "Kursywa (Ctrl+I)", command: "italic" },
-  { label: "U", title: "Podkreślenie (Ctrl+U)", command: "underline" },
-  { label: "Tekst", title: "Zwykły akapit", command: "formatBlock", value: "p" },
-  { label: "H1", title: "Nagłówek 1", command: "formatBlock", value: "h1" },
-  { label: "H2", title: "Nagłówek 2", command: "formatBlock", value: "h2" },
-  { label: "H3", title: "Nagłówek 3", command: "formatBlock", value: "h3" },
-  { label: "• Lista", title: "Lista punktowana", command: "insertUnorderedList" },
-  { label: "1. Lista", title: "Lista numerowana", command: "insertOrderedList" },
-  { label: "Cofnij", title: "Cofnij (Ctrl+Z)", command: "undo" },
-  { label: "Ponów", title: "Ponów (Ctrl+Y)", command: "redo" }
+  { label: "I", title: N_("Kursywa (Ctrl+I)"), command: "italic" },
+  { label: "U", title: N_("Podkreślenie (Ctrl+U)"), command: "underline" },
+  { label: N_("Tekst"), title: N_("Zwykły akapit"), command: "formatBlock", value: "p" },
+  { label: "H1", title: N_("Nagłówek 1"), command: "formatBlock", value: "h1" },
+  { label: "H2", title: N_("Nagłówek 2"), command: "formatBlock", value: "h2" },
+  { label: "H3", title: N_("Nagłówek 3"), command: "formatBlock", value: "h3" },
+  { label: "• Lista", title: t("Lista punktowana"), command: "insertUnorderedList" },
+  { label: "1. Lista", title: t("Lista numerowana"), command: "insertOrderedList" },
+  { label: N_("Cofnij"), title: N_("Cofnij (Ctrl+Z)"), command: "undo" },
+  { label: N_("Ponów"), title: N_("Ponów (Ctrl+Y)"), command: "redo" }
 ];
 
 export function DocumentEditor(props: {
@@ -122,10 +123,10 @@ export function DocumentEditor(props: {
     try {
       await props.onSave(name, format, blocksFromDom(target as unknown as NodeLike), { trackChanges: trackChanges && format === "docx" });
       setDirty(false);
-      setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
+      setStatus(t("Zapisano jako „{name}”. Oryginał pozostaje bez zmian.", { name: name }));
       setSaveAs(editedFilename(name));
     } catch (failure) {
-      setStatus(`Nie udało się zapisać: ${failure instanceof Error ? failure.message : String(failure)}`);
+      setStatus(t("Nie udało się zapisać: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
     } finally {
       setSaving(false);
     }
@@ -135,35 +136,33 @@ export function DocumentEditor(props: {
 
   return (
     <div className="text-editor office-editor">
-      <div className="text-editor-toolbar" role="toolbar" aria-label="Formatowanie dokumentu">
+      <div className="text-editor-toolbar" role="toolbar" aria-label={t("Formatowanie dokumentu")}>
         {editing
           ? COMMANDS.map((command) => (
               <button
                 key={command.label}
                 type="button"
-                title={command.title}
+                title={t(command.title)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => run(command)}
               >
-                {command.label}
+                {t(command.label)}
               </button>
             ))
           : null}
         <span className="text-editor-spacer" />
-        <div className="text-editor-modes" role="group" aria-label="Widok">
-          <button type="button" aria-pressed={mode === "view"} onClick={() => setMode("view")}>Podgląd</button>
+        <div className="text-editor-modes" role="group" aria-label={t("Widok")}>
+          <button type="button" aria-pressed={mode === "view"} onClick={() => setMode("view")}>{t("Podgląd")}</button>
           {props.readOnly ? null : (
-            <button type="button" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edycja</button>
+            <button type="button" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>{t("Edycja")}</button>
           )}
         </div>
       </div>
       {editing ? (
         <p className="office-editor-note">
-          Zapis tworzy nowy plik w uproszczonym układzie; oryginał pozostaje bez zmian.
+          {t("Zapis tworzy nowy plik w uproszczonym układzie; oryginał pozostaje bez zmian.")}
           <InfoTip>
-            Zostają akapity, nagłówki, listy, tabele, pogrubienie, kursywa i podkreślenie. Style, nagłówki i stopki
-            strony, komentarze oraz wcześniejsze śledzone zmiany nie są przenoszone. „Śledź zmiany” (DOCX) zapisuje
-            Twoje poprawki jako śledzone zmiany Worda, z Tobą jako autorem. PDF to wersja do wysłania lub druku.
+            {t("Zostają akapity, nagłówki, listy, tabele, pogrubienie, kursywa i podkreślenie. Style, nagłówki i stopki strony, komentarze oraz wcześniejsze śledzone zmiany nie są przenoszone. „Śledź zmiany” (DOCX) zapisuje Twoje poprawki jako śledzone zmiany Worda, z Tobą jako autorem. PDF to wersja do wysłania lub druku.")}
           </InfoTip>
         </p>
       ) : null}
@@ -194,18 +193,18 @@ export function DocumentEditor(props: {
         }}
       />
       <div className="text-editor-footer">
-        <small>{dirty ? "Niezapisane zmiany" : ""}</small>
+        <small>{dirty ? t("Niezapisane zmiany") : ""}</small>
         {props.readOnly ? (
-          <small>Sprawa tylko do odczytu.</small>
+          <small>{t("Sprawa tylko do odczytu.")}</small>
         ) : (
           <div className="text-editor-save">
             <input
-              aria-label="Nazwa zapisywanego pliku"
+              aria-label={t("Nazwa zapisywanego pliku")}
               value={saveAs}
               onChange={(event) => setSaveAs(event.target.value)}
             />
             <select
-              aria-label="Format zapisu"
+              aria-label={t("Format zapisu")}
               value={format}
               onChange={(event) => setFormat(event.target.value as "docx" | "odt" | "pdf")}
             >
@@ -214,20 +213,20 @@ export function DocumentEditor(props: {
               <option value="pdf">PDF</option>
             </select>
             {format === "docx" ? (
-              <label className="text-editor-track" title="Zmiany względem otwartego dokumentu zapisane jako śledzone zmiany Worda, z Tobą jako autorem">
+              <label className="text-editor-track" title={t("Zmiany względem otwartego dokumentu zapisane jako śledzone zmiany Worda, z Tobą jako autorem")}>
                 <input type="checkbox" checked={trackChanges} onChange={(event) => setTrackChanges(event.target.checked)} />
-                Śledź zmiany
+                {t("Śledź zmiany")}
               </label>
             ) : null}
             <button type="button" disabled={(!dirty && format === props.format) || saving || !saveAs.trim()} onClick={() => void save()}>
-              {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
+              {saving ? "Zapisywanie…" : t("Zapisz jako nowy plik")}
             </button>
             {editing
               ? (props.extraActions ?? []).map((action) => (
                   <button
                     key={action.label}
                     type="button"
-                    title={action.title}
+                    title={action.title ? t(action.title) : undefined}
                     disabled={saving}
                     onClick={() => {
                       const target = root.current;
@@ -241,12 +240,12 @@ export function DocumentEditor(props: {
                           setStatus(message);
                         })
                         .catch((failure: unknown) =>
-                          setStatus(`Nie udało się: ${failure instanceof Error ? failure.message : String(failure)}`)
+                          setStatus(t("Nie udało się: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }))
                         )
                         .finally(() => setSaving(false));
                     }}
                   >
-                    {action.label}
+                    {t(action.label)}
                   </button>
                 ))
               : null}

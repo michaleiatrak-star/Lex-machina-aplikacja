@@ -859,6 +859,15 @@ describe("AiSdkProviderAdapter", () => {
     ).toBe(
       "LOCAL_MODEL_INFERENCE_FAILED"
     );
+    // No text (or only stripped reasoning) is the model's empty answer, not a llama.cpp failure.
+    for (const detail of [
+      "LOCAL_MODEL_HTTP_EMPTY_RESPONSE",
+      "LOCAL_MODEL_EMPTY_ANSWER:raw_chars=412",
+      "Provider returned an empty deterministic-workflow result."
+    ]) {
+      expect(classifyLocalInferenceFailure(detail), detail).toBe("LOCAL_MODEL_EMPTY_ANSWER");
+    }
+    expect(classifyLocalInferenceFailure("LOCAL_MODEL_HTTP_INVALID_SSE_JSON")).toBe("LOCAL_MODEL_SERVER_ERROR");
   });
 
   it("registers all supported live providers", () => {

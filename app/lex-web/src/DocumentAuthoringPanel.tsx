@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   useEffect,
   useMemo,
@@ -228,8 +229,8 @@ export function DocumentAuthoringPanel({
       );
       setMessage(
         result.aliasesUsed.length > 0
-          ? "Dokument został przygotowany z oznaczeniami zastępczymi i kryptograficznie związany z kluczem anonimizacja↔deanonimizacja. Oryginalne dane zostaną wstawione mechanicznie dopiero przy finalnym eksporcie."
-          : "Dokument został przygotowany lokalnie i jest gotowy do eksportu."
+          ? t("Dokument został przygotowany z oznaczeniami zastępczymi i kryptograficznie związany z kluczem anonimizacja↔deanonimizacja. Oryginalne dane zostaną wstawione mechanicznie dopiero przy finalnym eksporcie.")
+          : t("Dokument został przygotowany lokalnie i jest gotowy do eksportu.")
       );
     } catch (value) {
       setError(
@@ -315,7 +316,7 @@ export function DocumentAuthoringPanel({
       setGenerated(null);
       setMessage(
         (savedPath ? `Zapisano: ${savedPath}. ` : "") +
-        `Finalny dokument zawiera oryginalne dane przywrócone mechanicznie z klucza anonimizacja↔deanonimizacja (${final.replacements} zamian). Model nie uczestniczył w reidentyfikacji. Dokument przeszedł HYBRID, G8 i G10.`
+        t("Finalny dokument zawiera oryginalne dane przywrócone mechanicznie z klucza anonimizacja↔deanonimizacja ({replacements} zamian). Model nie uczestniczył w reidentyfikacji. Dokument przeszedł HYBRID, G8 i G10.", { replacements: final.replacements })
       );
     } catch (value) {
       setPassword("");
@@ -334,13 +335,12 @@ export function DocumentAuthoringPanel({
       <div className="authoring-heading">
         <div>
           <p className="eyebrow">
-            Dokument końcowy
+            {t("Dokument końcowy")}
           </p>
           <h3>
-            DOCX / ODT z kluczową deanonimizacją
+            {t("DOCX / ODT z kluczową deanonimizacją")}
             <InfoTip>
-              Model pracuje tylko na aliasach. Plik powstaje lokalnie, a dane jawne są wstawiane z zaszyfrowanego klucza po
-              reautoryzacji - model ich nie otrzymuje.
+              {t("Model pracuje tylko na aliasach. Plik powstaje lokalnie, a dane jawne są wstawiane z zaszyfrowanego klucza po reautoryzacji - model ich nie otrzymuje.")}
             </InfoTip>
           </h3>
         </div>
@@ -351,13 +351,13 @@ export function DocumentAuthoringPanel({
 
       {!mayGenerate && (
         <p className="field-help">
-          Generowanie wymaga aktywnej sprawy i roli OWNER lub EDITOR.
+          {t("Generowanie wymaga aktywnej sprawy i roli OWNER lub EDITOR.")}
         </p>
       )}
 
       <div className="authoring-grid">
         <label>
-          Format
+          {t("Format")}
           <select
             value={format}
             disabled={
@@ -382,7 +382,7 @@ export function DocumentAuthoringPanel({
         </label>
 
         <label>
-          Typ dokumentu
+          {t("Typ dokumentu")}
           <select
             value={
               documentType
@@ -400,28 +400,28 @@ export function DocumentAuthoringPanel({
             }
           >
             <option value="pleading">
-              Pismo procesowe
+              {t("Pismo procesowe")}
             </option>
             <option value="contract">
-              Umowa
+              {t("Umowa")}
             </option>
             <option value="opinion">
-              Opinia
+              {t("Opinia")}
             </option>
             <option value="letter">
-              Pismo / list
+              {t("Pismo / list")}
             </option>
             <option value="report">
-              Raport
+              {t("Raport")}
             </option>
             <option value="other">
-              Inny
+              {t("Inny")}
             </option>
           </select>
         </label>
 
         <label>
-          Wzór kancelarii
+          {t("Wzór kancelarii")}
           <select
             value={
               templateId
@@ -438,7 +438,7 @@ export function DocumentAuthoringPanel({
             }
           >
             <option value="">
-              — bez wzoru —
+              {t("— bez wzoru —")}
             </option>
             {templates.map(
               (template) => (
@@ -463,7 +463,7 @@ export function DocumentAuthoringPanel({
         </label>
 
         <label>
-          Profil stylu
+          {t("Profil stylu")}
           <select
             value={
               styleProfile
@@ -484,16 +484,16 @@ export function DocumentAuthoringPanel({
             }
           >
             <option value="lex-classic-clean-v1">
-              Lex Classic Clean
+              {t("Lex Classic Clean")}
             </option>
             <option value="lex-light-legal-design-v1">
-              Lex Light Legal Design
+              {t("Lex Light Legal Design")}
             </option>
             <option value="lex-classic-tnr-v1">
-              Lex Classic TNR
+              {t("Lex Classic TNR")}
             </option>
             <option value="lex-office-tnr-v1">
-              Pismo kancelaryjne (TNR 12)
+              {t("Pismo kancelaryjne (TNR 12)")}
             </option>
           </select>
         </label>
@@ -501,19 +501,19 @@ export function DocumentAuthoringPanel({
 
       {selectedTemplate && (
         <p className="field-help">
-          Wybrano wzór: {
+          {t("Wybrano wzór:")} {
             selectedTemplate
               .filename
           }.
-          <InfoTip>Używany jest tylko lokalny, zatwierdzony profil stylu; treść wzoru nie trafia do providera.</InfoTip>
+          <InfoTip>{t("Używany jest tylko lokalny, zatwierdzony profil stylu; treść wzoru nie trafia do dostawcy modelu.")}</InfoTip>
         </p>
       )}
 
       <p className="field-help">
-        Źródła: {
+        {t("Źródła:")} {
           attachments.length
-        } dokument(ów).
-        <InfoTip>Do 32 wybranych chunków na dokument. Generuje aktualny provider i model.</InfoTip>
+        } {t("dokument(ów).")}
+        <InfoTip>{t("Do 32 wybranych fragmentów na dokument. Generuje aktualnie wybrany dostawca i model.")}</InfoTip>
       </p>
 
       <button
@@ -529,16 +529,16 @@ export function DocumentAuthoringPanel({
       >
         {busy
           ? "Przetwarzanie…"
-          : "Przygotuj dokument do finalnego eksportu"}
+          : t("Przygotuj dokument do finalnego eksportu")}
       </button>
 
       {generated && (
         <div className="authoring-finalize">
           <p>
-            Wewnętrzna wersja chroniona {
+            {t("Wewnętrzna wersja chroniona")} {
               generated.format
                 .toUpperCase()
-            } jest gotowa. Hash: {
+            } {t("jest gotowa. Hash:")} {
               (
                 generated.tokenizedSha256 ??
                 generated.sha256 ??
@@ -551,12 +551,12 @@ export function DocumentAuthoringPanel({
             <>
               {isDesktopShell() ? (
                 <p className="auth-copy">
-                  Reautoryzacja przez systemowy magazyn poświadczeń.
-                  <InfoTip>Windows: Menedżer poświadczeń, macOS: pęk kluczy. Hasło nie trafia do aplikacji.</InfoTip>
+                  {t("Reautoryzacja przez systemowy magazyn poświadczeń.")}
+                  <InfoTip>{t("Windows: Menedżer poświadczeń, macOS: pęk kluczy. Hasło nie trafia do aplikacji.")}</InfoTip>
                 </p>
               ) : (
                 <label>
-                  Bieżące hasło — jednorazowa reautoryzacja
+                  {t("Bieżące hasło — jednorazowa reautoryzacja")}
                   <input
                     type="password"
                     autoComplete="current-password"
@@ -586,12 +586,12 @@ export function DocumentAuthoringPanel({
                   void finalizeAndDownload();
                 }}
               >
-                Wstaw oryginalne dane z klucza i pobierz
+                {t("Wstaw oryginalne dane z klucza i pobierz")}
               </button>
             </>
           ) : (
             <p className="field-error">
-              Twoje ACL nie zezwala na reidentyfikację i eksport dokumentu z jawnymi danymi.
+              {t("Twoje ACL nie zezwala na reidentyfikację i eksport dokumentu z jawnymi danymi.")}
             </p>
           )}
         </div>

@@ -8,6 +8,8 @@ import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-fr
 import { claimedUnitState } from "./legal-source-verifier.js";
 import {
   FRESHNESS_MAX_AGE_MS,
+  QUOTE_CONTRADICTS_UNIT,
+  QUOTE_NOT_IN_UNIT,
   type VerificationKind,
   type VerificationRecord
 } from "./verification-ledger.js";
@@ -285,8 +287,13 @@ export function verifyFromCoreLaw(args: {
       args.quote?.trim() &&
       !comparable(evidence).includes(comparable(args.quote))
     ) {
+      // A quote with the provision's own words and numbers in another order ("od 2 do 15 lat"
+      // for "od lat 2 do 15") is a paraphrase: QUOTE_NOT_IN_UNIT, which does not undo the
+      // provision's verification. Other words or numbers ("od 2 do 12 lat") contradict the text.
+      const words = (value: string) => comparable(value).match(/[\p{L}\p{N}]+/gu) ?? [];
+      const textWords = new Set(words(evidence));
       evidence = undefined;
-      failure = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
+      failure = words(args.quote).every((word) => textWords.has(word)) ? QUOTE_NOT_IN_UNIT : QUOTE_CONTRADICTS_UNIT;
     }
   } else if (args.kind === "journal") {
     evidence = journalMatches(args.claim, [summary.eli, record.eli])

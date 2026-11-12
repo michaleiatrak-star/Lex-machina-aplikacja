@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { ReactNode } from "react";
 
 /**
@@ -100,7 +101,7 @@ export function parseMarkdown(content: string): MarkdownBlock[] {
     const mark = PLEADING_MARK.exec(line);
     if (mark) {
       flush();
-      blocks.push({ type: "rule", label: mark[1] === "PISMO" ? "Projekt pisma" : "Koniec pisma" });
+      blocks.push({ type: "rule", label: mark[1] === "PISMO" ? t("Projekt pisma") : t("Koniec pisma") });
       continue;
     }
     if (RULE.test(line)) {

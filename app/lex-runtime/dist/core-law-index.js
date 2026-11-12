@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 import { CoreLawSearchIndex } from "./core-law-search.js";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -7,7 +8,7 @@ import path from "node:path";
 import { LocalPdfTextExtractor, SMALL_LINE_MARK } from "./pdf-text-extractor.js";
 import { articleFootnotes, articleWording, extractPageFootnotes, stripTrailingHeadings } from "./core-law-footnotes.js";
 import { articleHeadingPattern, articleIdsFromHeading, htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
-import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill, listJurisdictions } from "./jurisdiction.js";
 /**
  * Why the copy of an act cannot be taken as the current wording (verification
  * from the copy is refused and the act must be checked in ELI), or null.
@@ -58,9 +59,14 @@ const OCR_MIN_PAGE_CHARS = 40;
 const OCR_BATCH_PAGES = 25;
 const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
-// Przy użyciu kopii relacje aktu są sprawdzane w ELI, nie częściej niż raz na kwadrans.
+// Przy użyciu kopii relacje aktu są sprawdzane w ELI co kwadrans (jak dotąd), ale w tle:
+// odpowiedź nie czeka na ELI (zgłoszenie 2026-11-11), a wykryta zmiana kieruje kolejne odczyty
+// do ELI. Czekanie tylko przy pierwszym użyciu aktu albo kopii niesprawdzanej ponad limit świeżości.
 const USE_CHECK_AFTER_MS = 15 * 60 * 1000;
-const USE_CHECK_TIMEOUT_MS = 15_000;
+const USE_CHECK_TIMEOUT_MS = 8_000;
+// Nieudane sprawdzenie (ELI wolne lub niedostępne) nie jest ponawiane przy każdym przepisie
+// tego aktu: przez ten czas kolejne użycia dostają od razu UNREACHABLE.
+const USE_CHECK_RETRY_AFTER_MS = 5 * 60 * 1000;
 // Kopie sprzed kotwic jednostek (extraction < 3) są pobierane ponownie, partiami.
 const ANCHOR_UPGRADES_PER_RUN = 5;
 const NOTE_CHARS = 400;
@@ -95,19 +101,41 @@ function labelFor(line) {
     }
     return null;
 }
+let scopeOf = () => "active";
+export function setCoreLawScope(scope) {
+    scopeOf = scope;
+}
+export function coreLawScope() {
+    return scopeOf();
+}
+// A domain skill the index covers: the chosen jurisdiction's, or in server mode any jurisdiction's.
+function coveredDomainSkill(corpusRoot, name) {
+    // A country without a package (Settings) has no domain skills: Polish acts are not updated for it.
+    if (scopeOf() === "active")
+        return Boolean(activeJurisdictionPack()) && isDomainSkill(name);
+    const prefixes = new Set(["dr", ...listJurisdictions(corpusRoot).map((provider) => provider.domainPrefix).filter(Boolean)]);
+    return [...prefixes].some((prefix) => new RegExp(`^${prefix}-\\d{2}-`, "u").test(name));
+}
 function mapFiles(corpusRoot) {
     const files = [];
     for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-        if (!entry.isDirectory() || !isDomainSkill(entry.name))
+        if (!entry.isDirectory() || !coveredDomainSkill(corpusRoot, entry.name))
             continue;
         const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
         if (fs.existsSync(file))
             files.push({ domain: entry.name, file });
     }
-    // The chosen jurisdiction's domain map (Polish law: prawo-polskie-v2/ROUTING-MAP.md).
-    const routing = path.join(corpusRoot, ...jurisdictionDomainMap(corpusRoot).split("/"));
-    if (fs.existsSync(routing)) {
-        files.push({ domain: activeJurisdictionPack(), file: routing });
+    // The jurisdictions' routing maps (Polish law: prawo-polskie-v2/ROUTING-MAP.md): the chosen one,
+    // or in server mode every package's.
+    const routings = scopeOf() === "all"
+        ? listJurisdictions(corpusRoot).map((provider) => ({ domain: provider.pack, map: provider.domains || `${provider.pack}/ROUTING-MAP.md` }))
+        : [{ domain: activeJurisdictionPack(), map: jurisdictionDomainMap(corpusRoot) }];
+    for (const { domain, map } of routings) {
+        if (!domain || !map)
+            continue;
+        const routing = path.join(corpusRoot, ...map.split("/"));
+        if (fs.existsSync(routing) && !files.some((item) => item.file === routing))
+            files.push({ domain, file: routing });
     }
     return files.sort((a, b) => a.domain.localeCompare(b.domain));
 }
@@ -118,7 +146,7 @@ function mapFiles(corpusRoot) {
 function sourceRegistries(corpusRoot) {
     const files = [];
     for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
-        if (!entry.isDirectory() || !isDomainSkill(entry.name))
+        if (!entry.isDirectory() || !coveredDomainSkill(corpusRoot, entry.name))
             continue;
         const references = path.join(corpusRoot, entry.name, "references");
         let scopes;
@@ -525,6 +553,8 @@ export class CoreLawIndex {
     refreshing = null;
     progress = null;
     useChecks = new Map();
+    failedUseChecks = new Map();
+    backgroundUseChecks = new Set();
     constructor(directory = defaultCoreLawDir(), fetcher = globalThis.fetch.bind(globalThis), 
     // Wiersze z PDF: splitArticles szuka "Art. N." na początku wiersza; bez nich tekst
     // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
@@ -546,16 +576,17 @@ export class CoreLawIndex {
     mapsSignature = "";
     // Size and mtime of every act map and source registry: a skill update changes it.
     static mapsSignatureOf(corpusRoot) {
-        return [...mapFiles(corpusRoot), ...sourceRegistries(corpusRoot)]
-            .map(({ file }) => {
-            try {
-                const stat = fs.statSync(file);
-                return `${file}:${stat.size}:${stat.mtimeMs}`;
-            }
-            catch {
-                return `${file}:-`;
-            }
-        })
+        // The scope and the chosen jurisdiction are part of it: switching either re-reads the act list.
+        return [`scope:${scopeOf()}:${scopeOf() === "active" ? activeJurisdictionPack() : "*"}`, ...[...mapFiles(corpusRoot), ...sourceRegistries(corpusRoot)]
+                .map(({ file }) => {
+                try {
+                    const stat = fs.statSync(file);
+                    return `${file}:${stat.size}:${stat.mtimeMs}`;
+                }
+                catch {
+                    return `${file}:-`;
+                }
+            })]
             .join("|");
     }
     /**
@@ -744,28 +775,56 @@ export class CoreLawIndex {
             void this.refresh({ force: true, only: [eli] }).catch(() => undefined);
         }
         const last = state.relationsCheckedAt ? Date.parse(state.relationsCheckedAt) : 0;
-        if (!pending() && this.now() - last < USE_CHECK_AFTER_MS)
+        const age = this.now() - last;
+        if (!pending() && age < USE_CHECK_AFTER_MS)
             return result();
-        if (this.state.blockedUntil && Date.parse(this.state.blockedUntil) > this.now()) {
-            return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: "ELI_BLOCKED" };
+        // Kopia ma pierwszeństwo (zgłoszenie 2026-11-11): sprawdzona w ELI w ciągu
+        // FRESHNESS_MAX_AGE_MS odpowiada od razu, a wersja jest sprawdzana w tle; wykryta nowsza
+        // wersja kieruje kolejne odczyty do ELI. Czekanie na ELI tylko przy pierwszym użyciu aktu
+        // (brak sprawdzenia albo starsze niż limit świeżości).
+        if (!pending() && age < FRESHNESS_MAX_AGE_MS) {
+            if (!this.backgroundUseChecks.has(eli)) {
+                this.backgroundUseChecks.add(eli);
+                void this.liveUseCheck(eli, ref, state).finally(() => this.backgroundUseChecks.delete(eli));
+            }
+            // The last check failed a moment ago: the copy still answers, with the outage stated.
+            const failed = this.failedUseChecks.get(eli);
+            if (failed && this.now() - failed.at < USE_CHECK_RETRY_AFTER_MS) {
+                return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: failed.error };
+            }
+            return result();
         }
         if (!pending()) {
-            try {
-                await this.checkConsolidated(ref, state, false, USE_CHECK_TIMEOUT_MS);
-            }
-            catch (error) {
-                return {
-                    state: "UNREACHABLE",
-                    checkedAt: state.relationsCheckedAt ?? null,
-                    error: error instanceof Error ? error.message : String(error)
-                };
-            }
-            this.saveState();
+            const failure = await this.liveUseCheck(eli, ref, state);
+            if (failure)
+                return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: failure };
         }
-        if (pending() && this.autoApply) {
+        else if (this.autoApply) {
             void this.refresh({ force: true, apply: [eli], only: [eli] }).catch(() => undefined);
         }
         return result();
+    }
+    /** Sprawdzenie relacji aktu w ELI; zwraca powód niepowodzenia albo null. */
+    async liveUseCheck(eli, ref, state) {
+        if (this.state.blockedUntil && Date.parse(this.state.blockedUntil) > this.now())
+            return "ELI_BLOCKED";
+        const failed = this.failedUseChecks.get(eli);
+        if (failed && this.now() - failed.at < USE_CHECK_RETRY_AFTER_MS)
+            return failed.error;
+        try {
+            await this.checkConsolidated(ref, state, false, USE_CHECK_TIMEOUT_MS);
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.failedUseChecks.set(eli, { at: this.now(), error: message });
+            return message;
+        }
+        this.failedUseChecks.delete(eli);
+        this.saveState();
+        if ((state.pendingConsolidated || state.pendingAmendments?.length) && this.autoApply) {
+            void this.refresh({ force: true, apply: [eli], only: [eli] }).catch(() => undefined);
+        }
+        return null;
     }
     /** Usuwa z kopii akt dodany przez użytkownika (akty z map zostają). */
     removeUserAct(eli) {
@@ -1002,6 +1061,8 @@ export class CoreLawIndex {
         return this.refresh(elis?.length ? { force: true, apply: elis, only: elis } : { force: true, apply: "all" });
     }
     status() {
+        // The act list follows the chosen jurisdiction (and server mode) without waiting for a refresh.
+        this.reloadMapsIfChanged();
         const acts = this.summaries().map((act) => {
             const due = act.consolidated &&
                 (!act.relationsCheckedAt || this.now() - Date.parse(act.relationsCheckedAt) >= CHECK_AFTER_MS);

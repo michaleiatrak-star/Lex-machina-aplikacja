@@ -1,3 +1,7 @@
+import { parseFirmKnowledgeSelection } from "../firm-knowledge-scope.js";
+import { astLines, compareFileWithDraft, draftLines, fileCheckReason } from "../file-consistency.js";
+import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
+import { classifyLocalInferenceFailure } from "../providers/ai-sdk-adapter.js";
 import { encryptedKind, passwordFromHeader } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
@@ -742,7 +746,8 @@ function parseSessionKnowledgeRequest(value) {
         return {
             includeCase: false,
             includeFirm: false,
-            limit: 8
+            limit: 8,
+            firmSelection: { folderIds: [], itemIds: [] }
         };
     }
     if (!value ||
@@ -763,9 +768,11 @@ function parseSessionKnowledgeRequest(value) {
         undefined
         ? 8
         : Number(record.limit);
-    if ((caseId !== undefined &&
-        !/^case_[a-f0-9]{32}$/
-            .test(caseId)) ||
+    const firmSelection = parseFirmKnowledgeSelection(record.firmSelection);
+    if (!firmSelection ||
+        (caseId !== undefined &&
+            !/^case_[a-f0-9]{32}$/
+                .test(caseId)) ||
         (includeCase &&
             !caseId) ||
         !Number.isInteger(limit) ||
@@ -779,7 +786,8 @@ function parseSessionKnowledgeRequest(value) {
             : {}),
         includeCase,
         includeFirm,
-        limit
+        limit,
+        firmSelection
     };
 }
 async function assertDocumentWorkflowFinalizationAllowed(options, args) {
@@ -2610,6 +2618,20 @@ export function createLexHttpApp(options) {
             }
         }
     };
+    // Edit in place from the calendar (an older runtime without the method answers 503).
+    app.patch("/api/cases/:caseId/schedule/:eventId", scheduleRoute("CASE_SCHEDULE_UPDATE_FAILED", async (service, req, res) => {
+        if (!service.updateCaseScheduleEvent) {
+            res.status(503).json({ error: "CASE_SCHEDULE_UNAVAILABLE" });
+            return;
+        }
+        res.json(await service.updateCaseScheduleEvent(responseAuthContext(res), String(req.params.caseId ?? ""), String(req.params.eventId ?? ""), {
+            kind: req.body?.kind,
+            title: req.body?.title,
+            startsAt: req.body?.startsAt,
+            location: req.body?.location,
+            notes: req.body?.notes
+        }));
+    }));
     // Home screen and calendar: events of all the user's active cases.
     app.get("/api/schedule/upcoming", scheduleRoute("CASE_SCHEDULE_LIST_FAILED", async (service, req, res) => {
         const limit = Number(req.query.limit);
@@ -5341,6 +5363,15 @@ export function createLexHttpApp(options) {
                     return;
                 }
             }
+            const fileSource = longDocumentSource ? joinParts(longDocumentSource) : pleadingSource?.text;
+            if (fileSource !== undefined) {
+                // G99 FILE CHECK (T33): the amounts, dates, sums and attachments of the stored text.
+                const findings = compareFileWithDraft(draftLines(fileSource), astLines(generated.ast));
+                if (findings.length) {
+                    res.status(422).json({ error: "DOCUMENT_FILE_CHECK_FAILED", reason: fileCheckReason(findings) });
+                    return;
+                }
+            }
             if (processDocumentStatus === "DRAFT") {
                 // pisma-procesowe-v3 CP-GATE: a draft file is marked as not for filing.
                 generated.ast.blocks.unshift({
@@ -6121,6 +6152,19 @@ export function createLexHttpApp(options) {
     // templates), resolved with access checks. Used to send them and to
     // estimate whether they fit the model before sending. Null: response sent.
     const templateTextCache = new Map();
+    // The purposes of the firm library's documents (by folder), for files picked in a conversation.
+    const firmPurposesOf = async (res, firmCaseId) => {
+        if (!options.firmDocumentPurposes || !options.caseAccessService)
+            return new Map();
+        try {
+            const context = responseAuthContext(res);
+            const view = options.caseAccessService.openCase(context, firmCaseId);
+            return await options.caseAccessService.withCaseDataKey(context, firmCaseId, "ANALYZE", async (caseDataKey) => await options.firmDocumentPurposes({ caseId: firmCaseId, caseDataKey, keyVersion: view.keyVersion }));
+        }
+        catch {
+            return new Map();
+        }
+    };
     const resolveSelectedAttachments = async (res, attachments, firmTemplates, firmCaseId, evidence, 
     // A model outside the computer: documents the user has not reviewed are refused.
     remote = true) => {
@@ -6168,12 +6212,16 @@ export function createLexHttpApp(options) {
                         chunkIndices: selection
                             .chunkIndices
                     }, { remote, ...(evidence ? { images: evidence } : {}) });
+                    const pickedPurpose = caseId === firmCaseId ? (await firmPurposesOf(res, caseId)).get(resolved.documentId) : undefined;
                     picked.push({
                         caseId,
                         documentId: resolved.documentId,
                         sourceScope: caseId === firmCaseId
-                            ? "FIRM_KNOWLEDGE"
+                            ? pickedPurpose === "TEMPLATES"
+                                ? "FIRM_TEMPLATE"
+                                : "FIRM_KNOWLEDGE"
                             : "MANUAL",
+                        ...(pickedPurpose && pickedPurpose !== "TEMPLATES" ? { firmPurpose: pickedPurpose } : {}),
                         selectedByUser: true,
                         ...(resolved.grammar
                             ? { grammar: resolved.grammar }
@@ -6423,6 +6471,8 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
+        // The interface language: every model call of this request answers in it.
+        enterAnswerLanguage(parseAnswerLanguage(req.get("X-Lex-Language")));
         if (keepAliveRequested(req))
             keepResponseAlive(res);
         if (!options.sessionExecutor) {
@@ -6648,6 +6698,7 @@ export function createLexHttpApp(options) {
                 }
                 const context = responseAuthContext(res);
                 const knowledgeSources = [];
+                let firmPurposeMap = new Map();
                 if (knowledge.includeCase &&
                     knowledge.caseId) {
                     knowledgeSources.push({
@@ -6661,10 +6712,30 @@ export function createLexHttpApp(options) {
                     if (!firm) {
                         throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
                     }
-                    knowledgeSources.push({
-                        caseId: firm.caseId,
-                        sourceScope: "FIRM_KNOWLEDGE"
-                    });
+                    // Only the picked files and folders and the firm's default folders, never the whole library.
+                    const firmView = options.caseAccessService.openCase(context, firm.caseId);
+                    const firmDocuments = options.firmKnowledgeScope
+                        ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) => await options.firmKnowledgeScope({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion, selection: knowledge.firmSelection }))
+                        : new Set();
+                    const firmPurposes = options.firmDocumentPurposes
+                        ? await options.caseAccessService.withCaseDataKey(context, firm.caseId, "ANALYZE", async (caseDataKey) => await options.firmDocumentPurposes({ caseId: firm.caseId, caseDataKey, keyVersion: firmView.keyVersion }))
+                        : new Map();
+                    firmPurposeMap = firmPurposes;
+                    // Templates are filled in, never searched as knowledge; the firm's rules get their own
+                    // search so they reach every conversation whatever the question's wording.
+                    const searched = new Set([...firmDocuments].filter((documentId) => !firmPurposes.has(documentId) || firmPurposes.get(documentId) === "CASE_LAW"));
+                    const rules = new Set([...firmDocuments].filter((documentId) => firmPurposes.get(documentId) === "RULES"));
+                    request.onStep?.("PREPARE", `know-how kancelarii: ${firmDocuments.size} dokumentów z wybranych i domyślnych folderów`);
+                    if (rules.size > 0) {
+                        knowledgeSources.push({ caseId: firm.caseId, sourceScope: "FIRM_KNOWLEDGE", documentIds: rules, priority: true });
+                    }
+                    if (searched.size > 0) {
+                        knowledgeSources.push({
+                            caseId: firm.caseId,
+                            sourceScope: "FIRM_KNOWLEDGE",
+                            documentIds: searched
+                        });
+                    }
                 }
                 const ranked = [];
                 for (const source of knowledgeSources) {
@@ -6681,15 +6752,18 @@ export function createLexHttpApp(options) {
                             .keyVersion,
                         query: request.query,
                         limit: knowledge.limit,
-                        reviewedOnly: !localModel
+                        reviewedOnly: !localModel,
+                        ...(source.documentIds ? { documentIds: source.documentIds } : {})
                     }));
-                    ranked.push(...hits.map((hit) => ({
+                    ranked.push(...(source.priority ? hits.slice(0, 2) : hits).map((hit) => ({
                         ...hit,
-                        sourceScope: source.sourceScope
+                        sourceScope: source.sourceScope,
+                        ...(source.priority ? { priority: true } : {})
                     })));
                 }
-                ranked.sort((left, right) => right.score -
-                    left.score ||
+                ranked.sort((left, right) => Number(Boolean(right.priority)) - Number(Boolean(left.priority)) ||
+                    right.score -
+                        left.score ||
                     left.caseId
                         .localeCompare(right.caseId) ||
                     left.documentId
@@ -6711,10 +6785,12 @@ export function createLexHttpApp(options) {
                             4) {
                             continue;
                         }
+                        const firmPurpose = hit.sourceScope === "FIRM_KNOWLEDGE" ? firmPurposeMap.get(hit.documentId) : undefined;
                         attachment = {
                             caseId: hit.caseId,
                             documentId: hit.documentId,
                             sourceScope: hit.sourceScope,
+                            ...(firmPurpose ? { firmPurpose } : {}),
                             chunks: []
                         };
                         grouped.set(key, attachment);
@@ -8496,7 +8572,14 @@ export function createLexHttpApp(options) {
             if (sendAccountPolicyError(res, error)) {
                 return;
             }
-            const localFailureMessage = request.model.startsWith("local/")
+            // A workflow gate of the application (e.g. a provision without an ELI text, the criminal
+            // qualifier) is not a llama.cpp failure: it is reported as for a cloud model. Only an empty
+            // model answer stays a local-model diagnostic.
+            const localModelFailure = request.model.startsWith("local/") &&
+                !(error instanceof Error &&
+                    error.name === "LexExecutionError" &&
+                    !/empty/i.test(error.message));
+            const localFailureMessage = localModelFailure
                 ? (error instanceof
                     ProviderGatewayError &&
                     error.causeValue instanceof
@@ -8511,8 +8594,8 @@ export function createLexHttpApp(options) {
                 .split(":", 1)[0] ?? "";
             const localFailureReason = /^LOCAL_MODEL_[A-Z0-9_]+$/.test(parsedLocalFailureReason)
                 ? parsedLocalFailureReason
-                : "LOCAL_MODEL_INFERENCE_FAILED";
-            if (request.model.startsWith("local/")) {
+                : classifyLocalInferenceFailure(localFailureMessage);
+            if (localModelFailure) {
                 res.status(503).json({
                     error: "LOCAL_MODEL_EXECUTION_FAILED",
                     reason: localFailureReason,

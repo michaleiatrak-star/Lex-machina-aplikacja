@@ -1,10 +1,37 @@
-!define LEX_HOOK_FILE_DIR "${__FILEDIR__}"
+﻿!define LEX_HOOK_FILE_DIR "${__FILEDIR__}"
+
+; While a PowerShell step runs, NSIS gets no progress: its bar moves continuously (marquee) so the
+; installer does not look frozen; the step's own window shows the real progress.
+!macro LEX_BAR_MARQUEE ENABLE
+  Push $R7
+  Push $R8
+  Push $R9
+  FindWindow $R8 "#32770" "" $HWNDPARENT
+  GetDlgItem $R9 $R8 1004
+  System::Call "user32::GetWindowLongW(p R9, i -16) i .R7"
+  !if ${ENABLE} == 1
+    IntOp $R7 $R7 | 0x08
+    System::Call "user32::SetWindowLongW(p R9, i -16, i R7)"
+    SendMessage $R9 0x40A 1 30
+  !else
+    SendMessage $R9 0x40A 0 0
+    IntOp $R7 $R7 & 0xFFFFFFF7
+    System::Call "user32::SetWindowLongW(p R9, i -16, i R7)"
+  !endif
+  Pop $R9
+  Pop $R8
+  Pop $R7
+!macroend
 
 !macro NSIS_HOOK_PREINSTALL
   SetOutPath "$PLUGINSDIR"
   File "/oname=lex-get-install-state.ps1" "${LEX_HOOK_FILE_DIR}\..\..\..\installer\get-install-state.ps1"
   File "/oname=lex-target-release-source.json" "${LEX_HOOK_FILE_DIR}\..\..\..\installer\windows-release-source.json"
 
+  ; Offline installer, three stages each with its own bar: 1 extraction (wrapper window), 2 preparation
+  ; (this installer's bar: the application files), 3 the actual installation (runtime window).
+  IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" 0 +2
+    DetailPrint "Etap 2 z 3: przygotowanie — kopiowanie plików aplikacji (pasek postępu poniżej)"
   DetailPrint "Lex Machina: rozpoznawanie stanu istniejącej instalacji..."
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\lex-get-install-state.ps1" -RuntimeRoot "$INSTDIR\runtime" -TargetManifestPath "$PLUGINSDIR\lex-target-release-source.json" -OutputPath "$PLUGINSDIR\lex-install-state.json" -ProductName "Lex Machina" -DiscoverRegisteredInstall -FailOnInstallRootMismatch -FailOnDowngrade'
   Pop $0
@@ -55,34 +82,38 @@
   ; Fail before downloading large components if the embedded thin payload is
   ; structurally incomplete.
   IfFileExists "$INSTDIR\runtime\app\dist\http\server.js" +3 0
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera kompletnego runtime aplikacji (brak app\dist\http\server.js)." /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera kompletnej usługi aplikacji (brak app\dist\http\server.js)." /SD IDOK
     Abort
   IfFileExists "$INSTDIR\runtime\corpus\*" +3 0
     MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera korpusu skilli." /SD IDOK
     Abort
   IfFileExists "$INSTDIR\runtime\lex-runtime-sidecar.exe" +3 0
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera natywnego sidecara runtime." /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalator nie zawiera natywnego modułu usługi aplikacji." /SD IDOK
     Abort
 
   IfFileExists "$EXEDIR\LexMachina-Offline-Runtime.zip" lex_offline_bundle lex_online_bootstrap
 
 lex_offline_bundle:
-  DetailPrint "Lex Machina: przygotowanie narzędzi z pełnego instalatora..."
+  DetailPrint "Etap 3 z 3: właściwa instalacja — dokładny postęp w osobnym oknie „Instalacja Lex Machina”"
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-offline-bundle-install.ps1" -RuntimeRoot "$INSTDIR\runtime" -BundlePath "$EXEDIR\LexMachina-Offline-Runtime.zip"'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0
     FileOpen $2 "$INSTDIR\runtime\bootstrap-install-error.log" w
     FileWrite $2 "stage=offline-bundle$\r$\nexit=$0$\r$\noutput=$1$\r$\n"
     FileClose $2
-    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalacja lokalnego runtime offline nie powiodła się.$\r$\n$1" /SD IDOK
+    MessageBox MB_ICONSTOP|MB_OK "Lex Machina: instalacja lokalnej usługi aplikacji bez internetu nie powiodła się.$\r$\n$1" /SD IDOK
     Abort
   ${EndIf}
   Goto lex_runtime_selftest
 
 lex_online_bootstrap:
   DetailPrint "Lex Machina: sprawdzanie i pobieranie potrzebnych narzędzi..."
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\bootstrap-run.ps1" -Script "$INSTDIR\runtime\bootstrap\windows-online-bootstrap.ps1" -RuntimeRoot "$INSTDIR\runtime"'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0
@@ -95,7 +126,9 @@ lex_online_bootstrap:
 
 lex_runtime_selftest:
   DetailPrint "Lex Machina: sprawdzanie gotowości aplikacji..."
+  !insertmacro LEX_BAR_MARQUEE 1
   nsExec::ExecToStack '"$INSTDIR\runtime\lex-runtime-sidecar.exe" --self-test'
+  !insertmacro LEX_BAR_MARQUEE 0
   Pop $0
   Pop $1
   ${If} $0 != 0
@@ -108,6 +141,6 @@ lex_runtime_selftest:
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  DetailPrint "Usuwanie prywatnego runtime programu. Dane spraw i Local AI pozostają poza katalogiem aplikacji."
+  DetailPrint "Usuwanie prywatnej usługi programu. Dane spraw i lokalna AI pozostają poza katalogiem aplikacji."
   RMDir /r "$INSTDIR\runtime"
 !macroend

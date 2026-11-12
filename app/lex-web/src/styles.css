@@ -2662,16 +2662,21 @@ textarea:focus {
   font-style: normal;
   text-align: left;
   white-space: normal;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--info-tip-shift, 0px)));
   visibility: hidden;
   opacity: 0;
   transition: opacity 0.12s ease;
   pointer-events: none;
 }
 
-.info-tip:hover .info-tip-bubble,
-.info-tip:focus-within .info-tip-bubble,
-.info-tip.open .info-tip-bubble {
+/* Hidden, the bubble takes no place in the layout (a hidden bubble at the right edge widened the
+   page and gave it a horizontal scroll); shown, it is moved to stay inside the window (InfoTip). */
+.info-tip-bubble {
+  display: none;
+}
+
+.info-tip.shown .info-tip-bubble {
+  display: block;
   visibility: visible;
   opacity: 1;
 }
@@ -2707,7 +2712,8 @@ textarea:focus {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--lm-t1);
+  /* Body text: --lm-t1 is the text on accent backgrounds (white), invisible on the row's surface. */
+  color: var(--lm-t2);
   font-weight: 600;
   text-align: left;
   text-decoration: underline;
@@ -2760,4 +2766,104 @@ textarea:focus {
   padding: 0 16px;
   display: grid;
   gap: 12px;
+}
+
+/* The info icon keeps its circle in any container (it was squeezed beside uppercase
+   eyebrows and in flex rows) and is not styled by the label's text rules. */
+.info-tip {
+  flex: none;
+}
+
+.info-tip-button {
+  flex: none;
+  min-width: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Account settings window: above the password bar, buttons in the app's style, plain field text. */
+.privacy-preview-overlay[role="dialog"] {
+  z-index: 70;
+}
+
+.user-account-dialog {
+  max-height: none;
+}
+
+.user-account-dialog legend {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.user-account-dialog input,
+.user-account-dialog select {
+  font-weight: 400;
+}
+
+.user-account-dialog .user-account-save {
+  justify-self: start;
+  min-height: 40px;
+}
+
+.user-account-dialog .admin-user-actions > button {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* Case participants: the add row wraps instead of cutting the user field; controls of a member fit. */
+.case-collaboration-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.case-collaboration-add > label:first-child {
+  flex: 1 1 260px;
+}
+
+.case-collaboration-add > label:nth-child(2) {
+  flex: 0 1 180px;
+}
+
+.case-collaboration-add select {
+  width: 100%;
+  min-height: 42px;
+  font-weight: 400;
+}
+
+.case-collaborator-controls select {
+  width: auto;
+  min-width: 150px;
+  min-height: 40px;
+}
+
+.case-collaborator-controls > button {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.language-picker {
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+}
+
+.translation-status {
+  margin-top: 8px;
+}
+
+.translation-status table {
+  display: block;
+  max-height: 360px;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.translation-status th,
+.translation-status td {
+  padding: 2px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--lm-l3);
 }
