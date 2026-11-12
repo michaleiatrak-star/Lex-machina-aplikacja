@@ -1,4 +1,5 @@
 import type { ProcessPleadingCheckpoint, ProcessPleadingStage } from "./process-pleading-state.js";
+import { validateEvidenceInventory, type EvidenceInventory } from "./evidence-inventory.js";
 
 // The pleading text of a case's process pipeline, kept in the encrypted workspace
 // between stages: written by the pipeline (W2 draft, W3 final text) or by the user
@@ -28,6 +29,8 @@ export type ProcessPleadingDraft = {
   // fits the window (user, 2026-11-12: with long documents the gates' results are collected
   // by stages and used).
   findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
+  // What every chunk of the case files proves, with checked quotations (evidence-inventory.ts).
+  evidence?: EvidenceInventory;
 };
 
 export const DRAFT_VERSIONS_MAX = 20;
@@ -97,6 +100,7 @@ export function validateProcessPleadingDraft(input: ProcessPleadingDraft): Proce
   for (const finding of Object.values(input.findings ?? {})) {
     if (!finding || typeof finding.text !== "string" || finding.text.length > FINDING_MAX || typeof finding.at !== "string") throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
   }
+  if (input.evidence !== undefined && !validateEvidenceInventory(input.evidence)) throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
   return structuredClone(input);
 }
 
@@ -294,6 +298,14 @@ export function draftPrompt(args: {
     );
   }
   return parts.join("\n\n");
+}
+
+export function withEvidenceInventory(input: ProcessPleadingDraft, evidence: EvidenceInventory): ProcessPleadingDraft {
+  const draft = validateProcessPleadingDraft(input);
+  if (!validateEvidenceInventory(evidence)) throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
+  draft.evidence = structuredClone(evidence);
+  draft.revision += 1;
+  return draft;
 }
 
 /** The findings of a passed checkpoint (its answer without the pleading block and the disclaimer). */

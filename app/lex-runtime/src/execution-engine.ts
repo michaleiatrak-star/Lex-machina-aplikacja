@@ -533,6 +533,7 @@ export class LexExecutionEngine {
       draft?: { version: number; source: "PIPELINE" | "USER"; stage: ProcessPleadingStage; text: string };
       remarks?: string;
       findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
+      evidencePrompt?: string;
     };
     courtWorkflowContext?: {
       stage: Exclude<
@@ -1476,6 +1477,10 @@ export class LexExecutionEngine {
         args.processWorkflowContext.checkpoint,
         args.model.startsWith("local/") ? 6_000 : 40_000
       );
+      if (args.processWorkflowContext.evidencePrompt) {
+        contractCheckpointText += `\n\n${args.processWorkflowContext.evidencePrompt}`;
+        emit("gate", "PROCESS_EVIDENCE_INVENTORY", "OK", `checkpoint=${args.processWorkflowContext.checkpoint}`);
+      }
       if (findings) {
         contractCheckpointText += `\n\n${findings}`;
         emit("gate", "PROCESS_CHECKPOINT_FINDINGS", "OK", `checkpoints=${Object.keys(args.processWorkflowContext.findings ?? {}).join(",")}`);

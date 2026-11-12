@@ -55,6 +55,7 @@ import {
   pleadingContinuationPrompt,
   pleadingStepText,
   withCheckpointFinding,
+  withEvidenceInventory,
   withoutDraftRemarks,
   writesPleading
 } from "../process-pleading-draft.js";
@@ -9964,7 +9965,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     caseId: string,
     keyVersion: number,
     checkpoint: ProcessPleadingCheckpoint
-  ): Promise<Pick<NonNullable<SessionExecutionRequest["processWorkflowContext"]>, "draft" | "remarks">> {
+  ): Promise<Pick<NonNullable<SessionExecutionRequest["processWorkflowContext"]>, "draft" | "remarks" | "findings" | "evidence" | "saveEvidence">> {
     const store = options.processWorkflowStore;
     if (!store?.getProcessPleadingDraft || !options.caseAccessService) return {};
     const draft = await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) =>
@@ -9974,7 +9975,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     return {
       ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
       ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {}),
-      ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {})
+      ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {}),
+      ...(draft?.evidence ? { evidence: draft.evidence } : {}),
+      // A rebuilt evidence inventory is kept at once (it costs model calls), whether the step passes or not.
+      saveEvidence: async (evidence) => {
+        await options.caseAccessService!.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+          const current = await store.getProcessPleadingDraft!({ caseId, caseDataKey, keyVersion });
+          const next = withEvidenceInventory(current ?? emptyProcessPleadingDraft(caseId), evidence);
+          await store.saveProcessPleadingDraft!({ caseId, caseDataKey, keyVersion, draft: next, expectedRevision: current?.revision ?? 0 });
+        });
+      }
     };
   }
 

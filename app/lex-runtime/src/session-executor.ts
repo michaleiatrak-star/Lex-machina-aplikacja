@@ -168,6 +168,7 @@ import type {
   ProcessPleadingMode,
   ProcessPleadingStage
 } from "./process-pleading-state.js";
+import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
 import type {
   CourtAnalysisCheckpoint,
   CourtAnalysisStage
@@ -301,6 +302,17 @@ import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, c
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
+import {
+  buildEvidenceInventory,
+  EVIDENCE_MAP_INSTRUCTION,
+  evidenceInventoryPrompt,
+  HOSTED_PORTION_CHARS,
+  inventoryBudget,
+  inventoryView,
+  LOCAL_PORTION_CHARS,
+  needsEvidenceInventory,
+  type EvidenceInventory
+} from "./evidence-inventory.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
@@ -450,6 +462,11 @@ export type SessionExecutionRequest = {
     remarks?: string;
     // What the earlier checkpoints of this case established (process-pleading-draft.ts findings).
     findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
+    // What every chunk of the case files proves (evidence-inventory.ts), and where a rebuilt one is kept.
+    evidence?: EvidenceInventory;
+    saveEvidence?: (inventory: EvidenceInventory) => Promise<void>;
+    // The inventory's view for this step, written by the executor (aliases of this turn).
+    evidencePrompt?: string;
   };
   courtWorkflowContext?: {
     stage: Exclude<
@@ -2683,6 +2700,55 @@ export class SafeSessionExecutor implements SessionExecutor {
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
+    // The evidence inventory of the whole case file (evidence-inventory.ts): from the matrix
+    // step on, every chunk not read before is read in portions sized to the model and what it
+    // proves is kept with a checked quotation; each step gets its view of it. A local model
+    // (no case-file tools, a small window) gets the files this way at all.
+    if (protectedProcessContext && request.caseFiles && needsEvidenceInventory(protectedProcessContext.checkpoint, PROCESS_PLEADING_CHECKPOINTS)) {
+      const local = request.model.startsWith("local/");
+      const aliasText = (documentId: string, text: string): string =>
+        request.caseFiles!.sharedKey(documentId) ? text : namespaceChunkTokens(text, aliasRegistry.prefixFor(documentId));
+      const unaliasText = (documentId: string, text: string): string =>
+        request.caseFiles!.sharedKey(documentId) ? text : text.replaceAll(`[LMPII:${aliasRegistry.prefixFor(documentId)}:`, "[PII:");
+      let inventory: EvidenceInventory | null = protectedProcessContext.evidence ?? null;
+      try {
+        step("PREPARE", "inwentarz dowodów: odczyt akt sprawy porcjami");
+        const built = await buildEvidenceInventory({
+          files: request.caseFiles,
+          previous: inventory,
+          aliasText,
+          unaliasText,
+          portionChars: local ? LOCAL_PORTION_CHARS : HOSTED_PORTION_CHARS,
+          concurrency: local ? 1 : 4,
+          onProgress: (done, total) => step("PREPARE", `inwentarz dowodów: porcja ${done} z ${total}`),
+          extract: async (portion) =>
+            (
+              await this.providers.stream(request.provider, {
+                model: request.model,
+                systemPrompt: EVIDENCE_MAP_INSTRUCTION,
+                messages: [{ role: "user", content: portion }],
+                accountContinuity: "none",
+                reasoning: "none",
+                abortSignal: AbortSignal.timeout(local ? 900_000 : 300_000)
+              })
+            ).fullText
+        });
+        inventory = built.inventory;
+        if (built.read || built.failed) await request.processWorkflowContext?.saveEvidence?.(inventory).catch(() => undefined);
+        audit.record("gate", "EVIDENCE_INVENTORY", built.failed ? "DEGRADED" : "OK", {
+          items: inventory.items.length,
+          read: built.read,
+          reused: built.reused,
+          failed: built.failed
+        });
+      } catch (error) {
+        audit.record("gate", "EVIDENCE_INVENTORY", "DEGRADED", { detail: error instanceof Error ? error.message.slice(0, 120) : "EVIDENCE_INVENTORY_FAILED" });
+      }
+      const view = inventoryView(protectedProcessContext.checkpoint);
+      const cited = view === "CITED" ? [protectedProcessContext.draft?.text ?? "", ...Object.values(protectedProcessContext.findings ?? {}).map((finding) => finding?.text ?? "")].join("\n") : "";
+      const evidencePrompt = evidenceInventoryPrompt(inventory, view, inventoryBudget(view, local), cited, aliasText);
+      if (evidencePrompt) protectedProcessContext = { ...protectedProcessContext, evidencePrompt };
+    }
     // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
     // application in the WSD portal before the model answers, every one of them (RD 121/26: the
     // model read one of three and left the others "z materiałów sprawy").

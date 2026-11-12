@@ -1547,6 +1547,56 @@ describe(
       expect(contexts.find((context) => context?.checkpoint === "CP-1a")?.findings).toBeUndefined();
     });
 
+    it("keeps the evidence inventory a step built and gives it to the later steps", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner", displayName: "Owner", password: "G39I evidence strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const caseId = String((await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Evidence" }).expect(201)).body.caseId);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/initialize`).set("Authorization", authorization).send({ mode: "AUTO" }).expect(201);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`).set("Authorization", authorization).send({}).expect(200);
+      const inventory = {
+        schemaVersion: 1 as const,
+        builtAt: "2026-11-12T10:00:00.000Z",
+        chunks: {},
+        items: [{ id: "D1", documentId: "doc-1", chunk: 0, pages: "4", kind: "dokument prywatny", fact: "Umowę zawarto 1 marca 2024 r.", quote: "Strony zawarły umowę", quoteVerified: true, strength: "B" as const }],
+        failed: []
+      };
+      current.execute.mockImplementation(async (input) => {
+        const checkpoint = input.processWorkflowContext?.checkpoint ?? "";
+        if (checkpoint === "CP-1c-lancuch") await input.processWorkflowContext!.saveEvidence!(inventory);
+        const answer = ["CP-ATAK", "CP-PODMIOT", "CP-QUALITY", "CP-AUDYT", "CP-PEER"].includes(checkpoint)
+          ? [`Raport ${checkpoint}.`, "=== PISMO ===", `Pozew o zapłatę. Wersja ${checkpoint}.`, "=== KONIEC PISMA ===", ...(checkpoint === "CP-PEER" ? ["RAPORT W3", "STATUS PISMA: do decyzji", "UWAGI REDAKCYJNE PRZED ZŁOŻENIEM", "REJESTR KROKÓW"] : [])].join("\n")
+          : `Raport ${checkpoint}.`;
+        return {
+          sessionId: "session-evidence",
+          status: "DRAFT_PRESENTABLE",
+          provider: input.provider,
+          model: input.model,
+          primarySkill: input.primarySkill,
+          answer,
+          finalization: "PASS",
+          blockedReferences: [],
+          verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+          evidence: [],
+          audit: { result: "PASS", eventCount: 1, closed: true },
+          workflow: { id: "PROCESS_PLEADING_V1", result: "PASS", requiredResources: [], missingResources: [] }
+        };
+      });
+      const body = { query: "Przygotuj pismo procesowe w trybie automatycznym.", provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } };
+      let stage = "";
+      for (let round = 0; round < 20 && stage !== "FINAL"; round += 1) {
+        stage = (await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(body).expect(200)).body.processWorkflow.stage;
+      }
+      expect(stage).toBe("FINAL");
+      const contexts = current.execute.mock.calls.map((call) => call[0].processWorkflowContext);
+      expect(contexts.find((context) => context?.checkpoint === "CP-1c-lancuch")?.evidence).toBeUndefined();
+      expect(contexts.find((context) => context?.checkpoint === "CP-ATAK")?.evidence?.items[0]?.fact).toBe("Umowę zawarto 1 marca 2024 r.");
+      expect(contexts.find((context) => context?.checkpoint === "CP-PEER")?.evidence?.items).toHaveLength(1);
+    });
+
     it("sends a step back with remarks and gives them to its next run", async () => {
       const current = fixture();
       const bootstrap = await request(current.app)
