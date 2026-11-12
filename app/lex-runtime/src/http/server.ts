@@ -65,7 +65,8 @@ import {
 } from "../providers/account-session.js";
 import { ProviderGateway } from "../providers/gateway.js";
 import {
-  applicationUpdateDiscovery
+  applicationUpdateDiscovery,
+  skillReleaseDiscovery
 } from "../update-discovery.js";
 import {
   applyAccountSkills
@@ -585,6 +586,10 @@ export async function startLocalServer(options?: {
     new MaintenanceService(
       updateDiscovery
     );
+  // Skills update from the skills repository's releases, against the versions of the skills in use.
+  maintenance.useSkillReleases(skillReleaseDiscovery(), () =>
+    new Map([...registry.everySkill].map(([name, skill]) => [name, typeof skill.frontmatter.version === "string" ? skill.frontmatter.version.trim() : ""]))
+  );
   const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
   if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off") skillAutoUpdate.start();
   const localModels =

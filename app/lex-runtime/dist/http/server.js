@@ -52,7 +52,7 @@ import { EnvironmentCredentialResolver, MemoryOverlayCredentialResolver } from "
 import { createLiveProviderRegistry } from "../providers/ai-sdk-adapter.js";
 import { AccountSessionManager } from "../providers/account-session.js";
 import { ProviderGateway } from "../providers/gateway.js";
-import { applicationUpdateDiscovery } from "../update-discovery.js";
+import { applicationUpdateDiscovery, skillReleaseDiscovery } from "../update-discovery.js";
 import { applyAccountSkills } from "../account-skills.js";
 import { CoreLawIndex } from "../core-law-index.js";
 import { LocalPersonMorphology } from "../privacy/person-morphology.js";
@@ -328,6 +328,8 @@ export async function startLocalServer(options) {
     const sensitiveDownloadTickets = new SensitiveDownloadTicketManager(authService);
     const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
+    // Skills update from the skills repository's releases, against the versions of the skills in use.
+    maintenance.useSkillReleases(skillReleaseDiscovery(), () => new Map([...registry.everySkill].map(([name, skill]) => [name, typeof skill.frontmatter.version === "string" ? skill.frontmatter.version.trim() : ""])));
     const skillAutoUpdate = new SkillAutoUpdater(maintenance, skillAutoUpdateSettingsPath());
     if (!process.env.VITEST && process.env.LEX_SKILL_AUTO_UPDATE !== "off")
         skillAutoUpdate.start();
