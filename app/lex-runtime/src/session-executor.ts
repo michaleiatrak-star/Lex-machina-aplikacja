@@ -94,7 +94,7 @@ import type {
   LegalSourceTier
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
-import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { CASE_FILE_READ_TOOL, CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
@@ -178,6 +178,7 @@ import type {
   ContractWorkflowMode
 } from "./contract-analysis-state.js";
 import {
+  documentCoveragePrompt,
   orchestrateDocumentContext,
   type ContextBudgetReport
 } from "./context-orchestrator.js";
@@ -203,6 +204,7 @@ import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -2577,12 +2579,23 @@ export class SafeSessionExecutor implements SessionExecutor {
     ]);
     corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
+    // Long documents: what of them the model got, by pages, and how it reads the rest.
+    const coverage = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+      local: request.model.startsWith("local/"),
+      readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
+    });
+    if (coverage) pathSections.push(coverage);
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
     // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
     // application in the WSD portal before the model answers, every one of them (RD 121/26: the
     // model read one of three and left the others "z materiałów sprawy").
+    // What the file quotes from each ruling goes to the model first; a local model (a small
+    // window) gets shorter excerpts and reads further with read_case_law_text.
+    const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n");
+    const fileQuotes = (signatures: readonly string[]) => Object.fromEntries(signatures.map((signature) => [signature, quotesForSignature(fileText, signature)]));
+    const caseTextBudget = request.model.startsWith("local/") ? LOCAL_CASE_TEXT_BUDGET : CASE_TEXT_BUDGET;
     const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
     const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
     // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
@@ -2598,7 +2611,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     if (wsdSignatures.length) {
       step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
       const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
-      pathSections.push(wsdPrefetchPrompt(found));
+      pathSections.push(wsdPrefetchPrompt(found, fileQuotes(wsdSignatures), caseTextBudget));
       for (const result of found) {
         if (result.status !== "FOUND") continue;
         officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
@@ -2630,7 +2643,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     const saosResults = await saosFound;
     if (saosResults.length) {
-      pathSections.push(saosPrefetchPrompt(saosResults));
+      pathSections.push(saosPrefetchPrompt(saosResults, fileQuotes(saosSignatures), caseTextBudget));
       for (const result of saosResults) if (result.status === "FOUND") leadCaseLawTexts.push(`${result.signature}\n${result.text}`);
       audit.record("gate", "SAOS_TEXT_PREFETCH", saosResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
         results: saosResults.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : ` ${result.detail}`}`)

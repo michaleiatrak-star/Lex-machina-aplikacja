@@ -4,6 +4,12 @@
 // human check, the app answered "the fragment holds only the signature" for SDI 9/12, while
 // SAOS holds the whole judgment and the quotes of the case file match it word for word.
 import { plainText } from "../eli/readers.js";
+import { CASE_TEXT_BUDGET, caseTextExcerpt, holdCaseLawText } from "../case-law-texts.js";
+
+function excerptFor(signature: string, source: string, text: string, quotes: readonly string[], budget: number): string {
+  holdCaseLawText(signature, source, text);
+  return caseTextExcerpt(text, quotes, budget).text;
+}
 
 const SAOS = "https://www.saos.org.pl/api";
 
@@ -36,10 +42,11 @@ export async function saosText(signature: string, fetchImpl: SaosFetch = fetch a
   }
 }
 
-export function saosPrefetchPrompt(results: readonly SaosText[]): string {
+/** `quotes`: what the case file quotes from each ruling (its passages go to the model first); `budget`: characters per ruling. */
+export function saosPrefetchPrompt(results: readonly SaosText[], quotes: Record<string, string[]> = {}, budget = CASE_TEXT_BUDGET): string {
   const lines = results.map((result) =>
     result.status === "FOUND"
-      ? `- ${result.signature} (${result.court}${result.date ? `, ${result.date}` : ""}): pełny tekst z SAOS (${result.url}; RZĄD 3 — treść do odczytu i cytatu, status orzeczenia potwierdza baza urzędowa sądu). Tekst:\n${result.text.slice(0, 40_000)}`
+      ? `- ${result.signature} (${result.court}${result.date ? `, ${result.date}` : ""}): tekst z SAOS (${result.url}; RZĄD 3 — treść do odczytu i cytatu, status orzeczenia potwierdza baza urzędowa sądu). Tekst:\n${excerptFor(result.signature, result.url, result.text, quotes[result.signature] ?? [], budget)}`
       : `- ${result.signature}: SAOS — ${result.status === "NOT_FOUND" ? "brak dokładnego trafienia" : "niedostępny"} (${result.detail}).`
   );
   return ["# ORZECZENIA Z AKT SPRAWY — TEKST POBRANY PRZEZ APLIKACJĘ Z SAOS (ustalone przez aplikację)", "Cytuj tylko z tych tekstów; sprawdź, czy cytaty z dokumentów sprawy są w nich dosłownie.", ...lines].join("\n");

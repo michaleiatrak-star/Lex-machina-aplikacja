@@ -5,6 +5,7 @@
 // portal's own search takes the signature (field sygAK of its register search); every hit is a
 // page …/rejestry/show/{slug}, read and accepted only when its text names the signature.
 import { plainText } from "../eli/readers.js";
+import { CASE_TEXT_BUDGET, caseTextExcerpt, holdCaseLawText } from "../case-law-texts.js";
 export const WSD_PORTAL = "https://wsd.adwokatura.pl";
 const REGISTER = 19;
 /** "WSD 113/22" -> "113/22"; null for another court's signature. */
@@ -66,9 +67,9 @@ export async function findWsdRuling(signature, fetchImpl = fetch) {
     return { status: "NOT_FOUND", signature: `WSD ${number}`, searched: `${WSD_PORTAL}/rejestry/showMain/orzecznictwo-${REGISTER} (wyszukiwarka portalu, sygnatura ${number})` };
 }
 /** For the model: what the application found for each WSD signature of the case file. */
-export function wsdPrefetchPrompt(results) {
+export function wsdPrefetchPrompt(results, quotes = {}, budget = CASE_TEXT_BUDGET) {
     const lines = results.map((result) => result.status === "FOUND"
-        ? `- ${result.signature}: ZNALEZIONE w portalu WSD (${result.url}). Tekst ze strony orzeczenia (cytuj tylko z niego):\n${result.text.slice(0, 12_000)}`
+        ? `- ${result.signature}: ZNALEZIONE w portalu WSD (${result.url}). Tekst ze strony orzeczenia (cytuj tylko z niego):\n${(holdCaseLawText(result.signature, result.url, result.text), caseTextExcerpt(result.text, quotes[result.signature] ?? [], budget).text)}`
         : result.status === "NOT_FOUND"
             ? `- ${result.signature}: NIE ZNALEZIONO w portalu orzecznictwa WSD (${result.searched}). Nie przypisuj mu treści ani cytatu; oznacz jako niezweryfikowane i wskaż źródło do sprawdzenia (LEX/Legalis, sekretariat WSD).`
             : `- ${result.signature}: portal WSD niedostępny (${result.detail}). Oznacz jako niezweryfikowane.`);

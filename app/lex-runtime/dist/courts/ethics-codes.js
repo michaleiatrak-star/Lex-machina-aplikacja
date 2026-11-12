@@ -15,7 +15,21 @@ export const ETHICS_CODES = [
                 label: "tekst jednolity — załącznik do uchwały nr 174/2026 Prezydium NRA z 23 czerwca 2026 r."
             }
         ],
-        names: /\bKEA\b|Kodeks\p{L}*\s+Etyki\s+Adwokackiej|Zbi\p{L}+\s+Zasad\s+Etyki\s+Adwokackiej|ZZEAiGZ/u
+        names: /\bKEA\b|Kodeks\p{L}*\s+Etyki\s+Adwokackiej|Zbi\p{L}+\s+Zasad\s+Etyki\s+Adwokackiej|ZZEAiGZ/u,
+        unit: "§"
+    },
+    {
+        key: "KERP",
+        name: "Kodeks Etyki Radcy Prawnego",
+        issuer: "Krajowa Rada Radców Prawnych",
+        sources: [
+            {
+                url: "https://kirp.pl/wp-content/uploads/2023/02/kodeks-etyki-radcy-prawnego-i-regulamin-wykonywania-zawodu.pdf",
+                label: "tekst ujednolicony po zmianach uchwałą nr 1/2022 Nadzwyczajnego Krajowego Zjazdu Radców Prawnych (w mocy od 1 stycznia 2023 r.), wydanie KRRP 2023"
+            }
+        ],
+        names: /\bKERP\b|Kodeks\p{L}*\s+Etyki\s+Radc\p{L}*\s+Prawn\p{L}*/u,
+        unit: "Art."
     }
 ];
 /** Paragraphs of a code the text cites: "§ 16 zd. 3 KEA", "§ 16 Kodeksu Etyki Adwokackiej", "§§ 16 i 17 KEA". */
@@ -26,7 +40,8 @@ export function citedEthicsParagraphs(text) {
         for (const sentence of text.split(/(?<=[.;])\s+(?=[\p{Lu}„(])|\n/u)) {
             if (!code.names.test(sentence))
                 continue;
-            for (const match of sentence.matchAll(/§§?\s*(\d{1,3}[a-z]?)(?:\s*(?:i|oraz|,)\s*(\d{1,3}[a-z]?))?/gu)) {
+            const units = code.unit === "§" ? /§§?\s*(\d{1,3}[a-z]?)(?:\s*(?:i|oraz|,)\s*(\d{1,3}[a-z]?))?/gu : /\bart\.\s*(\d{1,3}[a-z]?)(?:\s*(?:i|oraz|,)\s*(\d{1,3}[a-z]?))?/giu;
+            for (const match of sentence.matchAll(units)) {
                 paragraphs.add(match[1]);
                 if (match[2])
                     paragraphs.add(match[2]);
@@ -50,7 +65,7 @@ export function ethicsParagraph(text, paragraph) {
 /** The cited paragraphs from the local copy of the code (official-text-store.ts), downloaded once and kept current. */
 export async function readEthicsParagraphs(code, paragraphs, store = officialTextStore()) {
     for (const source of code.sources) {
-        const kept = await store.ensure({ key: code.key, name: code.name, issuer: code.issuer, url: source.url, version: source.label, unit: "§" });
+        const kept = await store.ensure({ key: code.key, name: code.name, issuer: code.issuer, url: source.url, version: source.label, unit: code.unit });
         if (!kept)
             continue;
         return {
@@ -59,7 +74,7 @@ export async function readEthicsParagraphs(code, paragraphs, store = officialTex
             source,
             from: kept.from,
             fetchedAt: kept.copy.fetchedAt,
-            paragraphs: paragraphs.map((paragraph) => ({ paragraph, text: kept.copy.units[paragraph] ?? ethicsParagraph(kept.copy.text, paragraph) }))
+            paragraphs: paragraphs.map((paragraph) => ({ paragraph, text: kept.copy.units[paragraph] ?? (code.unit === "§" ? ethicsParagraph(kept.copy.text, paragraph) : null) }))
         };
     }
     return { status: "UNAVAILABLE", code, detail: "ETHICS_CODE_SOURCE_UNAVAILABLE" };
@@ -68,7 +83,7 @@ export function ethicsPrompt(readings) {
     const lines = readings.flatMap((reading) => reading.status === "FOUND"
         ? [
             `${reading.code.name} — ${reading.source.label} (${reading.source.url}); źródło urzędowe samorządu zawodowego; ${reading.from === "LOCAL_STALE" ? `kopia lokalna z ${reading.fetchedAt.slice(0, 10)} (źródło teraz niedostępne — wskaż datę kopii)` : `kopia lokalna aplikacji, pobrana ${reading.fetchedAt.slice(0, 10)}, zgodna ze źródłem`}:`,
-            ...reading.paragraphs.map((item) => (item.text ? `- ${item.text}` : `- § ${item.paragraph}: brak takiego paragrafu w tekście jednolitym — nie przypisuj mu treści.`))
+            ...reading.paragraphs.map((item) => (item.text ? `- ${item.text}` : `- ${reading.code.unit === "§" ? "§" : "art."} ${item.paragraph}: brak takiej jednostki w tym tekście — nie przypisuj jej treści (numeracja mogła się zmienić po nowelizacji kodeksu).`))
         ]
         : [`${reading.code.name}: tekst niedostępny (${reading.detail}) — oznacz powołania jako niezweryfikowane.`]);
     return [

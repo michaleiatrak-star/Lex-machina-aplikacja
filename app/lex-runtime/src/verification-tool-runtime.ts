@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { caseTextExcerpt, caseTextPortion, holdCaseLawText } from "./case-law-texts.js";
 import { MAX_EVIDENCE_CHARS } from "./legal-source-verifier.js";
 import { caseLawRepository } from "./case-law-store.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
@@ -246,6 +247,26 @@ const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
   }
 };
 
+
+const CASE_TEXT_TOOL_NAME = "read_case_law_text";
+const CASE_TEXT_TOOL_SCHEMA: NormalizedToolSchema = {
+  type: "function",
+  function: {
+    name: CASE_TEXT_TOOL_NAME,
+    description:
+      "Read further portions of a ruling whose text the application fetched in this session (SN after verify_case_reference, SAOS or the WSD portal), " +
+      "when the excerpt you got is shortened ('[… doczytaj read_case_law_text z offset=N …]'). Returns about 15 000 characters from offset and nextOffset.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["signature"],
+      properties: {
+        signature: { type: "string", description: "Signature as in the excerpt, e.g. SDI 9/12." },
+        offset: { type: "number", description: "Character offset to read from (0 = the beginning)." }
+      }
+    }
+  }
+};
 
 const CASE_TOOL_SCHEMA: NormalizedToolSchema = {
   type: "function",
@@ -500,8 +521,13 @@ function publicCaseQuoteToolResult(
   });
 }
 
-// Characters of the official text given to the model with a verified SN signature.
-const CASE_TEXT_FOR_MODEL = 15_000;
+// The official text with a verified SN signature: whole when short, else its beginning with the
+// rest named for read_case_law_text (case-law-texts.ts).
+function caseTextForModel(signature: string, source: string, text: string): { text: string; textTruncated: boolean; textChars: number } {
+  holdCaseLawText(signature, source, text);
+  const excerpt = caseTextExcerpt(text, []);
+  return { text: excerpt.text, textTruncated: excerpt.truncated, textChars: excerpt.chars };
+}
 
 function publicCaseToolResult(
   record: VerificationRecord,
@@ -541,7 +567,7 @@ function publicCaseToolResult(
     marker,
     // The official text itself (RD 121/26, 2026-11-12: the model got the metadata only and wrote
     // "the fragment holds no content" for SDI 9/12, verified on sn.pl with the user's session).
-    ...(judgment.normalizedFullText ? { text: judgment.normalizedFullText.slice(0, CASE_TEXT_FOR_MODEL), textTruncated: judgment.normalizedFullText.length > CASE_TEXT_FOR_MODEL } : {}),
+    ...(judgment.normalizedFullText ? caseTextForModel(judgment.signature, record.sourceUrl ?? "sn.pl", judgment.normalizedFullText) : {}),
     instruction:
       "The signature/metadata and official full-text identity are verified; `text` is the official text of the judgment. " +
       "Copy the marker onto the same line as the exact signature. State the holding only from `text`; " +
@@ -1410,7 +1436,8 @@ export class LegalVerificationToolRuntime {
       CASE_LIBRARY_TOOL_SCHEMA,
       CASE_TOOL_SCHEMA,
       CASE_QUOTE_TOOL_SCHEMA,
-      CASE_PROPOSITION_TOOL_SCHEMA
+      CASE_PROPOSITION_TOOL_SCHEMA,
+      CASE_TEXT_TOOL_SCHEMA
     ];
   }
 
@@ -2057,6 +2084,10 @@ export class LegalVerificationToolRuntime {
         continue;
       }
 
+      if (call.name === CASE_TEXT_TOOL_NAME) {
+        results.push({ tool_use_id: call.id, content: caseTextPortion(String(call.input.signature ?? ""), Number(call.input.offset ?? 0)) });
+        continue;
+      }
       if (call.name === CASE_TOOL_NAME) {
         const signature =
           typeof call.input.signature === "string"

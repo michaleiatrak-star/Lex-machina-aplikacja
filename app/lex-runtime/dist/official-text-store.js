@@ -18,6 +18,8 @@ export function defaultOfficialTextDir(env = process.env) {
 /** Units of a text by their headings: "§ 16" on its own line, or "Art. 16." at the start of a line. */
 export function officialTextUnits(text, unit) {
     const heading = unit === "§" ? /(?:^|\n)[ \t]*§[ \t]*(\d{1,3}[a-z]?)[ \t]*\n/gu : /(?:^|\n)[ \t]*Art\.[ \t]*(\d{1,4}[a-z]?)\.[ \t]*/gu;
+    // A page number alone on its line ("25") is not text of the unit it splits.
+    text = text.replace(/\n[ \t]*\d{1,3}[ \t]*(?=\n)/gu, "");
     const marks = [...text.matchAll(heading)];
     const units = {};
     marks.forEach((match, index) => {

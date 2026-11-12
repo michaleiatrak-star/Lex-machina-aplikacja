@@ -17,6 +17,13 @@ describe("codes of professional ethics the case file cites", () => {
     const prompt = ethicsPrompt([{ status: "FOUND", code: ETHICS_CODES[0]!, source: ETHICS_CODES[0]!.sources[0]!, from: "LOCAL", fetchedAt: "2026-11-12T10:00:00Z", paragraphs: [{ paragraph: "16", text: ethicsParagraph(KEA_TEXT, "16") }, { paragraph: "99", text: null }] }]);
     expect(prompt).toContain("normą centralną jest naruszona zasada etyki");
     expect(prompt).toContain("grozić ściganiem karnym lub dyscyplinarnym");
-    expect(prompt).toContain("§ 99: brak takiego paragrafu");
+    expect(prompt).toContain("§ 99: brak takiej jednostki");
+  });
+});
+
+describe("Kodeks Etyki Radcy Prawnego: units are articles", () => {
+  it("finds the cited articles of KERP, not the paragraphs of KEA", () => {
+    const found = citedEthicsParagraphs("Radca naruszył art. 27 ust. 7 KERP oraz art. 44 Kodeksu Etyki Radcy Prawnego.");
+    expect(found).toEqual([{ code: ETHICS_CODES[1], paragraphs: ["27", "44"] }]);
   });
 });

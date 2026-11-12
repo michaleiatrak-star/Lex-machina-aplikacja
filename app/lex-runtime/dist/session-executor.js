@@ -27,7 +27,7 @@ import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { WidgetToolRuntime, widgetsFromAnswer } from "./widget-runtime.js";
-import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
+import { CASE_FILE_READ_TOOL, CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { astTextLines } from "./ast-text-lines.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
@@ -56,7 +56,7 @@ import { blueprintFinalizationText } from "./report-blueprint-finalization.js";
 import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
-import { orchestrateDocumentContext } from "./context-orchestrator.js";
+import { documentCoveragePrompt, orchestrateDocumentContext } from "./context-orchestrator.js";
 import { evaluateGuideOutput } from "./guide-session-state.js";
 import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
@@ -65,6 +65,7 @@ import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -1533,6 +1534,13 @@ export class SafeSessionExecutor {
         ]);
         corpusTools.setInContext(contextResources);
         const pathSections = [];
+        // Long documents: what of them the model got, by pages, and how it reads the rest.
+        const coverage = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+            local: request.model.startsWith("local/"),
+            readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
+        });
+        if (coverage)
+            pathSections.push(coverage);
         // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
         const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
         if (legalSystemNotice)
@@ -1540,6 +1548,11 @@ export class SafeSessionExecutor {
         // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
         // application in the WSD portal before the model answers, every one of them (RD 121/26: the
         // model read one of three and left the others "z materiałów sprawy").
+        // What the file quotes from each ruling goes to the model first; a local model (a small
+        // window) gets shorter excerpts and reads further with read_case_law_text.
+        const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n");
+        const fileQuotes = (signatures) => Object.fromEntries(signatures.map((signature) => [signature, quotesForSignature(fileText, signature)]));
+        const caseTextBudget = request.model.startsWith("local/") ? LOCAL_CASE_TEXT_BUDGET : CASE_TEXT_BUDGET;
         const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
         const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
         // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
@@ -1557,7 +1570,7 @@ export class SafeSessionExecutor {
         if (wsdSignatures.length) {
             step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
             const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
-            pathSections.push(wsdPrefetchPrompt(found));
+            pathSections.push(wsdPrefetchPrompt(found, fileQuotes(wsdSignatures), caseTextBudget));
             for (const result of found) {
                 if (result.status !== "FOUND")
                     continue;
@@ -1590,7 +1603,7 @@ export class SafeSessionExecutor {
         }
         const saosResults = await saosFound;
         if (saosResults.length) {
-            pathSections.push(saosPrefetchPrompt(saosResults));
+            pathSections.push(saosPrefetchPrompt(saosResults, fileQuotes(saosSignatures), caseTextBudget));
             for (const result of saosResults)
                 if (result.status === "FOUND")
                     leadCaseLawTexts.push(`${result.signature}\n${result.text}`);

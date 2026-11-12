@@ -7,7 +7,8 @@ import type { CaseKnowledgeHit } from "./case-knowledge-search.js";
 
 const LIST_TOOL = "list_case_files";
 const SEARCH_TOOL = "search_case_files";
-const READ_TOOL = "read_case_file";
+export const CASE_FILE_READ_TOOL = "read_case_file";
+const READ_TOOL = CASE_FILE_READ_TOOL;
 
 const MAX_SEARCH_HITS = 8;
 const SNIPPET_CHARS = 700;
