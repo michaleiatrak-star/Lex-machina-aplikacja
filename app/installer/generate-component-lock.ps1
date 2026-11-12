@@ -7,8 +7,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path $PayloadRoot).Path
+# Python bytecode caches (__pycache__, *.pyc) are not part of the payload: Python rebuilds them, their
+# content changes from run to run, and their deep paths broke the offline install on Windows
+# (MAX_PATH 260 under %TEMP%: modelscope\...\__pycache__\...cpython-313.pyc).
 $files = Get-ChildItem -Path $root -File -Recurse |
   Where-Object { $_.FullName -ne (Join-Path $root "component-lock.json") } |
+  Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and $_.Extension -ne '.pyc' } |
   Sort-Object FullName
 
 $entries = @()

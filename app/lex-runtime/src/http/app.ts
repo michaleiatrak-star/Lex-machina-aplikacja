@@ -2789,6 +2789,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               );
           res.locals.lexAuth =
             context;
+          // One-time password from the administrator: only the password change (and leaving) until it is done.
+          if (
+            context.user.passwordChangeRequired === true &&
+            !/^\/auth\/(?:me|password|logout|lock|activity)$/u.test(req.path)
+          ) {
+            res.status(403).json({ error: "PASSWORD_CHANGE_REQUIRED" });
+            return;
+          }
 
           trackSessionActivity(
             options.authService!,
@@ -3450,6 +3458,48 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
       try {
         const user = options.authService.setAccountKind(responseAuthContext(res), String(req.params.userId ?? "").trim(), accountKind);
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
+  // Account dialog: name and contact e-mail.
+  app.patch(
+    "/api/admin/users/:userId/profile",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      try {
+        const user = options.authService.setProfile(responseAuthContext(res), String(req.params.userId ?? "").trim(), {
+          ...(req.body?.displayName !== undefined ? { displayName: req.body.displayName } : {}),
+          ...(req.body?.email !== undefined ? { email: req.body.email } : {})
+        });
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
+  // Role (ADMIN / USER), set by another administrator; the account's sessions end.
+  app.patch(
+    "/api/admin/users/:userId/role",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      const appRole = req.body?.appRole === "ADMIN" || req.body?.appRole === "USER" ? req.body.appRole : null;
+      if (!appRole) {
+        res.status(400).json({ error: "INVALID_USER_REQUEST" });
+        return;
+      }
+      try {
+        const user = options.authService.setAppRole(responseAuthContext(res), String(req.params.userId ?? "").trim(), appRole);
         res.json({ user });
       } catch (error) {
         if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });

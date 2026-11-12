@@ -112,6 +112,28 @@ describe("Monaco and Latvia", () => {
   });
 });
 
+describe("Turkey: Mevzuat Bilgi Sistemi HTML", () => {
+  it("TR: Madde N with its paragraphs, section headings end an article, amendment note with the amending law", async () => {
+    const { readTurkey } = await import("../src/eli/readers.js");
+    const reading = readTurkey(fixture("tr-medeni-kanunu.html"), "mevzuat.gov.tr 1/4721/5");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "27"]);
+    expect(reading.articles[0]!.text).toMatch(/^Madde 1 - Kanun, sözüyle ve özüyle/u);
+    expect(reading.articles[0]!.text).toContain("yargı kararlarından yararlanır.");
+    expect(reading.articles[0]!.text).not.toContain("Hukukî ilişkilerin kapsamı");
+    expect(reading.articles[2]!.amendments).toContainEqual({ act: "Değişik ikinci fıkra: 2024-11-14, Kanun 7532 md. 12" });
+  });
+
+  it("TR: the official host goes to the HTML reader, the article asked for as \"Madde 27\"", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("tr-medeni-kanunu.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html; charset=utf-8" }, arrayBuffer: async () => body.buffer });
+    const answer = await readNationalLaw({ url: "https://www.mevzuat.gov.tr/anasayfa/MevzuatFihristDetayIframe?MevzuatTur=1&MevzuatNo=4721&MevzuatTertip=5", unit: "Madde 27", country: "TR" }, fetchImpl as never);
+    expect(answer.country).toBe("TR");
+    expect(answer.articles).toHaveLength(1);
+    expect(answer.articles[0]!.text).toContain("Adın değiştirilmesi, ancak haklı sebeplere");
+  });
+});
+
 describe("Sweden: Riksdagen consolidated SFS text", () => {
   it("sections by number, the consolidation reference and an amending act at the section", async () => {
     const { readSweden } = await import("../src/eli/readers.js");
@@ -167,5 +189,216 @@ describe("Estonia: Riigi Teataja XML", () => {
     expect(s106.heading).toBe("§ 106. Vastutusest vabastamise või vastutuse piiramise kokkulepe");
     expect(s106.text).toMatch(/^\(1\) Võlgnik ja võlausaldaja võivad eelnevalt kokku leppida/u);
     expect(reading.articles.find((article) => article.unit === "1")!.amendments[0]).toEqual({ act: "RT I, 131122013001", inForce: "2014-06-13" });
+  });
+});
+
+describe("readers added 2026-11-08: SK, HR, XK, SI, IS, FO, canon law", () => {
+  it("SK: version in force on a day from the Slov-Lex history, § with its odseky", async () => {
+    const { slovakVersions, slovakVersionOn, readSlovakia } = await import("../src/eli/readers.js");
+    const versions = slovakVersions(fixture("sk-40-1964-index.html"));
+    expect(slovakVersionOn(versions, "1970-01-01")).toMatchObject({ file: "19690701.html", amendments: ["58/1969 Zb."] });
+    const latest = slovakVersionOn(versions, "2026-11-08")!;
+    const reading = readSlovakia(fixture("sk-40-1964-20260731.html"), "x", latest);
+    expect(reading.articles.map((article) => article.unit)).toEqual(["415", "417"]);
+    expect(reading.articles[1]!.text).toContain("ohrozený má právo");
+    expect(reading.articles[1]!.text).not.toContain("DRUHÁ HLAVA");
+  });
+
+  it("HR: Članak N. with its paragraph, the bold title of the next article is not part of it", async () => {
+    const { readCroatia } = await import("../src/eli/readers.js");
+    const reading = readCroatia(fixture("hr-zoo-35-2005.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[0]!.text).not.toContain("Sloboda uređivanja");
+  });
+
+  it("XK: Neni N from the act's text; status and amending acts from ActDetail", async () => {
+    const { readKosovo } = await import("../src/eli/readers.js");
+    const reading = readKosovo(fixture("xk-act-document.html"), "x", fixture("xk-act-detail.html"));
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.status).toMatch(/UCHYLONY/u);
+    expect(reading.articles[0]!.amendments[0]).toMatchObject({ inForce: "2012-11-09" });
+  });
+
+  it("SI: PISRS card picks the newest NPB with HTML; N. člen without the next article's title", async () => {
+    const { pisrsCard, readPisrs, readSlovenia } = await import("../src/eli/readers.js");
+    const card = pisrsCard(fixture("si-pisrs-zako1263.json"));
+    expect(card.versions.map((version) => version.name)).toEqual(["Osnovni", "NPB 1", "NPB 2", "NPB 3", "NPB 4"]);
+    const reading = readPisrs(fixture("si-pisrs-oz-npb4.html"), "x", card, "NPB 4");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[0]!.text).not.toContain("Dispozitivna narava");
+    expect(reading.status).toMatch(/nieurzędowy/u);
+    expect(readSlovenia(fixture("si-ul-2001-4186.html"), "x").articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+  });
+
+  it("IS: articles and amending laws with dates in force; marked unofficial", async () => {
+    const { readIceland } = await import("../src/eli/readers.js");
+    const reading = readIceland(fixture("is-1944-33.xml"), "x", "158a");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[0]!.amendments).toContainEqual({ act: "L. 51/1959", inForce: "1959-08-20" });
+    expect(reading.status).toMatch(/nieurzędowa/u);
+  });
+
+  it("FO: § N from Lógasavnið", async () => {
+    const { readFaroe } = await import("../src/eli/readers.js");
+    const reading = readFaroe(fixture("fo-logtingslog-94-2026.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2"]);
+    expect(reading.articles[1]!.text).toBe("§ 2\nHenda løgtingslóg kemur í gildi 1. januar 2027.");
+  });
+
+  it("canon law: Can. N, § entities decoded, headings end a canon", async () => {
+    const { readCanonLaw } = await import("../src/eli/readers.js");
+    const first = readCanonLaw(fixture("va-cic-liberI.html"), "x");
+    expect(first.articles.map((article) => article.unit)).toEqual(["1", "2", "3", "7"]);
+    expect(first.articles[2]!.text).not.toContain("TITULUS");
+    const sixth = readCanonLaw(fixture("va-cic-liberVI.html"), "x");
+    expect(sixth.articles[0]!.text).toMatch(/^Can\. 1311 — § 1\. Nativum/u);
+    expect(sixth.articles[0]!.text).toContain("§ 2. Qui Ecclesiae");
+  });
+
+  it("canon law is read whatever country is chosen; another country's source is not", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("va-cic-liberVI.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer });
+    const canon = await readNationalLaw({ url: "https://www.vatican.va/archive/cod-iuris-canonici/latin/documents/cic_liberVI_la.html", unit: "can. 1311", country: "PL" }, fetchImpl as never);
+    expect(canon.articles).toHaveLength(1);
+    await expect(readNationalLaw({ url: "https://narodne-novine.nn.hr/clanci/sluzbeni/2005_03_35_707.html", unit: "2", country: "AT" }, fetchImpl as never)).rejects.toThrow("NATIONAL_LAW_COUNTRY_DISABLED:HR");
+  });
+});
+
+
+describe("Georgia (Matsne) and unit matching", () => {
+  it("GE: consolidated publications with dates; მუხლი N. from p.muxlixml with its paragraphs", async () => {
+    const { matsneVersions, readMatsne } = await import("../src/eli/readers.js");
+    const html = fixture("ge-civil-code-ka.html");
+    expect(matsneVersions(html).slice(0, 2)).toEqual([{ publication: "140", date: "2026-06-25" }, { publication: "139", date: "2026-06-23" }]);
+    const reading = readMatsne(html, "https://matsne.gov.ge/ka/document/view/31702?publication=140");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.status).toMatch(/urzędowy/u);
+  });
+
+  it("\"Article 2\" is article 2 (the longer word is cut first)", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = new TextEncoder().encode(fixture("va-cic-liberVI.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer });
+    const answer = await readNationalLaw({ url: "https://www.vatican.va/archive/cod-iuris-canonici/latin/documents/cic_liberVI_la.html", unit: "Canon 1312", country: "IT" }, fetchImpl as never);
+    expect(answer.articles.map((article) => article.unit)).toEqual(["1312"]);
+  });
+});
+
+describe("Paragraf Lex (RS, ME, BA)", () => {
+  it("Član N with its paragraphs; a removed range and the next title are not part of the article; marked unofficial", async () => {
+    const { readParagraf } = await import("../src/eli/readers.js");
+    const reading = readParagraf(fixture("rs-paragraf-zoo.html"), "x", "RS");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "10"]);
+    expect(reading.articles[1]!.text).not.toContain("Brisano");
+    expect(reading.articles[1]!.text).not.toContain("Autonomija volje");
+    expect(reading.status).toMatch(/nieurzędowy/u);
+  });
+});
+
+describe("common law and mixed systems: statutes and judgments", () => {
+  it("GB statute: section with subsections and the amending act from the F-commentary", async () => {
+    const { readUnitedKingdom } = await import("../src/eli/readers.js");
+    const reading = readUnitedKingdom(fixture("uk-sga-1979-s14.xml"), "x");
+    expect(reading.title).toBe("Sale of Goods Act 1979");
+    expect(reading.articles[0]!.text).toContain("(2A) For the purposes of this Act, goods are of satisfactory quality");
+    expect(reading.articles[0]!.amendments[0]).toMatchObject({ inForce: "1995-01-03" });
+  });
+
+  it("GB judgment (Find Case Law): numbered paragraphs, neutral citation, court and date", async () => {
+    const { readUkJudgment } = await import("../src/eli/readers.js");
+    const reading = readUkJudgment(fixture("uk-uksc-2024-1.xml"), "x");
+    expect(reading.title).toContain("Paul and another v Royal Wolverhampton NHS Trust");
+    expect(reading.version).toBe("UKSC, 2024-01-11");
+    expect(reading.articles[0]!.text).toMatch(/^\[1\] Introduction/u);
+    expect(reading.status).toMatch(/orzeczenie/u);
+  });
+
+  it("IE: section as enacted, without the 'Act Referred to' table", async () => {
+    const { readIreland } = await import("../src/eli/readers.js");
+    const reading = readIreland(fixture("ie-1980-40-s2.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["2"]);
+    expect(reading.articles[0]!.text).not.toContain("Referred");
+  });
+
+  it("CY: windows-1253 decoded by its meta charset; marked unofficial", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", "cy-kef149.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) });
+    const answer = await readNationalLaw({ url: "https://www.cylaw.org/nomoi/enop/non-ind/0_149/full.html", unit: "2", country: "CY" }, fetchImpl as never);
+    expect(answer.articles[0]!.text).toMatch(/^2\.-\(1\) Ο Νόμος αυτός ερμηνεύεται/u);
+    expect(answer.status).toMatch(/nieurzędowy/u);
+  });
+
+  it("IE judgments: page metadata and PDF link; numbered paragraphs, page numbers skipped", async () => {
+    const { irishJudgmentPage, judgmentParagraphs } = await import("../src/eli/readers.js");
+    expect(irishJudgmentPage(fixture("ie-judgment-page.html"))).toEqual({
+      title: "Portmarnock Real Estate Developments Limited -v- An Coimisiún Pleanála",
+      court: "High Court",
+      judge: "Stack J.",
+      citation: "[2026] IEHC 720",
+      delivered: "28 Oct 2026",
+      pdf: "/judgments/documents/78216"
+    });
+    const paragraphs = judgmentParagraphs(fixture("ie-judgment-2026-iehc-720.txt"));
+    expect(paragraphs.slice(0, 3).map((paragraph) => paragraph.unit)).toEqual(["1", "1.1", "1.2"]);
+    expect(paragraphs[2]!.text).toContain("The purpose of the RZLT is to incentivise");
+  });
+
+  it("CY judgments: CyLaw open.pl goes to the judgment reader; court from the header, ¶ numbering marked as the reader's", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const body = fs.readFileSync(path.join(import.meta.dirname, "fixtures/eli-readers", "cy-judgment-260-2026.html"));
+    const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) });
+    const answer = await readNationalLaw({ url: "https://www.cylaw.org/cgi-bin/open.pl?file=/courtOfAppeal/2026/202611-260-26PoinEf.html", unit: "¶2", country: "CY" }, fetchImpl as never);
+    expect(answer.articles.map((article) => article.text)).toEqual(["(Ποινική Έφεση Αρ.: 260/2026)"]);
+    expect(answer.status).toMatch(/numeracja akapitów nadana przez czytnik/u);
+  });
+
+  it("RW: RwandaLII Akoma Ntoso articles (One = 1) with the dated version", async () => {
+    const { readRwandaLii } = await import("../src/eli/readers.js");
+    const reading = readRwandaLii(fixture("rw-law-2008-19.html"), "https://rwandalii.org/akn/rw/act/law/2008/19/eng@2009-04-27");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1", "2", "3"]);
+    expect(reading.articles[1]!.text).toMatch(/^Article 2 – Title of the national Anthem/u);
+    expect(reading.version).toBe("wersja z 2009-04-27 (RwandaLII)");
+    expect(reading.status).toMatch(/art\. 96/u);
+  });
+
+  it("RW: a page without the text (the Constitution) is read from its source.pdf", async () => {
+    const { readNationalLaw } = await import("../src/eli/national-law.js");
+    const asked: string[] = [];
+    const page = new TextEncoder().encode('<html><a href="/akn/rw/act/law/2003/nn/eng@2015-12-24/source.pdf">PDF</a></html>');
+    const fetchImpl = async (address: string) => {
+      asked.push(String(address));
+      return asked.length === 1
+        ? { ok: true, status: 200, headers: { get: () => "text/html" }, arrayBuffer: async () => page.buffer }
+        : { ok: false, status: 404, headers: { get: () => "" }, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    await expect(readNationalLaw({ url: "https://rwandalii.org/akn/rw/act/law/2003/nn/eng@2015-12-24", unit: "Article 96", country: "RW" }, fetchImpl as never)).rejects.toThrow();
+    expect(asked[1]).toBe("https://rwandalii.org/akn/rw/act/law/2003/nn/eng@2015-12-24/source.pdf");
+  });
+
+  it("US Code: section with the edition and the amendment notes", async () => {
+    const { readUsCode } = await import("../src/eli/readers.js");
+    const reading = readUsCode(fixture("us-15-usc-1.html"), "x");
+    expect(reading.articles.map((article) => article.unit)).toEqual(["1"]);
+    expect(reading.version).toBe("United States Code, wydanie 2024");
+    expect(reading.articles[0]!.amendments[0]!.act).toMatch(/^2004: Pub\. L\. 108–237/u);
+  });
+
+  it("US judgment (Caselaw Access Project): official citation, court, date, the opinion", async () => {
+    const { readCapCase } = await import("../src/eli/readers.js");
+    const reading = readCapCase(fixture("us-cap-347-us-483.json"), "x");
+    expect(reading.title).toBe("Brown v. Board of Education, 347 U.S. 483");
+    expect(reading.version).toBe("Supreme Court of the United States, 1954-05-17");
+    expect(reading.articles[0]!.unit).toBe("majority");
+  });
+
+  it("method follows the family: common law asks for precedent, the USA for the state; mixed systems quote their note", async () => {
+    const { familyMethod } = await import("../src/jurisdiction.js");
+    const { eliCountry } = await import("../src/eli/eli-countries.js");
+    expect(familyMethod(eliCountry("GB"))).toContain("ratio decidendi");
+    expect(familyMethod(eliCountry("US"))).toContain("prawo federalne i stanowe");
+    expect(familyMethod(eliCountry("MT"))).toContain("tekst maltański");
+    expect(familyMethod(eliCountry("DE"))).toBe("");
   });
 });

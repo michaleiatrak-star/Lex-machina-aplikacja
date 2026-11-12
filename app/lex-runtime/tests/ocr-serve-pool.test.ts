@@ -25,6 +25,13 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   process.stderr.write("LEX_OCR_STATS " + JSON.stringify({ loadSeconds: loaded ? 0 : 5, pageSeconds: pages.map(() => 0.1), threads: 4, mkldnn: true, accel: null }) + "\\n");
   loaded = true;
   fs.writeFileSync(job.output, JSON.stringify(pages.map((page) => ({ page, text: "pid " + process.pid }))));
+  if (job.input === "late-stderr") {
+    // The result first, the last stderr lines afterwards (two pipes, no order between them).
+    console.log("LEX_OCR_JOB_DONE " + job.id);
+    setTimeout(() => process.stderr.write("LEX_OCR_STATS " + JSON.stringify({ loadSeconds: 7, pageSeconds: [0.1], threads: 4, mkldnn: true, accel: null }) + "\\nLEX_OCR_JOB_END " + job.id + "\\n"), 150);
+    return;
+  }
+  process.stderr.write("LEX_OCR_JOB_END " + job.id + "\\n");
   console.log("LEX_OCR_JOB_DONE " + job.id);
 });
 `;
@@ -58,6 +65,17 @@ describe("stały proces OCR", () => {
     expect(pool.size).toBe(0);
     pool.closeAll();
     // Real processes: slower than the default 5 s while the whole suite runs.
+  }, 30_000);
+
+  it("wynik na stdout przed ostatnimi liniami stderr: zadanie czeka na znacznik końca, statystyka nie ginie", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-serve-late-"));
+    const worker = path.join(dir, "serve.cjs");
+    await writeFile(worker, SERVE_WORKER);
+    const pool = new OcrServePool(60_000);
+    let stderr = "";
+    await pool.run({ key: "late", python: process.execPath, workerArgs: [worker], env: process.env, job: { input: "late-stderr", output: path.join(dir, "late.json"), pages: "1" }, onStderr: (text) => { stderr += text; } }).done;
+    expect(stderr).toContain('"loadSeconds":7');
+    pool.closeAll();
   }, 30_000);
 
   it("silnik PDF: drugi dokument bez wczytywania modeli (ten sam proces), statystyka i postęp stron", async () => {

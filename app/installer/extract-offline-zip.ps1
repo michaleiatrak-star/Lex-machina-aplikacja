@@ -14,6 +14,13 @@ $destinationPrefix =
 
 Add-Type -AssemblyName System.IO.Compression
 
+# Paths over 260 characters (deep Python packages): the \\?\ form lifts MAX_PATH for .NET on Windows 10/11.
+function ConvertTo-LongPath([string]$Path) {
+  if ($Path.StartsWith('\\?\')) { return $Path }
+  if ($Path.StartsWith('\\')) { return '\\?\UNC\' + $Path.Substring(2) }
+  return '\\?\' + $Path
+}
+
 $stream = [IO.File]::Open(
   $archive,
   [IO.FileMode]::Open,
@@ -54,9 +61,9 @@ try {
       }
 
       $relative = $name.Replace('/', [IO.Path]::DirectorySeparatorChar)
-      $target = [IO.Path]::GetFullPath(
-        (Join-Path $destination $relative)
-      )
+      # Plain join, not GetFullPath: Windows PowerShell 5.1 throws PathTooLongException there over 260
+      # characters. Safe: absolute names and ".." segments are refused above.
+      $target = $destinationPrefix + $relative
 
       if (
         -not $target.StartsWith(
@@ -71,15 +78,15 @@ try {
         throw "OFFLINE_ZIP_DUPLICATE_ENTRY:$name"
       }
 
-      $parent = Split-Path -Parent $target
+      $parent = [IO.Path]::GetDirectoryName($target)
       if ($parent) {
-        New-Item -ItemType Directory -Force -Path $parent | Out-Null
+        [IO.Directory]::CreateDirectory((ConvertTo-LongPath $parent)) | Out-Null
       }
 
       $input = $entry.Open()
       try {
         $output = [IO.File]::Open(
-          $target,
+          (ConvertTo-LongPath $target),
           [IO.FileMode]::CreateNew,
           [IO.FileAccess]::Write,
           [IO.FileShare]::None

@@ -363,6 +363,57 @@ describe("registration and password reset by e-mail", () => {
     await request(current.app).post("/api/server-mode/password-reset/confirm").send({ token: late, newPassword: "Inne serwerowe haslo 2026!" }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
   });
 
+  it("account dialog: one-time password the user must replace before anything else; reset link from the admin", async () => {
+    const current = fixture();
+    const adminToken = await bootstrapAdmin(current);
+    await enable(current, adminToken);
+    await configureMail(current, adminToken);
+    await request(current.app).post("/api/server-mode/register").send({ email: "klient@example.pl", password: USER_PASSWORD }).expect(202);
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: tokenFrom(current.mails.at(-1), "weryfikacja"), password: USER_PASSWORD }).expect(200);
+    const login = await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: USER_PASSWORD }).expect(200);
+    const oldToken = String(login.body.sessionToken);
+    const userId = String(login.body.user.userId);
+
+    // Profile: name and contact e-mail.
+    const profile = await request(current.app).patch(`/api/admin/users/${userId}/profile`).set("Authorization", `Bearer ${adminToken}`).send({ displayName: "Klient Nowak", email: "Kontakt@Example.pl" }).expect(200);
+    expect(profile.body.user).toMatchObject({ displayName: "Klient Nowak", email: "kontakt@example.pl" });
+    await request(current.app).patch(`/api/admin/users/${userId}/profile`).set("Authorization", `Bearer ${adminToken}`).send({ email: "nie-adres" }).expect(400);
+    await request(current.app).patch(`/api/admin/users/${userId}/profile`).set("Authorization", `Bearer ${oldToken}`).send({ displayName: "X" }).expect(403);
+
+    // Reset link sent by the admin to the login e-mail.
+    const sent = await request(current.app).post(`/api/server-mode/accounts/${userId}/password-reset`).set("Authorization", `Bearer ${adminToken}`).expect(200);
+    expect(sent.body).toEqual({ sentTo: "klient@example.pl" });
+    expect(current.mails.at(-1)?.text).toContain("#reset-hasla=");
+
+    // One-time password: shown once, old sessions end, the reset link no longer works.
+    const linkToken = tokenFrom(current.mails.at(-1), "reset-hasla");
+    const issued = await request(current.app).post(`/api/server-mode/accounts/${userId}/one-time-password`).set("Authorization", `Bearer ${adminToken}`).expect(200);
+    const oneTime = String(issued.body.oneTimePassword);
+    expect(oneTime).toMatch(/^[a-z2-9]{5}(?:-[a-z2-9]{5}){3}$/u);
+    await request(current.app).get("/api/auth/me").set("Authorization", `Bearer ${oldToken}`).expect(401);
+    await request(current.app).post("/api/server-mode/password-reset/confirm").send({ token: linkToken, newPassword: "Inne serwerowe haslo 2026!" }).expect(400);
+    await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: USER_PASSWORD }).expect(401);
+
+    const temporary = await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: oneTime }).expect(200);
+    const temporaryToken = String(temporary.body.sessionToken);
+    expect(temporary.body.user.passwordChangeRequired).toBe(true);
+    // Nothing else until the password is changed.
+    await request(current.app).get("/api/cases").set("Authorization", `Bearer ${temporaryToken}`).expect(403, { error: "PASSWORD_CHANGE_REQUIRED" });
+    await request(current.app).get("/api/auth/me").set("Authorization", `Bearer ${temporaryToken}`).expect(200);
+    const own = "Wlasne nowe haslo klienta 2026";
+    const changed = await request(current.app).post("/api/auth/password").set("Authorization", `Bearer ${temporaryToken}`).send({ currentPassword: oneTime, newPassword: own }).expect(200);
+    expect(changed.body.user.passwordChangeRequired).toBeUndefined();
+    expect(typeof changed.body.recoveryCode).toBe("string");
+    const fresh = await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: own }).expect(200);
+    await request(current.app).get("/api/cases").set("Authorization", `Bearer ${String(fresh.body.sessionToken)}`).expect(200);
+    await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: oneTime }).expect(401);
+
+    // Not for one's own account, not for a user.
+    const adminId = String((await request(current.app).get("/api/auth/me").set("Authorization", `Bearer ${adminToken}`).expect(200)).body.user.userId);
+    await request(current.app).post(`/api/server-mode/accounts/${adminId}/one-time-password`).set("Authorization", `Bearer ${adminToken}`).expect(409);
+    await request(current.app).post(`/api/server-mode/accounts/${adminId}/one-time-password`).set("Authorization", `Bearer ${String(fresh.body.sessionToken)}`).expect(403);
+  });
+
   it("limits registration per e-mail and reset requests per IP", async () => {
     const current = fixture();
     const adminToken = await bootstrapAdmin(current);

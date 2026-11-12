@@ -28,6 +28,8 @@ try {
     if (@(Get-ChildItem $root -Filter 'bootstrap-progress-*.json').Count) { throw 'Progress status left behind' }
   }
   Write-Host 'WINDOWS_BOOTSTRAP_WRAPPER_PASS'
+  # The last scenario ends the worker with 23 on purpose: that code must not become the step's result.
+  $global:LASTEXITCODE = 0
 } finally {
   if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
   Remove-Item Env:LEX_BOOTSTRAP_PROGRESS_PATH -ErrorAction SilentlyContinue

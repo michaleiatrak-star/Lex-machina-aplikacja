@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, getJurisdiction, setLegalSystem, type JurisdictionSettings } from "./api.js";
+import { ApiError, getJurisdiction, setLegalSystem, type JurisdictionSettings, type LegalSystemOption } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
@@ -17,6 +17,14 @@ const READING: Record<string, string> = {
   "BRAK-POŁĄCZENIA": "brak połączenia ze źródłem",
   "DO-ZBADANIA": "źródło do zbadania"
 };
+
+// Legal families: the category of the country list; the method the model uses follows from it.
+const FAMILIES: Array<[NonNullable<LegalSystemOption["family"]>, string]> = [
+  ["kontynentalne", "Prawo kontynentalne"],
+  ["nordyckie", "Prawo nordyckie"],
+  ["mieszane", "Systemy mieszane"],
+  ["common-law", "Common law"]
+];
 
 /**
  * The legal system (Polish law by default): one country from the list, in alphabetical order.
@@ -67,19 +75,29 @@ export function JurisdictionSection() {
       <label className="core-law-auto">
         Kraj:{" "}
         <select value={settings?.country ?? ""} disabled={busy || !settings} onChange={(event) => void change(event.target.value)}>
-          {countries.map((item) => (
-            <option key={item.code} value={item.code}>
-              {item.name}
-            </option>
-          ))}
+          {FAMILIES.map(([family, label]) => {
+            const members = countries.filter((item) => (item.family ?? "kontynentalne") === family);
+            return members.length ? (
+              <optgroup key={family} label={label}>
+                {members.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null;
+          })}
         </select>
       </label>
       {chosen ? (
         <p className="field-help">
           {chosen.pack ? `Pakiet prawa krajowego: ${chosen.pack}. ` : "Brak pakietu prawa krajowego i skilli dziedzinowych tego kraju: skille metod działają bez nich. "}
           Źródło przepisów: {READING[chosen.reading] ?? chosen.reading} ({chosen.portal}).
+          {chosen.familyLabel ? ` Rodzina prawa: ${chosen.familyLabel.toLowerCase()}.` : ""}
+          {chosen.family === "common-law" ? " Źródłem są ustawy i orzeczenia (precedens); model sprawdza oba." : ""}
         </p>
       ) : null}
+      {chosen?.familyNote ? <p className="field-help">{chosen.familyNote}</p> : null}
       {provider?.missing.length ? (
         <p className="field-error">Bez dostawcy w aplikacji (tryb zdegradowany): {provider.missing.join(", ")}.</p>
       ) : null}

@@ -579,8 +579,8 @@ const NATIONAL_LAW_SCHEMA:
     function: {
       name: NATIONAL_LAW_TOOL,
       description:
-        "Read the text of an article of the legislation of the country chosen as the legal system in Settings, from its official source (offered only when that country is not Poland; another country's source is refused). " +
-        "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), MC (legimonaco.mc), LV (likumi.lv), LU (legilux.public.lu ELI of an act), SE (data.riksdagen.se/dokument/sfs-{year}-{number}, unit \"36 §\" or \"3 kap. 5 §\"), FR (legifrance.gouv.fr address with LEGITEXT/LEGIARTI id + unit, read from the local LEGI index, without legal force; date gives the version in force), EE (riigiteataja.ee act title or …/akt/{id}, unit \"§ 106\"; date gives the version in force), FI (finlex.fi or data.finlex.fi/eli/sd/{year}/{number}, consolidated text without legal force, unit \"36 §\" or \"3 luku 1 §\"; /alkup for the Statute Book original), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), TR (mevzuat.gov.tr). " +
+        "Read the text of an article of the legislation of the country chosen as the legal system in Settings, from its official source (another country's source is refused), and canon law (Codex Iuris Canonici, vatican.va) in every country. With Poland chosen, Polish law goes through the ELI tools and this tool reads canon law only. " +
+        "Readers: ES (boe.es, BOE id + article; date gives the wording in force that day), AT (data.bka.gv.at/ris/api/v2.6/Bundesrecht?Titel=ABGB + unit § N), CZ (e-sbirka.gov.cz/sb/{year}/{number}, unit Čl. N or § N), CH (fedlex.data.admin.ch XML of a consolidated version), DK (retsinformation.dk …/xml), NL (wetten.overheid.nl), BE (ejustice.just.fgov.be justel, without legal force), IT (normattiva.it), DE (gesetze-im-internet.de, unofficial), MC (legimonaco.mc), LV (likumi.lv), LU (legilux.public.lu ELI of an act), SE (data.riksdagen.se/dokument/sfs-{year}-{number}, unit \"36 §\" or \"3 kap. 5 §\"), FR (legifrance.gouv.fr address with LEGITEXT/LEGIARTI id + unit, read from the local LEGI index, without legal force; date gives the version in force), EE (riigiteataja.ee act title or …/akt/{id}, unit \"§ 106\"; date gives the version in force), FI (finlex.fi or data.finlex.fi/eli/sd/{year}/{number}, consolidated text without legal force, unit \"36 §\" or \"3 luku 1 §\"; /alkup for the Statute Book original), TR (mevzuat.gov.tr anasayfa/MevzuatFihristDetayIframe?MevzuatTur=1&MevzuatNo=4721&MevzuatTertip=5, unit \"Madde 27\"), SK (static.slov-lex.sk/static/SK/ZZ/{year}/{number}/; date gives the version in force), HR (narodne-novine.nn.hr/clanci/sluzbeni/…html, text as published), SI (pisrs.si/pregledPredpisa?id=ZAKO1263: newest consolidated NPB, without legal force; uradni-list.si archive), XK (gzk.rks-gov.net ActDetail.aspx?ActID={id}, with repeal status), IS (althingi.is/lagas/nuna/{YYYY}{NNN}.html read from lagasafn-xml, unofficial), FO (logir.fo act page), PT (files.diariodarepublica.pt PDF), GE (matsne.gov.ge/ka/document/view/{id}; date picks the consolidated publication), RS/ME/BA (paragraf.rs/.me/.ba, unofficial), common law: GB statutes (legislation.gov.uk/{type}/{year}/{number}/section/{n}[/{YYYY-MM-DD}]) and judgments (caselaw.nationalarchives.gov.uk/{court}/{year}/{number}, unit \"[12]\"), IE (irishstatutebook.ie/eli/{year}/act/{number}/section/{n}/enacted/en/html) and judgments (judgments.courts.ie/judgments/{id}, unit \"1.2\"), US Code (govinfo.gov/link/uscode/{title}/{section}) and judgments (static.case.law/{reporter}/{volume}/cases/{page}-{nn}.json, unit \"majority\"), CY (cylaw.org, unofficial; judgments cylaw.org/cgi-bin/open.pl?file=/courtOfAppeal/…, unit \"¶N\" numbered by the reader), RW (rwandalii.org/akn/rw/act/{type}/{year}/{number}/eng@{date}, unit \"Article N\"; the language of adoption prevails). Russian Federation sources are blocked (outside the system), canon law (vatican.va Codex Iuris Canonici, Latin cic_liber{I…VII}_la.html, unit \"can. 1055\"; readable whatever country is chosen), and official PDFs with a text layer of LI (gesetze.li), MT (legislation.mt), VA state laws (vaticanstate.va, \"Articolo N\"), TR (mevzuat.gov.tr …pdf). " +
         "The answer gives the article, the source's legal status and the amending acts the source names; a scanned PDF is reported as such and is never quoted.",
       parameters: {
         type: "object",
@@ -1117,7 +1117,7 @@ export class LegalFederationToolRuntime {
 
   localSchemas():
     NormalizedToolSchema[] {
-    return [SEARCH_SCHEMA, GET_SCHEMA, CALL_SCHEMA, FETCH_AUXILIARY_SOURCE_SCHEMA, WEB_SEARCH_SCHEMA];
+    return [SEARCH_SCHEMA, GET_SCHEMA, CALL_SCHEMA, FETCH_AUXILIARY_SOURCE_SCHEMA, WEB_SEARCH_SCHEMA, NATIONAL_LAW_SCHEMA];
   }
 
   schemas():
@@ -1131,8 +1131,8 @@ export class LegalFederationToolRuntime {
       FETCH_AUXILIARY_SOURCE_SCHEMA,
       WEB_SEARCH_SCHEMA,
       COVERAGE_SCHEMA,
-      // Another country's law only when that country is the chosen legal system (jurisdiction.ts).
-      ...(activeCountry() === "PL" ? [] : [NATIONAL_LAW_SCHEMA])
+      // The chosen country's law (not Poland: ELI tools) and canon law in every country (national-law.ts).
+      NATIONAL_LAW_SCHEMA
     ];
   }
 
@@ -1327,8 +1327,14 @@ export class LegalFederationToolRuntime {
         // Case data or a personal identifier in the arguments: a policy refusal
         // the model must correct, never a source outage.
         const dataForbidden = /(?:CASE|PERSONAL)_DATA_FORBIDDEN/.test(message);
+        // A jurisdiction outside the system (technical block, src/blocked-jurisdictions.ts).
+        const jurisdictionBlocked =
+          /JURISDICTION_BLOCKED/.test(message) ||
+          (error instanceof AuxiliarySourceFetchError && error.code === "AUX_SOURCE_JURISDICTION_BLOCKED") ||
+          (error instanceof WebSearchError && error.code === "WEB_SEARCH_JURISDICTION_BLOCKED");
         const policyBlocked =
           dataForbidden ||
+          jurisdictionBlocked ||
           call.name ===
             ASSESS_SOURCE_TOOL ||
           (
@@ -1395,7 +1401,9 @@ export class LegalFederationToolRuntime {
               error:
                 message,
               instruction:
-                dataForbidden
+                jurisdictionBlocked
+                  ? "Prawo i źródła Federacji Rosyjskiej są poza systemem Lex Machina (blokada techniczna): nie pobieraj, nie wyszukuj i nie cytuj ich. Powiedz użytkownikowi wprost, że ta jurysdykcja nie jest obsługiwana."
+                  : dataForbidden
                   ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
                   : call.name === WEB_SEARCH_TOOL && policyBlocked
                   ? /DISABLED/.test(message)

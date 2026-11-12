@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<law nr="33" year="1944" law-type="law">
+  <name>Stjórnarskrá lýðveldisins Íslands</name>
+  <num-and-date>
+    <date>1944-06-17</date>
+    <num>33</num>
+    <original>1944 nr. 33 17. júní</original>
+  </num-and-date>
+  <minister-clause>&lt;a href="https://www.althingi.is/thingstorf/thingmalalistar-eftir-thingum/ferill/?ltg=63&amp;amp;mnr=1"&gt; &lt;i&gt; Ferill málsins á Alþingi. &lt;/i&gt; &lt;/a&gt; &lt;a href="https://www.althingi.is/altext/pdf/63/s/0001.pdf"&gt; &lt;i&gt; Frumvarp til laga. &lt;/i&gt; &lt;/a&gt; &lt;br/&gt; &lt;br/&gt; &lt;small&gt; &lt;b&gt; Tók gildi 17. júní 1944. &lt;/b&gt; &lt;em&gt; Breytt með: &lt;/em&gt; &lt;a href="/altext/stjtnr.html#1959051"&gt; L. 51/1959 &lt;/a&gt; (tóku gildi 20. ágúst 1959). &lt;a href="/altext/stjtnr.html#1968009"&gt; L. 9/1968 &lt;/a&gt; (tóku gildi 24. apríl 1968). &lt;a href="/altext/stjtnr.html#1984065"&gt; L. 65/1984 &lt;/a&gt; (tóku gildi 13. júní 1984). &lt;a href="/altext/stjt/1991.056.html"&gt; L. 56/1991 &lt;/a&gt; (tóku gildi 31. maí 1991). &lt;a href="/altext/stjt/1995.097.html"&gt; L. 97/1995 &lt;/a&gt; (tóku gildi 5. júlí 1995). &lt;a href="/altext/stjt/1995.100.html"&gt; L. 100/1995 &lt;/a&gt; (tóku gildi 5. júlí 1995). &lt;a href="/altext/stjt/1999.077.html"&gt; L. 77/1999 &lt;/a&gt; (tóku gildi 1. júlí 1999). &lt;a href="/altext/stjt/2013.091.html"&gt; L. 91/2013 &lt;/a&gt; (tóku gildi 18. júlí 2013). &lt;br/&gt; &lt;/small&gt;</minister-clause>
+  <chapter nr="1" nr-type="roman" roman-nr="I">
+    <nr-title>I.</nr-title>
+    <art nr="1">
+      <nr-title>1. gr.</nr-title>
+      <subart nr="1">
+        <paragraph nr="1">
+          <sen nr="1">Ísland er lýðveldi með þingbundinni stjórn.</sen>
+        </paragraph>
+      </subart>
+    </art>
+    <art nr="2">
+      <nr-title>2. gr.</nr-title>
+      <subart nr="1">
+        <paragraph nr="1">
+          <sen nr="1">Alþingi og forseti Íslands fara saman með löggjafarvaldið.</sen>
+          <sen nr="2">Forseti og önnur stjórnarvöld samkvæmt stjórnarskrá þessari og öðrum landslögum fara með framkvæmdarvaldið.</sen>
+          <sen nr="3">Dómendur fara með dómsvaldið.</sen>
+        </paragraph>
+      </subart>
+    </art>
+  </chapter>
+  </law>

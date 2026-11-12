@@ -27,7 +27,7 @@ import { buildLegiIndex, defaultLegiIndexDir, latestLegiDump } from "../eli/fr-l
 import { promises as legiFs } from "node:fs";
 import legiPath from "node:path";
 import { activeCountry, activeJurisdictionPack, COMPONENT_LABELS, jurisdictionStatus, listJurisdictions, setActiveCountry, setActiveJurisdictionPack } from "../jurisdiction.js";
-import { ELI_COUNTRIES } from "../eli/eli-countries.js";
+import { ELI_COUNTRIES, LEGAL_FAMILY_LABELS } from "../eli/eli-countries.js";
 
 function requireAdmin(
   req: Request,
@@ -470,6 +470,10 @@ export function registerMcpConnectorRoutes(
         .map((entry) => ({
           code: entry.code,
           name: entry.name,
+          // Legal family (category in Settings): the method follows from it (jurisdiction.ts familyMethod).
+          family: entry.family,
+          familyLabel: LEGAL_FAMILY_LABELS[entry.family],
+          ...(entry.familyNote ? { familyNote: entry.familyNote } : {}),
           reading: entry.text?.reading ?? "DO-ZBADANIA",
           note: entry.text?.note ?? "",
           portal: entry.portal,

@@ -64,6 +64,7 @@ type AuthDependency = Pick<
   | "findUserByLogin"
   | "getUser"
   | "resetPasswordWithUserMasterKey"
+  | "setOneTimePasswordWithUserMasterKey"
   | "withSessionUserMasterKey"
   | "listUsers"
 >;
@@ -532,6 +533,62 @@ export class ServerModeService implements ModelCallGuard {
         `${this.link("reset-hasla", token)}\n\n` +
         "Po zmianie hasła wszystkie sesje konta zostaną wylogowane. Jeśli to nie Ty prosiłeś o reset, zignoruj tę wiadomość."
     });
+  }
+
+  /**
+   * The administrator sends a password reset link (account dialog): to the login when it is an
+   * e-mail, else to the account's contact e-mail. Needs the server mode, mail and the UMK escrow
+   * (the account logged in since the mode was on), so no data is lost.
+   */
+  async adminPasswordReset(actor: AuthenticatedContext, userId: string): Promise<{ sentTo: string }> {
+    requireAdmin(actor);
+    this.requireMode();
+    const user = /^user_[a-f0-9]{32}$/.test(userId) ? this.auth.getUser(userId) : null;
+    if (!user) throw new ServerModeError("USER_NOT_FOUND", 404);
+    if (user.status !== "ACTIVE") throw new ServerModeError("USER_DISABLED", 409);
+    const login = normalizeLoginName(user.loginName);
+    const to = validMailAddress(login) ? login : user.email && validMailAddress(user.email) ? user.email : "";
+    if (!to) throw new ServerModeError("ACCOUNT_EMAIL_MISSING", 409);
+    if (!this.store.getEscrow(user.userId)) throw new ServerModeError("PASSWORD_RESET_NOT_AVAILABLE", 409);
+    const transport = this.transport();
+    const token = this.issueToken("RESET", user.userId, RESET_TTL_MS);
+    await this.deliver(transport, {
+      to,
+      subject: "Lex Machina: reset hasła",
+      text:
+        "Administrator wysłał link do ustawienia nowego hasła (ważny 1 godzinę, jednorazowy):\n\n" +
+        `${this.link("reset-hasla", token)}\n\n` +
+        "Po zmianie hasła wszystkie sesje konta zostaną wylogowane."
+    });
+    return { sentTo: to };
+  }
+
+  /**
+   * One-time password set by the administrator (account dialog): shown to the administrator once,
+   * the user must replace it right after logging in. Needs the UMK escrow, so no data is lost.
+   */
+  async adminOneTimePassword(actor: AuthenticatedContext, userId: string): Promise<{ oneTimePassword: string }> {
+    requireAdmin(actor);
+    this.requireMode();
+    const user = /^user_[a-f0-9]{32}$/.test(userId) ? this.auth.getUser(userId) : null;
+    if (!user) throw new ServerModeError("USER_NOT_FOUND", 404);
+    if (user.status !== "ACTIVE") throw new ServerModeError("USER_DISABLED", 409);
+    const escrow = this.store.getEscrow(user.userId);
+    if (!escrow) throw new ServerModeError("PASSWORD_RESET_NOT_AVAILABLE", 409);
+    const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+    const bytes = randomBytes(20);
+    const oneTimePassword = [0, 5, 10, 15].map((start) => [...bytes.subarray(start, start + 5)].map((byte) => alphabet[byte % alphabet.length]).join("")).join("-");
+    const userMasterKey = this.box.open("umk-escrow", user.userId, escrow);
+    try {
+      await this.auth.setOneTimePasswordWithUserMasterKey(actor, user.userId, oneTimePassword, userMasterKey);
+    } catch (error) {
+      if (error instanceof AuthError) throw new ServerModeError(error.code, error.httpStatus);
+      throw error;
+    } finally {
+      userMasterKey.fill(0);
+    }
+    this.store.invalidateTokens("RESET", user.userId, this.now());
+    return { oneTimePassword };
   }
 
   async confirmPasswordReset(input: { token?: unknown; newPassword?: unknown }, ip: string): Promise<void> {

@@ -13,6 +13,10 @@ on:
       - "app/installer/app-update-verification.ps1"
       - "app/installer/app-update-verification-selftest.ps1"
       - "app/installer/app-update-long-path-selftest.ps1"
+      - "app/installer/extract-offline-zip.ps1"
+      - "app/installer/extract-offline-zip-long-path-selftest.ps1"
+      - "app/installer/windows-offline-bundle-install.ps1"
+      - "app/installer/generate-component-lock.ps1"
       - "app/installer/sign-windows-artifact.ps1"
       - "app/installer/sign-windows-artifact-selftest.ps1"
       - "app/installer/polish-nsis-language-selftest.ps1"
@@ -88,6 +92,11 @@ jobs:
       - name: Application update backup on long paths (Windows PowerShell 5.1)
         shell: powershell
         run: ./app/installer/app-update-long-path-selftest.ps1
+
+      # The offline runtime bundle extracted by Windows PowerShell 5.1, with a path over 260 characters.
+      - name: Offline bundle extraction on long paths (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./app/installer/extract-offline-zip-long-path-selftest.ps1
 
       - name: G39J Authenticode fail-closed policy
         shell: pwsh

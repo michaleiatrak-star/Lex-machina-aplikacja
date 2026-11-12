@@ -1,0 +1,110 @@
+THE HIGH COURT
+JUDICIAL REVIEW
+[2026] IEHC 720
+H.JR.2024.0001464
+H.JR.2026.000160
+BETWEEN
+PORTMARNOCK REAL ESTATE DEVELOPMENTS LIMITED AND ST.
+MARNOCK’S II DESIGNATED ACTIVITY COMPANY
+Applicants
+-and-
+
+AN COIMISIÚN PLEANÁLA
+Respondent
+-and-
+
+FINGAL COUNTY COUNCIL
+Notice Party
+
+APPROVED Judgment of Ms. Justice Siobhán Stack delivered 28th October, 2026.
+
+1. Introduction
+
+1.1
+
+These are two related applications for relief by way of judicial review, which seek to
+
+quash decisions of the respondent upholding earlier determinations of Fingal County Council
+that certain lands comprising approximately 24.5 hectares which were zoned for residential
+
+1
+
+development in Portmarnock, County Dublin (variously, “the Applicants’ Lands”, “the
+Lands”), satisfied the criteria for imposition of the Residential Zoned Land Tax (“RZLT”).
+1.2
+
+The purpose of the RZLT is to incentivise the development of lands which are serviced
+
+and zoned for residential purposes, so as to encourage the provision of housing. In other words,
+the objective was to prevent the hoarding of serviced lands by developers and to incentivise
+the construction of residential developments.
+1.3
+
+It is not in dispute that the Applicants’ Lands are appropriately zoned, but the question
+
+of whether those lands can be regarded as having access to the necessary services so as to fall
+within the scope of the tax is hotly contested.
+1.4
+
+The RZLT was introduced by the Finance Act, 2021, which inserted a new Part 22A
+
+(comprising ss. 653A to 653AMA) in the Taxes Consolidation Act, 1997, as amended (“the
+TCA”), and is payable by landowners where their lands satisfy the criteria set out in s. 653B
+(b) of the TCA. In essence, those criteria are that the land is both zoned for residential
+development (including certain mixed-use zoning, which is not relevant here) and is adequately
+serviced, that is, has access to the necessary public infrastructure and facilities.
+1.5
+
+In the policy documents and information leaflets published in relation to the RZLT,
+
+lands which satisfy the statutory criteria, and which are not otherwise precluded from being
+developed, are referred to as being “in scope” of the RZLT. I will use a similar shorthand in
+this judgment.
+1.6
+
+There is no dispute about the fact that the Applicants’ Lands were, at all material times,
+
+zoned for residential development: these challenges revolve around whether those Lands had
+access to the necessary public infrastructure and facilities. The applicants contend that their
+lands were not “in scope” at the relevant times, principally by reason of the absence of public
+wastewater infrastructure in the South Portmarnock area.
+
+2
+
+1.7
+
+Where lands satisfy the criteria in Part 22A as regards both zoning and access to
+
+services, that is, where they are “in scope”, this is indicated on maps prepared by the relevant
+local authority, subject to appeal by the landowners to the respondent. The Revenue
+Commissioners are responsible for the administration of the tax where lands are “in scope”
+but take no part in the mapping and decision-making process with which these proceedings are
+concerned. For that reason, the suggestion at one point by counsel for the respondent that the
+Revenue Commissioners were a necessary party to these proceedings is not, in my view,
+correct.
+1.8
+
+It will be necessary to refer further below to the relevant provisions of Part 22A TCA
+
+relating both to the process of mapping and the statutory provisions governing when lands are
+regarded as being “in scope”. However, by way of context, the decisions challenged carry very
+significant financial consequences for the applicants as landowners. A decision that
+development lands satisfy the criteria for imposition of the RZLT renders the landowner liable
+to an annual tax of 3% of the market value of the lands. This in itself is likely to be a very large
+amount but, if imposed annually on foot of the annual reviews mandated by the TCA, the
+amounts involved quickly run to a significant proportion of the value of the lands overall.
+1.9
+
+The earlier of the two proceedings to which this judgment relates (H.JR.2024.0001464,
+
+“the 2024 Proceedings”) comprise a challenge to the Order of the respondent of 1 October,
+2024, (“the 2024 Decision”) affirming the earlier determination of Fingal County Council
+(“the Council”) dated 27 June, 2024, that the entire of the Applicants’ Lands were in scope.
+The later proceedings (H.JR.2026.000160, “the 2026 Proceedings”) comprise a challenge to
+the Order of the respondent of 20 November, 2025, (“the 2025 Decision”) affirming the earlier
+determination of the Council dated 25 June, 2025, which is to the same effect.
+
+3
+
+2. The Residential Zoned Land Tax:
+Part 22A of the Taxes Con

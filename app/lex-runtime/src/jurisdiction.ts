@@ -146,6 +146,31 @@ export function skillOfferedInJurisdiction(name: string, facades: ReadonlySet<st
   return true;
 }
 
+/**
+ * The method that follows from the legal family. Civil law (default): the act and its unit are the source, case law
+ * persuades. Common law: statute AND precedent; the reasoning goes through the binding judgments (ratio decidendi,
+ * court hierarchy, distinguishing); a provision without the judgments that read it is half the answer. Mixed systems:
+ * per field, as the register says.
+ */
+export function familyMethod(entry: ReturnType<typeof eliCountry>): string {
+  if (!entry) return "";
+  const caseLaw = entry.caseLaw ? ` Orzeczenia czytaj tym samym narzędziem (${entry.caseLaw.source}; ${entry.caseLaw.note.slice(0, 200)}).` : "";
+  if (entry.family === "common-law") {
+    return (
+      " RODZINA PRAWA: COMMON LAW — metoda: shared/RODZINA-PRAWA-COMMON-LAW.md (CL-1…CL-7, wczytaj przed pierwszym powołaniem). Źródłami są ustawa i precedens. Dla każdej osi sporu ustal: (1) ustawę, jeśli jest, i jej brzmienie; " +
+      "(2) orzeczenia wiążące według hierarchii sądów tej jurysdykcji (stare decisis) i ich ratio decidendi — odróżnij je od obiter dicta; " +
+      "(3) czy stan faktyczny da się odróżnić (distinguishing); (4) orzeczenia innych jurysdykcji common law tylko jako perswazyjne. " +
+      "Bramki metody (zakres normy, oś czasu, wykładnia) stosuj do ustawy i do ratio orzeczenia. Odpowiedź bez sprawdzonego orzecznictwa oznacz jako niepełną." +
+      (entry.code === "US" ? " USA: prawo federalne i stanowe są odrębne — ustal stan, którego prawo stosujesz, zanim powołasz przepis lub orzeczenie." : "") +
+      caseLaw
+    );
+  }
+  if (entry.family === "mieszane") {
+    return ` RODZINA PRAWA: SYSTEM MIESZANY — dla dziedzin opartych na common law metoda shared/RODZINA-PRAWA-COMMON-LAW.md (CL-1…CL-7). ${entry.familyNote ?? "Ustal dla danej dziedziny, czy źródłem jest kodeks, czy precedens."} Dla dziedzin opartych na common law ustal też orzeczenia wiążące i ich ratio.${caseLaw}`;
+  }
+  return "";
+}
+
 /** The sentence for the model when the chosen country is not Poland: its law only, the rest off. */
 export function foreignLegalSystemNotice(country: string): string | null {
   if (country === "PL") return null;
@@ -156,7 +181,9 @@ export function foreignLegalSystemNotice(country: string): string | null {
     "Prawo polskie, polskie skille dziedzinowe (dr-*), polskie konektory, korpus polskich ustaw i weryfikacja w ELI/ISAP są wyłączone: nie powołuj polskich przepisów. " +
     "Skille metod (router, shared, analiza umów, pisma) stosuj jako metodę, a ich polskie przykłady i parametry JUR zastąp prawem wybranego kraju. " +
     `Brzmienie przepisów ustalaj narzędziem read_national_legislation ze źródła urzędowego (${entry?.portal ?? "portal urzędowy kraju"}; ${entry?.text?.note ? entry.text.note.slice(0, 220) : "odczyt do ustalenia"}). ` +
-    "Przepis, którego nie odczytano, oznacz jako niezweryfikowany; nie podawaj brzmienia z pamięci."
+    "Przepis, którego nie odczytano, oznacz jako niezweryfikowany; nie podawaj brzmienia z pamięci." +
+    familyMethod(entry) +
+    " Prawo kanoniczne (Kodeks Prawa Kanonicznego, vatican.va) czytasz tym samym narzędziem niezależnie od kraju; wiąże tekst łaciński."
   );
 }
 

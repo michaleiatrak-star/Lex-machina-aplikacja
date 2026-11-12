@@ -28,12 +28,17 @@ describe("ELI of the civil-law countries (EUR-Lex ELI register, 2026-11-08)", ()
     }
   });
 
-  it("every country has a source; no common-law country; Poland alone reads the text", () => {
+  it("every country has a source; common law and mixed systems marked; Poland alone reads the text", () => {
     for (const country of ELI_COUNTRIES) {
       expect(country.source).toMatch(/^https?:\/\//u);
       expect(country.text?.reading).toBeTruthy();
-      expect(["IE", "UK", "CY"]).not.toContain(country.code);
     }
+    // Common law as its own family (user, 2026-11-08): statute and precedent; mixed systems say which field follows which.
+    expect(ELI_COUNTRIES.filter((country) => country.family === "common-law").map((country) => country.code).sort()).toEqual(["GB", "IE", "US"]);
+    for (const country of ELI_COUNTRIES.filter((item) => item.family === "common-law")) expect(country.caseLaw?.source).toMatch(/^https:\/\//u);
+    for (const country of ELI_COUNTRIES.filter((item) => item.family === "mieszane")) expect(country.familyNote).toBeTruthy();
+    // Russia and Belarus are not supported (user, 2026-11-08).
+    for (const country of ELI_COUNTRIES) expect(["RU", "BY"]).not.toContain(country.code);
     expect(ELI_COUNTRIES.filter((country) => country.level === "PEŁNA").map((country) => country.code)).toEqual(["PL"]);
     expect(eliCapabilityNotice("ES")).toContain("nie odczyta ani nie sprawdzi brzmienia");
   });
@@ -58,6 +63,6 @@ describe("coverage: the EU of civil law, Turkey, Ukraine, Moldova and the Balkan
     const others = ["TR", "UA", "MD", "RS", "ME", "MK", "BA", "XK", "AL", "IS", "LI", "MC", "SM", "AD"];
     const codes = new Set(ELI_COUNTRIES.map((country) => country.code));
     expect([...eu, ...others].filter((code) => !codes.has(code))).toEqual([]);
-    expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["AT", "BE", "CH", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "IT", "LU", "LV", "MC", "NL", "SE"]);
+    expect(ELI_COUNTRIES.filter((country) => country.text?.reading === "CZYTNIK").map((country) => country.code).sort()).toEqual(["AT", "BE", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FO", "FR", "GB", "GE", "HR", "IE", "IS", "IT", "LU", "LV", "MC", "NL", "RW", "SE", "SI", "SK", "TR", "US", "VA", "XK"]);
   });
 });

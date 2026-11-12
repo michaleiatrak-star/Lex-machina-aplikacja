@@ -35,8 +35,12 @@ export type PublicLocalUser = {
   displayName: string;
   appRole: AppRole;
   accountKind?: AccountKind;
+  // Contact e-mail (account dialog); absent when not set.
+  email?: string;
   status: LocalUserStatus;
   passwordSetupPending?: boolean;
+  // One-time password from the administrator: only the password change is allowed until it is done.
+  passwordChangeRequired?: boolean;
   createdAt: string;
   lastLoginAt?: string;
 };
