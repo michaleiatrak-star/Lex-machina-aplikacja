@@ -202,6 +202,7 @@ import {
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
+import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -2588,6 +2589,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     // (sn.pl often asks for its human check; RD 121/26 then had no text of SDI 9/12 at all).
     const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
     const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([] as SaosText[]);
+    // A code of professional ethics the file cites ("§ 16 zd. 3 KEA"): its paragraphs read from
+    // the council's consolidated text, as the chat did (RD 121/26: the central norm was never read).
+    const ethicsCited = legalTurn && activeCountry() === "PL" ? citedEthicsParagraphs([...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)), latestUserTurn(request.query)].join("\n")) : [];
+    const ethicsFound = Promise.all(ethicsCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs)));
+    if (ethicsCited.length) step("VERIFY", `kodeks etyki: ${ethicsCited.map((item) => `${item.code.key} § ${item.paragraphs.join(", ")}`).join("; ")}`);
     if (saosSignatures.length) step("VERIFY", `SAOS (tekst orzeczeń z akt): ${saosSignatures.join(", ")}`);
     if (wsdSignatures.length) {
       step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
@@ -2613,6 +2619,13 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
       audit.record("gate", "WSD_PORTAL_PREFETCH", found.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
         results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
+      });
+    }
+    const ethicsResults = await ethicsFound;
+    if (ethicsResults.length) {
+      pathSections.push(ethicsPrompt(ethicsResults));
+      audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+        results: ethicsResults.map((result) => (result.status === "FOUND" ? `${result.code.key}: ${result.paragraphs.map((item) => `§ ${item.paragraph} ${item.text ? "OK" : "BRAK"}`).join(", ")} (${result.source.url})` : `${result.code.key}: ${result.detail}`))
       });
     }
     const saosResults = await saosFound;

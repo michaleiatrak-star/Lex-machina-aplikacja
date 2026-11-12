@@ -39,7 +39,7 @@ export async function saosText(signature: string, fetchImpl: SaosFetch = fetch a
 export function saosPrefetchPrompt(results: readonly SaosText[]): string {
   const lines = results.map((result) =>
     result.status === "FOUND"
-      ? `- ${result.signature} (${result.court}${result.date ? `, ${result.date}` : ""}): pełny tekst z SAOS (${result.url}; RZĄD 3 — treść do odczytu i cytatu, status orzeczenia potwierdza baza urzędowa sądu). Tekst:\n${result.text.slice(0, 20_000)}`
+      ? `- ${result.signature} (${result.court}${result.date ? `, ${result.date}` : ""}): pełny tekst z SAOS (${result.url}; RZĄD 3 — treść do odczytu i cytatu, status orzeczenia potwierdza baza urzędowa sądu). Tekst:\n${result.text.slice(0, 40_000)}`
       : `- ${result.signature}: SAOS — ${result.status === "NOT_FOUND" ? "brak dokładnego trafienia" : "niedostępny"} (${result.detail}).`
   );
   return ["# ORZECZENIA Z AKT SPRAWY — TEKST POBRANY PRZEZ APLIKACJĘ Z SAOS (ustalone przez aplikację)", "Cytuj tylko z tych tekstów; sprawdź, czy cytaty z dokumentów sprawy są w nich dosłownie.", ...lines].join("\n");
