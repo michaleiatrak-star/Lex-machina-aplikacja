@@ -124,6 +124,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   ROUTER_SKILL,
   evaluateMandatoryPath,
+  gateBlocksOnlyPrompt,
   gateCorrectionPrompt,
   loadMandatoryPathModel,
   foreignJurisdiction,
@@ -199,6 +200,7 @@ import {
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
+import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -2576,6 +2578,21 @@ export class SafeSessionExecutor implements SessionExecutor {
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
+    // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
+    // application in the WSD portal before the model answers, every one of them (RD 121/26: the
+    // model read one of three and left the others "z materiałów sprawy").
+    const wsdSignatures = legalTurn && activeCountry() === "PL"
+      ? [...new Set(signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")).filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8)
+      : [];
+    if (wsdSignatures.length) {
+      step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
+      const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
+      pathSections.push(wsdPrefetchPrompt(found));
+      for (const result of found) if (result.status === "FOUND") officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
+      audit.record("gate", "WSD_PORTAL_PREFETCH", found.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+        results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
+      });
+    }
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
     // the skill also by what the user delivers (ACTIVATION-MATRIX).
@@ -3932,12 +3949,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
     // and account clients keep the short prompt.
     const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
-    const correctingRound = (answer: string, instruction: string, systemPrompt?: string): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
+    const correctingRound = (answer: string, instruction: string, systemPrompt?: string, form: string = CORRECTED_ANSWER_FORM): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
       reusable
         ? {
             ...reusable,
             ...(reusable.tools?.length ? { toolChoice: "none" as const } : {}),
-            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }]
+            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }]
           }
         : {
             systemPrompt:
@@ -3951,7 +3968,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             messages: [
               { role: "user" as const, content: protectedQuery },
               { role: "assistant" as const, content: answer },
-              { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }
+              { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }
             ]
           };
     const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
@@ -3961,10 +3978,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         "MODEL",
         `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`
       );
+      // Only blocks missing (no content to supervise): the model writes those blocks alone and the
+      // application appends them, instead of a second generation of the whole answer.
+      const blocksOnly = missingGates.length > 0 && supervisedMissing.length === 0;
       try {
         const corrected = await this.providers.stream(request.provider, {
           model: request.model,
-          ...correctingRound(modelOutput, [
+          ...(blocksOnly
+            ? correctingRound(modelOutput, gateBlocksOnlyPrompt(missingGates), undefined, "")
+            : correctingRound(modelOutput, [
                 ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
                 ...(supervisedMissing.length
                   ? [
@@ -3973,11 +3995,12 @@ export class SafeSessionExecutor implements SessionExecutor {
                       ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
                     ]
                   : [])
-              ].join("\n")),
+              ].join("\n"))),
           accountContinuity: "none",
           reasoning: "none"
         });
-        const text = withoutCorrectionPreface(corrected.fullText).trim();
+        const returned = withoutCorrectionPreface(corrected.fullText).trim();
+        const text = blocksOnly && returned ? `${modelOutput.trimEnd()}\n\n${returned}` : returned;
         const remaining = text ? missingGateBlocks(mandatoryModel!, effectiveProfile, text) : missingGates;
         const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
         const accepted =

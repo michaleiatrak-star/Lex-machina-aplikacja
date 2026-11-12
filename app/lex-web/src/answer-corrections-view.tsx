@@ -33,7 +33,7 @@ export function CorrectionsDetails({ corrections }: { corrections: AnswerCorrect
               ))}
             </ul>
           ) : (
-            <small>Pierwsza wersja została uzupełniona; żadne jej zdanie nie zostało usunięte.</small>
+            <small>Ta runda tylko uzupełniła odpowiedź; nie usunęła żadnego zdania.</small>
           )}
         </div>
       ))}

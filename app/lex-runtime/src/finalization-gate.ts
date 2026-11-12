@@ -1224,7 +1224,11 @@ export function markUnverifiedReferences(
     for (const { claim, marker } of claims) {
       if (done.has(claim)) continue;
       done.add(claim);
-      const at = lineText.indexOf(claim);
+      // An occurrence another finding already marked ("XII Kp 176/20 🟨" holds "Kp 176/20"): the
+      // next one, never a second marker on the same place (RD 121/26, 2026-11-12).
+      const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
+      let at = lineText.indexOf(claim);
+      while (at >= 0 && MARKED_AFTER.test(lineText.slice(at + claim.length, at + claim.length + 60))) at = lineText.indexOf(claim, at + claim.length);
       if (at < 0) continue;
       // After the act's short name, not inside the citation: "art. 4 pkt 1 RODO ⚠️", not
       // "art. 4 pkt 1 ⚠️ RODO" (RD 121/26; also "art. 95n pkt 1 Prawa o adwokaturze").

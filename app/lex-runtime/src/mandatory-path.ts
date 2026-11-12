@@ -779,6 +779,21 @@ export function missingGateBlocks(model: MandatoryPathModel, profile: PathProfil
 }
 
 /** The correcting request for one more model round (the gates the router requires, shown visibly). */
+/**
+ * Only the missing gate blocks, appended by the application: the answer is not written again
+ * (RD 121/26, 2026-11-12: a full rewrite took a further generation of the whole answer and
+ * dropped 15 sentences of substance to add two blocks).
+ */
+export function gateBlocksOnlyPrompt(missing: Array<{ block: string; resource: string; steps: string[] }>): string {
+  return [
+    "Ścieżka obowiązkowa routera (profil PEŁNY): w odpowiedzi brakuje widocznych bloków bramek obowiązkowych.",
+    ...missing.map((item) => `- ${item.block}${item.steps.length ? ` z krokami ${item.steps.join(", ")}` : ""} (${basename(item.resource)})`),
+    "Wykonaj te bramki według modułów podanych w instrukcji dla odpowiedzi powyżej i zwróć WYŁĄCZNIE te bloki (nagłówek bloku i jego kroki).",
+    "Nie powtarzaj odpowiedzi ani jej części, nie pisz wstępu ani komentarza: aplikacja dołączy bloki na końcu odpowiedzi.",
+    "Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj znaczniki ✅/🟨/⚠️ przepisów, które powtarzasz."
+  ].join("\n");
+}
+
 export function gateCorrectionPrompt(missing: Array<{ block: string; resource: string; steps: string[] }>): string {
   return [
     "Ścieżka obowiązkowa routera (profil PEŁNY): w odpowiedzi brakuje widocznych bloków bramek obowiązkowych.",
