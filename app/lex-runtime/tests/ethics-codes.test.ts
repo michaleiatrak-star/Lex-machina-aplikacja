@@ -14,7 +14,7 @@ describe("codes of professional ethics the case file cites", () => {
     expect(ethicsParagraph(KEA_TEXT, "99")).toBeNull();
   });
   it("prompt: the ethics rule as the central norm, a missing paragraph named", () => {
-    const prompt = ethicsPrompt([{ status: "FOUND", code: ETHICS_CODES[0]!, source: ETHICS_CODES[0]!.sources[0]!, paragraphs: [{ paragraph: "16", text: ethicsParagraph(KEA_TEXT, "16") }, { paragraph: "99", text: null }] }]);
+    const prompt = ethicsPrompt([{ status: "FOUND", code: ETHICS_CODES[0]!, source: ETHICS_CODES[0]!.sources[0]!, from: "LOCAL", fetchedAt: "2026-11-12T10:00:00Z", paragraphs: [{ paragraph: "16", text: ethicsParagraph(KEA_TEXT, "16") }, { paragraph: "99", text: null }] }]);
     expect(prompt).toContain("normą centralną jest naruszona zasada etyki");
     expect(prompt).toContain("grozić ściganiem karnym lub dyscyplinarnym");
     expect(prompt).toContain("§ 99: brak takiego paragrafu");

@@ -3,11 +3,12 @@
 // central norm of the case, § 16 KEA, was never read by the application, while the chat read it
 // from the consolidated text of the Bar's council. The application reads the cited paragraphs
 // before the model answers.
-import { readLegislationPdf } from "../eli/readers.js";
+import { officialTextStore } from "../official-text-store.js";
 export const ETHICS_CODES = [
     {
         key: "KEA",
         name: "Zbiór Zasad Etyki Adwokackiej i Godności Zawodu (Kodeks Etyki Adwokackiej)",
+        issuer: "Naczelna Rada Adwokacka",
         sources: [
             {
                 url: "https://www.adwokatura.pl/admin/wgrane_pliki/file-zal-do-uchwaly-prezydium-nra-nr-1742026kodeksetykiadwokackiejtekst-jednolity-44572.pdf",
@@ -46,33 +47,27 @@ export function ethicsParagraph(text, paragraph) {
     const body = rest.slice(0, next ? next.index : 4_000).replace(/\s*\n\s*/gu, " ").trim();
     return body ? `§ ${paragraph}. ${body}` : null;
 }
-const cache = new Map();
-export async function readEthicsParagraphs(code, paragraphs, fetchImpl = fetch) {
+/** The cited paragraphs from the local copy of the code (official-text-store.ts), downloaded once and kept current. */
+export async function readEthicsParagraphs(code, paragraphs, store = officialTextStore()) {
     for (const source of code.sources) {
-        try {
-            let text = cache.get(source.url);
-            if (!text) {
-                const reply = await fetchImpl(source.url, { headers: { accept: "application/pdf" }, signal: AbortSignal.timeout(60_000) });
-                if (!reply.ok)
-                    continue;
-                const reading = await readLegislationPdf(new Uint8Array(await reply.arrayBuffer()));
-                if (reading.kind === "SKAN")
-                    continue;
-                text = reading.text;
-                cache.set(source.url, text);
-            }
-            return { status: "FOUND", code, source, paragraphs: paragraphs.map((paragraph) => ({ paragraph, text: ethicsParagraph(text, paragraph) })) };
-        }
-        catch {
-            // The next source, if any.
-        }
+        const kept = await store.ensure({ key: code.key, name: code.name, issuer: code.issuer, url: source.url, version: source.label, unit: "§" });
+        if (!kept)
+            continue;
+        return {
+            status: "FOUND",
+            code,
+            source,
+            from: kept.from,
+            fetchedAt: kept.copy.fetchedAt,
+            paragraphs: paragraphs.map((paragraph) => ({ paragraph, text: kept.copy.units[paragraph] ?? ethicsParagraph(kept.copy.text, paragraph) }))
+        };
     }
     return { status: "UNAVAILABLE", code, detail: "ETHICS_CODE_SOURCE_UNAVAILABLE" };
 }
 export function ethicsPrompt(readings) {
     const lines = readings.flatMap((reading) => reading.status === "FOUND"
         ? [
-            `${reading.code.name} — ${reading.source.label} (${reading.source.url}); źródło urzędowe samorządu zawodowego, odczytane przez aplikację w tej turze:`,
+            `${reading.code.name} — ${reading.source.label} (${reading.source.url}); źródło urzędowe samorządu zawodowego; ${reading.from === "LOCAL_STALE" ? `kopia lokalna z ${reading.fetchedAt.slice(0, 10)} (źródło teraz niedostępne — wskaż datę kopii)` : `kopia lokalna aplikacji, pobrana ${reading.fetchedAt.slice(0, 10)}, zgodna ze źródłem`}:`,
             ...reading.paragraphs.map((item) => (item.text ? `- ${item.text}` : `- § ${item.paragraph}: brak takiego paragrafu w tekście jednolitym — nie przypisuj mu treści.`))
         ]
         : [`${reading.code.name}: tekst niedostępny (${reading.detail}) — oznacz powołania jako niezweryfikowane.`]);
