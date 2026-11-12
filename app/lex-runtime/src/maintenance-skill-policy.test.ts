@@ -307,7 +307,7 @@ describe(
         } = service(
           verifiedIndex({
             version:
-              "0.1.80"
+              "0.1.81"
           })
         );
 
