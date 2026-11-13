@@ -962,7 +962,7 @@ function pageRanges(pages: readonly number[]): string {
 export function documentCoveragePrompt(
   original: readonly SessionDocumentAttachment[],
   sent: readonly SessionDocumentAttachment[],
-  options: { local: boolean; readTool: string | null }
+  options: { local: boolean; readTool: string | null; inventoryDocuments?: ReadonlySet<string> }
 ): string | null {
   const lines: string[] = [];
   original.forEach((document, index) => {
@@ -977,14 +977,19 @@ export function documentCoveragePrompt(
     lines.push(
       `- ${name} (${all.length ? `${Math.max(...all)} s.` : "?"}): w całości s. ${full.length ? pageRanges(full) : "—"}` +
         (digest.length ? `; streszczenie wyciągowe s. ${pageRanges(digest)}` : "") +
-        (missing.length ? `; NIEPRZEKAZANE s. ${pageRanges(missing)}` : "")
+        (missing.length ? `; NIEPRZEKAZANE s. ${pageRanges(missing)}` : "") +
+        (options.inventoryDocuments?.has(document.documentId) ? " — CAŁY dokument przeczytany przez aplikację do INWENTARZA DOWODÓW" : "")
     );
   });
   if (!lines.length) return null;
-  const how = options.readTool
+  // Evidence inventory (evidence-inventory.ts): the application read every page, the model relies on its items.
+  const inventory = options.inventoryDocuments?.size
+    ? "Strony nieprzekazane albo streszczone dokumentów oznaczonych jako przeczytane do INWENTARZA DOWODÓW są ODCZYTANE: aplikacja przeczytała je w całości, a ich fakty z cytatami sprawdzonymi w dokumencie są w INWENTARZU DOWODÓW (pozycje D1, D2 …). Opieraj na tych pozycjach ustalenia i powołuj je ze źródłem; nie nazywaj tych dokumentów nieodczytanymi. "
+    : "";
+  const how = inventory + (options.readTool
     ? `Strony nieprzekazane albo tylko streszczone doczytaj narzędziem ${options.readTool} (porcjami), zanim oprzesz na nich ustalenie; cytuj wyłącznie z odczytanego tekstu.`
     : options.local
       ? "Odpowiadaj wyłącznie na podstawie stron przekazanych w całości. Jeśli odpowiedź zależy od stron nieprzekazanych albo tylko streszczonych, napisz wprost, których stron nie przeczytano, i zaproponuj odczyt następnej porcji (np. „przeczytaj s. 12–20”); nie uzupełniaj ich treści z domysłu."
-      : "Strony nieprzekazane albo tylko streszczone nie są odczytane: nie opieraj na nich ustaleń; wskaż je użytkownikowi.";
+      : "Strony nieprzekazane albo tylko streszczone nie są odczytane: nie opieraj na nich ustaleń; wskaż je użytkownikowi.");
   return ["# ZAKRES DOKUMENTÓW PRZEKAZANYCH MODELOWI (ustalone przez aplikację)", "Dobrane według pytania i okna modelu.", ...lines, how].join("\n");
 }

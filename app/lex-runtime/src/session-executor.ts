@@ -2696,7 +2696,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       local: request.model.startsWith("local/"),
       readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
     });
-    if (coverage) pathSections.push(coverage);
+    const coverageAt = coverage ? pathSections.push(coverage) - 1 : -1;
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
@@ -2748,6 +2748,16 @@ export class SafeSessionExecutor implements SessionExecutor {
       const cited = view === "CITED" ? [protectedProcessContext.draft?.text ?? "", ...Object.values(protectedProcessContext.findings ?? {}).map((finding) => finding?.text ?? "")].join("\n") : "";
       const evidencePrompt = evidenceInventoryPrompt(inventory, view, inventoryBudget(view, local), cited, aliasText);
       if (evidencePrompt) protectedProcessContext = { ...protectedProcessContext, evidencePrompt };
+      // The coverage of the documents says the pages not sent were read into the inventory.
+      if (evidencePrompt && inventory && coverageAt >= 0) {
+        const read = new Set(Object.keys(inventory.chunks).filter((key) => !inventory!.failed.includes(key)).map((key) => key.slice(0, key.lastIndexOf("#"))));
+        const covered = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+          local,
+          readTool: caseFileTools ? CASE_FILE_READ_TOOL : null,
+          inventoryDocuments: read
+        });
+        if (covered) pathSections[coverageAt] = covered;
+      }
     }
     // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
     // application in the WSD portal before the model answers, every one of them (RD 121/26: the
