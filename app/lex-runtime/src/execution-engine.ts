@@ -24,7 +24,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
-import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
+import { checkpointCorrectionPrompt, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -474,6 +474,9 @@ export class LexExecutionEngine {
     // Answer of this turn given by the application, no model call (material gate).
     fixedAnswer?: string;
     documentContext?: string;
+    // The model's window (tokens) and characters per token, for fitting the documents (fitDocumentContext).
+    modelContextTokens?: number;
+    tokenCharsPerToken?: number;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
     // Placeholder kinds and genders (privacy/token-legend.ts).
@@ -1300,7 +1303,9 @@ export class LexExecutionEngine {
       const fullContract = executiveContract(this.registry, workflowPlan.executionSkill);
       // A pleading checkpoint reads its own files; another checkpoint's wait for it.
       const checkpoint = workflowPlan.executionSkill === "pisma-procesowe-v3" ? args.processWorkflowContext?.checkpoint : undefined;
-      const ownStep = (resource: string) => !checkpoint || !readAtOtherCheckpoint(resource, checkpoint);
+      // The contract is part of the prefix every step shares: no checkpoint's file in it (the step's own
+      // come with the checkpoint's part, loadCheckpointResources).
+      const ownStep = (resource: string) => !checkpoint || !checkpointOwned(resource);
       const contract = fullContract && { ...fullContract, resources: fullContract.resources.filter(ownStep) };
       if (contract) {
         const inContext = new Set<string>([
@@ -1312,7 +1317,7 @@ export class LexExecutionEngine {
           // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
           extra: [
             ...workflowPlan.requiredFreshResources,
-            ...(/^pisma-/.test(contract.skill) && args.documentContext ? ["shared/FAKTY_v2.md"] : [])
+            ...(/^pisma-/.test(contract.skill) && args.documentContext && ownStep("shared/FAKTY_v2.md") ? ["shared/FAKTY_v2.md"] : [])
           ],
           inContext
         });
@@ -1497,7 +1502,16 @@ export class LexExecutionEngine {
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
     if (!args.model.startsWith("local/")) {
-      const acts = resolveActModulesWithChecks(this.registry, [moduleTriggerText, documentTriggerText(args.documentContext, 30_000)].join("\n"));
+      // The question by every rule; the case documents only by a Dz.U. number or a code's article: a
+      // name in a document ("faktura VAT", "transport") loaded the VAT and carriage modules into a
+      // dispute over a solar installation (2026-11-13, 37k characters in every step).
+      const fromQuestion = resolveActModulesWithChecks(this.registry, moduleTriggerText);
+      const fromDocuments = args.documentContext ? resolveActModulesWithChecks(this.registry, documentTriggerText(args.documentContext, 30_000)) : { modules: [], rejected: [] };
+      const seen = new Set(fromQuestion.modules.map((module) => module.resource));
+      const acts = {
+        modules: [...fromQuestion.modules, ...fromDocuments.modules.filter((module) => module.rule !== "NAZWA" && !seen.has(module.resource))],
+        rejected: [...fromQuestion.rejected, ...fromDocuments.rejected.filter((item) => !fromQuestion.rejected.some((other) => other.resource === item.resource))]
+      };
       if (acts.modules.length || acts.rejected.length) {
         const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
         const loaded = loadActModules(this.registry, acts.modules, already);
@@ -2220,6 +2234,7 @@ export class LexExecutionEngine {
         // skills; a switch is offered by the application, not chosen by the model.
         catalog: skillEnvelope.automatic || skillEnvelope.modelRouted || !workflowPlan.executionSkill,
         toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
+        ...(args.processWorkflowContext ? { filesOnRequest: true } : {}),
         ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
       }),
       gateIRuntimePlanPrompt(
@@ -2338,6 +2353,9 @@ export class LexExecutionEngine {
       : fullSystemPrompt;
     const turnInstructions = [...perTurnSections, ...turnTail].join("\n\n");
     const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : cachedSystemPrompt;
+    // The documents fit what the window leaves after the system prompt (2026-11-13: 553k characters of skills plus
+    // 127k tokens of documents went to a model with a 200k-token window).
+    const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length, args.modelContextTokens, args.tokenCharsPerToken);
     const promptCache = {
       ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
       ...(cacheable
@@ -2358,7 +2376,7 @@ export class LexExecutionEngine {
       ...(args.documentContext
         ? [{
             role: "user" as const,
-            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
+            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + fittedDocumentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
             ...(args.documentImages?.length ? { images: args.documentImages } : {})
           }]
         : []),
@@ -2441,7 +2459,7 @@ export class LexExecutionEngine {
             ...promptCache,
             messages: [
               ...(args.documentContext
-                ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
+                ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + fittedDocumentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
                 : []),
               { role: "user", content: effectiveQuery },
               { role: "assistant", content: output },
@@ -2712,6 +2730,9 @@ export class LexExecutionEngine {
     }
     if (!cachePrefix) cachePrefix = sharedPrefix.length + 2;
     const systemPrompt = promptParts.join("\n\n");
+    // The documents fit what the window leaves after the system prompt (2026-11-13: 553k characters of skills plus
+    // 127k tokens of documents went to a model with a 200k-token window).
+    const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length, args.modelContextTokens, args.tokenCharsPerToken);
     const promptCache =
       !args.model.startsWith("local/") && cachePrefix >= 4_096 && cachePrefix < systemPrompt.length
         ? {
@@ -2740,7 +2761,7 @@ export class LexExecutionEngine {
       ...(args.documentContext
         ? [{
             role: "user" as const,
-            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
+            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + fittedDocumentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
             ...(args.documentImages?.length ? { images: args.documentImages } : {})
           }]
         : []),
@@ -2870,4 +2891,21 @@ export class LexExecutionEngine {
       modelPrompt: { systemPrompt, ...promptCache, messages: mainMessages, ...(args.tools?.length ? { tools: args.tools } : {}) }
     };
   }
+}
+
+
+/**
+ * The document context cut to what the model's window leaves after the system prompt and the
+ * question (and an output reserve), at a line boundary, with what was left out named.
+ */
+export function fitDocumentContext(context: string | undefined, otherChars: number, windowTokens?: number, charsPerToken = 3): string | undefined {
+  if (!context || !windowTokens) return context;
+  const outputReserve = Math.min(16_384, Math.max(4_096, Math.floor(windowTokens * 0.12)));
+  const safety = Math.max(2_048, Math.floor(windowTokens * 0.04));
+  const room = Math.floor((windowTokens - outputReserve - safety) * charsPerToken) - otherChars;
+  if (context.length <= room) return context;
+  if (room < 4_000) return "[Akta sprawy nie mieszczą się w oknie modelu obok instrukcji: czytaj je narzędziem read_case_file porcjami.]";
+  const cut = context.lastIndexOf("\n", room - 400);
+  const kept = context.slice(0, cut > room / 2 ? cut : room - 400);
+  return `${kept}\n[… pominięto ${context.length - kept.length} znaków akt (limit okna modelu: ${windowTokens} tokenów); doczytaj resztę narzędziem read_case_file, nie zakładaj ich treści.]`;
 }

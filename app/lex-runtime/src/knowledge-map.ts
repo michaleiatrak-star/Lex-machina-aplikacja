@@ -79,6 +79,9 @@ export function knowledgeMapPrompt(args: {
   nativeFiles?: boolean;
   // AUTO already lists every skill; leave the catalog out there.
   catalog?: boolean;
+  // A step of a workflow pipeline: the files of a skill are named on request (list_legal_resources),
+  // not listed in every step's prompt (2026-11-13: 26k characters of file names in each step).
+  filesOnRequest?: boolean;
 }): string {
   const fileLimit = args.local ? 12 : 150;
   const readHow = args.nativeFiles
@@ -97,13 +100,13 @@ export function knowledgeMapPrompt(args: {
     const skill = args.registry.get(name)!;
     const folder = path.basename(skill.directory);
     const files = skillFiles(skill.directory).filter((file) => file !== "SKILL.md");
-    const shown = files.slice(0, fileLimit);
+    const shown = args.filesOnRequest ? [] : files.slice(0, fileLimit);
     lines.push(
       `- ${name} (${folder}/): ${files.length} ${files.length === 1 ? "plik" : "plików"} poza SKILL.md` +
         (shown.length ? `: ${shown.join(", ")}${files.length > shown.length ? `, … (+${files.length - shown.length})` : ""}` : "")
     );
   }
-  if (readHow) lines.push(`Odczyt plików skilli: ${readHow}.`);
+  if (readHow) lines.push(`Odczyt plików skilli: ${readHow}.${args.filesOnRequest && args.toolNames.has("list_legal_resources") ? " Lista plików skilla: list_legal_resources." : ""}`);
 
   const others = args.catalog === false ? [] : [...args.registry.skills.values()]
     .filter((skill) => !active.includes(skill.name))
@@ -123,6 +126,10 @@ export function knowledgeMapPrompt(args: {
   if (acts.length) {
     const domains = new Set(active.filter((name) => isDomainSkill(name)).map((name) => name.slice(0, 5)));
     // Acts added by users have no domain: a local model always sees them.
+    // The whole catalogue of in-force acts (eli-catalog.ts) is thousands: the acts of the turn's
+    // domains and the users' own are named, the rest counted and found with search_core_law.
+    const hostedCap = 80;
+    const ofDomains = acts.filter((act) => act.origin === "USER" || act.domains.some((domain) => domains.has(domain.slice(0, 5))));
     const relevant = args.local
       ? [
           ...acts.filter((act) => act.origin === "USER").slice(0, 15),
@@ -130,13 +137,15 @@ export function knowledgeMapPrompt(args: {
             .filter((act) => act.origin !== "USER" && act.domains.some((domain) => domains.has(domain.slice(0, 5))))
             .slice(0, 15)
         ]
-      : acts;
+      : acts.length <= hostedCap
+        ? acts
+        : ofDomains.slice(0, hostedCap);
     const added = acts.filter((act) => act.origin === "USER").length;
     lines.push(
       "",
       `## Rdzeń aktów prawnych (lokalnie, teksty z ELI): ${acts.length} aktów${added ? `, w tym ${added} dodanych przez użytkowników` : ""}`,
       ...relevant.map(actLine),
-      ...(args.local && relevant.length < acts.length ? [`… oraz ${acts.length - relevant.length} innych aktów.`] : []),
+      ...(relevant.length < acts.length ? [`… oraz ${acts.length - relevant.length} innych aktów (search_core_law).`] : []),
       args.toolNames.has("read_core_law_article")
         ? "Brzmienie przepisu: read_core_law_article / search_core_law; aktualność: verify_legal_reference."
         : "Brzmienie przepisu bierz z tych tekstów lub weryfikacji ELI, nigdy z pamięci."

@@ -120,6 +120,25 @@ describe("evidence inventory", () => {
     expect(short).toMatch(/pominięto \d+ pozycji/u);
   });
 
+  it("a small budget still shows every document, the strongest items first", async () => {
+    const documents = {
+      a: Array.from({ length: 20 }, (_, index) => `Wpis numer ${index + 1} z dziennika budowy o przebiegu prac na dachu hali.`),
+      z: ["Świadek stwierdził, że uwagę o falowniku dopisano odręcznie już po podpisaniu protokołu."]
+    };
+    const { inventory } = await buildEvidenceInventory({ files: files(documents).access, extract: echoModel([]), portionChars: 2_000, concurrency: 2 });
+    const short = evidenceInventoryPrompt(inventory, "FULL", 1_500)!;
+    expect(short).toContain("dok. z, s. 1");
+    const ids = [...short.matchAll(/^D(\d+) /gmu)].map((match) => Number(match[1]));
+    expect(ids).toEqual([...ids].sort((x, y) => x - y));
+  });
+
+  it("over the cap keeps every document, the last one too", async () => {
+    const documents = { a: Array.from({ length: 820 }, (_, index) => `Rutynowy wpis numer ${index + 1} dziennika budowy bez znaczenia.`), z: ["Świadek stwierdził, że uwagę dopisano odręcznie już po podpisaniu protokołu."] };
+    const { inventory } = await buildEvidenceInventory({ files: files(documents).access, extract: echoModel([]), portionChars: 20_000, concurrency: 4 });
+    expect(inventory.items).toHaveLength(800);
+    expect(inventory.items.some((item) => item.documentId === "z")).toBe(true);
+  });
+
   it("names the views and the steps that build the inventory", () => {
     expect(inventoryView("CP-1c-macierz")).toBe("FULL");
     expect(inventoryView("CP-ATAK")).toBe("CITED");

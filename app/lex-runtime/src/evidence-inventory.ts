@@ -50,7 +50,7 @@ export const EVIDENCE_MAP_INSTRUCTION = [
   "Wypisz KAŻDY fakt istotny dla sprawy, który dany fragment dowodzi lub któremu przeczy — jeden fakt w jednej linii, w formacie:",
   "FRAGMENT-ID | FAKT (jednym zdaniem) | CYTAT (dosłowny, ciągły fragment tekstu, do 300 znaków) | RODZAJ (dokument urzędowy, dokument prywatny, zeznanie, opinia, korespondencja, nagranie, inny) | SIŁA (A, B, C albo D) | DATA zdarzenia (RRRR-MM-DD albo -)",
   "SIŁA: A — dokument urzędowy lub fakt bezsporny; B — dokument prywatny podpisany, korespondencja stron; C — zeznanie, oświadczenie strony; D — pośredni, poszlaka, niepodpisany.",
-  "Cytat przepisz dosłownie z fragmentu (aplikacja go sprawdzi); symbole w nawiasach kwadratowych przepisz bez zmian. Bez wstępu, bez komentarza, bez tabel Markdown. Fragment bez faktów: pomiń."
+  "Cytat przepisz dosłownie z fragmentu (aplikacja go sprawdzi); symbole w nawiasach kwadratowych przepisz bez zmian. Bez wstępu, bez komentarza, bez tabel Markdown. Fragment bez faktów: pomiń. Pomijaj wpisy rutynowe i powtarzalne bez znaczenia dla sporu (seryjne pomiary w normie, logistyka, operacje bankowe innych podmiotów); fakt z wielu podobnych wpisów podaj raz, zbiorczo."
 ].join("\n");
 
 const flat = (value: string): string => value.normalize("NFKC").replace(/[„”"«»]/gu, '"').replace(/\s+/gu, " ").trim().toLocaleLowerCase("pl");
@@ -207,16 +207,26 @@ export async function buildEvidenceInventory(args: {
   // Ids in the order of the files (document, then chunk): the same files give the same ids.
   const order = new Map(all.map((item, index) => [chunkKey(item.documentId, item.chunk), index]));
   const chunks = Object.fromEntries(Object.entries(kept).sort((a, b) => (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)));
-  const items = Object.values(chunks)
-    .flatMap((entry) => entry.items)
-    .slice(0, INVENTORY_ITEMS_MAX)
-    .map((item, index) => ({ ...item, id: `D${index + 1}` }));
+  const items = capped(Object.values(chunks).flatMap((entry) => entry.items)).map((item, index) => ({ ...item, id: `D${index + 1}` }));
   return {
     inventory: { schemaVersion: 1, builtAt: (args.now ?? (() => new Date().toISOString()))(), chunks, items, failed },
     read: toRead.length - failed.length,
     reused: all.length - toRead.length,
     failed: failed.length
   };
+}
+
+// Over the cap: by turns from every document, the strongest first (the end of a long case file
+// is not dropped: 2026-11-13, the witness's note was the last document and lost), file order kept.
+function capped<T extends { documentId: string; strength: EvidenceStrength }>(items: T[]): T[] {
+  if (items.length <= INVENTORY_ITEMS_MAX) return items;
+  const rank = { A: 0, B: 1, C: 2, D: 3 } as const;
+  const byDocument = new Map<string, number[]>();
+  items.forEach((item, index) => byDocument.set(item.documentId, [...(byDocument.get(item.documentId) ?? []), index]));
+  const queues = [...byDocument.values()].map((list) => list.sort((a, b) => rank[items[a]!.strength] - rank[items[b]!.strength] || a - b));
+  const kept = new Set<number>();
+  for (let round = 0; kept.size < INVENTORY_ITEMS_MAX; round += 1) for (const queue of queues) if (queue[round] !== undefined && kept.size < INVENTORY_ITEMS_MAX) kept.add(queue[round]!);
+  return items.filter((_, index) => kept.has(index));
 }
 
 export function validateEvidenceInventory(input: unknown): EvidenceInventory | null {
@@ -278,28 +288,33 @@ export function evidenceInventoryPrompt(
   if (!inventory?.items.length) return null;
   const alias = (item: EvidenceItem): EvidenceItem => ({ ...item, fact: aliasText(item.documentId, item.fact), quote: aliasText(item.documentId, item.quote) });
   const cited = new Set([...citedIn.matchAll(/\bD(\d{1,4})\b/gu)].map((match) => `D${match[1]}`));
-  const lines =
-    view === "FULL"
-      ? inventory.items.map((item) => full(alias(item)))
-      : view === "CITED"
-        ? [
-            ...inventory.items.filter((item) => cited.has(item.id)).map((item) => full(alias(item))),
-            ...inventory.items.filter((item) => !cited.has(item.id)).map((item) => compact(alias(item)))
-          ]
-        : inventory.items.map((item) => compact(alias(item)));
-  const kept: string[] = [];
+  const render = (item: EvidenceItem): string => (view === "FULL" || (view === "CITED" && cited.has(item.id)) ? full(alias(item)) : compact(alias(item)));
+  // What fits the budget: the cited items first, then by turns from every document (the
+  // strongest first in each), so a small window still sees each document; shown in id order.
+  const rank = { A: 0, B: 1, C: 2, D: 3 } as const;
+  const byDocument = new Map<string, EvidenceItem[]>();
+  for (const item of inventory.items) byDocument.set(item.documentId, [...(byDocument.get(item.documentId) ?? []), item]);
+  for (const list of byDocument.values()) list.sort((a, b) => Number(cited.has(b.id)) - Number(cited.has(a.id)) || rank[a.strength] - rank[b.strength] || Number(a.id.slice(1)) - Number(b.id.slice(1)));
+  const order: EvidenceItem[] = inventory.items.filter((item) => cited.has(item.id));
+  const queues = [...byDocument.values()].map((list) => list.filter((item) => !cited.has(item.id)));
+  for (let round = 0; queues.some((queue) => queue.length > round); round += 1) for (const queue of queues) if (queue[round]) order.push(queue[round]!);
+  const chosen = new Set<string>();
   let used = 0;
-  for (const line of lines) {
-    if (used + line.length + 1 > budget) break;
-    kept.push(line);
+  for (const item of order) {
+    const line = render(item);
+    if (used + line.length + 1 > budget) continue;
+    chosen.add(item.id);
     used += line.length + 1;
   }
+  const lines = inventory.items.map((item) => item.id);
+  const kept = inventory.items.filter((item) => chosen.has(item.id)).sort((a, b) => Number(cited.has(b.id)) - Number(cited.has(a.id)) || Number(a.id.slice(1)) - Number(b.id.slice(1))).map(render);
   const unverified = inventory.items.filter((item) => item.quote && !item.quoteVerified).length;
   return [
     `# INWENTARZ DOWODÓW Z CAŁYCH AKT SPRAWY (zbudowany przez aplikację ${inventory.builtAt.slice(0, 10)}: ${inventory.items.length} pozycji z ${Object.keys(inventory.chunks).length} fragmentów${
       inventory.failed.length ? `; ${inventory.failed.length} fragmentów nieprzeczytanych — wskaż to` : ""
     })`,
     "Pozycja: id dowodu, siła (A–D), źródło (dokument, strona), fakt, cytat sprawdzony przez aplikację w dokumencie. Powołuj dowody przez id (D12) i źródło; macierz D×T i dalsze kroki budują się na tych pozycjach, nie na pamięci rozmowy.",
+    "Inwentarz obejmuje WSZYSTKIE dokumenty sprawy, także strony oznaczone w ZAKRESIE DOKUMENTÓW jako NIEPRZEKAZANE albo streszczone: aplikacja przeczytała je w całości. Ustalenia z nich opieraj na pozycjach inwentarza (źródło i cytat są sprawdzone); nie nazywaj tych dokumentów nieodczytanymi ani niedostępnymi. Pełne brzmienie poza cytatem: read_case_file, gdy dostępne.",
     ...(unverified ? [`Cytaty oznaczone „NIE ODNALEZIONY” (${unverified}) nie występują dosłownie w dokumencie: nie przytaczaj ich jako cytatu.`] : []),
     ...kept,
     ...(kept.length < lines.length ? [`[… pominięto ${lines.length - kept.length} pozycji (limit okna modelu); pełne brzmienie w aktach sprawy (read_case_file, gdy dostępne)]`] : [])

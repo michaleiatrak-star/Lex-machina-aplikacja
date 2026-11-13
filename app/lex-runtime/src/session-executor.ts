@@ -10,6 +10,7 @@ import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
+import { checkpointOwned, checkpointsReading } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   expectedVerificationMarker,
@@ -127,6 +128,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import {
   ROUTER_SKILL,
+  canonicalPath,
   evaluateMandatoryPath,
   gateBlocksOnlyPrompt,
   gateCorrectionPrompt,
@@ -2696,7 +2698,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       local: request.model.startsWith("local/"),
       readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
     });
-    if (coverage) pathSections.push(coverage);
+    const coverageAt = coverage ? pathSections.push(coverage) - 1 : -1;
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
@@ -2748,6 +2750,16 @@ export class SafeSessionExecutor implements SessionExecutor {
       const cited = view === "CITED" ? [protectedProcessContext.draft?.text ?? "", ...Object.values(protectedProcessContext.findings ?? {}).map((finding) => finding?.text ?? "")].join("\n") : "";
       const evidencePrompt = evidenceInventoryPrompt(inventory, view, inventoryBudget(view, local), cited, aliasText);
       if (evidencePrompt) protectedProcessContext = { ...protectedProcessContext, evidencePrompt };
+      // The coverage of the documents says the pages not sent were read into the inventory.
+      if (evidencePrompt && inventory && coverageAt >= 0) {
+        const read = new Set(Object.keys(inventory.chunks).filter((key) => !inventory!.failed.includes(key)).map((key) => key.slice(0, key.lastIndexOf("#"))));
+        const covered = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+          local,
+          readTool: caseFileTools ? CASE_FILE_READ_TOOL : null,
+          inventoryDocuments: read
+        });
+        if (covered) pathSections[coverageAt] = covered;
+      }
     }
     // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
     // application in the WSD portal before the model answers, every one of them (RD 121/26: the
@@ -3004,7 +3016,16 @@ export class SafeSessionExecutor implements SessionExecutor {
         .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
         .join("\n")
         .slice(0, 30_000);
-      const acts = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"));
+      // The question by every rule; the documents only by a Dz.U. number or a code's article (a
+      // "faktura VAT" or "transport" in a document is not the case's act; 2026-11-13: VAT and
+      // carriage modules in a dispute over a solar installation, 37k characters in every step).
+      const ofQuestion = resolveActModulesWithChecks(this.registry, caseText);
+      const ofDocuments = documentText.trim() ? resolveActModulesWithChecks(this.registry, documentText) : { modules: [], rejected: [] };
+      const named = new Set(ofQuestion.modules.map((module) => module.resource));
+      const acts = {
+        modules: [...ofQuestion.modules, ...ofDocuments.modules.filter((module) => module.rule !== "NAZWA" && !named.has(module.resource))],
+        rejected: [...ofQuestion.rejected, ...ofDocuments.rejected.filter((item) => !ofQuestion.rejected.some((other) => other.resource === item.resource))]
+      };
       if (acts.modules.length || acts.rejected.length) {
         const loaded = loadActModules(this.registry, acts.modules, contextResources);
         for (const item of loaded.loaded) {
@@ -3124,10 +3145,34 @@ export class SafeSessionExecutor implements SessionExecutor {
     // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
     // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
     const unreadableResources: string[] = [];
+    const deferredToCheckpoint = new Map<string, string>();
     const jurisdiction = legalTurn ? activeJurisdiction(this.registry.root) : null;
     const jurisdictionNotice = jurisdiction ? jurisdictionDegradedNotice(jurisdictionStatus(jurisdiction)) : null;
     if (mandatoryModel && legalTurn) {
-      const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
+      // A step of the pleading pipeline: a gate another checkpoint reads (MOD-SKAN at CP-1c-skan,
+      // PRE-W2 at CP-PRE-W2, HYBRID-VALIDATION at CP-AUDYT) waits for its step instead of riding on
+      // every step (2026-11-13: ~250k characters of gates in each step's prompt).
+      const pipelineCheckpoint = request.processWorkflowContext?.checkpoint;
+      const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => {
+        if (contextResources.has(resource)) return false;
+        // Every checkpoint's file stays out of the shared prefix (the prompt cache holds one prefix for all
+        // steps): the current step gets its own files in the checkpoint's part, the others wait for theirs.
+        // PROFIL-LEKKI orders the resources to read; in a pipeline step the application has loaded them.
+        if (pipelineCheckpoint && /prawny-router-v3\/references\/PROFIL-LEKKI\.md$/u.test(resource)) {
+          deferredToCheckpoint.set(canonicalPath(resource), "kolejność i dobór zasobów kroku potoku pisma ustaliła aplikacja");
+          return false;
+        }
+        if (pipelineCheckpoint && checkpointOwned(resource)) {
+          deferredToCheckpoint.set(
+            canonicalPath(resource),
+            checkpointsReading(resource).includes(pipelineCheckpoint)
+              ? `wczytany przez aplikację w części punktu kontrolnego ${pipelineCheckpoint}`
+              : `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`
+          );
+          return false;
+        }
+        return true;
+      });
       for (const resource of preloaded) {
         const content = this.readCorpus(resource);
         if (!content) {
@@ -3137,7 +3182,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         contextResources.add(resource);
         audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
-        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
+        // The router in a pipeline step: its rules (always loaded, the user's preferences, the
+        // overriding rules, the self-check); its routing tables and main sequence are the application's
+        // there (the route and the step are set).
+        const body = pipelineCheckpoint && /^prawny-router-v3\/SKILL\.md$/u.test(resource) ? routerRulesOnly(content) : content;
+        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, body)}`);
       }
       if (unreadableResources.length) {
         pathSections.push(
@@ -3493,6 +3542,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           }
         : {}),
       ...(documentContext ? { documentContext } : {}),
+      ...(request.modelContextTokens ? { modelContextTokens: request.modelContextTokens } : {}),
+      ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
       ...(modelImages.length ? { documentImages: modelImages } : {}),
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly
@@ -4149,6 +4200,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
         if (contextResources.has(resource)) continue;
+        const stepOfPipeline = request.processWorkflowContext?.checkpoint;
+        if (stepOfPipeline && checkpointOwned(resource)) {
+          deferredToCheckpoint.set(canonicalPath(resource), `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`);
+          continue;
+        }
         const content = this.readCorpus(resource);
         if (!content) continue;
         contextResources.add(resource);
@@ -5573,9 +5629,10 @@ export class SafeSessionExecutor implements SessionExecutor {
             contextResources,
             // Mechanical routing: the runtime routes, the model holds only the
             // router's semantic contract (not its text).
-            ...(request.modelSelectsSkills
-              ? {}
-              : { executedByApp: new Map([[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]]) }),
+            executedByApp: new Map([
+              ...deferredToCheckpoint,
+              ...(request.modelSelectsSkills ? [] : [[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"] as const])
+            ]),
             answer: processedDocumentCitations.text,
             ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),
@@ -6022,4 +6079,15 @@ export function withOneClosingDisclaimer(text: string): string {
   if (blocks.length < 2) return text;
   const dropped = new Set(blocks.slice(0, -1).flatMap(([from, to]) => Array.from({ length: to - from }, (_, offset) => from + offset)));
   return lines.filter((_, index) => !dropped.has(index)).join("\n");
+}
+
+/** The router's rule sections, for a step whose route and stage the application set. */
+export function routerRulesOnly(skill: string): string {
+  // KROK 2 stays (the application collapses it to its reference line), KROK 5–6 in full: the
+  // end-to-end sequence is part of the router's mandatory core in the mechanical mode.
+  const keep = /^## (?:ŁADOWANE ZAWSZE|PREFERENCJE UŻYTKOWNIKA|KROK 2|KROK 5|REGUŁY NADRZĘDNE|SELF-CHECK)/u;
+  // A section's "<!-- lex:wykonuje-aplikacja: … -->" marker stands on the line above its heading.
+  const parts = skill.split(/(?<!-->)\n(?=(?:<!--[^\n]*-->\n)?## )/u);
+  const kept = parts.filter((part, index) => index === 0 || keep.test(part.replace(/^<!--[^\n]*-->\n/u, "")));
+  return `${kept.join("\n")}\n\n> Pominięte w kroku potoku (wykonuje aplikacja): sekwencja główna, adapter runtime, widgety, pokrycie dziedzinowe.`;
 }
