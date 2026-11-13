@@ -3157,6 +3157,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (contextResources.has(resource)) return false;
         // Every checkpoint's file stays out of the shared prefix (the prompt cache holds one prefix for all
         // steps): the current step gets its own files in the checkpoint's part, the others wait for theirs.
+        // PROFIL-LEKKI orders the resources to read; in a pipeline step the application has loaded them.
+        if (pipelineCheckpoint && /prawny-router-v3\/references\/PROFIL-LEKKI\.md$/u.test(resource)) {
+          deferredToCheckpoint.set(canonicalPath(resource), "kolejność i dobór zasobów kroku potoku pisma ustaliła aplikacja");
+          return false;
+        }
         if (pipelineCheckpoint && checkpointOwned(resource)) {
           deferredToCheckpoint.set(
             canonicalPath(resource),
@@ -3177,7 +3182,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         contextResources.add(resource);
         audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
-        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
+        // The router in a pipeline step: its rules (always loaded, the user's preferences, the
+        // overriding rules, the self-check); its routing tables and main sequence are the application's
+        // there (the route and the step are set).
+        const body = pipelineCheckpoint && /^prawny-router-v3\/SKILL\.md$/u.test(resource) ? routerRulesOnly(content) : content;
+        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, body)}`);
       }
       if (unreadableResources.length) {
         pathSections.push(
@@ -6070,4 +6079,15 @@ export function withOneClosingDisclaimer(text: string): string {
   if (blocks.length < 2) return text;
   const dropped = new Set(blocks.slice(0, -1).flatMap(([from, to]) => Array.from({ length: to - from }, (_, offset) => from + offset)));
   return lines.filter((_, index) => !dropped.has(index)).join("\n");
+}
+
+/** The router's rule sections, for a step whose route and stage the application set. */
+export function routerRulesOnly(skill: string): string {
+  // KROK 2 stays (the application collapses it to its reference line), KROK 5–6 in full: the
+  // end-to-end sequence is part of the router's mandatory core in the mechanical mode.
+  const keep = /^## (?:ŁADOWANE ZAWSZE|PREFERENCJE UŻYTKOWNIKA|KROK 2|KROK 5|REGUŁY NADRZĘDNE|SELF-CHECK)/u;
+  // A section's "<!-- lex:wykonuje-aplikacja: … -->" marker stands on the line above its heading.
+  const parts = skill.split(/(?<!-->)\n(?=(?:<!--[^\n]*-->\n)?## )/u);
+  const kept = parts.filter((part, index) => index === 0 || keep.test(part.replace(/^<!--[^\n]*-->\n/u, "")));
+  return `${kept.join("\n")}\n\n> Pominięte w kroku potoku (wykonuje aplikacja): sekwencja główna, adapter runtime, widgety, pokrycie dziedzinowe.`;
 }

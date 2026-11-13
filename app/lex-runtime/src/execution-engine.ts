@@ -2234,6 +2234,7 @@ export class LexExecutionEngine {
         // skills; a switch is offered by the application, not chosen by the model.
         catalog: skillEnvelope.automatic || skillEnvelope.modelRouted || !workflowPlan.executionSkill,
         toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
+        ...(args.processWorkflowContext ? { filesOnRequest: true } : {}),
         ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
       }),
       gateIRuntimePlanPrompt(

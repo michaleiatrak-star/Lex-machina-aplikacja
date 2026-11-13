@@ -64,7 +64,7 @@ describe("knowledge map", () => {
     expect(text).toContain("… (+8)");
     expect(text).toContain("KC (DU/1964/93");
     expect(text).not.toContain("KK (DU/1997/553");
-    expect(text).toContain("… oraz 1 innych aktów.");
+    expect(text).toContain("… oraz 1 innych aktów (search_core_law).");
   });
 
   it("marks acts added by users and acts whose copy is not current; a local model always sees added acts", () => {
