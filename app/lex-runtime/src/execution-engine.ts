@@ -1315,7 +1315,7 @@ export class LexExecutionEngine {
           // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
           extra: [
             ...workflowPlan.requiredFreshResources,
-            ...(/^pisma-/.test(contract.skill) && args.documentContext ? ["shared/FAKTY_v2.md"] : [])
+            ...(/^pisma-/.test(contract.skill) && args.documentContext && ownStep("shared/FAKTY_v2.md") ? ["shared/FAKTY_v2.md"] : [])
           ],
           inContext
         });

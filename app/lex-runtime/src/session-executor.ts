@@ -10,6 +10,7 @@ import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
+import { checkpointsReading, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   expectedVerificationMarker,
@@ -127,6 +128,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import {
   ROUTER_SKILL,
+  canonicalPath,
   evaluateMandatoryPath,
   gateBlocksOnlyPrompt,
   gateCorrectionPrompt,
@@ -3134,10 +3136,22 @@ export class SafeSessionExecutor implements SessionExecutor {
     // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
     // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
     const unreadableResources: string[] = [];
+    const deferredToCheckpoint = new Map<string, string>();
     const jurisdiction = legalTurn ? activeJurisdiction(this.registry.root) : null;
     const jurisdictionNotice = jurisdiction ? jurisdictionDegradedNotice(jurisdictionStatus(jurisdiction)) : null;
     if (mandatoryModel && legalTurn) {
-      const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
+      // A step of the pleading pipeline: a gate another checkpoint reads (MOD-SKAN at CP-1c-skan,
+      // PRE-W2 at CP-PRE-W2, HYBRID-VALIDATION at CP-AUDYT) waits for its step instead of riding on
+      // every step (2026-11-13: ~250k characters of gates in each step's prompt).
+      const pipelineCheckpoint = request.processWorkflowContext?.checkpoint;
+      const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => {
+        if (contextResources.has(resource)) return false;
+        if (pipelineCheckpoint && readAtOtherCheckpoint(resource, pipelineCheckpoint)) {
+          deferredToCheckpoint.set(canonicalPath(resource), `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`);
+          return false;
+        }
+        return true;
+      });
       for (const resource of preloaded) {
         const content = this.readCorpus(resource);
         if (!content) {
@@ -4161,6 +4175,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
         if (contextResources.has(resource)) continue;
+        const stepOfPipeline = request.processWorkflowContext?.checkpoint;
+        if (stepOfPipeline && readAtOtherCheckpoint(resource, stepOfPipeline)) {
+          deferredToCheckpoint.set(canonicalPath(resource), `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`);
+          continue;
+        }
         const content = this.readCorpus(resource);
         if (!content) continue;
         contextResources.add(resource);
@@ -5585,9 +5604,10 @@ export class SafeSessionExecutor implements SessionExecutor {
             contextResources,
             // Mechanical routing: the runtime routes, the model holds only the
             // router's semantic contract (not its text).
-            ...(request.modelSelectsSkills
-              ? {}
-              : { executedByApp: new Map([[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]]) }),
+            executedByApp: new Map([
+              ...deferredToCheckpoint,
+              ...(request.modelSelectsSkills ? [] : [[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"] as const])
+            ]),
             answer: processedDocumentCitations.text,
             ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),
