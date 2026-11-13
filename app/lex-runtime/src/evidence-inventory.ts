@@ -207,16 +207,26 @@ export async function buildEvidenceInventory(args: {
   // Ids in the order of the files (document, then chunk): the same files give the same ids.
   const order = new Map(all.map((item, index) => [chunkKey(item.documentId, item.chunk), index]));
   const chunks = Object.fromEntries(Object.entries(kept).sort((a, b) => (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)));
-  const items = Object.values(chunks)
-    .flatMap((entry) => entry.items)
-    .slice(0, INVENTORY_ITEMS_MAX)
-    .map((item, index) => ({ ...item, id: `D${index + 1}` }));
+  const items = capped(Object.values(chunks).flatMap((entry) => entry.items)).map((item, index) => ({ ...item, id: `D${index + 1}` }));
   return {
     inventory: { schemaVersion: 1, builtAt: (args.now ?? (() => new Date().toISOString()))(), chunks, items, failed },
     read: toRead.length - failed.length,
     reused: all.length - toRead.length,
     failed: failed.length
   };
+}
+
+// Over the cap: by turns from every document, the strongest first (the end of a long case file
+// is not dropped: 2026-11-13, the witness's note was the last document and lost), file order kept.
+function capped<T extends { documentId: string; strength: EvidenceStrength }>(items: T[]): T[] {
+  if (items.length <= INVENTORY_ITEMS_MAX) return items;
+  const rank = { A: 0, B: 1, C: 2, D: 3 } as const;
+  const byDocument = new Map<string, number[]>();
+  items.forEach((item, index) => byDocument.set(item.documentId, [...(byDocument.get(item.documentId) ?? []), index]));
+  const queues = [...byDocument.values()].map((list) => list.sort((a, b) => rank[items[a]!.strength] - rank[items[b]!.strength] || a - b));
+  const kept = new Set<number>();
+  for (let round = 0; kept.size < INVENTORY_ITEMS_MAX; round += 1) for (const queue of queues) if (queue[round] !== undefined && kept.size < INVENTORY_ITEMS_MAX) kept.add(queue[round]!);
+  return items.filter((_, index) => kept.has(index));
 }
 
 export function validateEvidenceInventory(input: unknown): EvidenceInventory | null {

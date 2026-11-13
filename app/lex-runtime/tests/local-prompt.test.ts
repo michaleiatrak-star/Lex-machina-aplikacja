@@ -87,4 +87,10 @@ describe("the map of sources by kind (comparison with the chat, 2026-11-06)", ()
     expect(compact).toContain(SOURCES_BY_KIND);
     for (const item of ["verify_interpretation", "site:zus.pl", "site:uokik.gov.pl", "sp (Portal Orzeczeń)", "tylko trop", "nigdy wniosek „nie ma”"]) expect(SOURCES_BY_KIND).toContain(item);
   });
+  it("keeps the evidence inventory and the checkpoint findings whole (sized by the application)", () => {
+    const items = Array.from({ length: 30 }, (_, i) => `D${i + 1} [B; dok. a, s. ${i + 1}] Fakt numer ${i + 1} z akt sprawy.`).join("\n");
+    const compact = compactLocalPrompt(`# ZASADY\nzasady\n\n# INWENTARZ DOWODÓW Z CAŁYCH AKT SPRAWY (30 pozycji)\n${items}\n\n# USTALENIA Z ZAMKNIĘTYCH PUNKTÓW KONTROLNYCH TEJ SPRAWY\n${"x".repeat(2_000)}`);
+    expect(compact).toContain("D30 [B; dok. a, s. 30]");
+    expect(compact).toContain("x".repeat(2_000));
+  });
 });
