@@ -3016,7 +3016,16 @@ export class SafeSessionExecutor implements SessionExecutor {
         .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
         .join("\n")
         .slice(0, 30_000);
-      const acts = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"));
+      // The question by every rule; the documents only by a Dz.U. number or a code's article (a
+      // "faktura VAT" or "transport" in a document is not the case's act; 2026-11-13: VAT and
+      // carriage modules in a dispute over a solar installation, 37k characters in every step).
+      const ofQuestion = resolveActModulesWithChecks(this.registry, caseText);
+      const ofDocuments = documentText.trim() ? resolveActModulesWithChecks(this.registry, documentText) : { modules: [], rejected: [] };
+      const named = new Set(ofQuestion.modules.map((module) => module.resource));
+      const acts = {
+        modules: [...ofQuestion.modules, ...ofDocuments.modules.filter((module) => module.rule !== "NAZWA" && !named.has(module.resource))],
+        rejected: [...ofQuestion.rejected, ...ofDocuments.rejected.filter((item) => !ofQuestion.rejected.some((other) => other.resource === item.resource))]
+      };
       if (acts.modules.length || acts.rejected.length) {
         const loaded = loadActModules(this.registry, acts.modules, contextResources);
         for (const item of loaded.loaded) {
