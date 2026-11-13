@@ -46,6 +46,11 @@ const LATER_STEP_RESOURCES: Readonly<Partial<Record<ProcessPleadingCheckpoint, r
  * shared/CP-GATE.md, MODULY-MAPA.md), not at this one: the macierz D×T at CP-1c-macierz,
  * the red team at W1.6. One checkpoint per turn reads its own files; the rest wait for theirs.
  */
+/** A file one or more checkpoints read: kept out of the prefix the steps share (prompt cache). */
+export function checkpointOwned(resource: string): boolean {
+  return checkpointsReading(resource).length > 0;
+}
+
 export function readAtOtherCheckpoint(resource: string, checkpoint: ProcessPleadingCheckpoint): boolean {
   const owners = (Object.keys(CHECKPOINT_RESOURCES) as ProcessPleadingCheckpoint[]).filter(
     (owner) => CHECKPOINT_RESOURCES[owner].includes(resource) || (LATER_STEP_RESOURCES[owner] ?? []).includes(resource)
@@ -104,7 +109,9 @@ export function loadCheckpointResources(
   const loaded: Array<{ resource: string; content: string }> = [];
   const toRead: string[] = [];
   let left = budget;
-  for (const resource of CHECKPOINT_RESOURCES[checkpoint]) {
+  // The checkpoint's own files, then the skill's modules run at this step (LATER_STEP_RESOURCES): all
+  // of them in the checkpoint's part, after the cached prefix every step shares.
+  for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? [])]) {
     if (inContext.has(resource)) continue;
     const file = registry.resolveResource("pisma-procesowe-v3", resource);
     let content = "";

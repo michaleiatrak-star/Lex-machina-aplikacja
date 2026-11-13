@@ -10,7 +10,7 @@ import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
-import { checkpointsReading, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
+import { checkpointOwned, checkpointsReading } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   expectedVerificationMarker,
@@ -3155,8 +3155,15 @@ export class SafeSessionExecutor implements SessionExecutor {
       const pipelineCheckpoint = request.processWorkflowContext?.checkpoint;
       const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => {
         if (contextResources.has(resource)) return false;
-        if (pipelineCheckpoint && readAtOtherCheckpoint(resource, pipelineCheckpoint)) {
-          deferredToCheckpoint.set(canonicalPath(resource), `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`);
+        // Every checkpoint's file stays out of the shared prefix (the prompt cache holds one prefix for all
+        // steps): the current step gets its own files in the checkpoint's part, the others wait for theirs.
+        if (pipelineCheckpoint && checkpointOwned(resource)) {
+          deferredToCheckpoint.set(
+            canonicalPath(resource),
+            checkpointsReading(resource).includes(pipelineCheckpoint)
+              ? `wczytany przez aplikację w części punktu kontrolnego ${pipelineCheckpoint}`
+              : `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`
+          );
           return false;
         }
         return true;
@@ -4185,7 +4192,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
         if (contextResources.has(resource)) continue;
         const stepOfPipeline = request.processWorkflowContext?.checkpoint;
-        if (stepOfPipeline && readAtOtherCheckpoint(resource, stepOfPipeline)) {
+        if (stepOfPipeline && checkpointOwned(resource)) {
           deferredToCheckpoint.set(canonicalPath(resource), `wczytywany przez aplikację w punkcie ${checkpointsReading(resource).join(", ")} potoku pisma (nie w tym kroku)`);
           continue;
         }

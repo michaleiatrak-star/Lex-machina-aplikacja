@@ -24,7 +24,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
-import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
+import { checkpointCorrectionPrompt, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -1303,7 +1303,9 @@ export class LexExecutionEngine {
       const fullContract = executiveContract(this.registry, workflowPlan.executionSkill);
       // A pleading checkpoint reads its own files; another checkpoint's wait for it.
       const checkpoint = workflowPlan.executionSkill === "pisma-procesowe-v3" ? args.processWorkflowContext?.checkpoint : undefined;
-      const ownStep = (resource: string) => !checkpoint || !readAtOtherCheckpoint(resource, checkpoint);
+      // The contract is part of the prefix every step shares: no checkpoint's file in it (the step's own
+      // come with the checkpoint's part, loadCheckpointResources).
+      const ownStep = (resource: string) => !checkpoint || !checkpointOwned(resource);
       const contract = fullContract && { ...fullContract, resources: fullContract.resources.filter(ownStep) };
       if (contract) {
         const inContext = new Set<string>([
