@@ -8507,7 +8507,11 @@ export function createLexHttpApp(options) {
             if (sendAccountPolicyError(res, error)) {
                 return;
             }
-            const localFailureMessage = request.model.startsWith("local/")
+            // A gate of the application (LexExecutionError) is not a failure of the local model: it
+            // goes to its own handler below with its stage, as for a hosted model.
+            const applicationGate = error instanceof Error && error.name === "LexExecutionError";
+            const localFailureMessage = !applicationGate &&
+                request.model.startsWith("local/")
                 ? (error instanceof
                     ProviderGatewayError &&
                     error.causeValue instanceof
@@ -8523,7 +8527,8 @@ export function createLexHttpApp(options) {
             const localFailureReason = /^LOCAL_MODEL_[A-Z0-9_]+$/.test(parsedLocalFailureReason)
                 ? parsedLocalFailureReason
                 : "LOCAL_MODEL_INFERENCE_FAILED";
-            if (request.model.startsWith("local/")) {
+            if (!applicationGate &&
+                request.model.startsWith("local/")) {
                 res.status(503).json({
                     error: "LOCAL_MODEL_EXECUTION_FAILED",
                     reason: localFailureReason,

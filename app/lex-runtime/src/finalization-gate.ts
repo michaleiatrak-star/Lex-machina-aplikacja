@@ -1187,7 +1187,10 @@ export function markUnverifiedReferences(
   // Signatures an official case-law database returned in this turn (sn.pl, CBOSA, the courts'
   // portal, TK, KIO, CURIA, ETPCz): an official anchor without full verification, 🟨 (NSA/WSA
   // snapshot, no promotion). SAOS, LEX, Legalis and other portals are leads (⚠️).
-  retrievedCases: ReadonlySet<string> = new Set()
+  retrievedCases: ReadonlySet<string> = new Set(),
+  // Signatures the application looked up itself: a lead (SAOS, web search) or nothing found,
+  // each with its own marker (ruling-lookup.ts).
+  caseMarkers: ReadonlyMap<string, string> = new Map()
 ): string {
   const markable = new Set<FinalizationFinding["status"]>([
     "MISSING_LEDGER_RECORD",
@@ -1203,11 +1206,13 @@ export function markUnverifiedReferences(
   for (const finding of report.findings) {
     if (!markable.has(finding.status)) continue;
     const key = finding.reference.kind === "case" ? caseFileKey(finding.reference.claim) : "";
-    if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key) && !disclosed.has(key)) continue;
+    if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key) && !caseMarkers.has(key) && !disclosed.has(key)) continue;
     // An official database's hit outranks the same number in the user's words or the files.
     const marker =
       finding.reference.kind === "case" && retrievedCases.has(key)
         ? OFFICIAL_ANCHOR_MARKER_TEXT
+        : finding.reference.kind === "case" && caseMarkers.has(key)
+          ? caseMarkers.get(key)!
         : finding.reference.kind === "case" && caseReferences.has(key)
           ? CASE_MATERIAL_MARKER_TEXT
           : UNVERIFIED_MARKER_TEXT;

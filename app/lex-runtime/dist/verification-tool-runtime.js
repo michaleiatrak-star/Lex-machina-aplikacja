@@ -171,7 +171,8 @@ const CASE_SEARCH_TOOL_SCHEMA = {
                 rapporteur: { type: "string", description: "SN only: judge rapporteur." },
                 reasonsAuthor: { type: "string", description: "SN only: author of the reasons." },
                 courtType: { type: "string", enum: SAOS_COURT_TYPES, description: "SAOS only: court type (SUPREME = Sąd Najwyższy)." },
-                judgmentType: { type: "string", enum: SAOS_JUDGMENT_TYPES, description: "SAOS only: SENTENCE = wyrok, DECISION = postanowienie, RESOLUTION = uchwała." }
+                judgmentType: { type: "string", enum: SAOS_JUDGMENT_TYPES, description: "SAOS only: SENTENCE = wyrok, DECISION = postanowienie, RESOLUTION = uchwała." },
+                sort: { type: "string", enum: ["cited", "date"], description: "SAOS only: cited = the most cited rulings first (Supreme Court among them); date (default) = the newest first." }
             }
         }
     }
@@ -532,7 +533,9 @@ function snSearchFilters(input) {
 function saosSearchFilters(input) {
     const courtType = typeof input.courtType === "string" && SAOS_COURT_TYPES.includes(input.courtType) ? input.courtType : undefined;
     const judgmentType = typeof input.judgmentType === "string" && SAOS_JUDGMENT_TYPES.includes(input.judgmentType) ? input.judgmentType : undefined;
-    return { ...(courtType ? { courtType } : {}), ...(judgmentType ? { judgmentType } : {}) };
+    // "cited": the most cited rulings first (SN among them), not the newest common-court ones.
+    const sort = input.sort === "cited" ? "cited" : undefined;
+    return { ...(courtType ? { courtType } : {}), ...(judgmentType ? { judgmentType } : {}), ...(sort ? { sort } : {}) };
 }
 function searchCaseLawLibrary(input) {
     const repository = caseLawRepository();
@@ -1411,6 +1414,8 @@ export class LegalVerificationToolRuntime {
                             ? { limit }
                             : {}),
                         ...(Object.keys(snFilters).length ? { sn: snFilters } : {}),
+                        // SAOS filters (court type, form, order) reach the search: before, they were dropped here.
+                        ...(typedSource === "SAOS" ? saosSearchFilters(call.input) : {}),
                         url: caseLawSearchEntryUrl(typedSource)
                     }
                 });

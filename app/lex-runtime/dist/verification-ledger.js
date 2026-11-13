@@ -127,6 +127,17 @@ export class VerificationLedger {
     retrievedCases() {
         return [...this.retrievedCaseKeys];
     }
+    // Signatures the application looked up itself (ruling-lookup.ts) without full verification:
+    // a lead in SAOS or a web search, or nothing found. Each keeps its own marker.
+    caseMarkerByKey = new Map();
+    addCaseMarker(signature, marker) {
+        const key = caseFileKey(signature);
+        if (key)
+            this.caseMarkerByKey.set(key, marker);
+    }
+    caseMarkers() {
+        return this.caseMarkerByKey;
+    }
     // Values the case itself states (the user's messages, the case's documents): a fact of the
     // matter ("pozew o 48 000 zł"), not a statutory rate or term to verify.
     factAmounts = new Set();

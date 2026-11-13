@@ -97,8 +97,26 @@ function saosCandidate(raw) {
             ? { courtType }
             : {}),
         sourceUrl: `https://www.saos.org.pl/judgments/${encodeURIComponent(id)}`,
-        contentScope: "DISCOVERY"
+        contentScope: "DISCOVERY",
+        ...(saosExcerpt(item.textContent) ? { excerpt: saosExcerpt(item.textContent) } : {})
     };
+}
+const SAOS_EXCERPT_CHARS = 2_400;
+function saosExcerpt(value) {
+    if (typeof value !== "string")
+        return "";
+    return value
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&[a-z]+;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, SAOS_EXCERPT_CHARS);
+}
+/** "SDI 9/12", "sygn. akt II CSK 12/20", "I ACa 1/19": a query that is one signature. */
+export function signatureQuery(query) {
+    const value = query.normalize("NFKC").replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "").replace(/\s+/g, " ").trim();
+    return /^(?:[IVXL]{1,5}\s+)?[A-ZĄĆĘŁŃÓŚŹŻ][A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]{0,6}(?:\/[A-Z][a-z]{1,2})?\s+\d{1,6}\/\d{2,4}$/u.test(value) ? value : null;
 }
 function saosTotal(payload) {
     const info = object(payload.info);
@@ -368,14 +386,17 @@ export class CaseLawSearchService {
     }
     async searchSaos(query, limit, filters = {}) {
         const url = new URL(SAOS_ENDPOINT);
-        url.searchParams.set("all", query);
+        // A signature is searched as the case number: full text found other courts' rulings that
+        // merely mention "9/12" (SDI 9/12, 2026-11-10).
+        const bySignature = signatureQuery(query);
+        url.searchParams.set(bySignature ? "caseNumber" : "all", bySignature ?? query);
         if (filters.courtType)
             url.searchParams.set("courtType", filters.courtType);
         if (filters.judgmentType)
             url.searchParams.set("judgmentTypes", filters.judgmentType);
         url.searchParams.set("pageSize", String(Math.max(10, limit)));
         url.searchParams.set("pageNumber", "0");
-        url.searchParams.set("sortingField", "JUDGMENT_DATE");
+        url.searchParams.set("sortingField", filters.sort === "cited" ? "REFERENCING_JUDGMENTS_COUNT" : "JUDGMENT_DATE");
         url.searchParams.set("sortingDirection", "DESC");
         let response;
         try {

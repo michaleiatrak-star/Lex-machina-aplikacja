@@ -4675,9 +4675,9 @@ export default function MatterChatApp({
           : code === "CHAT_PRIVACY_GATE_FAILED"
             ? "Lokalna pseudonimizacja nie mogła się wykonać, więc zapytanie zostało zatrzymane przed wysłaniem do modelu. Sprawdź lokalny runtime prywatności w panelu Utrzymanie."
           : code === "LOCAL_MODEL_EXECUTION_FAILED"
-            ? localModelFailureMessage(
+            ? `${localModelFailureMessage(
                 reason
-              )
+              )}${error instanceof ApiError && error.description ? ` Szczegóły: ${error.description.slice(0, 300)}` : ""}`
           : code === "PROVIDER_EXECUTION_FAILED"
             ? provider === "local"
               ? localModelFailureMessage(

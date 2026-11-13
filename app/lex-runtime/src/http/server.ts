@@ -87,6 +87,7 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
+import { configureGoogleSearchKey, configureSearchOrder, configureSearxngUrl } from "../google-search-key.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -423,6 +424,9 @@ export async function startLocalServer(options?: {
   // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
   configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
+  configureGoogleSearchKey(path.join(caseFileStore.rootDir, "settings"));
+  configureSearxngUrl(path.join(caseFileStore.rootDir, "settings"));
+  configureSearchOrder(path.join(caseFileStore.rootDir, "settings"));
   configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));
   const authStore =
     new LocalAuthStore({

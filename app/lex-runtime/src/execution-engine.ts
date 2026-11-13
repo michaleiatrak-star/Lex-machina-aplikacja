@@ -1965,16 +1965,15 @@ export class LexExecutionEngine {
         missing = sources.unsourced(response.fullText);
       }
       if (missing.length > 0) {
+        // Still unsourced after the correcting round: the application verifies them itself after
+        // the answer (local ELI copy, then ELI) and marks each ✅ or ⚠️. Before, the whole answer
+        // failed and the chat showed it as a llama.cpp failure (LOCAL_MODEL_INFERENCE_FAILED,
+        // user report 2026-11-10: "o czym mówi art. 280 KK", Bielik).
         emit(
           "gate",
           "QUICK_LEGAL_SOURCES",
-          "BLOCKED",
-          `unsourced=${missing.join("|")}`
-        );
-        throw new LexExecutionError(
-          "The answer cites provisions without an ELI text in this turn.",
-          "QUICK_LEGAL_UNSOURCED_PROVISION",
-          [...events]
+          "OK",
+          `warning;unsourced=${missing.join("|")};verified_after_answer`
         );
       }
       emit(

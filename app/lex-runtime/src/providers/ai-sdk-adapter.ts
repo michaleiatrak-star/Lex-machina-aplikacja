@@ -682,6 +682,7 @@ export function buildLocalChatRequest(
   cache_prompt: boolean;
   reasoning_format: "deepseek";
   chat_template_kwargs: { enable_thinking: boolean };
+  reasoning_budget_tokens: number;
 } {
   return {
     // Reasoning never belongs in a Lex answer: templates that support it
@@ -689,6 +690,9 @@ export function buildLocalChatRequest(
     // reasoning_content, which Lex does not read.
     reasoning_format: "deepseek",
     chat_template_kwargs: { enable_thinking: false },
+    // A <think> block the model opens on its own is closed at once (llama.cpp reasoning budget):
+    // otherwise all output could land in reasoning_content and the answer come back empty.
+    reasoning_budget_tokens: 0,
     // Reuse llama.cpp's KV cache for the unchanged prompt prefix (system
     // prompt + earlier turns) instead of re-reading it on every request.
     cache_prompt: true,

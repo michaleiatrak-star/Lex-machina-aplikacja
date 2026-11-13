@@ -1,6 +1,9 @@
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
+import { googleSearchStatus, normalizeSearxngUrl, searchOrder, searxngUrl, setGoogleSearchKey, setSearchOrder, setSearxngUrl } from "../google-search-key.js";
+import { PublicWebSearch } from "../web-search.js";
+import { runSearchBenchmark } from "../web-search-benchmark.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -485,6 +488,80 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         }
         setDomainFallbackChoice(choice);
         res.json({ choice: domainFallbackChoice() });
+    });
+    // Wyszukiwarka Google (Programmable Search, klucz kancelarii): web_search i sprawdzanie orzeczeń.
+    app.get("/api/settings/google-search", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        res.json(googleSearchStatus());
+    });
+    app.put("/api/settings/google-search", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const key = typeof req.body?.key === "string" ? req.body.key.trim() : "";
+        const cx = typeof req.body?.cx === "string" ? req.body.cx.trim() : "";
+        try {
+            setGoogleSearchKey({ key, cx });
+            res.json(googleSearchStatus());
+        }
+        catch (error) {
+            res.status(400).json({ error: error instanceof Error ? error.message : "GOOGLE_SEARCH_KEY_INVALID" });
+        }
+    });
+    app.delete("/api/settings/google-search", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        setGoogleSearchKey(null);
+        res.json(googleSearchStatus());
+    });
+    // SearXNG (własna instancja kancelarii) i test porównawczy wyszukiwarek.
+    const searxngStatus = () => ({ configured: Boolean(searxngUrl()), fromEnvironment: Boolean(process.env.LEX_SEARXNG_URL?.trim()), url: searxngUrl() });
+    app.get("/api/settings/searxng", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        res.json(searxngStatus());
+    });
+    app.put("/api/settings/searxng", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        try {
+            const url = normalizeSearxngUrl(typeof req.body?.url === "string" ? req.body.url : "");
+            // Probe before saving: JSON must be on in the instance and its limiter must let the app in.
+            const hits = await new PublicWebSearch(process.env, fetch, 10_000, 0, () => null, () => url).searchWith("searxng", "kodeks cywilny", 3);
+            if (!hits.length)
+                throw new Error("SEARXNG_NO_RESULTS");
+            setSearxngUrl(url);
+            res.json(searxngStatus());
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "SEARXNG_URL_INVALID";
+            res.status(400).json({ error: message.startsWith("SEARXNG_") ? message : `SEARXNG_PROBE_FAILED:${message}` });
+        }
+    });
+    app.delete("/api/settings/searxng", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        setSearxngUrl(null);
+        res.json(searxngStatus());
+    });
+    app.get("/api/settings/web-search", (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        res.json({ order: searchOrder(), available: new PublicWebSearch().available() });
+    });
+    // Test porównawczy: te same pytania prawne w każdej dostępnej wyszukiwarce, ocena 0-10;
+    // apply=true ustawia kolejność według wyniku (najlepsza pierwsza).
+    app.post("/api/settings/web-search/benchmark", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const search = new PublicWebSearch();
+        const results = await runSearchBenchmark({ providers: search.available(), search: (provider, query) => search.searchWith(provider, query, 8) });
+        if (req.body?.apply === true) {
+            const ranked = results.filter((item) => item.score > 0).map((item) => item.provider);
+            if (ranked.length)
+                setSearchOrder(ranked);
+        }
+        res.json({ results, order: searchOrder(), at: new Date().toISOString() });
     });
     // Tryb offline modelu lokalnego (Ustawienia, domyślnie wyłączony): bez źródeł zewnętrznych.
     app.get("/api/settings/local-offline", (req, res) => {

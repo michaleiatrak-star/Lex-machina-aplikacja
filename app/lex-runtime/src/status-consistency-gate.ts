@@ -555,7 +555,13 @@ export function stripUnbackedVerificationMarkers(
   let removed = 0;
   const lines = text.split(/\r?\n/u).map((line, index) =>
     caseLines.has(index + 1)
-      ? line
+      ? // A judgment's line: a ✅ with no source address is the model's own (SDI 9/12, 2026-11-10:
+        // "✅ [VER: SN.pl, karta sprawy z 10.05.2012]" stayed); every ledger marker carries its URL.
+        line.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
+          if (ledgerMarkers.has(match.trimStart()) || /https?:\/\//iu.test(match)) return match;
+          removed += 1;
+          return "";
+        })
       : line.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
           if (ledgerMarkers.has(match.trimStart())) return match;
           removed += 1;

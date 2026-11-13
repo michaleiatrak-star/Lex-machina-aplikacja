@@ -1565,6 +1565,10 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
         // Tryb offline modelu lokalnego (bez źródeł zewnętrznych).
         "/api/settings/local-offline" => matches!(method, "GET" | "PUT"),
+        // Wyszukiwarka Google (klucz kancelarii, administrator).
+        "/api/settings/google-search" | "/api/settings/searxng" => matches!(method, "GET" | "PUT" | "DELETE"),
+        "/api/settings/web-search" => method == "GET",
+        "/api/settings/web-search/benchmark" => method == "POST",
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         "/api/settings/legal-sources/legi" => method == "GET",
@@ -2262,6 +2266,12 @@ mod tests {
         assert!(!route_allowed("DELETE", "/api/settings/domain-fallback"));
         assert!(route_allowed("PUT", "/api/settings/local-offline"));
         assert!(!route_allowed("POST", "/api/settings/local-offline"));
+        assert!(route_allowed("PUT", "/api/settings/google-search"));
+        assert!(route_allowed("DELETE", "/api/settings/google-search"));
+        assert!(route_allowed("PUT", "/api/settings/searxng"));
+        assert!(route_allowed("GET", "/api/settings/web-search"));
+        assert!(route_allowed("POST", "/api/settings/web-search/benchmark"));
+        assert!(!route_allowed("PUT", "/api/settings/brave-search"));
         assert!(route_allowed("GET", "/api/settings/jurisdiction"));
         assert!(route_allowed("PUT", "/api/settings/jurisdiction"));
         assert!(!route_allowed("DELETE", "/api/settings/jurisdiction"));

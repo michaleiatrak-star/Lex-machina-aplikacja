@@ -16,7 +16,7 @@ export type CaseLawSearchRequest = {
   // SN only: the other fields of the sn.pl search form.
   sn?: Omit<SupremeCourtSearchFilters, "tresc" | "strona" | "rozmiar_strony">;
   // SAOS only: court type (SUPREME, COMMON, ...) and form (SENTENCE = wyrok, DECISION, RESOLUTION).
-  saos?: { courtType?: string; judgmentType?: string };
+  saos?: { courtType?: string; judgmentType?: string; sort?: "cited" };
 };
 
 export type CaseLawSearchCandidate = {
@@ -28,6 +28,9 @@ export type CaseLawSearchCandidate = {
   courtType?: string;
   sourceUrl: string;
   contentScope: "DISCOVERY";
+  // A search by signature (SAOS caseNumber): the opening of the judgment's text, so the
+  // answer rests on what the source says, not on the model's memory.
+  excerpt?: string;
 };
 
 export type CaseLawSearchResult = {
@@ -204,8 +207,28 @@ function saosCandidate(
     sourceUrl:
       `https://www.saos.org.pl/judgments/${encodeURIComponent(id)}`,
     contentScope:
-      "DISCOVERY"
+      "DISCOVERY",
+    ...(saosExcerpt(item.textContent) ? { excerpt: saosExcerpt(item.textContent) } : {})
   };
+}
+
+const SAOS_EXCERPT_CHARS = 2_400;
+
+function saosExcerpt(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&[a-z]+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, SAOS_EXCERPT_CHARS);
+}
+
+/** "SDI 9/12", "sygn. akt II CSK 12/20", "I ACa 1/19": a query that is one signature. */
+export function signatureQuery(query: string): string | null {
+  const value = query.normalize("NFKC").replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "").replace(/\s+/g, " ").trim();
+  return /^(?:[IVXL]{1,5}\s+)?[A-ZĄĆĘŁŃÓŚŹŻ][A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]{0,6}(?:\/[A-Z][a-z]{1,2})?\s+\d{1,6}\/\d{2,4}$/u.test(value) ? value : null;
 }
 
 function saosTotal(
@@ -693,9 +716,12 @@ export class CaseLawSearchService {
   ): Promise<CaseLawSearchResult> {
     const url =
       new URL(SAOS_ENDPOINT);
+    // A signature is searched as the case number: full text found other courts' rulings that
+    // merely mention "9/12" (SDI 9/12, 2026-11-10).
+    const bySignature = signatureQuery(query);
     url.searchParams.set(
-      "all",
-      query
+      bySignature ? "caseNumber" : "all",
+      bySignature ?? query
     );
     if (filters.courtType) url.searchParams.set("courtType", filters.courtType);
     if (filters.judgmentType) url.searchParams.set("judgmentTypes", filters.judgmentType);
@@ -711,7 +737,7 @@ export class CaseLawSearchService {
     );
     url.searchParams.set(
       "sortingField",
-      "JUDGMENT_DATE"
+      filters.sort === "cited" ? "REFERENCING_JUDGMENTS_COUNT" : "JUDGMENT_DATE"
     );
     url.searchParams.set(
       "sortingDirection",

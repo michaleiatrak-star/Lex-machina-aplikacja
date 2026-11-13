@@ -5023,3 +5023,33 @@ export function probeLawSourceSession(host: string, cookie: string, userAgent: s
 export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
   return json("/api/courts/wokanda/session/probe", { method: "POST", body: JSON.stringify({ domain, cookie, userAgent }) });
 }
+
+// Wyszukiwanie w internecie: SearXNG kancelarii, Google (lista witryn), test porównawczy.
+export type SearchKeyStatus = { configured: boolean; fromEnvironment: boolean; url?: string | null };
+export type SearchProviderId = "searxng" | "google" | "brave" | "duckduckgo";
+export type SearchBenchmarkQuestion = { id: string; label: string; score: number; hits: number; official: number; matched: boolean; ms: number; error?: string; top?: string[] };
+export type SearchBenchmarkResult = { provider: SearchProviderId; score: number; questions: SearchBenchmarkQuestion[] };
+
+export function getSearchKeyStatus(provider: "searxng" | "google"): Promise<SearchKeyStatus> {
+  return json(provider === "searxng" ? "/api/settings/searxng" : "/api/settings/google-search");
+}
+
+export function setSearxngUrl(url: string): Promise<SearchKeyStatus> {
+  return json("/api/settings/searxng", { method: "PUT", body: JSON.stringify({ url }) });
+}
+
+export function setGoogleSearchKey(key: string, cx: string): Promise<SearchKeyStatus> {
+  return json("/api/settings/google-search", { method: "PUT", body: JSON.stringify({ key, cx }) });
+}
+
+export function clearSearchKey(provider: "searxng" | "google"): Promise<SearchKeyStatus> {
+  return json(provider === "searxng" ? "/api/settings/searxng" : "/api/settings/google-search", { method: "DELETE" });
+}
+
+export function getWebSearchOrder(): Promise<{ order: SearchProviderId[]; available: SearchProviderId[] }> {
+  return json("/api/settings/web-search");
+}
+
+export function runWebSearchBenchmark(apply: boolean): Promise<{ results: SearchBenchmarkResult[]; order: SearchProviderId[]; at: string }> {
+  return json("/api/settings/web-search/benchmark", { method: "POST", body: JSON.stringify({ apply }) });
+}

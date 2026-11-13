@@ -663,9 +663,12 @@ describe("local quick lane: provisions only from ELI texts", () => {
     expect(result.output).toBe("Wykroczenie (art. 119 KW).");
   });
 
-  it("blocks an answer that still cites a provision without its text", async () => {
+  it("keeps an answer that still cites a provision without its text: a warning, verified after the answer", async () => {
+    // Before: the whole answer failed and the chat said llama.cpp failed (2026-11-10, art. 280 KK).
     const { providers } = scriptedEngine(["Przestępstwo z art. 278 KK."]);
-    await expect(request(providers)).rejects.toMatchObject({ target: "QUICK_LEGAL_UNSOURCED_PROVISION" });
+    const result = await request(providers);
+    expect(result.output).toBe("Przestępstwo z art. 278 KK.");
+    expect(result.events.some((event) => event.target === "QUICK_LEGAL_SOURCES" && String(event.detail ?? "").includes("warning;unsourced="))).toBe(true);
   });
 });
 

@@ -1,3 +1,4 @@
+import { googleSearchKey, searchOrder, searxngUrl, type GoogleSearchKey, type SearchProviderId } from "./google-search-key.js";
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import {
@@ -22,7 +23,9 @@ export type WebSearchHit = {
 
 export type WebSearchProviderName =
   | "brave"
-  | "duckduckgo";
+  | "duckduckgo"
+  | "google"
+  | "searxng";
 
 export type WebSearchResponse = {
   provider: WebSearchProviderName;
@@ -194,8 +197,99 @@ export class PublicWebSearch implements WebSearchProvider {
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
-    private readonly botCheckPauseMs = 2_500
+    private readonly botCheckPauseMs = 2_500,
+    private readonly googleKey: () => GoogleSearchKey | null = () => googleSearchKey(env),
+    private readonly searxng: () => string | null = () => searxngUrl(env),
+    private readonly order: () => SearchProviderId[] = searchOrder
   ) {}
+
+  /** Which providers can run now (a key or an address is set; DuckDuckGo always). */
+  available(): SearchProviderId[] {
+    return this.order().filter((id) =>
+      id === "searxng" ? Boolean(this.searxng()) : id === "google" ? Boolean(this.googleKey()) : id === "brave" ? Boolean(this.env.BRAVE_SEARCH_API_KEY?.trim()) : true
+    );
+  }
+
+  /** One provider, no fallback (the comparison test and the ordered search). */
+  async searchWith(id: SearchProviderId, query: string, maxResults: number): Promise<WebSearchHit[]> {
+    if (id === "searxng") {
+      const base = this.searxng();
+      if (!base) throw new Error("NOT_CONFIGURED");
+      return withoutBlocked(await this.searchSearxng(query, maxResults, base));
+    }
+    if (id === "google") {
+      const key = this.googleKey();
+      if (!key) throw new Error("NOT_CONFIGURED");
+      return withoutBlocked(await this.searchGoogle(query, maxResults, key));
+    }
+    if (id === "brave") {
+      const key = this.env.BRAVE_SEARCH_API_KEY?.trim();
+      if (!key) throw new Error("NOT_CONFIGURED");
+      return withoutBlocked(await this.searchBrave(query, maxResults, key));
+    }
+    // A bot check passes after a short pause more often than not: one more try before "refused".
+    try {
+      return withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "BOT_CHECK")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
+      return withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
+    }
+  }
+
+  private async searchSearxng(query: string, maxResults: number, base: string): Promise<WebSearchHit[]> {
+    const url = new URL(`${base}/search`);
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("language", "pl");
+    const response = await this.fetchImpl(url, {
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    // 403: JSON is off in the instance (search.formats), 429: its limiter refused the program.
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    const text = await readLimitedText(response);
+    let payload: { results?: Array<{ url?: unknown; title?: unknown; content?: unknown }> };
+    try {
+      payload = JSON.parse(text) as typeof payload;
+    } catch {
+      throw new Error("NOT_JSON");
+    }
+    return (payload.results ?? [])
+      .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.url === "string" ? item.url.trim() : "",
+        snippet: typeof item.content === "string" ? decodeEntities(item.content) : ""
+      }))
+      .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+      .slice(0, maxResults);
+  }
+
+  private async searchGoogle(query: string, maxResults: number, key: GoogleSearchKey): Promise<WebSearchHit[]> {
+    const url = new URL("https://www.googleapis.com/customsearch/v1");
+    // The key in a header (Google accepts X-goog-api-key), not in the URL: it stays out of logs.
+    url.searchParams.set("cx", key.cx);
+    url.searchParams.set("q", query);
+    url.searchParams.set("num", String(Math.min(10, Math.max(1, maxResults))));
+    const response = await this.fetchImpl(url, {
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT, "X-goog-api-key": key.key },
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP_${response.status}`);
+    }
+    const payload = JSON.parse(await readLimitedText(response)) as {
+      items?: Array<{ link?: unknown; title?: unknown; snippet?: unknown }>;
+    };
+    return (payload.items ?? [])
+      .map((item) => ({
+        title: typeof item.title === "string" ? decodeEntities(item.title) : "",
+        url: typeof item.link === "string" ? item.link.trim() : "",
+        snippet: typeof item.snippet === "string" ? decodeEntities(item.snippet) : ""
+      }))
+      .filter((item) => item.title && /^https?:\/\//i.test(item.url))
+      .slice(0, maxResults);
+  }
 
   async search(
     query: string,
@@ -215,49 +309,15 @@ export class PublicWebSearch implements WebSearchProvider {
     }
 
     const errors: string[] = [];
-    const braveKey =
-      this.env.BRAVE_SEARCH_API_KEY?.trim();
-    if (
-      braveKey &&
-      (provider === "auto" || provider === "brave")
-    ) {
+    const wanted = (id: SearchProviderId) => provider === "auto" || provider === id || (id === "duckduckgo" && provider === "ddg");
+    // Order from the comparison test (best first); each provider that fails passes to the next.
+    for (const id of this.available()) {
+      if (!wanted(id)) continue;
       try {
-        const hits =
-          withoutBlocked(await this.searchBrave(query, maxResults, braveKey));
-        if (hits.length > 0) {
-          return { provider: "brave", hits };
-        }
+        const hits = await this.searchWith(id, query, maxResults);
+        if (hits.length > 0) return { provider: id, hits };
       } catch (error) {
-        errors.push(
-          `brave:${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    }
-
-    if (
-      provider === "auto" ||
-      provider === "duckduckgo" ||
-      provider === "ddg"
-    ) {
-      // A bot check passes after a short pause more often than not (seen while checking the
-      // disciplinary courts' portals): one more try before "refused".
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-          const hits =
-            withoutBlocked(await this.searchDuckDuckGo(query, maxResults));
-          if (hits.length > 0) {
-            return { provider: "duckduckgo", hits };
-          }
-          break;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (message === "BOT_CHECK" && attempt === 1) {
-            await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
-            continue;
-          }
-          errors.push(`duckduckgo:${message}`);
-          break;
-        }
+        errors.push(`${id}:${error instanceof Error ? error.message : String(error)}`);
       }
     }
 

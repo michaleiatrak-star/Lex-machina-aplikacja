@@ -13335,7 +13335,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
 
+      // A gate of the application (LexExecutionError) is not a failure of the local model: it
+      // goes to its own handler below with its stage, as for a hosted model.
+      const applicationGate =
+        error instanceof Error && error.name === "LexExecutionError";
       const localFailureMessage =
+        !applicationGate &&
         request.model.startsWith(
           "local/"
         )
@@ -13364,6 +13369,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           ? parsedLocalFailureReason
           : "LOCAL_MODEL_INFERENCE_FAILED";
       if (
+        !applicationGate &&
         request.model.startsWith(
           "local/"
         )

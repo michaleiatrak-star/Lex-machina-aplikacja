@@ -8,6 +8,7 @@ import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { UserGroupsPanel } from "./UserGroupsPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
+import { WebSearchKeysPanel } from "./WebSearchKeysPanel.js";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleIntegrationPanel } from "./GoogleIntegrationPanel.js";
 import { MicrosoftIntegrationPanel } from "./MicrosoftIntegration.js";
 import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
@@ -104,7 +105,10 @@ export default function App({
         mcp:
           user.appRole ===
           "ADMIN" ? (
-            <McpConnectorsPanel />
+            <>
+              <WebSearchKeysPanel />
+              <McpConnectorsPanel />
+            </>
           ) : null,
         invoices: <InvoiceSettingsPanel />,
         maintenance: (

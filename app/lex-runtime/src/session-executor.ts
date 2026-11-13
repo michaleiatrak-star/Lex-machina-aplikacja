@@ -72,7 +72,8 @@ import type {
 import { LexSkillRegistry } from "./registry.js";
 import {
   VerificationLedger,
-  type VerificationRecord
+  type VerificationRecord,
+  caseFileKey
 } from "./verification-ledger.js";
 import type {
   LegalVerificationToolFactory
@@ -289,6 +290,7 @@ import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } fr
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
+import { askedRulingSignatures, asksForCaseLaw, caseLawLeadsPrompt, caseLawSearchPhrase, lookupRulings, rulingLookupPrompt, searchCaseLawLeads } from "./ruling-lookup.js";
 import { STATUTE_JUDGE_BATCH, claimsWithWording, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
@@ -1824,7 +1826,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
     let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
     const gate = new FinalizationGate().evaluate(text, ledger);
-    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate, verifiedLedgerMarkers(ledger)), ledger).text;
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()), ledger.caseMarkers()), gate, verifiedLedgerMarkers(ledger)), ledger).text;
     return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
@@ -2366,11 +2368,40 @@ export class SafeSessionExecutor implements SessionExecutor {
     )) {
       ledger.addCaseFileNumber(signature);
     }
+    // A ruling the user asks about ("o czym mówi wyrok SN … sygn. SDI 9/12") is not the case's
+    // material: online, the application looks it up before the answer (ruling-lookup.ts).
+    const askedRulings = askedRulingSignatures(threadUserText(request.query), mentionedCaseNumbers([threadUserText(request.query)]));
     for (const signature of mentionedCaseNumbers([
       threadUserText(request.query),
       ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
     ])) {
+      if (askedRulings.includes(signature)) continue;
       ledger.addCaseReference(signature);
+    }
+    const rulingRunners = {
+      runVerification: (calls: NormalizedToolCall[]) => verificationTools!.runTools(calls),
+      ...(this.legalFederationTools && !offline
+        ? { runWebSearch: (calls: NormalizedToolCall[]) => this.legalFederationTools!.runTools(calls) }
+        : {})
+    };
+    if (askedRulings.length && verificationTools && !offline && !request.conversationalOnly) {
+      const found = await lookupRulings({ signatures: askedRulings, ledger, ...rulingRunners });
+      for (const item of found) if (item.raw) caseSourceTexts.push(item.raw);
+      const lookupPrompt = rulingLookupPrompt(found);
+      if (lookupPrompt) evidencePrompt = [evidencePrompt, lookupPrompt].filter(Boolean).join("\n\n");
+      step("VERIFY", `orzeczenia z pytania: ${found.map((item) => `${item.signature} — ${item.outcome === "NOT_FOUND" ? `nie znaleziono (${item.tried.join(", ")})` : item.source}`).join("; ")}`);
+      audit.record("gate", "RULING_LOOKUP_BEFORE_ANSWER", found.every((item) => item.outcome === "VERIFIED") ? "OK" : "DEGRADED", {
+        rulings: found.map((item) => `${item.signature}:${item.outcome}:${item.source || item.tried.join("+")}`)
+      });
+    }
+    // A question for case law without a signature: leads from SAOS and the web search before the
+    // answer, for every model (a model's own tool use is not left to chance; online only).
+    if (!askedRulings.length && verificationTools && !offline && !request.conversationalOnly && asksForCaseLaw(threadUserText(request.query))) {
+      const phrase = caseLawSearchPhrase(protectedQuery);
+      const leads = await searchCaseLawLeads({ phrase, ...rulingRunners });
+      evidencePrompt = [evidencePrompt, caseLawLeadsPrompt(phrase, leads)].filter(Boolean).join("\n\n");
+      step("VERIFY", `orzecznictwo przed odpowiedzią: ${leads.length} tropów (SAOS ${leads.filter((lead) => lead.source === "SAOS").length}, wyszukiwarka ${leads.filter((lead) => lead.source === "wyszukiwarka").length}), fraza „${phrase}”`);
+      audit.record("gate", "CASE_LAW_LEADS_BEFORE_ANSWER", leads.length ? "OK" : "DEGRADED", { phrase, leads: leads.length });
     }
     for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
       ledger.addFactAmount(key);
@@ -4317,6 +4348,31 @@ export class SafeSessionExecutor implements SessionExecutor {
     };
     await verifyDraft();
 
+    // Rulings the answer names that no tool verified in this turn: looked up by the application
+    // (court database, SAOS, web search) instead of being left to the model — online only.
+    if (legalTurn && verificationTools && !offline) {
+      const known = new Set([...ledger.caseReferences(), ...ledger.caseFileNumbers(), ...ledger.retrievedCases(), ...ledger.caseMarkers().keys()]);
+      const draftRulings = [
+        ...new Set(
+          detectLegalReferences(releasedDraft.text)
+            .filter((reference) => reference.kind === "case")
+            .map((reference) => reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "").trim())
+        )
+      ].filter((signature) => {
+        const key = caseFileKey(signature);
+        if (!key || known.has(key)) return false;
+        return !ledger.all().some((record) => record.kind === "case" && record.status === "VERIFIED" && record.caseSignature && caseFileKey(record.caseSignature) === key);
+      });
+      if (draftRulings.length) {
+        const found = await lookupRulings({ signatures: draftRulings, ledger, ...rulingRunners });
+        for (const item of found) if (item.raw) caseSourceTexts.push(item.raw);
+        step("VERIFY", `orzeczenia z odpowiedzi: ${found.map((item) => `${item.signature} — ${item.outcome === "NOT_FOUND" ? `nie znaleziono (${item.tried.join(", ")})` : item.source}`).join("; ")}`);
+        audit.record("gate", "RULING_LOOKUP_AFTER_ANSWER", found.every((item) => item.outcome === "VERIFIED") ? "OK" : "DEGRADED", {
+          rulings: found.map((item) => `${item.signature}:${item.outcome}:${item.source || item.tried.join("+")}`)
+        });
+      }
+    }
+
     // Kontrola treści przepisów: the application verified a provision (ELI/RAG) — does its wording
     // say what the answer claims? The same model judges (a local one too); every verdict quotes the
     // wording and the quote is checked. A claim the provision does not carry: one correcting round
@@ -4520,7 +4576,8 @@ export class SafeSessionExecutor implements SessionExecutor {
                 citedAnswer.text,
                 preFinalization,
                 new Set(ledger.caseReferences()),
-                new Set(ledger.retrievedCases())
+                new Set(ledger.retrievedCases()),
+                ledger.caseMarkers()
               ),
               preFinalization,
               verifiedLedgerMarkers(ledger)
@@ -4554,7 +4611,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       const check = new FinalizationGate().evaluate(remarkedText, ledger);
       if (check.result !== "BLOCKED") break;
       const marked = addMissingVerificationMarkers(
-        markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
+        markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()), ledger.caseMarkers()),
         check,
         verifiedLedgerMarkers(ledger)
       );
@@ -4772,7 +4829,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const finalizationText =
       blueprintText && blueprintCheck?.result === "BLOCKED"
         ? addMissingVerificationMarkers(
-            markUnverifiedReferences(blueprintText, blueprintCheck, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
+            markUnverifiedReferences(blueprintText, blueprintCheck, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()), ledger.caseMarkers()),
             blueprintCheck,
             verifiedLedgerMarkers(ledger)
           )
