@@ -4,7 +4,7 @@ import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { articleWording, futureDate, hasPendingWording } from "./core-law-footnotes.js";
 import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
-import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
+import { amendmentMentionsArticle, amendmentPartFor, transitionalProvisions } from "./temporal-source-freshness.js";
 import { claimedUnitState } from "./legal-source-verifier.js";
 import {
   FRESHNESS_MAX_AGE_MS,
@@ -35,10 +35,19 @@ export type CoreLawVerificationIndex = Pick<
   // Sprawdzenie w ELI przy użyciu kopii (CoreLawIndex); bez niego kopia bez kontroli na żywo.
   Partial<Pick<CoreLawIndex, "confirmCurrent">>;
 
+// Why the copy does not stand for a provision in time: the amendments that touch it (or whose
+// impact is unknown) with their dates, and their transitional provisions from the amendment texts
+// in the copy. Offline this is all the model gets, so the answer can name the change and its date.
+export type CoreLawTemporalDetails = {
+  amendments: Array<{ eli: string; title: string | null; from?: string; promulgation?: string | null }>;
+  transitionalProvisions: Array<{ eli: string; text: string }>;
+};
+
 export type CoreLawVerificationOutcome =
   | {
       decision: "DENY";
       reason: string;
+      temporal?: CoreLawTemporalDetails;
     }
   | {
       decision: "RECORD";
@@ -162,6 +171,22 @@ export function postConsolidationImpact(
   return { status: "UNAFFECTED", checked: amendments };
 }
 
+function temporalDetails(
+  index: Pick<CoreLawVerificationIndex, "record">,
+  amendments: Array<{ eli: string; title: string | null; from?: string; promulgation?: string | null }>
+): CoreLawTemporalDetails {
+  const transitional: Array<{ eli: string; text: string }> = [];
+  for (const amendment of amendments) {
+    const record = index.record?.(amendment.eli);
+    const body =
+      record && record.textSource !== "ocr" && record.textSource !== "none"
+        ? record.text || record.articleOrder.map((unit) => `Art. ${unit}. ${record.articles[unit] ?? ""}`).join("\n")
+        : "";
+    if (body.trim()) for (const text of transitionalProvisions(body)) transitional.push({ eli: amendment.eli, text });
+  }
+  return { amendments, transitionalProvisions: transitional.slice(0, 6) };
+}
+
 const REPEALED_ARTICLE = /^Art\.?\s*[^\s.]+\s*\.?\s*\((?:uchylony|uchylona|uchylone|skreślony|pominięty)\)/iu;
 
 export function verifyFromCoreLaw(args: {
@@ -192,7 +217,14 @@ export function verifyFromCoreLaw(args: {
   let amendmentsChecked: string[] = [];
   if (summary.amendmentsAfter.length > 0) {
     const impact = postConsolidationImpact(args.index, summary.amendmentsAfter.map((item) => item.eli), args.kind === "statute" ? articleToken(args.claim) : null, summary.title ?? undefined);
-    if (impact.status !== "UNAFFECTED") return { decision: "DENY", reason: impact.reason };
+    if (impact.status !== "UNAFFECTED") {
+      const touched = new Set(impact.amendments);
+      return {
+        decision: "DENY",
+        reason: impact.reason,
+        temporal: temporalDetails(args.index, summary.amendmentsAfter.filter((item) => touched.has(item.eli)))
+      };
+    }
     amendmentsChecked = impact.checked;
   }
   // Tekst z OCR skanu może mieć błędy odczytu: nie jest podstawą VERIFIED.
@@ -227,7 +259,7 @@ export function verifyFromCoreLaw(args: {
     const known = Boolean(article) && record.articles[article!] !== undefined;
     // The article carries a wording that is not in force yet: never from the copy.
     if (known && notes && hasPendingWording(record.markedArticles?.[article!] ?? record.articles[article!]!, notes, today)) {
-      return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+      return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE", temporal: temporalDetails(args.index, summary.notYetInForce) };
     }
     // An article the act does not have (u.k.k. art. 36a cited as KC): no wording to be pending;
     // the lookup below says the unit is not in the text, so the model sees the wrong act.
@@ -239,7 +271,14 @@ export function verifyFromCoreLaw(args: {
       const impact = known
         ? postConsolidationImpact(args.index, summary.notYetInForce.map((item) => item.eli), article, summary.title ?? undefined)
         : null;
-      if (impact?.status !== "UNAFFECTED") return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+      if (impact?.status !== "UNAFFECTED") {
+        const touched = impact ? new Set(impact.amendments) : null;
+        return {
+          decision: "DENY",
+          reason: "TEMPORAL_NOT_YET_IN_FORCE",
+          temporal: temporalDetails(args.index, summary.notYetInForce.filter((item) => !touched || touched.has(item.eli)))
+        };
+      }
     }
   }
 

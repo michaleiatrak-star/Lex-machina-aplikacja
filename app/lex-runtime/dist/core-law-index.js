@@ -9,6 +9,16 @@ import { LocalPdfTextExtractor, SMALL_LINE_MARK } from "./pdf-text-extractor.js"
 import { articleFootnotes, articleWording, extractPageFootnotes, stripTrailingHeadings } from "./core-law-footnotes.js";
 import { articleHeadingPattern, articleIdsFromHeading, htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
 import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill, listJurisdictions } from "./jurisdiction.js";
+import { catalogDue, catalogFile, catalogRefs, loadCatalog, refreshEliCatalog } from "./eli-catalog.js";
+// The whole catalogue of in-force acts with a t.j. (eli-catalog.ts), not only those of the DR maps.
+// Off with LEX_ELI_FULL_CATALOG=0 (a slow link); Polish law only.
+function fullCatalogOn() {
+    // Tests run with scripted ELI replies: the catalogue only when a test asks for it (=1).
+    const flag = process.env.LEX_ELI_FULL_CATALOG ?? (process.env.VITEST ? "0" : "1");
+    return flag !== "0" && activeJurisdictionPack() === "prawo-polskie-v2";
+}
+// Requests of one catalogue build step: the build continues at the next tick (resumable).
+const CATALOG_REQUESTS_PER_RUN = 400;
 /**
  * Why the copy of an act cannot be taken as the current wording (verification
  * from the copy is refused and the act must be checked in ELI), or null.
@@ -594,15 +604,38 @@ export class CoreLawIndex {
      * acts are downloaded on the next refresh (not only after a restart).
      * Returns the ELIs added.
      */
+    // The acts of the DR maps, then the catalogue's acts not named there (the newest t.j., marked as such).
+    withCatalog(refs) {
+        if (!fullCatalogOn())
+            return refs;
+        const known = new Set(refs.map((ref) => ref.eli));
+        const added = [];
+        for (const act of catalogRefs(loadCatalog(this.directory))) {
+            if (known.has(act.tj) || known.has(act.eli))
+                continue;
+            known.add(act.tj);
+            added.push({ eli: act.tj, consolidated: true, labels: [act.title.slice(0, 80)], domains: act.domains, notes: [`katalog ELI: akt bazowy ${act.eli}`] });
+        }
+        return [...refs, ...added];
+    }
+    catalogSignature() {
+        try {
+            const stat = fs.statSync(catalogFile(this.directory));
+            return `|catalog:${fullCatalogOn()}:${stat.size}:${stat.mtimeMs}`;
+        }
+        catch {
+            return `|catalog:${fullCatalogOn()}:-`;
+        }
+    }
     reloadMapsIfChanged() {
         if (!this.corpusRoot)
             return [];
-        const signature = CoreLawIndex.mapsSignatureOf(this.corpusRoot);
+        const signature = CoreLawIndex.mapsSignatureOf(this.corpusRoot) + this.catalogSignature();
         if (signature === this.mapsSignature)
             return [];
         const before = new Set(this.refs.map((ref) => ref.eli));
         const adopted = this.refs.filter((ref) => (this.state.adopted ?? []).some((item) => item.eli === ref.eli));
-        this.refs = extractCoreActs(this.corpusRoot);
+        this.refs = this.withCatalog(extractCoreActs(this.corpusRoot));
         for (const ref of adopted)
             if (!this.ref(ref.eli))
                 this.refs.push(ref);
@@ -611,9 +644,9 @@ export class CoreLawIndex {
     }
     load(corpusRoot) {
         this.corpusRoot = corpusRoot;
-        this.mapsSignature = CoreLawIndex.mapsSignatureOf(corpusRoot);
-        this.refs = extractCoreActs(corpusRoot);
+        this.mapsSignature = CoreLawIndex.mapsSignatureOf(corpusRoot) + this.catalogSignature();
         fs.mkdirSync(this.directory, { recursive: true });
+        this.refs = this.withCatalog(extractCoreActs(corpusRoot));
         try {
             this.state = JSON.parse(fs.readFileSync(path.join(this.directory, "index.json"), "utf8"));
         }
@@ -1239,6 +1272,18 @@ export class CoreLawIndex {
         state.relationsCheckedAt = state.checkedAt;
     }
     async refreshAll(options = {}) {
+        // The catalogue of all in-force acts: built in parts, checked once a day; new acts join the refs.
+        if (fullCatalogOn() && this.corpusRoot && catalogDue(loadCatalog(this.directory), this.now())) {
+            const mapDomains = new Map(extractCoreActs(this.corpusRoot).map((ref) => [ref.eli, ref.domains]));
+            await refreshEliCatalog({
+                directory: this.directory,
+                fetcher: this.fetcher,
+                mapDomains: (eli) => mapDomains.get(eli) ?? [],
+                gapMs: this.gapMs,
+                maxRequests: CATALOG_REQUESTS_PER_RUN,
+                now: this.now
+            }).catch(() => undefined);
+        }
         this.reloadMapsIfChanged();
         if (!options.force &&
             this.state.blockedUntil &&

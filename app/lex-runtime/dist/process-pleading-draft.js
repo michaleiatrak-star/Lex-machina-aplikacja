@@ -1,3 +1,4 @@
+import { validateEvidenceInventory } from "./evidence-inventory.js";
 export const DRAFT_VERSIONS_MAX = 20;
 export const DRAFT_TEXT_MAX = 400_000;
 export const REMARKS_MAX = 4_000;
@@ -59,6 +60,8 @@ export function validateProcessPleadingDraft(input) {
         if (!finding || typeof finding.text !== "string" || finding.text.length > FINDING_MAX || typeof finding.at !== "string")
             throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
     }
+    if (input.evidence !== undefined && !validateEvidenceInventory(input.evidence))
+        throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
     return structuredClone(input);
 }
 export function latestDraftVersion(draft) {
@@ -224,6 +227,14 @@ export function draftPrompt(args) {
         parts.push(`# UWAGI UŻYTKOWNIKA DO KROKU ${args.checkpoint} (krok odesłany do poprawy)`, "Wykonaj ten krok ponownie z uwzględnieniem uwag; wskaż, co zmieniono.", args.remarks);
     }
     return parts.join("\n\n");
+}
+export function withEvidenceInventory(input, evidence) {
+    const draft = validateProcessPleadingDraft(input);
+    if (!validateEvidenceInventory(evidence))
+        throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
+    draft.evidence = structuredClone(evidence);
+    draft.revision += 1;
+    return draft;
 }
 /** The findings of a passed checkpoint (its answer without the pleading block and the disclaimer). */
 export function withCheckpointFinding(input, checkpoint, stage, answer, at = new Date().toISOString()) {

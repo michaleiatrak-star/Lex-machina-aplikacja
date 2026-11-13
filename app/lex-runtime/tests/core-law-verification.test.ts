@@ -241,10 +241,34 @@ describe("verifyFromCoreLaw", () => {
     expect(untouched.decision === "RECORD" && untouched.record.status).toBe("VERIFIED");
     expect(untouched.decision === "RECORD" && untouched.act.amendmentsChecked).toEqual(["DU/2026/600"]);
     expect(verify(amended("Art. 1. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 wyrazy … zastępuje się …")))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE" });
     // An amendment the copy has no text of, or only an OCR reading: the impact is unknown.
-    expect(verify(amended(null))).toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
-    expect(verify(amended("Art. 1. … w art. 52 …", "ocr"))).toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
+    expect(verify(amended(null))).toMatchObject({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
+    expect(verify(amended("Art. 1. … w art. 52 …", "ocr"))).toMatchObject({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
+  });
+
+  it("odmowa z powodów czasowych podaje nowelizację, jej datę i przepisy przejściowe z kopii (tryb offline)", () => {
+    const idx = index(kw({ amendmentsAfter: [{ eli: "DU/2026/600", title: "Ustawa zmieniająca KW", promulgation: "2026-07-01" }] }));
+    const withText = {
+      ...idx,
+      record: (eli: string) =>
+        eli === "DU/2026/600"
+          ? {
+              ...act({ eli, title: "Ustawa zmieniająca", labels: [], url: KW_URL, articles: {} }).record,
+              textSource: "html" as const,
+              text: "Art. 1. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 wyrazy … zastępuje się … Art. 2. Do spraw wszczętych i niezakończonych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe. Art. 3. Ustawa wchodzi w życie po upływie 14 dni od dnia ogłoszenia."
+            }
+          : null
+    };
+    const outcome = verify(withText);
+    expect(outcome).toMatchObject({
+      decision: "DENY",
+      reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE",
+      temporal: { amendments: [{ eli: "DU/2026/600", promulgation: "2026-07-01" }] }
+    });
+    const transitional = outcome.decision === "DENY" ? outcome.temporal?.transitionalProvisions ?? [] : [];
+    expect(transitional.map((item) => item.text)).toEqual([expect.stringContaining("przepisy dotychczasowe")]);
+    expect(transitional.some((item) => /W ustawie z dnia/u.test(item.text))).toBe(false);
   });
 
   it("checks the quoted wording against the provision", () => {
@@ -259,14 +283,14 @@ describe("verifyFromCoreLaw", () => {
 
   it("refuses when the copy cannot be correct: amendments after t.j., repealed act, past state, unknown act", () => {
     expect(verify(index(kw({ amendmentsAfter: [{ eli: "DU/2025/1814", title: null, promulgation: null }] }))))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" });
     // Found by a check but not applied yet (automatic updates off).
     expect(verify(index(kw({ pendingConsolidated: { eli: "DU/2026/77", title: null, promulgation: null } }))))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
     expect(verify(index(kw({ pendingAmendments: [{ eli: "DU/2026/78", title: null, promulgation: null }] }))))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
     expect(verify(index(kw({ status: "uchylony" }))))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" });
     expect(verify(index(kw()), { asOf: "2020-01-01" }))
       .toEqual({ decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" });
     expect(verify(index(kw()), { act: "XYZ" }))
@@ -275,7 +299,7 @@ describe("verifyFromCoreLaw", () => {
 
   it("odmawia brzmienia z t.j. zawierającego zmianę jeszcze nieobowiązującą", () => {
     const pending = kw({ notYetInForce: [{ eli: "DU/2026/1046", title: null, from: "2026-11-05" }] });
-    expect(verify(index(pending))).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    expect(verify(index(pending))).toMatchObject({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
     // Numer Dz.U. t.j. pozostaje prawidłowy.
     const journal = verifyFromCoreLaw({
       index: index(pending),
@@ -301,7 +325,7 @@ describe("verifyFromCoreLaw", () => {
     });
     const art51 = verify(index(pending));
     expect(art51.decision === "RECORD" && art51.record.status).toBe("VERIFIED");
-    expect(verify(index(pending), { claim: "art. 52 § 1 KW" })).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    expect(verify(index(pending), { claim: "art. 52 § 1 KW" })).toMatchObject({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
   });
 
   it("zmiana w vacatio legis bez odnośników w kopii: tekst ustawy zmieniającej rozstrzyga per artykuł (KC t.j. 2026/795 i ustawa o CEIDG)", () => {
@@ -318,13 +342,13 @@ describe("verifyFromCoreLaw", () => {
     const untouched = verify(pending("Art. 2. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 52 dodaje się § 3 …"));
     expect(untouched.decision === "RECORD" && untouched.record.status).toBe("VERIFIED");
     expect(verify(pending("Art. 2. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 otrzymuje brzmienie: …")))
-      .toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+      .toMatchObject({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
     // Without the amending act's text the impact is unknown: the copy refuses as before.
-    expect(verify(pending(null))).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    expect(verify(pending(null))).toMatchObject({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
     // An article the act does not have (u.k.k. art. 36a cited as KC, E2E W3): not "not yet in
     // force", but the unit missing from the text, so the model sees it named the wrong act.
     const wrongAct = verify(pending(null), { claim: "art. 36a ust. 1 KW" });
-    expect(wrongAct).not.toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    expect(wrongAct).not.toMatchObject({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
     expect(wrongAct.decision === "RECORD" && wrongAct.record.status).not.toBe("VERIFIED");
   });
 
@@ -337,7 +361,7 @@ describe("verifyFromCoreLaw", () => {
       toolCallId: "call_1",
       now: Date.parse("2026-09-28T08:00:01.000Z")
     });
-    expect(stale).toEqual({ decision: "DENY", reason: "TEMPORAL_COPY_STALE" });
+    expect(stale).toMatchObject({ decision: "DENY", reason: "TEMPORAL_COPY_STALE" });
     // Świeże sprawdzenie relacji w ELI odnawia kopię.
     const rechecked = verifyFromCoreLaw({
       index: index(kw({ relationsCheckedAt: "2026-09-27T08:00:00.000Z" })),

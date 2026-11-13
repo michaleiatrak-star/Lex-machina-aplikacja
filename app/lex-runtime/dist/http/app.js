@@ -27,7 +27,7 @@ import fs from "node:fs";
 import { latestUserTurn } from "../execution-engine.js";
 import { applyPleadingChatReply, bareRefusal, lastAssistantTurn, reopensDraft, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
-import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withCheckpointFinding, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
+import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withCheckpointFinding, withEvidenceInventory, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
 // The citations that blocked a part of a long letter, as the corrections its rewrite needs.
 function blockedPartProblems(references) {
     const seen = new Set();
@@ -6313,7 +6313,16 @@ export function createLexHttpApp(options) {
         return {
             ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
             ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {}),
-            ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {})
+            ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {}),
+            ...(draft?.evidence ? { evidence: draft.evidence } : {}),
+            // A rebuilt evidence inventory is kept at once (it costs model calls), whether the step passes or not.
+            saveEvidence: async (evidence) => {
+                await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+                    const current = await store.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion });
+                    const next = withEvidenceInventory(current ?? emptyProcessPleadingDraft(caseId), evidence);
+                    await store.saveProcessPleadingDraft({ caseId, caseDataKey, keyVersion, draft: next, expectedRevision: current?.revision ?? 0 });
+                });
+            }
         };
     }
     // After a passing step: the pleading block of the answer becomes the next version and

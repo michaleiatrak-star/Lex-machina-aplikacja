@@ -16,6 +16,18 @@ import { euAct, verifyEuArticle } from "./eu-law-verifier.js";
 import { verificationMarker, verificationSourceLink } from "./source-anchor.js";
 const TOOL_NAME = "verify_legal_reference";
 const OFFLINE_NOTE = "Tryb offline: źródła zewnętrzne wyłączone. Przepis, którego nie potwierdza lokalna kopia ELI, oznacz ⚠️ [NIEWERYFIKOWANE]; orzeczenia tylko z biblioteki na dysku (search_case_law_library), inne jako do sprawdzenia.";
+function temporalDenialPayload(details) {
+    return {
+        amendments: details.amendments.map((item) => ({
+            eli: item.eli,
+            title: item.title,
+            ...(item.from ? { inForceFrom: item.from } : {}),
+            ...(item.promulgation ? { promulgation: item.promulgation } : {})
+        })),
+        ...(details.transitionalProvisions.length ? { transitionalProvisions: details.transitionalProvisions } : {}),
+        instruction: "The local consolidated text does not give this provision's wording in force: the listed amendments change it (or their impact is unknown). Name the amendment (Dz.U.) and its date; do not present the consolidated-text wording as current. transitionalProvisions are the amendment's own rules for matters begun before it: apply them from this text, not from memory. Mark the provision ⚠️ [NIEWERYFIKOWANE] unless verified in ELI."
+    };
+}
 const OFFLINE_VERIFICATION_APPENDIX = "TRYB OFFLINE (ustawienie administratora): aplikacja nie łączy się ze źródłami zewnętrznymi. verify_legal_reference sprawdza przepis wyłącznie w lokalnej kopii ELI (data kopii w wyniku); search_case_law_library przeszukuje orzeczenia zapisane na dysku. Nie powołuj orzeczeń ani interpretacji spoza biblioteki jako zweryfikowanych i nie podawaj brzmienia przepisu, którego kopia nie zawiera.";
 /** Wynik z lokalnej kopii ELI, gdy samo ELI nie odpowiada: data kopii i wyraźna informacja. */
 function withEliOutageNotice(payload, cause) {
@@ -1300,7 +1312,12 @@ export class LegalVerificationToolRuntime {
         });
         if (outcome.decision === "DENY") {
             return {
-                content: JSON.stringify({ status: "DENIED", error: outcome.reason, localCopy: outcome.reason }),
+                content: JSON.stringify({
+                    status: "DENIED",
+                    error: outcome.reason,
+                    localCopy: outcome.reason,
+                    ...(outcome.temporal ? temporalDenialPayload(outcome.temporal) : {})
+                }),
                 denied: outcome.reason
             };
         }
@@ -1675,7 +1692,18 @@ export class LegalVerificationToolRuntime {
                 }
                 else {
                     this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: TOOL_NAME, capability: "read", decision: "DENY", reason: `OFFLINE_MODE:${local.denied}` });
-                    results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "DENIED", error: "OFFLINE_MODE", localCopy: local.denied, note: OFFLINE_NOTE }) });
+                    // The copy's own reasons in time (amendments, their dates, transitional provisions) go
+                    // with the denial: offline they are the only source the model has for the change.
+                    let temporal = {};
+                    try {
+                        const parsed = JSON.parse(local.content || "{}");
+                        if (parsed.amendments)
+                            temporal = { amendments: parsed.amendments, transitionalProvisions: parsed.transitionalProvisions, instruction: parsed.instruction };
+                    }
+                    catch {
+                        // no details
+                    }
+                    results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "DENIED", error: "OFFLINE_MODE", localCopy: local.denied, note: OFFLINE_NOTE, ...temporal }) });
                 }
                 continue;
             }

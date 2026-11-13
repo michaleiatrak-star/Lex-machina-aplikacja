@@ -26,7 +26,7 @@ const KW_ART_51 =
   "Art. 51. § 1. Kto krzykiem, hałasem, alarmem lub innym wybrykiem zakłóca spokój, porządek publiczny, spoczynek nocny albo wywołuje zgorszenie w miejscu publicznym, podlega karze aresztu, ograniczenia wolności albo grzywny.";
 const QUOTE = "podlega karze aresztu, ograniczenia wolności albo grzywny";
 
-function kwIndex(): CoreLawVerificationIndex {
+function kwIndex(amended = false): CoreLawVerificationIndex {
   const ref: CoreActRef = { eli: "DU/2025/734", consolidated: true, labels: ["KW"], domains: ["dr-03-prawo-karne-wykroczenia-egzekucja"], notes: [] };
   const record: CoreActRecord = {
     eli: ref.eli,
@@ -55,7 +55,7 @@ function kwIndex(): CoreLawVerificationIndex {
     unavailable: null,
     relationsCheckedAt: null,
     currentEli: ref.eli,
-    amendmentsAfter: [],
+    amendmentsAfter: amended ? [{ eli: "DU/2026/600", title: "Ustawa o zmianie Kodeksu wykroczeń", promulgation: "2026-07-01" }] : [],
     pendingConsolidated: null,
     pendingAmendments: [],
     notYetInForce: [],
@@ -67,7 +67,18 @@ function kwIndex(): CoreLawVerificationIndex {
     resolve: (value) => (value.trim().toLocaleLowerCase("pl") === "kw" || value.trim() === ref.eli ? ref : null),
     summaries: () => [summary],
     summary: (eli) => (eli === ref.eli ? summary : null),
-    currentRecord: (eli) => (eli === ref.eli ? record : null)
+    currentRecord: (eli) => (eli === ref.eli ? record : null),
+    record: (eli) =>
+      amended && eli === "DU/2026/600"
+        ? {
+            ...record,
+            eli,
+            title: "Ustawa o zmianie Kodeksu wykroczeń",
+            articleOrder: [],
+            articles: {},
+            text: "Art. 1. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 wyrazy „aresztu” zastępuje się … Art. 2. Do spraw wszczętych i niezakończonych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe. Art. 3. Ustawa wchodzi w życie po upływie 14 dni od dnia ogłoszenia."
+          }
+        : null
   };
 }
 
@@ -76,8 +87,8 @@ const noNetwork = vi.fn(async () => {
   throw new Error("NETWORK_USED_OFFLINE");
 });
 
-function runtime(ledger: VerificationLedger, offline: boolean) {
-  return new LegalVerificationToolRuntime(ledger, undefined, undefined, null, undefined, undefined, kwIndex(), noNetwork as never, null, true, offline);
+function runtime(ledger: VerificationLedger, offline: boolean, amended = false) {
+  return new LegalVerificationToolRuntime(ledger, undefined, undefined, null, undefined, undefined, kwIndex(amended), noNetwork as never, null, true, offline);
 }
 
 describe("weryfikacja w trybie offline", () => {
@@ -137,4 +148,19 @@ describe("sesja modelu lokalnego w trybie offline", () => {
     expect(answer.indexOf("Tryb offline")).toBeLessThan(answer.indexOf("Nie stanowi"));
     expect(noNetwork).not.toHaveBeenCalled();
   }, 60_000);
+
+  it("przepis zmieniony nowelizacją po t.j.: odmowa z nowelizacją, datą i przepisem przejściowym z kopii", async () => {
+    const tools = runtime(new VerificationLedger(), true, true);
+    const [result] = await tools.runTools([{ id: "a", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } }]);
+    const payload = JSON.parse(result!.content);
+    expect(payload).toMatchObject({
+      status: "DENIED",
+      error: "OFFLINE_MODE",
+      localCopy: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE",
+      amendments: [{ eli: "DU/2026/600", promulgation: "2026-07-01" }]
+    });
+    expect(payload.transitionalProvisions[0].text).toContain("przepisy dotychczasowe");
+    expect(payload.instruction).toContain("do not present the consolidated-text wording as current");
+    expect(noNetwork).not.toHaveBeenCalled();
+  });
 });

@@ -19,23 +19,39 @@ export const CHECKPOINT_RESOURCES = {
     "CP-ATAK": ["shared/MOD-ATAK-NA-DRAFT.md", "pisma-procesowe-v3/references/W2-SZCZEGOLY.md"],
     "CP-PODMIOT": ["JUR:pisma-w3-podmiot-gate"],
     "CP-QUALITY": ["shared/LEGAL-QUALITY-GATE.md", "shared/MOD-WALIDACJA_v2.md", "pisma-procesowe-v3/references/W3-WERYFIKACJA.md"],
-    "CP-AUDYT": ["shared/AUDYT-KONCOWY.md"],
+    // HYBRID-VALIDATION before the .docx: the final audit (user preference "HYBRID-VAL przed .docx").
+    "CP-AUDYT": ["shared/AUDYT-KONCOWY.md", "shared/HYBRID-VALIDATION.md"],
     "CP-PEER": ["shared/MOD-PEER-REVIEW.md", "shared/POST-VALIDATION.md"]
 };
 // Modules of a later W1 step that the module map lists for the whole stage W1 (MODULY-MAPA:
 // MOD-RED-TEAM-WLASNY at W1.6; SKILL.md W1.2c KROK PRZ: MOD-GRAF-PRZYCZYNOWY before W1.3).
 const LATER_STEP_RESOURCES = {
-    "CP-1c-lancuch": ["shared/MOD-GRAF-PRZYCZYNOWY.md"],
-    "CP-W1": ["shared/MOD-RED-TEAM-WLASNY.md", "shared/MOD-GRAF-PRZYCZYNOWY.md"]
+    // The skill's own modules, at the step SKILL.md and MODULY-MAPA run them (2026-11-13: each rode on
+    // every step): ELIMINACJA-TEZ W1.2a-POST after CLAIM-VALIDATION, KARTA-DOWODU KROK KD before the
+    // chain, FAKTY W3.3, REDAKCJA the text's quality, AUDIT-BUNDLE after FINAL.
+    "CP-1a": ["pisma-procesowe-v3/modules/MOD-ELIMINACJA-TEZ.md"],
+    "CP-1c-macierz": ["shared/MOD-KARTA-DOWODU.md"],
+    "CP-1c-lancuch": ["shared/MOD-GRAF-PRZYCZYNOWY.md", "shared/MOD-KARTA-DOWODU.md"],
+    "CP-W1": ["shared/MOD-RED-TEAM-WLASNY.md", "shared/MOD-GRAF-PRZYCZYNOWY.md"],
+    "CP-QUALITY": ["shared/FAKTY_v2.md", "pisma-procesowe-v3/modules/MOD-REDAKCJA.md"],
+    "CP-PEER": ["pisma-procesowe-v3/modules/MOD-AUDIT-BUNDLE.md"]
 };
 /**
  * A resource the skill reads at another checkpoint of the pipeline (CP-REJESTR of
  * shared/CP-GATE.md, MODULY-MAPA.md), not at this one: the macierz D×T at CP-1c-macierz,
  * the red team at W1.6. One checkpoint per turn reads its own files; the rest wait for theirs.
  */
+/** A file one or more checkpoints read: kept out of the prefix the steps share (prompt cache). */
+export function checkpointOwned(resource) {
+    return checkpointsReading(resource).length > 0;
+}
 export function readAtOtherCheckpoint(resource, checkpoint) {
     const owners = Object.keys(CHECKPOINT_RESOURCES).filter((owner) => CHECKPOINT_RESOURCES[owner].includes(resource) || (LATER_STEP_RESOURCES[owner] ?? []).includes(resource));
     return owners.length > 0 && !owners.includes(checkpoint);
+}
+/** The checkpoints that read a resource (empty: not a checkpoint's own file). */
+export function checkpointsReading(resource) {
+    return Object.keys(CHECKPOINT_RESOURCES).filter((owner) => CHECKPOINT_RESOURCES[owner].includes(resource) || (LATER_STEP_RESOURCES[owner] ?? []).includes(resource));
 }
 // Conditional checkpoints (CP-REJESTR "warunkowy", "gdy ..."): N/A is allowed with a reason.
 export const CONDITIONAL_CHECKPOINTS = new Set([
@@ -73,7 +89,9 @@ export function loadCheckpointResources(registry, checkpoint, inContext, budget 
     const loaded = [];
     const toRead = [];
     let left = budget;
-    for (const resource of CHECKPOINT_RESOURCES[checkpoint]) {
+    // The checkpoint's own files, then the skill's modules run at this step (LATER_STEP_RESOURCES): all
+    // of them in the checkpoint's part, after the cached prefix every step shares.
+    for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? [])]) {
         if (inContext.has(resource))
             continue;
         const file = registry.resolveResource("pisma-procesowe-v3", resource);

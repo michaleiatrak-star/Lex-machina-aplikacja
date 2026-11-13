@@ -5,6 +5,7 @@
 // SAOS holds the whole judgment and the quotes of the case file match it word for word.
 import { plainText } from "../eli/readers.js";
 import { CASE_TEXT_BUDGET, caseTextExcerpt, holdCaseLawText } from "../case-law-texts.js";
+import { sharedCaseLawDatabase } from "../case-law-db.js";
 function excerptFor(signature, source, text, quotes, budget) {
     holdCaseLawText(signature, source, text);
     return caseTextExcerpt(text, quotes, budget).text;
@@ -16,7 +17,13 @@ export function saosCovers(signature, court) {
     const full = year < 100 ? 2000 + year : year;
     return court === "POWSZECHNY" || (court === "SN" && full <= 2016);
 }
-export async function saosText(signature, fetchImpl = fetch) {
+export async function saosText(signature, fetchImpl = fetch, local = sharedCaseLawDatabase()) {
+    // The local database first (case-law-db.ts): the same SAOS document, kept current by the sync.
+    const held = local?.bySignature(signature).filter((entry) => entry.card.source === "SAOS" && entry.text) ?? [];
+    if (held.length === 1) {
+        const { card, text } = held[0];
+        return { signature, status: "FOUND", url: card.url ?? "", court: card.court, date: card.date ?? "", text: text };
+    }
     try {
         const search = await fetchImpl(`${SAOS}/search/judgments?caseNumber=${encodeURIComponent(signature)}&pageSize=5`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
         if (!search.ok)

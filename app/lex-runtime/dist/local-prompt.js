@@ -150,6 +150,12 @@ export function compactLocalPrompt(prompt, question = "") {
             out.push(shortened(part, 2_500));
             continue;
         }
+        if (/^# (?:INWENTARZ DOWODÓW|USTALENIA Z ZAMKNIĘTYCH PUNKTÓW)/u.test(head)) {
+            // Sized for the local window by the application (evidence-inventory.ts, process-pleading-
+            // draft.ts): cut to 1 200 characters the inventory kept only its header (2026-11-13).
+            out.push(part);
+            continue;
+        }
         if (/^# DR-\d{2}\b/u.test(head)) {
             out.push(shortened(domainRules(part), LOCAL_DOMAIN_MAX));
             continue;
