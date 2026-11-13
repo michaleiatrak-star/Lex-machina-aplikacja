@@ -467,3 +467,47 @@ export function estimateDocumentFit(args) {
     const neededTokens = documents.reduce((sum, document) => sum + document.tokens, 0);
     return { modelContextTokens: window, budgetTokens, neededTokens, fits: neededTokens <= budgetTokens, documents };
 }
+/** Pages as ranges: [1,2,3,7] -> "1–3, 7". */
+function pageRanges(pages) {
+    const sorted = [...new Set(pages)].sort((a, b) => a - b);
+    const out = [];
+    for (let at = 0; at < sorted.length; at += 1) {
+        let end = at;
+        while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1)
+            end += 1;
+        out.push(sorted[at] === sorted[end] ? String(sorted[at]) : `${sorted[at]}–${sorted[end]}`);
+        at = end;
+    }
+    return out.join(", ");
+}
+/**
+ * What of each long document reached the model, by pages, and how to read the rest (user,
+ * 2026-11-12: long documents like long rulings; for a local model the reading adapted to its
+ * window): a hosted model reads further with its document tool, a local one answers from the
+ * pages it got and names the pages it did not read.
+ */
+export function documentCoveragePrompt(original, sent, options) {
+    const lines = [];
+    original.forEach((document, index) => {
+        const delivered = sent.find((item) => item.documentId === document.documentId);
+        const pagesOf = (chunks) => chunks.flatMap((chunk) => Array.from({ length: Math.max(1, chunk.pageEnd - chunk.pageStart + 1) }, (_, offset) => chunk.pageStart + offset));
+        const all = pagesOf(document.chunks);
+        const full = pagesOf((delivered?.chunks ?? []).filter((chunk) => chunk.representation !== "EXTRACTIVE_DIGEST"));
+        const digest = pagesOf((delivered?.chunks ?? []).filter((chunk) => chunk.representation === "EXTRACTIVE_DIGEST"));
+        const missing = all.filter((page) => !full.includes(page) && !digest.includes(page));
+        if (!digest.length && !missing.length)
+            return;
+        const name = document.title ? `„${document.title}”` : `dokument ${index + 1}`;
+        lines.push(`- ${name} (${all.length ? `${Math.max(...all)} s.` : "?"}): w całości s. ${full.length ? pageRanges(full) : "—"}` +
+            (digest.length ? `; streszczenie wyciągowe s. ${pageRanges(digest)}` : "") +
+            (missing.length ? `; NIEPRZEKAZANE s. ${pageRanges(missing)}` : ""));
+    });
+    if (!lines.length)
+        return null;
+    const how = options.readTool
+        ? `Strony nieprzekazane albo tylko streszczone doczytaj narzędziem ${options.readTool} (porcjami), zanim oprzesz na nich ustalenie; cytuj wyłącznie z odczytanego tekstu.`
+        : options.local
+            ? "Odpowiadaj wyłącznie na podstawie stron przekazanych w całości. Jeśli odpowiedź zależy od stron nieprzekazanych albo tylko streszczonych, napisz wprost, których stron nie przeczytano, i zaproponuj odczyt następnej porcji (np. „przeczytaj s. 12–20”); nie uzupełniaj ich treści z domysłu."
+            : "Strony nieprzekazane albo tylko streszczone nie są odczytane: nie opieraj na nich ustaleń; wskaż je użytkownikowi.";
+    return ["# ZAKRES DOKUMENTÓW PRZEKAZANYCH MODELOWI (ustalone przez aplikację)", "Dobrane według pytania i okna modelu.", ...lines, how].join("\n");
+}

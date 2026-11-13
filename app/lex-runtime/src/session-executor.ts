@@ -96,7 +96,7 @@ import type {
   LegalSourceTier
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
-import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { CASE_FILE_READ_TOOL, CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
 import { instructionAttemptNote, scanForInstructions } from "./prompt-injection-scan.js";
 import { astTextLines } from "./ast-text-lines.js";
@@ -128,6 +128,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   ROUTER_SKILL,
   evaluateMandatoryPath,
+  gateBlocksOnlyPrompt,
   gateCorrectionPrompt,
   loadMandatoryPathModel,
   foreignJurisdiction,
@@ -167,6 +168,7 @@ import type {
   ProcessPleadingMode,
   ProcessPleadingStage
 } from "./process-pleading-state.js";
+import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
 import type {
   CourtAnalysisCheckpoint,
   CourtAnalysisStage
@@ -181,6 +183,7 @@ import type {
   ContractWorkflowMode
 } from "./contract-analysis-state.js";
 import {
+  documentCoveragePrompt,
   orchestrateDocumentContext,
   type ContextBudgetReport
 } from "./context-orchestrator.js";
@@ -203,6 +206,10 @@ import {
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
+import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
+import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
+import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -295,6 +302,17 @@ import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, c
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
+import {
+  buildEvidenceInventory,
+  EVIDENCE_MAP_INSTRUCTION,
+  evidenceInventoryPrompt,
+  HOSTED_PORTION_CHARS,
+  inventoryBudget,
+  inventoryView,
+  LOCAL_PORTION_CHARS,
+  needsEvidenceInventory,
+  type EvidenceInventory
+} from "./evidence-inventory.js";
 
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
@@ -442,6 +460,13 @@ export type SessionExecutionRequest = {
     // sent back for correction (process-pleading-draft.ts).
     draft?: { version: number; source: "PIPELINE" | "USER"; stage: ProcessPleadingStage; text: string };
     remarks?: string;
+    // What the earlier checkpoints of this case established (process-pleading-draft.ts findings).
+    findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
+    // What every chunk of the case files proves (evidence-inventory.ts), and where a rebuilt one is kept.
+    evidence?: EvidenceInventory;
+    saveEvidence?: (inventory: EvidenceInventory) => Promise<void>;
+    // The inventory's view for this step, written by the executor (aliases of this turn).
+    evidencePrompt?: string;
   };
   courtWorkflowContext?: {
     stage: Exclude<
@@ -2147,10 +2172,18 @@ export class SafeSessionExecutor implements SessionExecutor {
 
         // The stored pleading draft and remarks reach the model like the chat text:
         // pseudonymized with the same vault (restored in the answer).
-        if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+        if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks || request.processWorkflowContext?.findings) {
           const context = request.processWorkflowContext;
+          const findings = context.findings
+            ? Object.fromEntries(
+                await Promise.all(
+                  Object.entries(context.findings).map(async ([checkpoint, finding]) => [checkpoint, { ...finding!, text: (await chatPseudonymizer.pseudonymize(finding!.text)).text }] as const)
+                )
+              )
+            : undefined;
           protectedProcessContext = {
             ...context,
+            ...(findings ? { findings } : {}),
             ...(context.draft
               ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
               : {}),
@@ -2658,9 +2691,125 @@ export class SafeSessionExecutor implements SessionExecutor {
     ]);
     corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
+    // Long documents: what of them the model got, by pages, and how it reads the rest.
+    const coverage = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+      local: request.model.startsWith("local/"),
+      readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
+    });
+    if (coverage) pathSections.push(coverage);
     // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
     const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
     if (legalSystemNotice) pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
+    // The evidence inventory of the whole case file (evidence-inventory.ts): from the matrix
+    // step on, every chunk not read before is read in portions sized to the model and what it
+    // proves is kept with a checked quotation; each step gets its view of it. A local model
+    // (no case-file tools, a small window) gets the files this way at all.
+    if (protectedProcessContext && request.caseFiles && needsEvidenceInventory(protectedProcessContext.checkpoint, PROCESS_PLEADING_CHECKPOINTS)) {
+      const local = request.model.startsWith("local/");
+      const aliasText = (documentId: string, text: string): string =>
+        request.caseFiles!.sharedKey(documentId) ? text : namespaceChunkTokens(text, aliasRegistry.prefixFor(documentId));
+      const unaliasText = (documentId: string, text: string): string =>
+        request.caseFiles!.sharedKey(documentId) ? text : text.replaceAll(`[LMPII:${aliasRegistry.prefixFor(documentId)}:`, "[PII:");
+      let inventory: EvidenceInventory | null = protectedProcessContext.evidence ?? null;
+      try {
+        step("PREPARE", "inwentarz dowodów: odczyt akt sprawy porcjami");
+        const built = await buildEvidenceInventory({
+          files: request.caseFiles,
+          previous: inventory,
+          aliasText,
+          unaliasText,
+          portionChars: local ? LOCAL_PORTION_CHARS : HOSTED_PORTION_CHARS,
+          concurrency: local ? 1 : 4,
+          onProgress: (done, total) => step("PREPARE", `inwentarz dowodów: porcja ${done} z ${total}`),
+          extract: async (portion) =>
+            (
+              await this.providers.stream(request.provider, {
+                model: request.model,
+                systemPrompt: EVIDENCE_MAP_INSTRUCTION,
+                messages: [{ role: "user", content: portion }],
+                accountContinuity: "none",
+                reasoning: "none",
+                abortSignal: AbortSignal.timeout(local ? 900_000 : 300_000)
+              })
+            ).fullText
+        });
+        inventory = built.inventory;
+        if (built.read || built.failed) await request.processWorkflowContext?.saveEvidence?.(inventory).catch(() => undefined);
+        audit.record("gate", "EVIDENCE_INVENTORY", built.failed ? "DEGRADED" : "OK", {
+          items: inventory.items.length,
+          read: built.read,
+          reused: built.reused,
+          failed: built.failed
+        });
+      } catch (error) {
+        audit.record("gate", "EVIDENCE_INVENTORY", "DEGRADED", { detail: error instanceof Error ? error.message.slice(0, 120) : "EVIDENCE_INVENTORY_FAILED" });
+      }
+      const view = inventoryView(protectedProcessContext.checkpoint);
+      const cited = view === "CITED" ? [protectedProcessContext.draft?.text ?? "", ...Object.values(protectedProcessContext.findings ?? {}).map((finding) => finding?.text ?? "")].join("\n") : "";
+      const evidencePrompt = evidenceInventoryPrompt(inventory, view, inventoryBudget(view, local), cited, aliasText);
+      if (evidencePrompt) protectedProcessContext = { ...protectedProcessContext, evidencePrompt };
+    }
+    // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
+    // application in the WSD portal before the model answers, every one of them (RD 121/26: the
+    // model read one of three and left the others "z materiałów sprawy").
+    // What the file quotes from each ruling goes to the model first; a local model (a small
+    // window) gets shorter excerpts and reads further with read_case_law_text.
+    const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n");
+    const fileQuotes = (signatures: readonly string[]) => Object.fromEntries(signatures.map((signature) => [signature, quotesForSignature(fileText, signature)]));
+    const caseTextBudget = request.model.startsWith("local/") ? LOCAL_CASE_TEXT_BUDGET : CASE_TEXT_BUDGET;
+    const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
+    const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
+    // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
+    // (sn.pl often asks for its human check; RD 121/26 then had no text of SDI 9/12 at all).
+    const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
+    const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([] as SaosText[]);
+    // A code of professional ethics the file cites ("§ 16 zd. 3 KEA"): its paragraphs read from
+    // the council's consolidated text, as the chat did (RD 121/26: the central norm was never read).
+    const ethicsCited = legalTurn && activeCountry() === "PL" ? citedEthicsParagraphs([...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)), latestUserTurn(request.query)].join("\n")) : [];
+    const ethicsFound = Promise.all(ethicsCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs)));
+    if (ethicsCited.length) step("VERIFY", `kodeks etyki: ${ethicsCited.map((item) => `${item.code.key} § ${item.paragraphs.join(", ")}`).join("; ")}`);
+    if (saosSignatures.length) step("VERIFY", `SAOS (tekst orzeczeń z akt): ${saosSignatures.join(", ")}`);
+    if (wsdSignatures.length) {
+      step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
+      const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
+      pathSections.push(wsdPrefetchPrompt(found, fileQuotes(wsdSignatures), caseTextBudget));
+      for (const result of found) {
+        if (result.status !== "FOUND") continue;
+        officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
+        // The court's own publication: RZĄD 2A like sn.pl (HIERARCHIA-ZRODEL, 2026-11-12) -> ✅ [VER].
+        ledger.add({
+          claim: result.signature,
+          kind: "case",
+          status: "VERIFIED",
+          sourceUrl: result.url,
+          sourceTier: "R2A",
+          fetchedAt: new Date().toISOString(),
+          verificationMethod: "web_fetch",
+          sourceFormat: "TEXT",
+          caseScope: "FULL_TEXT",
+          caseSignature: result.signature,
+          evidence: ["Wyższy Sąd Dyscyplinarny Adwokatury", result.signature, result.title].filter(Boolean).join(" · ")
+        });
+      }
+      audit.record("gate", "WSD_PORTAL_PREFETCH", found.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+        results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
+      });
+    }
+    const ethicsResults = await ethicsFound;
+    if (ethicsResults.length) {
+      pathSections.push(ethicsPrompt(ethicsResults));
+      audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+        results: ethicsResults.map((result) => (result.status === "FOUND" ? `${result.code.key}: ${result.paragraphs.map((item) => `§ ${item.paragraph} ${item.text ? "OK" : "BRAK"}`).join(", ")} (${result.source.url})` : `${result.code.key}: ${result.detail}`))
+      });
+    }
+    const saosResults = await saosFound;
+    if (saosResults.length) {
+      pathSections.push(saosPrefetchPrompt(saosResults, fileQuotes(saosSignatures), caseTextBudget));
+      for (const result of saosResults) if (result.status === "FOUND") leadCaseLawTexts.push(`${result.signature}\n${result.text}`);
+      audit.record("gate", "SAOS_TEXT_PREFETCH", saosResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+        results: saosResults.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : ` ${result.detail}`}`)
+      });
+    }
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
     // the skill also by what the user delivers (ACTIVATION-MATRIX).
@@ -4049,12 +4198,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
     // and account clients keep the short prompt.
     const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
-    const correctingRound = (answer: string, instruction: string, systemPrompt?: string): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
+    const correctingRound = (answer: string, instruction: string, systemPrompt?: string, form: string = CORRECTED_ANSWER_FORM): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
       reusable
         ? {
             ...reusable,
             ...(reusable.tools?.length ? { toolChoice: "none" as const } : {}),
-            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }]
+            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }]
           }
         : {
             systemPrompt:
@@ -4068,7 +4217,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             messages: [
               { role: "user" as const, content: protectedQuery },
               { role: "assistant" as const, content: answer },
-              { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }
+              { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }
             ]
           };
     const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
@@ -4078,10 +4227,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         "MODEL",
         `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`
       );
+      // Only blocks missing (no content to supervise): the model writes those blocks alone and the
+      // application appends them, instead of a second generation of the whole answer.
+      const blocksOnly = missingGates.length > 0 && supervisedMissing.length === 0;
       try {
         const corrected = await this.providers.stream(request.provider, {
           model: request.model,
-          ...correctingRound(modelOutput, [
+          ...(blocksOnly
+            ? correctingRound(modelOutput, gateBlocksOnlyPrompt(missingGates), undefined, "")
+            : correctingRound(modelOutput, [
                 ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
                 ...(supervisedMissing.length
                   ? [
@@ -4090,11 +4244,12 @@ export class SafeSessionExecutor implements SessionExecutor {
                       ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
                     ]
                   : [])
-              ].join("\n")),
+              ].join("\n"))),
           accountContinuity: "none",
           reasoning: "none"
         });
-        const text = withoutCorrectionPreface(corrected.fullText).trim();
+        const returned = withoutCorrectionPreface(corrected.fullText).trim();
+        const text = blocksOnly && returned ? `${modelOutput.trimEnd()}\n\n${returned}` : returned;
         const remaining = text ? missingGateBlocks(mandatoryModel!, effectiveProfile, text) : missingGates;
         const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
         const accepted =

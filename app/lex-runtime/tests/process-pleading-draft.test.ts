@@ -122,3 +122,69 @@ describe("stored draft reaches the model pseudonymized", () => {
     expect(all).not.toContain("44051401359");
   });
 });
+
+describe("evidence inventory of the whole case file (matrix step)", () => {
+  it("reads every chunk in portions, keeps the inventory and gives the step its view", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const sent: Array<{ system: string; body: string }> = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "test",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(request) {
+        const body = JSON.stringify(request);
+        sent.push({ system: request.systemPrompt, body });
+        if (request.systemPrompt.startsWith("Jesteś asystentem prawnika. Poniżej fragmenty akt")) {
+          const user = String(request.messages.at(-1)?.content ?? "");
+          return {
+            fullText: [...user.matchAll(/\[FRAGMENT (F\d+) — dokument [^\]]+\]\n(.+)/gu)].map((match) => `${match[1]} | Fakt: ${match[2]!.slice(0, 30)} | ${match[2]!.slice(0, 40)} | dokument prywatny | B | -`).join("\n")
+          };
+        }
+        return { fullText: "MACIERZ D×T: D1 → T1." };
+      }
+    });
+    const pages: Record<string, string[]> = {
+      "doc-umowa": ["Strony zawarły umowę sprzedaży w dniu 1 marca 2024 r. w Krakowie.", "Cena wynosi 10 000 zł i jest płatna w terminie 14 dni."],
+      "doc-wezwanie": ["Wezwanie do zapłaty z dnia 20 kwietnia 2024 r. doręczone pozwanemu."]
+    };
+    const saved: unknown[] = [];
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    await executor.execute({
+      query: "Przygotuj pismo procesowe.",
+      provider: "openai",
+      model: "gpt-test",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK",
+      caseFiles: {
+        caseId: CASE,
+        listDocuments: async () => Object.entries(pages).map(([documentId, chunks]) => ({ documentId, totalPages: chunks.length, chunks: chunks.length })),
+        search: async () => [],
+        readChunks: async (documentId: string, indices: number[]) => ({
+          totalPages: pages[documentId]!.length,
+          chunks: indices.map((index) => ({ index, pageStart: index + 1, pageEnd: index + 1, text: pages[documentId]![index]! }))
+        }),
+        sharedKey: () => false
+      },
+      processWorkflowContext: {
+        stage: "W1",
+        checkpoint: "CP-1c-macierz",
+        mode: "AUTO",
+        saveEvidence: async (inventory: unknown) => {
+          saved.push(inventory);
+        }
+      }
+    } as never).catch(() => undefined);
+    const extraction = sent.filter((item) => item.system.startsWith("Jesteś asystentem prawnika. Poniżej fragmenty akt"));
+    expect(extraction).toHaveLength(1);
+    expect(saved).toHaveLength(1);
+    expect((saved[0] as { items: Array<{ id: string; documentId: string; quoteVerified: boolean }> }).items.map((item) => [item.id, item.documentId, item.quoteVerified])).toEqual([
+      ["D1", "doc-umowa", true],
+      ["D2", "doc-umowa", true],
+      ["D3", "doc-wezwanie", true]
+    ]);
+    const main = sent.find((item) => item.body.includes("INWENTARZ DOWODÓW Z CAŁYCH AKT SPRAWY"));
+    expect(main?.body).toContain("D3 [B; dokument prywatny; dok. doc-wezwanie, s. 1]");
+  });
+});

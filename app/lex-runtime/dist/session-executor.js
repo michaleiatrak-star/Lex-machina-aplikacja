@@ -28,7 +28,7 @@ import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { WidgetToolRuntime, widgetsFromAnswer } from "./widget-runtime.js";
-import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
+import { CASE_FILE_READ_TOOL, CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { IndependentReviewToolRuntime, newAuthorMarker, reviewerInstructions } from "./independent-review.js";
 import { instructionAttemptNote, scanForInstructions } from "./prompt-injection-scan.js";
 import { astTextLines } from "./ast-text-lines.js";
@@ -51,7 +51,7 @@ const COVERAGE_SKILLS = new Set([
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
+import { ROUTER_SKILL, evaluateMandatoryPath, gateBlocksOnlyPrompt, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
@@ -59,12 +59,16 @@ import { blueprintFinalizationText } from "./report-blueprint-finalization.js";
 import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
-import { orchestrateDocumentContext } from "./context-orchestrator.js";
+import { documentCoveragePrompt, orchestrateDocumentContext } from "./context-orchestrator.js";
 import { evaluateGuideOutput } from "./guide-session-state.js";
 import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
+import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
+import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
+import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -1231,10 +1235,14 @@ export class SafeSessionExecutor {
                 }
                 // The stored pleading draft and remarks reach the model like the chat text:
                 // pseudonymized with the same vault (restored in the answer).
-                if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+                if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks || request.processWorkflowContext?.findings) {
                     const context = request.processWorkflowContext;
+                    const findings = context.findings
+                        ? Object.fromEntries(await Promise.all(Object.entries(context.findings).map(async ([checkpoint, finding]) => [checkpoint, { ...finding, text: (await chatPseudonymizer.pseudonymize(finding.text)).text }])))
+                        : undefined;
                     protectedProcessContext = {
                         ...context,
+                        ...(findings ? { findings } : {}),
                         ...(context.draft
                             ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
                             : {}),
@@ -1608,10 +1616,83 @@ export class SafeSessionExecutor {
         ]);
         corpusTools.setInContext(contextResources);
         const pathSections = [];
+        // Long documents: what of them the model got, by pages, and how it reads the rest.
+        const coverage = documentCoveragePrompt(request.documentAttachments ?? [], contextSelection.attachments, {
+            local: request.model.startsWith("local/"),
+            readTool: caseFileTools ? CASE_FILE_READ_TOOL : null
+        });
+        if (coverage)
+            pathSections.push(coverage);
         // The legal system chosen in Settings (jurisdiction.ts): another country's law only, Polish law off.
         const legalSystemNotice = legalTurn ? foreignLegalSystemNotice(activeCountry()) : null;
         if (legalSystemNotice)
             pathSections.push(`# SYSTEM PRAWNY (ustalone przez aplikację)\n${legalSystemNotice}`);
+        // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
+        // application in the WSD portal before the model answers, every one of them (RD 121/26: the
+        // model read one of three and left the others "z materiałów sprawy").
+        // What the file quotes from each ruling goes to the model first; a local model (a small
+        // window) gets shorter excerpts and reads further with read_case_law_text.
+        const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n");
+        const fileQuotes = (signatures) => Object.fromEntries(signatures.map((signature) => [signature, quotesForSignature(fileText, signature)]));
+        const caseTextBudget = request.model.startsWith("local/") ? LOCAL_CASE_TEXT_BUDGET : CASE_TEXT_BUDGET;
+        const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
+        const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
+        // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
+        // (sn.pl often asks for its human check; RD 121/26 then had no text of SDI 9/12 at all).
+        const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
+        const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([]);
+        // A code of professional ethics the file cites ("§ 16 zd. 3 KEA"): its paragraphs read from
+        // the council's consolidated text, as the chat did (RD 121/26: the central norm was never read).
+        const ethicsCited = legalTurn && activeCountry() === "PL" ? citedEthicsParagraphs([...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)), latestUserTurn(request.query)].join("\n")) : [];
+        const ethicsFound = Promise.all(ethicsCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs)));
+        if (ethicsCited.length)
+            step("VERIFY", `kodeks etyki: ${ethicsCited.map((item) => `${item.code.key} § ${item.paragraphs.join(", ")}`).join("; ")}`);
+        if (saosSignatures.length)
+            step("VERIFY", `SAOS (tekst orzeczeń z akt): ${saosSignatures.join(", ")}`);
+        if (wsdSignatures.length) {
+            step("VERIFY", `portal orzecznictwa WSD: ${wsdSignatures.join(", ")}`);
+            const found = await Promise.all(wsdSignatures.map((signature) => findWsdRuling(signature)));
+            pathSections.push(wsdPrefetchPrompt(found, fileQuotes(wsdSignatures), caseTextBudget));
+            for (const result of found) {
+                if (result.status !== "FOUND")
+                    continue;
+                officialCaseLawTexts.push(`${result.signature}\n${result.title}\n${result.text}`);
+                // The court's own publication: RZĄD 2A like sn.pl (HIERARCHIA-ZRODEL, 2026-11-12) -> ✅ [VER].
+                ledger.add({
+                    claim: result.signature,
+                    kind: "case",
+                    status: "VERIFIED",
+                    sourceUrl: result.url,
+                    sourceTier: "R2A",
+                    fetchedAt: new Date().toISOString(),
+                    verificationMethod: "web_fetch",
+                    sourceFormat: "TEXT",
+                    caseScope: "FULL_TEXT",
+                    caseSignature: result.signature,
+                    evidence: ["Wyższy Sąd Dyscyplinarny Adwokatury", result.signature, result.title].filter(Boolean).join(" · ")
+                });
+            }
+            audit.record("gate", "WSD_PORTAL_PREFETCH", found.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+                results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
+            });
+        }
+        const ethicsResults = await ethicsFound;
+        if (ethicsResults.length) {
+            pathSections.push(ethicsPrompt(ethicsResults));
+            audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+                results: ethicsResults.map((result) => (result.status === "FOUND" ? `${result.code.key}: ${result.paragraphs.map((item) => `§ ${item.paragraph} ${item.text ? "OK" : "BRAK"}`).join(", ")} (${result.source.url})` : `${result.code.key}: ${result.detail}`))
+            });
+        }
+        const saosResults = await saosFound;
+        if (saosResults.length) {
+            pathSections.push(saosPrefetchPrompt(saosResults, fileQuotes(saosSignatures), caseTextBudget));
+            for (const result of saosResults)
+                if (result.status === "FOUND")
+                    leadCaseLawTexts.push(`${result.signature}\n${result.text}`);
+            audit.record("gate", "SAOS_TEXT_PREFETCH", saosResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
+                results: saosResults.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : ` ${result.detail}`}`)
+            });
+        }
         // The kind of every document the user sent (court decision, pleading, contract,
         // evidence...), recognised locally from its protected text; the router chooses
         // the skill also by what the user delivers (ACTIVATION-MATRIX).
@@ -2822,11 +2903,11 @@ export class SafeSessionExecutor {
         // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
         // and account clients keep the short prompt.
         const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
-        const correctingRound = (answer, instruction, systemPrompt) => reusable
+        const correctingRound = (answer, instruction, systemPrompt, form = CORRECTED_ANSWER_FORM) => reusable
             ? {
                 ...reusable,
                 ...(reusable.tools?.length ? { toolChoice: "none" } : {}),
-                messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }]
+                messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }]
             }
             : {
                 systemPrompt: systemPrompt ??
@@ -2839,29 +2920,35 @@ export class SafeSessionExecutor {
                 messages: [
                     { role: "user", content: protectedQuery },
                     { role: "assistant", content: answer },
-                    { role: "user", content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }
+                    { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }
                 ]
             };
         const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
         if (missingGates.length || supervisedMissing.length) {
             step("MODEL", `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`);
+            // Only blocks missing (no content to supervise): the model writes those blocks alone and the
+            // application appends them, instead of a second generation of the whole answer.
+            const blocksOnly = missingGates.length > 0 && supervisedMissing.length === 0;
             try {
                 const corrected = await this.providers.stream(request.provider, {
                     model: request.model,
-                    ...correctingRound(modelOutput, [
-                        ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
-                        ...(supervisedMissing.length
-                            ? [
-                                "Nadzór aplikacji nad treścią odpowiedzi — uzupełnij i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian):",
-                                ...supervisedMissing.map((check) => `- ${check.correction}`),
-                                ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
-                            ]
-                            : [])
-                    ].join("\n")),
+                    ...(blocksOnly
+                        ? correctingRound(modelOutput, gateBlocksOnlyPrompt(missingGates), undefined, "")
+                        : correctingRound(modelOutput, [
+                            ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
+                            ...(supervisedMissing.length
+                                ? [
+                                    "Nadzór aplikacji nad treścią odpowiedzi — uzupełnij i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian):",
+                                    ...supervisedMissing.map((check) => `- ${check.correction}`),
+                                    ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
+                                ]
+                                : [])
+                        ].join("\n"))),
                     accountContinuity: "none",
                     reasoning: "none"
                 });
-                const text = withoutCorrectionPreface(corrected.fullText).trim();
+                const returned = withoutCorrectionPreface(corrected.fullText).trim();
+                const text = blocksOnly && returned ? `${modelOutput.trimEnd()}\n\n${returned}` : returned;
                 const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
                 const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
                 const accepted = Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;

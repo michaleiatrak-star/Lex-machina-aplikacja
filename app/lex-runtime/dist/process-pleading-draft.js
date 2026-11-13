@@ -1,6 +1,8 @@
 export const DRAFT_VERSIONS_MAX = 20;
 export const DRAFT_TEXT_MAX = 400_000;
 export const REMARKS_MAX = 4_000;
+// One checkpoint's findings kept for the later stages.
+export const FINDING_MAX = 12_000;
 // The pipeline writes the full current pleading between these lines (W2, W3).
 export const PLEADING_START = "=== PISMO ===";
 export const PLEADING_END = "=== KONIEC PISMA ===";
@@ -52,6 +54,10 @@ export function validateProcessPleadingDraft(input) {
     }
     if (input.remarks && (typeof input.remarks.text !== "string" || input.remarks.text.length > REMARKS_MAX)) {
         throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
+    }
+    for (const finding of Object.values(input.findings ?? {})) {
+        if (!finding || typeof finding.text !== "string" || finding.text.length > FINDING_MAX || typeof finding.at !== "string")
+            throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
     }
     return structuredClone(input);
 }
@@ -218,4 +224,36 @@ export function draftPrompt(args) {
         parts.push(`# UWAGI UŻYTKOWNIKA DO KROKU ${args.checkpoint} (krok odesłany do poprawy)`, "Wykonaj ten krok ponownie z uwzględnieniem uwag; wskaż, co zmieniono.", args.remarks);
     }
     return parts.join("\n\n");
+}
+/** The findings of a passed checkpoint (its answer without the pleading block and the disclaimer). */
+export function withCheckpointFinding(input, checkpoint, stage, answer, at = new Date().toISOString()) {
+    const draft = validateProcessPleadingDraft(input);
+    const start = answer.indexOf(PLEADING_START);
+    const end = answer.lastIndexOf(PLEADING_END);
+    const withoutPleading = start >= 0 ? `${answer.slice(0, start)}${end > start ? answer.slice(end + PLEADING_END.length) : ""}` : answer;
+    const text = withoutPleading.replace(/\n-{3,}\n⚖️[\s\S]*$/u, "").replace(/\n{3,}/gu, "\n\n").trim().slice(0, FINDING_MAX);
+    if (!text || draft.findings?.[checkpoint]?.text === text)
+        return draft;
+    draft.findings = { ...(draft.findings ?? {}), [checkpoint]: { text, stage, at } };
+    draft.revision += 1;
+    return draft;
+}
+/**
+ * The findings of the earlier checkpoints for the step now running, newest last, within the
+ * budget (a local model gets less: each finding's beginning, the rest named).
+ */
+export function checkpointFindingsPrompt(findings, order, current, budget) {
+    const before = order.slice(0, Math.max(0, order.indexOf(current))).filter((checkpoint) => findings?.[checkpoint]);
+    if (!before.length)
+        return null;
+    const share = Math.max(800, Math.floor(budget / before.length));
+    const parts = before.map((checkpoint) => {
+        const text = findings[checkpoint].text;
+        return `## ${checkpoint} (etap ${findings[checkpoint].stage})\n${text.length > share ? `${text.slice(0, share)}\n[… skrócono: ${text.length - share} znaków; pełne ustalenia ${checkpoint} są w historii sprawy]` : text}`;
+    });
+    return [
+        "# USTALENIA Z ZAMKNIĘTYCH PUNKTÓW KONTROLNYCH TEJ SPRAWY (zapisane przez aplikację)",
+        "Wyniki wcześniejszych bramek potoku pisma (mapa faktów, macierz dowodów, anomalie, weryfikacja): opieraj na nich ten krok; nie ustalaj ich od nowa i nie pomijaj; rozbieżność z dokumentami wskaż wprost.",
+        ...parts
+    ].join("\n\n");
 }

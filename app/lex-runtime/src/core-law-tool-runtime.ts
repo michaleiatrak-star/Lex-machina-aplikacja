@@ -1,4 +1,5 @@
 import { articleUnits, searchStems } from "./core-law-search.js";
+import { officialTextStore } from "./official-text-store.js";
 import type {
   NormalizedToolCall,
   NormalizedToolResult,
@@ -63,7 +64,7 @@ const SCHEMAS: NormalizedToolSchema[] = [
     function: {
       name: SEARCH_TOOL,
       description:
-        "Search the wording of the locally held core acts. Returns act ELI, article number and a snippet.",
+        "Search the wording of the locally held core acts and of the official texts outside ELI held locally (codes of professional ethics, councils' resolutions). Returns act ELI (or the text's source and version), unit and a snippet.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -497,15 +498,22 @@ export class CoreLawToolRuntime {
             snippet: articleSnippet(unit?.text ?? body, query)
           };
         });
+      // Official texts outside ELI held locally (codes of ethics, councils' resolutions): the same
+      // local search, with their source and version (official-text-store.ts).
+      const official = act ? [] : officialTextStore().search(query, MAX_SEARCH_HITS).map((hit) => {
+        const copy = officialTextStore().get(hit.key);
+        return { act: hit.name, source: copy?.url ?? null, version: copy?.version ?? null, fetchedAt: copy?.fetchedAt ?? null, unit: `${copy?.unit ?? "§"} ${hit.unit}`, snippet: articleSnippet(hit.text, query) };
+      });
       this.events.push({
         tool: call.name,
         target: "core-law",
         decision: "ALLOW",
-        detail: { hits: hits.length }
+        detail: { hits: hits.length, officialTexts: official.length }
       });
       return JSON.stringify({
-        status: hits.length > 0 ? "OK" : "NO_HITS",
-        hits
+        status: hits.length + official.length > 0 ? "OK" : "NO_HITS",
+        hits,
+        ...(official.length ? { officialTexts: official } : {})
       });
     }
 

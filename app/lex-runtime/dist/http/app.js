@@ -27,7 +27,7 @@ import fs from "node:fs";
 import { latestUserTurn } from "../execution-engine.js";
 import { applyPleadingChatReply, bareRefusal, lastAssistantTurn, reopensDraft, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
-import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
+import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withCheckpointFinding, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
 // The citations that blocked a part of a long letter, as the corrections its rewrite needs.
 function blockedPartProblems(references) {
     const seen = new Set();
@@ -6312,7 +6312,8 @@ export function createLexHttpApp(options) {
         const latest = latestDraftVersion(draft);
         return {
             ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
-            ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {})
+            ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {}),
+            ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {})
         };
     }
     // After a passing step: the pleading block of the answer becomes the next version and
@@ -6336,6 +6337,9 @@ export function createLexHttpApp(options) {
                 const text = step?.kind === "FULL" ? step.text : null;
                 if (text)
                     next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
+                // Every passed step keeps what it established for the later stages (fact map, evidence
+                // matrix, anomalies, verification), apart from the pleading text itself.
+                next = withCheckpointFinding(next, checkpoint, stage, answer);
                 if (next.remarks?.checkpoint === checkpoint)
                     next = withoutDraftRemarks(next);
                 if (next.revision === (current?.revision ?? 0))

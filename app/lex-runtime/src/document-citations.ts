@@ -343,6 +343,8 @@ type Anchor = { label: string; key: string; locate: (text: string) => { start: n
 
 const MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"];
 const MONEY = /(?<![\p{L}\d,.])\d{1,3}(?:[ .  ]\d{3})*(?:,\d{1,2})?\s*(?:zł|złotych|PLN)(?![\p{L}])/gu;
+// A signature or a ruling's name right before a date: the ruling's date ("SDI 9/12 z", "wyrokiem z dnia").
+const RULING_BEFORE_DATE = /(?:\b[A-Z][A-Za-z]{0,4}\s+\d{1,5}\/\d{2,4}|\b(?:wyrok\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*|uchwał\p{L}*|decyzj\p{L}*))\s*(?:\([^)]{0,40}\)\s*)?(?:z\s+dnia|z|dnia|of)?\s*$/u;
 const DATE = new RegExp(`(?<![\\d.])(\\d{1,2})(?:\\.(\\d{1,2})\\.|\\s+(${MONTHS.join("|")})\\s+)(\\d{4})(?!\\d)`, "giu");
 
 function moneyKey(text: string): string {
@@ -400,8 +402,15 @@ function linkDocumentAnchors(text: string, entries: ChunkEntry[]): { text: strin
   const dates = new RegExp(DATE.source, DATE.flags);
   let date: RegExpExecArray | null;
   while ((date = dates.exec(text)) !== null) {
+    // The date of a ruling ("WSD 77/22 z 21 września 2022 r.", "wyrokiem z 13 lutego 2026 r., sygn.")
+    // is the ruling's, not a fact of a case document (RD 121/26, 2026-11-12).
+    const before = text.slice(Math.max(0, date.index - 60), date.index);
+    const after = text.slice(date.index + date[0].length, date.index + date[0].length + 30);
+    if (RULING_BEFORE_DATE.test(before) || /^\s*r\.?,?\s*(?:sygn|[A-Z]{1,5}\s+\d+\/\d{2})/u.test(after)) continue;
     const key = dateKey(date);
-    add(date.index + date[0].length, { label: date[0], key: `d${key}`, locate: firstMatching(DATE, dateKey, key) });
+    // After the year's "r." ("4 maja 2026 r. [dokument]"), never between them.
+    const year = /^\s*r\.(?!\p{L})/u.exec(after);
+    add(date.index + date[0].length + (year ? year[0].length : 0), { label: date[0], key: `d${key}`, locate: firstMatching(DATE, dateKey, key) });
   }
   // A quote is linked as a quote (linkUnmarkedQuotes, the model's marker): nothing inside it twice.
   const quotes = [...text.matchAll(/„[^„”]*”|“[^“”]*”/gu)].map((quote) => ({ start: quote.index!, end: quote.index! + quote[0].length }));

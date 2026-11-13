@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { caseTextExcerpt, caseTextPortion, holdCaseLawText } from "./case-law-texts.js";
 import { MAX_EVIDENCE_CHARS } from "./legal-source-verifier.js";
 import { caseLawRepository } from "./case-law-store.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
@@ -172,6 +173,24 @@ const CASE_SEARCH_TOOL_SCHEMA = {
                 reasonsAuthor: { type: "string", description: "SN only: author of the reasons." },
                 courtType: { type: "string", enum: SAOS_COURT_TYPES, description: "SAOS only: court type (SUPREME = Sąd Najwyższy)." },
                 judgmentType: { type: "string", enum: SAOS_JUDGMENT_TYPES, description: "SAOS only: SENTENCE = wyrok, DECISION = postanowienie, RESOLUTION = uchwała." }
+            }
+        }
+    }
+};
+const CASE_TEXT_TOOL_NAME = "read_case_law_text";
+const CASE_TEXT_TOOL_SCHEMA = {
+    type: "function",
+    function: {
+        name: CASE_TEXT_TOOL_NAME,
+        description: "Read further portions of a ruling whose text the application fetched in this session (SN after verify_case_reference, SAOS or the WSD portal), " +
+            "when the excerpt you got is shortened ('[… doczytaj read_case_law_text z offset=N …]'). Returns about 15 000 characters from offset and nextOffset.",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            required: ["signature"],
+            properties: {
+                signature: { type: "string", description: "Signature as in the excerpt, e.g. SDI 9/12." },
+                offset: { type: "number", description: "Character offset to read from (0 = the beginning)." }
             }
         }
     }
@@ -368,6 +387,13 @@ function publicCaseQuoteToolResult(caseRecord, quoteRecord, evidenceHash) {
             "Do not edit the quotation and do not use this result to verify a paraphrase."
     });
 }
+// The official text with a verified SN signature: whole when short, else its beginning with the
+// rest named for read_case_law_text (case-law-texts.ts).
+function caseTextForModel(signature, source, text) {
+    holdCaseLawText(signature, source, text);
+    const excerpt = caseTextExcerpt(text, []);
+    return { text: excerpt.text, textTruncated: excerpt.truncated, textChars: excerpt.chars };
+}
 function publicCaseToolResult(record, judgment) {
     if (record.status !== "VERIFIED") {
         throw new Error("CASE_VERIFICATION_RECORD_NOT_VERIFIED");
@@ -388,9 +414,12 @@ function publicCaseToolResult(record, judgment) {
         sourceUrl: record.sourceUrl ?? null,
         fetchedAt: record.fetchedAt,
         marker,
-        instruction: "The signature/metadata and official full-text identity are verified. " +
-            "Copy the marker onto the same line as the exact signature. " +
-            "Do not attribute a legal thesis or quote unless that proposition is separately verified against the fetched judgment text."
+        // The official text itself (RD 121/26, 2026-11-12: the model got the metadata only and wrote
+        // "the fragment holds no content" for SDI 9/12, verified on sn.pl with the user's session).
+        ...(judgment.normalizedFullText ? caseTextForModel(judgment.signature, record.sourceUrl ?? "sn.pl", judgment.normalizedFullText) : {}),
+        instruction: "The signature/metadata and official full-text identity are verified; `text` is the official text of the judgment. " +
+            "Copy the marker onto the same line as the exact signature. State the holding only from `text`; " +
+            "for a verbatim quotation call verify_case_quote with the exact sentence from `text`."
     });
 }
 function isVerifiedRecord(record) {
@@ -550,6 +579,29 @@ function searchCaseLawLibrary(input) {
         entries,
         instruction: "Local copies of official decisions; the card (cardUrl) is the source to cite. Verify before citing as VERIFIED."
     });
+}
+const SN_COPIES = new Map();
+const snKey = (signature) => signature.normalize("NFKC").replace(/\./g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pl");
+export function rememberSupremeCourtCopy(copy) {
+    if (copy.cardUrl && copy.text)
+        SN_COPIES.set(snKey(copy.signature), copy);
+}
+/** The copy of an SN decision the application downloaded from sn.pl before: this run first, then the library. */
+export function storedSupremeCourtCopy(signature) {
+    const inMemory = SN_COPIES.get(snKey(signature));
+    if (inMemory)
+        return inMemory;
+    const repository = caseLawRepository();
+    if (!repository?.libraryEnabled())
+        return null;
+    for (const entry of repository.catalog(signature, 5)) {
+        if (entry.court !== "SN" || !entry.signature || snKey(entry.signature) !== snKey(signature))
+            continue;
+        const stored = repository.get(entry.cardUrl);
+        if (stored?.text)
+            return { signature: entry.signature, cardUrl: entry.cardUrl, fetchedAt: stored.fetchedAt, text: stored.text, ...(stored.date ? { date: stored.date } : {}), ...(stored.form ? { form: stored.form } : {}) };
+    }
+    return null;
 }
 // sn.pl (Imperva) stopped the request until a person passes its check: the chat shows
 // the user the sn.pl verification window and repeats the question afterwards.
@@ -838,6 +890,28 @@ export class LegalVerificationToolRuntime {
                 if (result.status !== "FOUND" ||
                     !isVerifiedRecord(result.record) ||
                     !result.judgment) {
+                    // sn.pl asks for its human check again: the copy downloaded from sn.pl earlier (this run
+                    // of the application, or the case-law library) is the same official text (user, 2026-11-12:
+                    // "aplikacja powinna korzystać z bloba zapisanej kopii orzeczenia z SN").
+                    const stored = snVerificationNeeded(result.reason) ? storedSupremeCourtCopy(result.normalizedSignature ?? signature) : null;
+                    if (stored) {
+                        const record = {
+                            claim,
+                            kind: "case",
+                            status: "VERIFIED",
+                            sourceUrl: stored.cardUrl,
+                            sourceTier: "R1",
+                            fetchedAt: stored.fetchedAt,
+                            toolCallId,
+                            verificationMethod: "web_fetch",
+                            sourceFormat: "TEXT",
+                            caseScope: "FULL_TEXT",
+                            caseSignature: stored.signature,
+                            evidence: ["Sąd Najwyższy", stored.signature, stored.date, stored.form, "kopia z sn.pl zapisana w aplikacji"].filter(Boolean).join(" · ")
+                        };
+                        this.ledger.add(record);
+                        return publicCaseToolResult(record, { signature: stored.signature, ...(stored.date ? { date: stored.date } : {}), ...(stored.form ? { form: stored.form } : {}), contentScope: "FULL_TEXT", normalizedFullText: stored.text });
+                    }
                     return JSON.stringify({
                         status: result.status,
                         error: result.reason ?? null,
@@ -847,6 +921,14 @@ export class LegalVerificationToolRuntime {
                     });
                 }
                 this.ledger.add(result.record);
+                rememberSupremeCourtCopy({
+                    signature: result.judgment.signature,
+                    cardUrl: result.record.sourceUrl ?? "",
+                    fetchedAt: result.record.fetchedAt,
+                    text: result.judgment.normalizedFullText,
+                    ...(result.judgment.date ? { date: result.judgment.date } : {}),
+                    ...(result.judgment.form ? { form: result.judgment.form } : {})
+                });
                 return publicCaseToolResult(result.record, result.judgment);
             }
         });
@@ -986,7 +1068,8 @@ export class LegalVerificationToolRuntime {
             CASE_LIBRARY_TOOL_SCHEMA,
             CASE_TOOL_SCHEMA,
             CASE_QUOTE_TOOL_SCHEMA,
-            CASE_PROPOSITION_TOOL_SCHEMA
+            CASE_PROPOSITION_TOOL_SCHEMA,
+            CASE_TEXT_TOOL_SCHEMA
         ];
     }
     systemPromptAppendix() {
@@ -1519,6 +1602,10 @@ export class LegalVerificationToolRuntime {
                                 "CASE_QUOTE_TOOL_FAILED"
                         })
                 });
+                continue;
+            }
+            if (call.name === CASE_TEXT_TOOL_NAME) {
+                results.push({ tool_use_id: call.id, content: caseTextPortion(String(call.input.signature ?? ""), Number(call.input.offset ?? 0)) });
                 continue;
             }
             if (call.name === CASE_TOOL_NAME) {

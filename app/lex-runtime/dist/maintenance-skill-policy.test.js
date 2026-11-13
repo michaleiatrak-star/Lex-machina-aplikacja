@@ -8,25 +8,25 @@ function sha256(bytes) {
 }
 function discoveryResult(indexBytes, signatureBytes) {
     return {
-        currentVersion: "0.1.78",
+        currentVersion: "0.1.79",
         status: "AVAILABLE",
         checkedAt: "2026-09-18T09:00:00.000Z",
-        latestVersion: "0.1.79",
+        latestVersion: "0.1.80",
         skillsBundle: {
-            name: "LexMachina-Skills-0.1.79.zip",
-            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.79/LexMachina-Skills-0.1.79.zip",
+            name: "LexMachina-Skills-0.1.80.zip",
+            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.80/LexMachina-Skills-0.1.80.zip",
             sha256: "a".repeat(64),
             bytes: 123
         },
         skillsIndex: {
             name: "LexMachina-Skills-Index.json",
-            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.79/LexMachina-Skills-Index.json",
+            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.80/LexMachina-Skills-Index.json",
             sha256: sha256(indexBytes),
             bytes: indexBytes.byteLength
         },
         skillsSignature: {
             name: "LexMachina-Skills-Index.sig",
-            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.79/LexMachina-Skills-Index.sig",
+            url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.80/LexMachina-Skills-Index.sig",
             sha256: sha256(signatureBytes),
             bytes: signatureBytes.byteLength
         }
@@ -40,15 +40,15 @@ function verifiedIndex(args) {
             schemaVersion: 1,
             kind: "LEX_MACHINA_SKILLS_INDEX",
             version: args?.version ??
-                "0.1.79",
+                "0.1.80",
             bundle: {
-                filename: "LexMachina-Skills-0.1.79.zip",
+                filename: "LexMachina-Skills-0.1.80.zip",
                 sha256: "a".repeat(64),
                 bytes: 123
             },
             compatibility: {
                 minAppVersion: args?.minAppVersion ??
-                    "0.1.78",
+                    "0.1.79",
                 ...(args?.maxAppVersion
                     ? {
                         maxAppVersion: args.maxAppVersion

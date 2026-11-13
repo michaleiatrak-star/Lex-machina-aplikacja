@@ -1,7 +1,8 @@
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
 import type { ProviderStreamResult } from "./providers/types.js";
-import { draftPrompt } from "./process-pleading-draft.js";
+import { checkpointFindingsPrompt, draftPrompt } from "./process-pleading-draft.js";
+import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
   CHRONOLOGY_CHECKPOINT_SECTIONS,
@@ -531,6 +532,8 @@ export class LexExecutionEngine {
       // sent back for correction (process-pleading-draft.ts).
       draft?: { version: number; source: "PIPELINE" | "USER"; stage: ProcessPleadingStage; text: string };
       remarks?: string;
+      findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
+      evidencePrompt?: string;
     };
     courtWorkflowContext?: {
       stage: Exclude<
@@ -1467,6 +1470,21 @@ export class LexExecutionEngine {
         draft: args.processWorkflowContext.draft ? { ...args.processWorkflowContext.draft, createdAt: "" } : null,
         remarks: args.processWorkflowContext.remarks ?? null
       });
+      // The earlier checkpoints' findings: the results of the gates, by stage, for this step.
+      const findings = checkpointFindingsPrompt(
+        args.processWorkflowContext.findings,
+        PROCESS_PLEADING_CHECKPOINTS,
+        args.processWorkflowContext.checkpoint,
+        args.model.startsWith("local/") ? 6_000 : 40_000
+      );
+      if (args.processWorkflowContext.evidencePrompt) {
+        contractCheckpointText += `\n\n${args.processWorkflowContext.evidencePrompt}`;
+        emit("gate", "PROCESS_EVIDENCE_INVENTORY", "OK", `checkpoint=${args.processWorkflowContext.checkpoint}`);
+      }
+      if (findings) {
+        contractCheckpointText += `\n\n${findings}`;
+        emit("gate", "PROCESS_CHECKPOINT_FINDINGS", "OK", `checkpoints=${Object.keys(args.processWorkflowContext.findings ?? {}).join(",")}`);
+      }
       if (pleading) {
         contractCheckpointText += `\n\n${pleading}`;
         emit(

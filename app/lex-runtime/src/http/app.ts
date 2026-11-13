@@ -54,6 +54,8 @@ import {
   PLEADING_START,
   pleadingContinuationPrompt,
   pleadingStepText,
+  withCheckpointFinding,
+  withEvidenceInventory,
   withoutDraftRemarks,
   writesPleading
 } from "../process-pleading-draft.js";
@@ -9963,7 +9965,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     caseId: string,
     keyVersion: number,
     checkpoint: ProcessPleadingCheckpoint
-  ): Promise<Pick<NonNullable<SessionExecutionRequest["processWorkflowContext"]>, "draft" | "remarks">> {
+  ): Promise<Pick<NonNullable<SessionExecutionRequest["processWorkflowContext"]>, "draft" | "remarks" | "findings" | "evidence" | "saveEvidence">> {
     const store = options.processWorkflowStore;
     if (!store?.getProcessPleadingDraft || !options.caseAccessService) return {};
     const draft = await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) =>
@@ -9972,7 +9974,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     const latest = latestDraftVersion(draft);
     return {
       ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
-      ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {})
+      ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {}),
+      ...(draft?.findings && Object.keys(draft.findings).length ? { findings: draft.findings } : {}),
+      ...(draft?.evidence ? { evidence: draft.evidence } : {}),
+      // A rebuilt evidence inventory is kept at once (it costs model calls), whether the step passes or not.
+      saveEvidence: async (evidence) => {
+        await options.caseAccessService!.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+          const current = await store.getProcessPleadingDraft!({ caseId, caseDataKey, keyVersion });
+          const next = withEvidenceInventory(current ?? emptyProcessPleadingDraft(caseId), evidence);
+          await store.saveProcessPleadingDraft!({ caseId, caseDataKey, keyVersion, draft: next, expectedRevision: current?.revision ?? 0 });
+        });
+      }
     };
   }
 
@@ -10001,6 +10013,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (step?.kind === "PARTIAL") problems.push(`pismo niedokończone po ${PLEADING_CONTINUATIONS_MAX} rundach dalszego ciągu: nowa wersja nie została zapisana`);
         const text = step?.kind === "FULL" ? step.text : null;
         if (text) next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
+        // Every passed step keeps what it established for the later stages (fact map, evidence
+        // matrix, anomalies, verification), apart from the pleading text itself.
+        next = withCheckpointFinding(next, checkpoint, stage, answer);
         if (next.remarks?.checkpoint === checkpoint) next = withoutDraftRemarks(next);
         if (next.revision === (current?.revision ?? 0)) return null;
         await store.saveProcessPleadingDraft!({
