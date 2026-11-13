@@ -3503,6 +3503,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           }
         : {}),
       ...(documentContext ? { documentContext } : {}),
+      ...(request.modelContextTokens ? { modelContextTokens: request.modelContextTokens } : {}),
+      ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
       ...(modelImages.length ? { documentImages: modelImages } : {}),
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly
