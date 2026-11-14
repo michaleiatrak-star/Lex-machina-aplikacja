@@ -39,3 +39,26 @@ describe("core-law RAG follows the chosen jurisdiction; server mode keeps every 
     expect(extractCoreActs(corpus).length).toBeGreaterThan(50);
   });
 });
+
+describe("KATALOG-TJ of a domain (scripts/mapy_tj.py): the domain of the catalogue's acts", () => {
+  const ukonc = "DU/2025/1688"; // umowa koncesji: DR-07 KATALOG-TJ only, not in its MAPA-AKTOW routing
+  afterEach(() => {
+    delete process.env.LEX_ELI_FULL_CATALOG;
+  });
+
+  it("full ELI catalogue on: the act of KATALOG-TJ is a core act of its domain", () => {
+    settings();
+    setActiveCountry(corpus, "PL");
+    process.env.LEX_ELI_FULL_CATALOG = "1";
+    const act = extractCoreActs(corpus).find((ref) => ref.eli === ukonc);
+    expect(act?.domains).toContain("dr-07-zamowienia-publiczne-fundusze-ue");
+    expect(act?.consolidated).toBe(true);
+  });
+
+  it("catalogue off: KATALOG-TJ is not read (no thousands of downloads)", () => {
+    settings();
+    setActiveCountry(corpus, "PL");
+    process.env.LEX_ELI_FULL_CATALOG = "0";
+    expect(extractCoreActs(corpus).some((ref) => ref.eli === ukonc)).toBe(false);
+  });
+});

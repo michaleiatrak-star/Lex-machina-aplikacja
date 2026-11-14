@@ -134,6 +134,11 @@ function mapFiles(corpusRoot) {
         const file = path.join(corpusRoot, entry.name, "MAPA-AKTOW.md");
         if (fs.existsSync(file))
             files.push({ domain: entry.name, file });
+        // All in-force consolidated texts of the domain (scripts/mapy_tj.py in the skills): with the full
+        // ELI catalogue on, they give the catalogue's acts their domain instead of the title heuristic.
+        const catalogue = path.join(corpusRoot, entry.name, "KATALOG-TJ.md");
+        if (fullCatalogOn() && fs.existsSync(catalogue))
+            files.push({ domain: entry.name, file: catalogue });
     }
     // The jurisdictions' routing maps (Polish law: prawo-polskie-v2/ROUTING-MAP.md): the chosen one,
     // or in server mode every package's.
