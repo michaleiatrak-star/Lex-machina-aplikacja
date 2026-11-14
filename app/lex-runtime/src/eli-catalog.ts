@@ -11,6 +11,40 @@ import path from "node:path";
 
 export const ELI_CATALOG_API = "https://api.sejm.gov.pl/eli";
 export const CATALOG_REFRESH_MS = 24 * 60 * 60 * 1000;
+// A new amendment to an unchanged t.j.: every act's amendments are read again at least this often.
+export const AMENDMENTS_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+
+type RefAct = { ELI?: string; promulgation?: string; announcementDate?: string };
+
+/**
+ * Amendments after a consolidated text, by the skills' monitoring rule (check_nowelizacje.py,
+ * F-153): "Akty zmieniające" of the base act published after the earlier of the t.j.'s legal
+ * status date and its publication — a change published between them is not in the text.
+ * United (F-155) with ELI's own "Nowelizacje po tekście jednolitym" — a relation of the t.j.'s
+ * /references, not of the base act (the catalogue read it from the base act before: always empty).
+ */
+export function amendmentsAfterTj(
+  tj: { legalStatusDate?: string; promulgation?: string; announcementDate?: string } | null,
+  baseReferences: Record<string, unknown> | null,
+  tjReferences: Record<string, unknown> | null = null
+): Array<{ eli: string; date: string | null }> {
+  const found = new Map<string, string | null>();
+  for (const item of (tjReferences?.["Nowelizacje po tekście jednolitym"] as unknown[] | undefined) ?? []) {
+    const wrapper = (item && typeof item === "object" ? item : {}) as { act?: RefAct; date?: string; id?: string };
+    const eli = eliId(wrapper.act?.ELI ?? wrapper.id);
+    if (eli) found.set(eli, wrapper.date ?? null);
+  }
+  const marks = [tj?.legalStatusDate, tj?.promulgation, tj?.announcementDate].filter((value): value is string => Boolean(value));
+  const threshold = marks.sort()[0];
+  for (const item of (baseReferences?.["Akty zmieniające"] as unknown[] | undefined) ?? []) {
+    const wrapper = (item && typeof item === "object" ? item : {}) as { act?: RefAct; date?: string };
+    const act = wrapper.act ?? (wrapper as RefAct);
+    const eli = eliId(act.ELI);
+    const published = act.promulgation || act.announcementDate || "";
+    if (eli && threshold && published && published > threshold) found.set(eli, wrapper.date ?? found.get(eli) ?? null);
+  }
+  return [...found.entries()].map(([eli, date]) => ({ eli, date })).sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.eli.localeCompare(b.eli));
+}
 
 export type CatalogAct = {
   // Base act ("DU/2001/1371") and its newest in-force consolidated text ("DU/2025/1490").
@@ -20,7 +54,11 @@ export type CatalogAct = {
   title: string;
   type: string;
   inForce: boolean;
+  // Amendments published after the t.j. (not in its text): ELI and the date the change applies.
   amendmentsAfter: string[];
+  amendments?: Array<{ eli: string; date: string | null }>;
+  // Last check of the amendments (rechecked in parts every AMENDMENTS_RECHECK_MS).
+  amendmentsCheckedAt?: string | null;
   // DR modules: from the skills' act maps when the act is there, otherwise from the title.
   domains: string[];
   domainSource: "MAP" | "TITLE";
@@ -150,6 +188,12 @@ export async function refreshEliCatalog(args: {
       }
     }
   };
+  const readAmendments = async (eli: string, tj: string) =>
+    amendmentsAfterTj(
+      (await get(`${ELI_CATALOG_API}/acts/${tj}`)) as Record<string, string> | null,
+      (await get(`${ELI_CATALOG_API}/acts/${eli}/references`)) as Record<string, unknown> | null,
+      (await get(`${ELI_CATALOG_API}/acts/${tj}/references`)) as Record<string, unknown> | null
+    );
   try {
     // 1. Every in-force announcement of a consolidated text (Dz.U.).
     const listed: Array<{ ELI: string; announcementDate?: string }> = [];
@@ -190,6 +234,7 @@ export async function refreshEliCatalog(args: {
       const [eli, latest] = due[index]!;
       const detail = (await get(`${ELI_CATALOG_API}/acts/${eli}`)) as { title?: string; type?: string; inForce?: string; references?: Record<string, unknown[]> } | null;
       const title = detail?.title ?? "";
+      const amendments = await readAmendments(eli, latest.tj);
       const fromMap = [...new Set([...(args.mapDomains?.(eli) ?? []), ...(args.mapDomains?.(latest.tj) ?? [])])];
       catalog.acts[eli] = {
         eli,
@@ -198,13 +243,32 @@ export async function refreshEliCatalog(args: {
         title,
         type: detail?.type ?? "",
         inForce: detail?.inForce === "IN_FORCE",
-        amendmentsAfter: (detail?.references?.["Nowelizacje po tekście jednolitym"] ?? []).map(eliId).filter((value): value is string => Boolean(value)),
+        amendmentsAfter: amendments.map((item) => item.eli),
+        amendments,
+        amendmentsCheckedAt: new Date(now()).toISOString(),
         domains: fromMap.length ? fromMap : domainsByTitle(title),
         domainSource: fromMap.length ? "MAP" : "TITLE"
       };
       if ((index + 1) % batch === 0) {
         saveCatalog(args.directory, catalog);
         args.onProgress?.("akty", index + 1, due.length);
+      }
+    }
+    saveCatalog(args.directory, catalog);
+    // 4. Amendments to an unchanged t.j.: the oldest checks first, within this run's request budget
+    // (three requests an act); the rest continue at the next run.
+    const stale = Object.values(catalog.acts)
+      .filter((act) => !act.amendmentsCheckedAt || now() - Date.parse(act.amendmentsCheckedAt) >= AMENDMENTS_RECHECK_MS)
+      .sort((a, b) => String(a.amendmentsCheckedAt ?? "").localeCompare(String(b.amendmentsCheckedAt ?? "")));
+    for (let index = 0; index < stale.length && requests + 3 <= limit; index += 1) {
+      const act = stale[index]!;
+      const amendments = await readAmendments(act.eli, act.tj);
+      act.amendments = amendments;
+      act.amendmentsAfter = amendments.map((item) => item.eli);
+      act.amendmentsCheckedAt = new Date(now()).toISOString();
+      if ((index + 1) % batch === 0) {
+        saveCatalog(args.directory, catalog);
+        args.onProgress?.("nowelizacje", index + 1, stale.length);
       }
     }
     catalog.complete = true;
