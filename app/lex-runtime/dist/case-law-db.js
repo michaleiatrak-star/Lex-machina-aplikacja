@@ -110,6 +110,34 @@ export class CaseLawDatabase {
         const row = (source ? this.db.prepare("SELECT COUNT(*) AS n FROM documents WHERE source = ?").get(source) : this.db.prepare("SELECT COUNT(*) AS n FROM documents").get());
         return row.n;
     }
+    /** Whether a document of this source is held. */
+    has(source, sourceId) {
+        return Boolean(this.db.prepare("SELECT 1 FROM documents WHERE id = ?").get(`${source}:${sourceId}`));
+    }
+    /**
+     * The same ruling already held from another official source (same signature and date): the
+     * database keeps one copy, e.g. a WSA ruling from CBOSA is not stored again from another base.
+     */
+    duplicateOf(source, signatures, date) {
+        if (!date)
+            return null;
+        for (const signature of signatures) {
+            const row = this.db
+                .prepare("SELECT d.id FROM signatures s JOIN documents d ON d.id = s.id WHERE s.signature = ? AND d.date = ? AND d.source <> ? AND d.source <> 'SAOS' LIMIT 1")
+                .get(normalizeSignature(signature), date, source);
+            if (row)
+                return row.id;
+        }
+        return null;
+    }
+    /** Any JSON state of a source's synchronisation (its cursor), saved after every unit of work. */
+    state(source) {
+        const row = this.db.prepare("SELECT cursor FROM sync_state WHERE source = ?").get(source);
+        return row ? JSON.parse(row.cursor) : null;
+    }
+    saveState(source, state) {
+        this.db.prepare("INSERT OR REPLACE INTO sync_state (source, cursor, updated_at) VALUES (?, ?, ?)").run(source, JSON.stringify(state), new Date().toISOString());
+    }
     cursor(source) {
         const row = this.db.prepare("SELECT cursor FROM sync_state WHERE source = ?").get(source);
         return row ? JSON.parse(row.cursor) : null;
@@ -214,36 +242,7 @@ export function sharedCaseLawDatabase() {
     shared = process.env.VITEST || !fs.existsSync(path.join(directory, "case-law.sqlite")) ? null : new CaseLawDatabase(directory);
     return shared;
 }
-// Official sources and disciplinary case law: none is downloaded in full yet. SAOS is an unofficial
-// copy and is never downloaded in bulk. SN's own base asks for a person's verification (captcha),
-// which the application does not get around; the others have no adapter for the whole base yet.
-// Their rulings are read one by one, from the official page, when the work needs them.
-export const CASE_LAW_NOT_BULK = [
-    { source: "SN", reason: "baza sn.pl wymaga weryfikacji człowieka — orzeczenia SN pobierane pojedynczo" },
-    { source: "Portal Orzeczeń Sądów Powszechnych", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
-    { source: "CBOSA", reason: "brak adaptera pobierania całej bazy — orzeczenia NSA/WSA pobierane pojedynczo" },
-    { source: "TK", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
-    { source: "Sądy dyscyplinarne", reason: "brak adaptera pobierania całej bazy — orzeczenia z portali sądów dyscyplinarnych pobierane pojedynczo" },
-    { source: "EUREKA", reason: "brak adaptera pobierania całej bazy — interpretacje pobierane pojedynczo" }
-];
-const lastRun = null;
-let syncActive = false;
-/**
- * Background synchronisation of the whole bases. Downloads only official sources; none has a bulk
- * adapter yet, so no run starts. SAOS (an unofficial copy) is not downloaded, also with
- * LEX_CASE_LAW_SYNC=1. The interval stays so that an adapter added later runs on the same schedule.
- */
-export function startCaseLawSync(isServerMode = () => false, intervalMs = 60 * 60 * 1000) {
-    void isServerMode;
-    const tick = () => {
-        syncActive = false;
-    };
-    tick();
-    const timer = setInterval(tick, intervalMs);
-    timer.unref?.();
-    return () => clearInterval(timer);
-}
-/** What the settings window shows: whether the sync runs, how much each source holds, where it is. */
-export function caseLawSyncStatus() {
-    return { active: syncActive, sources: [], lastRun, notBulk: CASE_LAW_NOT_BULK };
+/** The synchronisation's database becomes the installation's shared one. */
+export function setSharedCaseLawDatabase(database) {
+    shared = database;
 }

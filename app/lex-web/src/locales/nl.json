@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Sessie vernieuwen in het Google-venster",
  "Potwierdź w oknie Google": "Bevestigen in het Google-venster",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "bevestiging nodig in het Google-venster (knop hierboven of in de chat)",
- "najlepsza w teście: {name} {score}/10": "beste in test: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "beste in test: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "laatste run {date}: nieuw {stored}, overgeslagen duplicaten {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "In servermodus downloadt de server de volledige officiële jurisprudentiedatabanken (oudste eerst), daarna alleen nieuwe stukken. Een onderbroken download gaat verder waar hij stopte. Dezelfde uitspraak uit twee databanken wordt één keer opgeslagen.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Downloaden werkt alleen in servermodus.",
+ "pobieranie trwa": "bezig met downloaden"
 }

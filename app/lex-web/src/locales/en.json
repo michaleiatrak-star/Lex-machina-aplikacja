@@ -2859,5 +2859,9 @@
  "Odnów sesję w oknie Google": "Renew session in the Google window",
  "Potwierdź w oknie Google": "Confirm in the Google window",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "confirmation needed in the Google window (button above or in the chat)",
- "najlepsza w teście: {name} {score}/10": "best in test: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "best in test: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "last run {date}: new {stored}, duplicates skipped {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "In server mode the server downloads the whole official case-law databases (oldest first), then only new items. An interrupted download resumes where it stopped. The same ruling from two databases is stored once.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Downloading runs only in server mode.",
+ "pobieranie trwa": "downloading"
 }

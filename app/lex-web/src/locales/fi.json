@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Uusi istunto Google-ikkunassa",
  "Potwierdź w oknie Google": "Vahvista Google-ikkunassa",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "vahvistus tarvitaan Google-ikkunassa (yllä oleva painike tai keskustelussa)",
- "najlepsza w teście: {name} {score}/10": "paras testissä: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "paras testissä: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "viimeisin ajo {date}: uusia {stored}, ohitettuja kaksoiskappaleita {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Palvelintilassa palvelin lataa viralliset oikeuskäytäntötietokannat kokonaan (vanhimmat ensin) ja sen jälkeen vain uudet. Keskeytynyt lataus jatkuu siitä, mihin se jäi. Sama ratkaisu kahdesta tietokannasta tallennetaan kerran.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Lataus toimii vain palvelintilassa.",
+ "pobieranie trwa": "lataus käynnissä"
 }

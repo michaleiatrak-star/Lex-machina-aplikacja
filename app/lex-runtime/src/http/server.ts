@@ -1,5 +1,5 @@
 import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
-import { startCaseLawSync } from "../case-law-db.js";
+import { startCaseLawSync, type SyncFetch } from "../case-law-sync.js";
 import { SkillAutoUpdater } from "../skill-auto-update.js";
 import { setCoreLawScope } from "../core-law-index.js";
 import { UserGroupStore } from "../user-groups.js";
@@ -714,7 +714,7 @@ export async function startLocalServer(options?: {
       // Daily ELI check while the application runs, not only at start.
       coreLawIndex.startSchedule();
       // The local database of rulings (case-law-db.ts): on in server mode, or LEX_CASE_LAW_SYNC=1.
-      startCaseLawSync(() => serverMode.isEnabled());
+      startCaseLawSync({ isServerMode: () => serverMode.isEnabled(), snFetcher: snFetch as unknown as SyncFetch, ocr: new LocalPaddleOcrEngine() });
       // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
       // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
       mcpConnectors.onJurisdictionChange(() => {

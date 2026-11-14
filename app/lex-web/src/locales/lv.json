@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Atjaunot sesiju Google logā",
  "Potwierdź w oknie Google": "Apstiprināt Google logā",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "nepieciešams apstiprinājums Google logā (poga augstāk vai tērzēšanā)",
- "najlepsza w teście: {name} {score}/10": "labākā testā: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "labākā testā: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "pēdējā palaišana {date}: jauni {stored}, izlaisti dublikāti {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Servera režīmā serveris lejupielādē visas oficiālās judikatūras datubāzes (vecākās vispirms), pēc tam tikai jauno. Pārtraukta lejupielāde turpinās no vietas, kur tā apstājās. Viens un tas pats nolēmums no divām datubāzēm tiek saglabāts vienreiz.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Lejupielāde darbojas tikai servera režīmā.",
+ "pobieranie trwa": "notiek lejupielāde"
 }

@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Forny sessionen i Google-vinduet",
  "Potwierdź w oknie Google": "Bekræft i Google-vinduet",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "bekræftelse nødvendig i Google-vinduet (knappen ovenfor eller i chatten)",
- "najlepsza w teście: {name} {score}/10": "bedst i testen: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "bedst i testen: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "seneste kørsel {date}: nye {stored}, oversprungne dubletter {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "I servertilstand henter serveren hele de officielle retspraksisdatabaser (ældste først) og derefter kun nyt. En afbrudt hentning fortsætter, hvor den stoppede. Den samme afgørelse fra to databaser gemmes én gang.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Hentningen kører kun i servertilstand.",
+ "pobieranie trwa": "hentning i gang"
 }

@@ -4182,11 +4182,10 @@ export function resolveCaseLaw(input: { cardUrl?: string; signature?: string; ca
 export type CaseLawCatalogEntry = Omit<CaseLawCopy, "text"> & { chars: number; snippet?: string };
 
 // Baza orzeczeń serwera (tryb serwerowy): synchronizacja całych źródeł, stan każdego źródła.
-export type CaseLawSyncCursor = { phase: "FULL" | "INCREMENTAL"; year: number; page: number; since: string | null; completedAt: string | null };
+export type CaseLawSyncRun = { at: string; requests: number; stored: number; duplicates: number; error?: string; waiting?: string };
 export type CaseLawServerStatus = {
   active: boolean;
-  sources: Array<{ source: string; documents: number; cursor: CaseLawSyncCursor | null }>;
-  lastRun: { at: string; source: string; pages: number; stored: number; error?: string } | null;
+  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; lastRun: CaseLawSyncRun | null }>;
   notBulk: Array<{ source: string; reason: string }>;
 };
 

@@ -1,3 +1,4 @@
+import { sharedCaseLawDatabase, type CaseLawDatabase } from "./case-law-db.js";
 import { supremeCourtSearch, type SupremeCourtSearchFilters } from "./case-law-verifier.js";
 export type CaseLawSearchFetch = (
   input: string | URL,
@@ -289,7 +290,7 @@ function sleep(
   );
 }
 
-async function fetchCbosa(
+export async function fetchCbosa(
   fetcher: CaseLawSearchFetch,
   input: string,
   init: RequestInit,
@@ -454,7 +455,7 @@ async function fetchCbosa(
   );
 }
 
-function cbosaTotal(
+export function cbosaTotal(
   html: string
 ): number | undefined {
   const normalized =
@@ -468,7 +469,7 @@ function cbosaTotal(
     : undefined;
 }
 
-function cbosaDocIds(
+export function cbosaDocIds(
   html: string
 ): string[] {
   const ids: string[] = [];
@@ -493,7 +494,7 @@ function cbosaDocIds(
   return ids;
 }
 
-function cbosaCaseNumber(
+export function cbosaCaseNumber(
   html: string
 ): string[] {
   const titleMatch =
@@ -515,7 +516,7 @@ function cbosaCaseNumber(
     : [];
 }
 
-function cbosaField(
+export function cbosaField(
   html: string,
   label: string
 ): string | undefined {
@@ -581,6 +582,45 @@ export function caseLawSearchEntryUrl(
       : CBOSA_SEARCH;
 }
 
+// Which held sources answer a search addressed to a source: SAOS stands for the common courts,
+// SN and TK, now read from the official bases the server downloaded.
+const LOCAL_SOURCES: Record<CaseLawSearchSource, string[]> = {
+  SAOS: ["SP", "SN", "TK", "KIO"],
+  CBOSA: ["CBOSA"],
+  SN: ["SN"]
+};
+
+/** Hits from the local database of official rulings, or null when it holds none for the query. */
+export function searchLocalDatabase(
+  request: CaseLawSearchRequest,
+  query: string,
+  limit: number,
+  database: CaseLawDatabase | null = sharedCaseLawDatabase()
+): CaseLawSearchResult | null {
+  if (!database || query.length < 2) return null;
+  if (request.sn && Object.values(request.sn).some((value) => value !== undefined && value !== "")) return null;
+  if (request.saos && (request.saos.courtType || request.saos.judgmentType)) return null;
+  const wanted = new Set(LOCAL_SOURCES[request.source]);
+  const cards = database.search(query, limit * 5).filter((card) => wanted.has(card.source) && card.url).slice(0, limit);
+  if (!cards.length) return null;
+  return {
+    source: request.source,
+    status: "FOUND",
+    query,
+    candidates: cards.map((card) => ({
+      source: request.source,
+      id: card.id,
+      caseNumbers: card.signatures,
+      ...(card.date ? { judgmentDate: card.date } : {}),
+      ...(card.court ? { court: card.court } : {}),
+      ...(card.courtType ? { courtType: card.courtType } : {}),
+      sourceUrl: card.url!,
+      contentScope: "DISCOVERY" as const
+    })),
+    reason: "LOCAL_DATABASE"
+  };
+}
+
 export class CaseLawSearchService {
   constructor(
     private readonly fetcher:
@@ -600,6 +640,10 @@ export class CaseLawSearchService {
         .trim();
     const limit =
       clampLimit(request.limit);
+
+    // The server's database of official rulings (case-law-sync.ts) is read before the source.
+    const local = searchLocalDatabase(request, query, limit);
+    if (local) return local;
 
     if (request.source === "SN") {
       return await this.searchSn(query, limit, request.sn ?? {});

@@ -1,3 +1,4 @@
+import { sharedCaseLawDatabase } from "./case-law-db.js";
 import { supremeCourtSearch } from "./case-law-verifier.js";
 export const CASE_LAW_SEARCH_HOSTS = [
     "saos.org.pl",
@@ -139,7 +140,7 @@ function mergeCookies(current, incoming) {
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
-async function fetchCbosa(fetcher, input, init, cookies) {
+export async function fetchCbosa(fetcher, input, init, cookies) {
     let url = input;
     let method = (init.method ?? "GET")
         .toUpperCase();
@@ -230,14 +231,14 @@ async function fetchCbosa(fetcher, input, init, cookies) {
     }
     throw new Error("CBOSA_REDIRECT_LIMIT_EXCEEDED");
 }
-function cbosaTotal(html) {
+export function cbosaTotal(html) {
     const normalized = decodeHtml(html);
     const match = normalized.match(/Znaleziono\s+(\d+)\s+orzecze(?:ń|nia|nie)/iu);
     return match?.[1]
         ? Number(match[1])
         : undefined;
 }
-function cbosaDocIds(html) {
+export function cbosaDocIds(html) {
     const ids = [];
     const seen = new Set();
     const regex = /href\s*=\s*["']\/doc\/([A-Z0-9]{10})\/?["']/giu;
@@ -251,7 +252,7 @@ function cbosaDocIds(html) {
     }
     return ids;
 }
-function cbosaCaseNumber(html) {
+export function cbosaCaseNumber(html) {
     const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/iu);
     const title = titleMatch?.[1]
         ? decodeHtml(titleMatch[1])
@@ -261,7 +262,7 @@ function cbosaCaseNumber(html) {
         ? [match[1].trim()]
         : [];
 }
-function cbosaField(html, label) {
+export function cbosaField(html, label) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(`<td[^>]*class=["'][^"']*lista-label[^"']*["'][^>]*>\\s*${escaped}\\s*<\\/td>[\\s\\S]{0,500}?<td[^>]*class=["'][^"']*info-list-value[^"']*["'][^>]*>([\\s\\S]*?)<\\/td>`, "iu");
     const value = html.match(pattern)?.[1];
@@ -294,6 +295,42 @@ export function caseLawSearchEntryUrl(source) {
             ? "https://sn.pl/index.php"
             : CBOSA_SEARCH;
 }
+// Which held sources answer a search addressed to a source: SAOS stands for the common courts,
+// SN and TK, now read from the official bases the server downloaded.
+const LOCAL_SOURCES = {
+    SAOS: ["SP", "SN", "TK", "KIO"],
+    CBOSA: ["CBOSA"],
+    SN: ["SN"]
+};
+/** Hits from the local database of official rulings, or null when it holds none for the query. */
+export function searchLocalDatabase(request, query, limit, database = sharedCaseLawDatabase()) {
+    if (!database || query.length < 2)
+        return null;
+    if (request.sn && Object.values(request.sn).some((value) => value !== undefined && value !== ""))
+        return null;
+    if (request.saos && (request.saos.courtType || request.saos.judgmentType))
+        return null;
+    const wanted = new Set(LOCAL_SOURCES[request.source]);
+    const cards = database.search(query, limit * 5).filter((card) => wanted.has(card.source) && card.url).slice(0, limit);
+    if (!cards.length)
+        return null;
+    return {
+        source: request.source,
+        status: "FOUND",
+        query,
+        candidates: cards.map((card) => ({
+            source: request.source,
+            id: card.id,
+            caseNumbers: card.signatures,
+            ...(card.date ? { judgmentDate: card.date } : {}),
+            ...(card.court ? { court: card.court } : {}),
+            ...(card.courtType ? { courtType: card.courtType } : {}),
+            sourceUrl: card.url,
+            contentScope: "DISCOVERY"
+        })),
+        reason: "LOCAL_DATABASE"
+    };
+}
 export class CaseLawSearchService {
     fetcher;
     constructor(fetcher = globalThis.fetch.bind(globalThis)) {
@@ -305,6 +342,10 @@ export class CaseLawSearchService {
             .replace(/\s+/gu, " ")
             .trim();
         const limit = clampLimit(request.limit);
+        // The server's database of official rulings (case-law-sync.ts) is read before the source.
+        const local = searchLocalDatabase(request, query, limit);
+        if (local)
+            return local;
         if (request.source === "SN") {
             return await this.searchSn(query, limit, request.sn ?? {});
         }

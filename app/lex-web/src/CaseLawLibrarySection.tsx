@@ -48,10 +48,15 @@ export function filterCaseLaw(
   return listed;
 }
 
-function cursorText(cursor: CaseLawServerStatus["sources"][number]["cursor"]): string {
-  if (!cursor) return t("pobieranie jeszcze nie ruszyło");
-  if (cursor.phase === "FULL") return t("pierwsze pobranie: rok {year}, strona {page}", { year: cursor.year, page: cursor.page + 1 });
-  return t("komplet pobrany {date}; dalej tylko zmiany", { date: (cursor.completedAt ?? "").slice(0, 10) });
+function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string {
+  if (!run) return "";
+  const head = t("ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}", {
+    date: run.at.slice(0, 16).replace("T", " "),
+    stored: run.stored,
+    duplicates: run.duplicates
+  });
+  if (run.waiting) return `${head} · ${run.waiting}`;
+  return run.error ? `${head} · ${t("błąd: {error}", { error: run.error })}` : head;
 }
 
 /**
@@ -353,16 +358,19 @@ export function CaseLawLibrarySection() {
                 )}
               </>
             ) : null}
-            {server && (server.active || server.sources.length) ? (
+            {server ? (
               <div className="case-law-server">
                 <h3>
                   {t("Baza serwera — wszystkie orzeczenia")}
-                  <InfoTip>{t("W trybie serwerowym serwer pobiera całe bazy orzeczeń (od najstarszych), potem już tylko zmiany. Model czyta tę bazę przed sięgnięciem do źródła.")}</InfoTip>
+                  <InfoTip>{t("W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.")}</InfoTip>
                 </h3>
+                {server.active ? null : <p className="field-help">{t("Pobieranie działa tylko w trybie serwerowym.")}</p>}
                 <ul>
                   {server.sources.map((item) => (
                     <li key={item.source}>
-                      <strong>{item.source}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {cursorText(item.cursor)}
+                      <strong>{item.label}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {item.progress}
+                      {item.running ? ` · ${t("pobieranie trwa")}` : ""}
+                      {item.lastRun ? <small className="field-help"> {runText(item.lastRun)}</small> : null}
                     </li>
                   ))}
                   {server.notBulk.map((item) => (
@@ -371,16 +379,6 @@ export function CaseLawLibrarySection() {
                     </li>
                   ))}
                 </ul>
-                {server.lastRun ? (
-                  <p className="field-help">
-                    {t("Ostatni przebieg {date}: stron {pages}, nowych lub zmienionych {stored}", {
-                      date: server.lastRun.at.slice(0, 16).replace("T", " "),
-                      pages: server.lastRun.pages,
-                      stored: server.lastRun.stored
-                    })}
-                    {server.lastRun.error ? ` · ${t("błąd: {error}", { error: server.lastRun.error })}` : ""}
-                  </p>
-                ) : null}
               </div>
             ) : null}
             {error ? <p className="chat-inline-error">{error}</p> : null}

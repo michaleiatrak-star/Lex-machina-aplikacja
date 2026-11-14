@@ -1,4 +1,4 @@
-import { caseLawSyncStatus } from "../case-law-db.js";
+import { caseLawSyncStatus } from "../case-law-sync.js";
 import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";

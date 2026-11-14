@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Renova la sessió a la finestra de Google",
  "Potwierdź w oknie Google": "Confirma a la finestra de Google",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "cal confirmació a la finestra de Google (botó de dalt o al xat)",
- "najlepsza w teście: {name} {score}/10": "millor a la prova: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "millor a la prova: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "darrera execució {date}: nous {stored}, duplicats omesos {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "En mode servidor, el servidor baixa les bases oficials de jurisprudència senceres (les més antigues primer) i després només les novetats. Una baixada interrompuda es reprèn on s’havia aturat. La mateixa resolució de dues bases es desa una sola vegada.",
+ "Pobieranie działa tylko w trybie serwerowym.": "La baixada només funciona en mode servidor.",
+ "pobieranie trwa": "baixada en curs"
 }

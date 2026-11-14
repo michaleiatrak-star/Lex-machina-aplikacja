@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA";
+export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA" | "SP" | "TK" | "KIO" | "UODO" | "WSD" | "OSD";
 
 export type CaseLawCard = {
   id: string;
@@ -141,6 +141,36 @@ export class CaseLawDatabase {
   count(source?: CaseLawSource): number {
     const row = (source ? this.db.prepare("SELECT COUNT(*) AS n FROM documents WHERE source = ?").get(source) : this.db.prepare("SELECT COUNT(*) AS n FROM documents").get()) as { n: number };
     return row.n;
+  }
+
+  /** Whether a document of this source is held. */
+  has(source: CaseLawSource, sourceId: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM documents WHERE id = ?").get(`${source}:${sourceId}`));
+  }
+
+  /**
+   * The same ruling already held from another official source (same signature and date): the
+   * database keeps one copy, e.g. a WSA ruling from CBOSA is not stored again from another base.
+   */
+  duplicateOf(source: CaseLawSource, signatures: string[], date: string | null): string | null {
+    if (!date) return null;
+    for (const signature of signatures) {
+      const row = this.db
+        .prepare("SELECT d.id FROM signatures s JOIN documents d ON d.id = s.id WHERE s.signature = ? AND d.date = ? AND d.source <> ? AND d.source <> 'SAOS' LIMIT 1")
+        .get(normalizeSignature(signature), date, source) as { id: string } | undefined;
+      if (row) return row.id;
+    }
+    return null;
+  }
+
+  /** Any JSON state of a source's synchronisation (its cursor), saved after every unit of work. */
+  state<T>(source: string): T | null {
+    const row = this.db.prepare("SELECT cursor FROM sync_state WHERE source = ?").get(source) as { cursor: string } | undefined;
+    return row ? (JSON.parse(row.cursor) as T) : null;
+  }
+
+  saveState(source: string, state: unknown): void {
+    this.db.prepare("INSERT OR REPLACE INTO sync_state (source, cursor, updated_at) VALUES (?, ?, ?)").run(source, JSON.stringify(state), new Date().toISOString());
   }
 
   cursor(source: CaseLawSource): SyncCursor | null {
@@ -270,45 +300,7 @@ export function sharedCaseLawDatabase(): CaseLawDatabase | null {
   return shared;
 }
 
-// Official sources and disciplinary case law: none is downloaded in full yet. SAOS is an unofficial
-// copy and is never downloaded in bulk. SN's own base asks for a person's verification (captcha),
-// which the application does not get around; the others have no adapter for the whole base yet.
-// Their rulings are read one by one, from the official page, when the work needs them.
-export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
-  { source: "SN", reason: "baza sn.pl wymaga weryfikacji człowieka — orzeczenia SN pobierane pojedynczo" },
-  { source: "Portal Orzeczeń Sądów Powszechnych", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
-  { source: "CBOSA", reason: "brak adaptera pobierania całej bazy — orzeczenia NSA/WSA pobierane pojedynczo" },
-  { source: "TK", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
-  { source: "Sądy dyscyplinarne", reason: "brak adaptera pobierania całej bazy — orzeczenia z portali sądów dyscyplinarnych pobierane pojedynczo" },
-  { source: "EUREKA", reason: "brak adaptera pobierania całej bazy — interpretacje pobierane pojedynczo" }
-];
-
-type SyncRun = { at: string; source: string; pages: number; stored: number; error?: string };
-const lastRun: SyncRun | null = null;
-let syncActive = false;
-
-/**
- * Background synchronisation of the whole bases. Downloads only official sources; none has a bulk
- * adapter yet, so no run starts. SAOS (an unofficial copy) is not downloaded, also with
- * LEX_CASE_LAW_SYNC=1. The interval stays so that an adapter added later runs on the same schedule.
- */
-export function startCaseLawSync(isServerMode: () => boolean = () => false, intervalMs = 60 * 60 * 1000): () => void {
-  void isServerMode;
-  const tick = () => {
-    syncActive = false;
-  };
-  tick();
-  const timer = setInterval(tick, intervalMs);
-  timer.unref?.();
-  return () => clearInterval(timer);
-}
-
-/** What the settings window shows: whether the sync runs, how much each source holds, where it is. */
-export function caseLawSyncStatus(): {
-  active: boolean;
-  sources: Array<{ source: string; documents: number; cursor: SyncCursor | null }>;
-  lastRun: SyncRun | null;
-  notBulk: typeof CASE_LAW_NOT_BULK;
-} {
-  return { active: syncActive, sources: [], lastRun, notBulk: CASE_LAW_NOT_BULK };
+/** The synchronisation's database becomes the installation's shared one. */
+export function setSharedCaseLawDatabase(database: CaseLawDatabase | null): void {
+  shared = database;
 }

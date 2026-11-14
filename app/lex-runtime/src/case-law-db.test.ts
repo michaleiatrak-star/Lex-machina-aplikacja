@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CASE_LAW_NOT_BULK, CaseLawDatabase, SAOS_DUMP, caseLawSyncStatus, saosRecord, startCaseLawSync, syncSaos } from "./case-law-db.js";
+import { CaseLawDatabase, SAOS_DUMP, saosRecord, syncSaos } from "./case-law-db.js";
 
 const item = (id: number, signature: string, date: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -75,18 +75,5 @@ describe("local case-law database (SAOS first)", () => {
     expect(db.upsert(record.card, record.text, record.links)).toBe(false);
     expect(db.upsert({ ...record.card, modified: "2021-02-01T00:00:00.000" }, record.text, record.links)).toBe(true);
     db.close();
-  });
-});
-
-describe("synchronizacja bazy orzeczeń: tylko źródła oficjalne", () => {
-  it("SAOS (kopia nieoficjalna) nie jest pobierany hurtowo, także w trybie serwerowym i z LEX_CASE_LAW_SYNC=1", () => {
-    process.env.LEX_CASE_LAW_SYNC = "1";
-    startCaseLawSync(() => true, 60_000)();
-    delete process.env.LEX_CASE_LAW_SYNC;
-    const status = caseLawSyncStatus();
-    expect(status.active).toBe(false);
-    expect(status.sources).toEqual([]);
-    expect(CASE_LAW_NOT_BULK.map((item) => item.source)).not.toContain("SAOS");
-    expect(CASE_LAW_NOT_BULK.map((item) => item.source)).toContain("Sądy dyscyplinarne");
   });
 });

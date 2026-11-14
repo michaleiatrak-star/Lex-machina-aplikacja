@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Sessioun an der Google-Fënster erneieren",
  "Potwierdź w oknie Google": "An der Google-Fënster confirméieren",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "Bestätegung an der Google-Fënster néideg (Knäppchen uewen oder am Chat)",
- "najlepsza w teście: {name} {score}/10": "bescht am Test: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "bescht am Test: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "leschte Laf {date}: nei {stored}, iwwersprongen Duplikater {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Am Servermodus luet de Server déi ganz offiziell Rechtsprechungsdatebanken erof (déi eelst als éischt), duerno nëmmen dat Neit. En ënnerbrachenen Download geet do weider, wou en opgehalen huet. Dee selwechten Uerteel aus zwou Datebanke gëtt eemol gespäichert.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Den Download leeft nëmmen am Servermodus.",
+ "pobieranie trwa": "Download leeft"
 }

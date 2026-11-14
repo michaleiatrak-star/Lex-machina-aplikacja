@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Atnaujinti sesiją Google lange",
  "Potwierdź w oknie Google": "Patvirtinti Google lange",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "reikia patvirtinimo Google lange (mygtukas aukščiau arba pokalbyje)",
- "najlepsza w teście: {name} {score}/10": "geriausia teste: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "geriausia teste: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "paskutinis vykdymas {date}: naujų {stored}, praleista dublikatų {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Serverio režimu serveris atsisiunčia visas oficialias teismų praktikos duomenų bazes (seniausias pirmiausia), vėliau tik naujus. Nutrūkęs atsisiuntimas tęsiamas nuo sustojimo vietos. Tas pats sprendimas iš dviejų duomenų bazių išsaugomas vieną kartą.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Atsisiuntimas veikia tik serverio režimu.",
+ "pobieranie trwa": "vyksta atsisiuntimas"
 }

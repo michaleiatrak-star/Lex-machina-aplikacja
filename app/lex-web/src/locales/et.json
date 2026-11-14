@@ -2853,5 +2853,9 @@
  "Odnów sesję w oknie Google": "Uuenda seanssi Google'i aknas",
  "Potwierdź w oknie Google": "Kinnita Google'i aknas",
  "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "vaja on kinnitust Google'i aknas (nupp ülal või vestluses)",
- "najlepsza w teście: {name} {score}/10": "testis parim: {name} {score}/10"
+ "najlepsza w teście: {name} {score}/10": "testis parim: {name} {score}/10",
+ "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "viimane käivitus {date}: uusi {stored}, vahele jäetud duplikaate {duplicates}",
+ "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Serverirežiimis laadib server alla terved ametlikud kohtupraktika andmebaasid (vanimad enne) ja seejärel ainult uue. Katkenud allalaadimine jätkub sealt, kus see peatus. Sama lahend kahest andmebaasist salvestatakse üks kord.",
+ "Pobieranie działa tylko w trybie serwerowym.": "Allalaadimine töötab ainult serverirežiimis.",
+ "pobieranie trwa": "allalaadimine käib"
 }
