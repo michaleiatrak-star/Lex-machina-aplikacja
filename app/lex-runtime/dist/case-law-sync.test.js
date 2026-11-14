@@ -126,3 +126,50 @@ describe("RPO na sesji użytkownika i sygnatury urzędów", () => {
         expect(authoritySignature("Minister Zdrowia VII.501.12.2025 2025-03-01")).toBe("VII.501.12.2025");
     });
 });
+describe("czat czyta bazę serwera: źródło BAZA i pełny tekst", () => {
+    it("BAZA zwraca orzeczenia sądów dyscyplinarnych z kartą i bazą; tekst do doczytania po sygnaturze", async () => {
+        const { setSharedCaseLawDatabase } = await import("./case-law-db.js");
+        const { caseTextPortion } = await import("./case-law-texts.js");
+        const db = database();
+        db.upsert({ source: "OSD", sourceId: "K1", court: "Okręgowy Sąd Dyscyplinarny OIRP w Kielcach", courtType: "DISCIPLINARY", division: null, signatures: ["OSD 40/22"], date: "2022-11-10", kind: "orzeczenie", judges: [], keywords: [], legalBases: [], summary: null, url: "https://www.oirpkielce.pl/x/OSD_40-XI-22.pdf", modified: null }, "tajemnica zawodowa radcy prawnego naruszenie ".repeat(5), []);
+        const baza = searchLocalDatabase({ source: "BAZA", query: "tajemnica zawodowa" }, "tajemnica zawodowa", 5, db);
+        expect(baza?.candidates[0]).toMatchObject({ database: "OSD", sourceUrl: "https://www.oirpkielce.pl/x/OSD_40-XI-22.pdf" });
+        expect(searchLocalDatabase({ source: "BAZA", query: "tajemnica zawodowa", bases: ["NIL"] }, "tajemnica zawodowa", 5, db)).toBeNull();
+        expect(searchLocalDatabase({ source: "SAOS", query: "tajemnica zawodowa" }, "tajemnica zawodowa", 5, db)).toBeNull();
+        setSharedCaseLawDatabase(db);
+        try {
+            expect(JSON.parse(caseTextPortion("OSD 40/22", 0))).toMatchObject({ status: "OK", source: "OSD" });
+        }
+        finally {
+            setSharedCaseLawDatabase(null);
+        }
+    });
+});
+describe("KNF, UKE, RIO, KRRiT, RF: sygnatury i daty urzędów", () => {
+    it("numer uchwały RIO, znak sprawy UKE, data z linii miejscowości; RF bez sesji czeka", async () => {
+        const { authoritySignature, letterDate, rfAdapter, runAdapter, CASE_LAW_ADAPTERS } = await import("./case-law-sync.js");
+        expect(authoritySignature("Garwolin (gmina) Uchwała Kolegium Nr 23.284.2026 z dnia 3 listopada 2026 r.")).toBe("Nr 23.284.2026");
+        expect(authoritySignature("dr.wwm.6171.21.2026.91.PDF")).toBe("DR.WWM.6171.21.2026");
+        expect(letterDate("PREZES UKE Warszawa, dnia 12 sierpnia 2026 r. DR.WWM.6171.21.2026 DECYZJA ... wniosku z dnia 9 listopada 2023 r.")).toBe("2026-08-12");
+        const run = await runAdapter(rfAdapter, database(), (async () => { throw new Error("bez sesji nic nie pobieramy"); }), 10, 0, now);
+        expect(run.waiting).toMatch(/Rzecznika Finansowego/u);
+        expect(CASE_LAW_ADAPTERS.map((adapter) => adapter.source)).toEqual(expect.arrayContaining(["KNF", "UKE", "RIO", "KRRIT", "RF"]));
+    });
+});
+describe("biblioteka orzeczeń w czacie obejmuje bazę serwera", () => {
+    it("search_case_law_library zwraca orzeczenie z bazy serwera także przy wyłączonej bibliotece", async () => {
+        const { setSharedCaseLawDatabase } = await import("./case-law-db.js");
+        const db = database();
+        db.upsert({ source: "KNF", sourceId: "kary-2025", court: "Komisja Nadzoru Finansowego", courtType: "AUTHORITY", division: null, signatures: ["Wykaz kar nałożonych przez KNF w 2025"], date: null, kind: "wykaz kar", judges: [], keywords: [], legalBases: [], summary: null, url: "https://knf.gov.pl/knf/pl/komponenty/img/kary_KNF_2025.pdf", modified: null }, "kara pieniężna nałożona na dom maklerski ".repeat(5), []);
+        setSharedCaseLawDatabase(db);
+        try {
+            const { searchCaseLawLibraryForTest } = await import("./verification-tool-runtime.js");
+            const result = JSON.parse(searchCaseLawLibraryForTest({ query: "dom maklerski" }));
+            expect(result.status).toBe("FOUND");
+            expect(result.entries[0]).toMatchObject({ database: "KNF" });
+        }
+        finally {
+            setSharedCaseLawDatabase(null);
+        }
+    });
+});

@@ -131,4 +131,17 @@ describe("Gemini + Google i Brave", () => {
         }
         await expect(new PublicWebSearch({}, (async () => new Response(""))).searchEngine("brave", "x", 3)).rejects.toThrow("NOT_CONFIGURED");
     });
+    it("Brave z limitem API: wyniki ze strony wyników DuckDuckGo (scrapowanie), nie błąd", async () => {
+        const asked = [];
+        const fetchImpl = (async (input) => {
+            const url = String(input);
+            asked.push(new URL(url).host);
+            if (url.includes("api.search.brave.com"))
+                return new Response("", { status: 429 });
+            return new Response('<div class="result"><a class="result__a" href="https://isap.sejm.gov.pl/isap.nsf/x">Kodeks cywilny</a><a class="result__snippet">art. 415</a></div>', { headers: { "content-type": "text/html" } });
+        });
+        const result = await new PublicWebSearch({ BRAVE_SEARCH_API_KEY: "BSAtestkey1234567890", WEB_SEARCH_PROVIDER: "brave" }, fetchImpl).search("kodeks cywilny art. 415", 3);
+        expect(result.provider).toBe("duckduckgo");
+        expect(asked).toEqual(["api.search.brave.com", "html.duckduckgo.com"]);
+    });
 });

@@ -1,3 +1,4 @@
+import { sharedCaseLawDatabase } from "./case-law-db.js";
 // Long rulings for the model, as the chat reads them: the beginning (court, composition,
 // operative part) and the passages around what the case file quotes from that ruling, with the
 // rest read in portions by read_case_law_text (user, 2026-11-12: fragments instead of higher
@@ -16,7 +17,12 @@ export function holdCaseLawText(signature, source, text) {
         held.set(key(signature), { signature, source, text });
 }
 export function heldCaseLawText(signature) {
-    return held.get(key(signature)) ?? null;
+    const entry = held.get(key(signature));
+    if (entry)
+        return entry;
+    // Rulings downloaded into the server's database of official sources (case-law-sync.ts).
+    const stored = sharedCaseLawDatabase()?.bySignature(signature).find((row) => row.text && row.card.source !== "SAOS");
+    return stored?.text ? { signature, source: stored.card.source, text: stored.text } : null;
 }
 const flat = (value) => value.normalize("NFKC").replace(/\s+/gu, " ").toLocaleLowerCase("pl");
 /** Quotations the case file attributes to this ruling: „…” within 600 characters after its signature. */
@@ -75,7 +81,7 @@ export function caseTextExcerpt(text, quotes, budget = CASE_TEXT_BUDGET) {
 export function caseTextPortion(signature, offset) {
     const entry = heldCaseLawText(signature);
     if (!entry)
-        return JSON.stringify({ status: "NOT_HELD", signature, instruction: "Ten tekst nie był pobrany w tej sesji; zweryfikuj sygnaturę narzędziem właściwego sądu." });
+        return JSON.stringify({ status: "NOT_HELD", signature, instruction: "Ten tekst nie był pobrany w tej sesji ani nie ma go w bazie orzeczeń serwera; zweryfikuj sygnaturę narzędziem właściwego sądu." });
     const source = entry.text.normalize("NFKC").replace(/\s+/gu, " ");
     const from = Math.max(0, Math.min(Math.trunc(offset) || 0, source.length));
     const to = Math.min(source.length, from + CASE_TEXT_PORTION);

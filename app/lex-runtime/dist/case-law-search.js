@@ -4,7 +4,9 @@ export const CASE_LAW_SEARCH_HOSTS = [
     "saos.org.pl",
     "www.saos.org.pl",
     "orzeczenia.nsa.gov.pl",
-    "sn.pl"
+    "sn.pl",
+    // source=BAZA reads the server's database; the court portal stands for its official sources.
+    "orzeczenia.ms.gov.pl"
 ];
 const SAOS_ENDPOINT = "https://www.saos.org.pl/api/search/judgments";
 const CBOSA_QUERY = "https://orzeczenia.nsa.gov.pl/cbo/query";
@@ -289,6 +291,8 @@ function cbosaCandidate(id, html) {
     };
 }
 export function caseLawSearchEntryUrl(source) {
+    if (source === "BAZA")
+        return "https://orzeczenia.ms.gov.pl/";
     return source === "SAOS"
         ? SAOS_ENDPOINT
         : source === "SN"
@@ -300,7 +304,8 @@ export function caseLawSearchEntryUrl(source) {
 const LOCAL_SOURCES = {
     SAOS: ["SP", "SN", "TK", "KIO"],
     CBOSA: ["CBOSA"],
-    SN: ["SN"]
+    SN: ["SN"],
+    BAZA: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF"]
 };
 /** Hits from the local database of official rulings, or null when it holds none for the query. */
 export function searchLocalDatabase(request, query, limit, database = sharedCaseLawDatabase()) {
@@ -310,7 +315,9 @@ export function searchLocalDatabase(request, query, limit, database = sharedCase
         return null;
     if (request.saos && (request.saos.courtType || request.saos.judgmentType))
         return null;
-    const wanted = new Set(LOCAL_SOURCES[request.source]);
+    const official = LOCAL_SOURCES[request.source];
+    const asked = request.source === "BAZA" && request.bases?.length ? official.filter((base) => request.bases.includes(base)) : official;
+    const wanted = new Set(asked);
     const cards = database.search(query, limit * 5).filter((card) => wanted.has(card.source) && card.url).slice(0, limit);
     if (!cards.length)
         return null;
@@ -326,6 +333,7 @@ export function searchLocalDatabase(request, query, limit, database = sharedCase
             ...(card.court ? { court: card.court } : {}),
             ...(card.courtType ? { courtType: card.courtType } : {}),
             sourceUrl: card.url,
+            ...(request.source === "BAZA" ? { database: card.source } : {}),
             contentScope: "DISCOVERY"
         })),
         reason: "LOCAL_DATABASE"
@@ -346,6 +354,9 @@ export class CaseLawSearchService {
         const local = searchLocalDatabase(request, query, limit);
         if (local)
             return local;
+        if (request.source === "BAZA") {
+            return { source: "BAZA", status: "NOT_FOUND", query, candidates: [], reason: sharedCaseLawDatabase() ? "LOCAL_DATABASE_NO_HITS" : "LOCAL_DATABASE_UNAVAILABLE" };
+        }
         if (request.source === "SN") {
             return await this.searchSn(query, limit, request.sn ?? {});
         }

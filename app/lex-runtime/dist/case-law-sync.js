@@ -660,6 +660,11 @@ export function disciplinarySignature(...texts) {
     return null;
 }
 /** The ruling's date: "z dnia 14 maja 2024 r." / "dnia 14.05.2024", not the first date of a cited act. */
+/** The date of an authority's document: its place-and-date line ("Warszawa, dnia 3 listopada 2026 r."). */
+export function letterDate(text) {
+    const found = /\b\p{Lu}[\p{L}-]+(?: \p{Lu}[\p{L}-]+)?,\s*(?:dnia\s+)?(\d{1,2}\s+\p{L}+\s+\d{4}|\d{1,2}[.-]\d{1,2}[.-]\d{4})/u.exec(text.slice(0, 1500))?.[1];
+    return found ? polishDate(found) ?? numericDate(found) : null;
+}
 export function rulingDate(text) {
     // The header only (up to the bench): a date further on is a cited act's or a party's letter's.
     const bench = text.search(/w\s+składzie|skład\s+orzekający/iu);
@@ -719,30 +724,32 @@ function storeDisciplinary(ctx, seed, url, label, text, source = "OSD") {
     ctx.store({
         source, sourceId: url, court: seed.body, courtType: source === "OSD" ? "DISCIPLINARY" : "AUTHORITY", division: null,
         signatures: [(source === "OSD" ? disciplinarySignature(label, head, decodeURIComponent(url.split("/").pop() ?? "")) : authoritySignature(label, head)) ?? label.slice(0, 80)].filter(Boolean),
-        date: rulingDate(head), kind: source === "OSD" ? (/postanowieni/iu.test(head.slice(0, 300)) ? "postanowienie" : "orzeczenie") : "decyzja",
+        date: source === "OSD" ? rulingDate(head) : letterDate(head) ?? rulingDate(head), kind: source === "OSD" ? (/postanowieni/iu.test(head.slice(0, 300)) ? "postanowienie" : "orzeczenie") : "decyzja",
         judges: [], keywords: [], legalBases: [], summary: null, url, modified: null
     }, text);
 }
 async function crawlSeed(ctx, seed, source = "OSD") {
-    const queue = [seed.start];
+    const queue = [seed.start, ...(seed.starts ?? [])];
     const seen = new Set(queue);
-    const items = new Map();
-    while (queue.length && ctx.open && seen.size <= 300) {
+    const hosts = new Set([new URL(seed.start).host, ...(seed.itemHosts ?? [])]);
+    const links = (html, page) => [...html.matchAll(/<a\b[^>]*href="([^"#]+)"[^>]*>([\s\S]*?)<\/a>/giu)].flatMap((match) => {
+        try {
+            const link = new URL(match[1].replace(/&amp;/gu, "&"), page);
+            return hosts.has(link.host) ? [{ href: link.toString(), match }] : [];
+        }
+        catch {
+            return [];
+        }
+    });
+    // Items are stored page by page, so a pass cut by the budget keeps what it downloaded; the next
+    // pass walks the listing again and skips what is held.
+    while (queue.length && ctx.open && seen.size <= (seed.pageLimit ?? 300)) {
         const page = queue.shift();
         const html = await ctx.html(page);
         if (!html)
             continue;
-        for (const match of html.matchAll(/<a\b[^>]*href="([^"#]+)"[^>]*>([\s\S]*?)<\/a>/giu)) {
-            let link;
-            try {
-                link = new URL(match[1].replace(/&amp;/gu, "&"), page);
-            }
-            catch {
-                continue;
-            }
-            if (link.host !== new URL(seed.start).host)
-                continue;
-            const href = link.toString();
+        const items = new Map();
+        for (const { href, match } of links(html, page)) {
             if (seed.item.test(href)) {
                 // The link's own text, or (a bare "Pobierz") the table row it sits in.
                 let label = squeeze(plainText(match[2]));
@@ -759,13 +766,24 @@ async function crawlSeed(ctx, seed, source = "OSD") {
                 queue.push(href);
             }
         }
-    }
-    for (const [url, label] of items) {
-        if (!ctx.open)
-            return false;
-        if (ctx.db.has(source, url))
-            continue;
-        storeDisciplinary(ctx, seed, url, label, await documentText(ctx, url).catch(() => null), source);
+        for (const [url, label] of items) {
+            if (!ctx.open)
+                return false;
+            if (ctx.db.has(source, url))
+                continue;
+            let documentUrl = url;
+            let title = label;
+            if (seed.attachment) {
+                const itemPage = (await ctx.html(url)) ?? "";
+                title = squeeze(plainText(/<h1\b[\s\S]*?<\/h1>/u.exec(itemPage)?.[0] ?? "")) || label;
+                const file = links(itemPage, url).find(({ href }) => seed.attachment.test(href));
+                if (!file)
+                    continue;
+                documentUrl = file.href;
+            }
+            const text = await documentText(ctx, documentUrl).catch(() => null);
+            storeDisciplinary(ctx, seed, url, title, text, source);
+        }
     }
     return ctx.open;
 }
@@ -1025,7 +1043,17 @@ export const nilAdapter = {
 };
 // ── Decisions of authorities published as tables of files (URE) ──
 const AUTHORITY_SIGNATURE = /\b([A-ZŁŚŻ]{2,5}(?:[.-][A-Z0-9]{1,6})*[ .-]?\d{1,5}\/\d{4}|[A-ZŁŚŻ][a-ząćęłńóśźż]{2,12} \d{1,5}\/\d{4}|[IVXL]{1,5}\.\d{3,4}(?:\.\d{1,5}){1,3}\.\d{4})\b/u;
+const RESOLUTION_NUMBER = /\b(?:Uchwał[ay]|Rozstrzygnięci[ea]|Postanowieni[ea])[^\n]{0,60}?\bNr\s+([0-9IVXLA-Z][\w./-]*?\d{4})(?:\b|\s)/u;
+const CASE_REFERENCE = /\b([A-Za-z]{2,5}(?:\.[A-Za-z]{2,6})+\.\d{3,4}(?:\.\d{1,5}){1,2}\.\d{4})\b/u;
 export function authoritySignature(...texts) {
+    for (const text of texts) {
+        const resolution = RESOLUTION_NUMBER.exec(text.normalize("NFKC"))?.[1];
+        if (resolution)
+            return `Nr ${resolution}`;
+        const reference = CASE_REFERENCE.exec(text.normalize("NFKC"))?.[1];
+        if (reference)
+            return reference.toLocaleUpperCase("pl");
+    }
     for (const text of texts) {
         const found = AUTHORITY_SIGNATURE.exec(text.normalize("NFKC"))?.[1];
         if (found)
@@ -1123,7 +1151,218 @@ export const rpoAdapter = {
         }
     }
 };
-export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter];
+// ── Seeded crawls of authorities' BIPs: one run walks the seeds in turn and resumes at the next ──
+function seededAdapter(source, label, seeds) {
+    return {
+        source,
+        label,
+        progress: (db) => {
+            const state = db.state(source);
+            if (!state)
+                return "nie rozpoczęto";
+            const head = state.rounds ? `pełny przegląd zakończony ${state.lastRoundAt?.slice(0, 10)}; ` : "";
+            return `${head}część ${state.seed + 1} z ${seeds.length} (${seeds[state.seed]?.id ?? ""})`;
+        },
+        async run(ctx) {
+            let state = ctx.db.state(source) ?? { seed: 0, rounds: 0, lastRoundAt: null };
+            if (state.seed >= seeds.length)
+                state = { ...state, seed: 0 };
+            while (ctx.open) {
+                if (!(await crawlSeed(ctx, seeds[state.seed], source)))
+                    break;
+                const next = state.seed + 1;
+                state = next >= seeds.length ? { seed: 0, rounds: state.rounds + 1, lastRoundAt: ctx.now().toISOString() } : { ...state, seed: next };
+                ctx.db.saveState(source, state);
+                if (state.seed === 0)
+                    return;
+            }
+            ctx.db.saveState(source, state);
+        }
+    };
+}
+// UKE (bip.uke.gov.pl): decisions of the President of UKE by category; month pages hold the PDFs.
+const UKE_CATEGORIES = ["bezplatny-internet/decyzje-o-bezplatnym-internecie", "decyzje-smp", "dostep-do-infrastruktury", "dostep-do-nieruchomosci", "inne", "obowiazki-regulacyjne", "oferty-ramowe", "operator-wyznaczony", "podlaczenie-siecidostep-telekomunikacyjny/decyzje-o-dostepie-telekomunikacyjnym", "podlaczenie-siecidostep-telekomunikacyjny/decyzje-o-polaczeniu-sieci", "rachunkowosc-regulacyjna"];
+export const UKE_SEEDS = [
+    ...UKE_CATEGORIES.map((part) => ({
+        id: `uke-${part.split("/").pop()}`,
+        body: "Prezes Urzędu Komunikacji Elektronicznej",
+        start: `https://bip.uke.gov.pl/decyzje/${part}/`,
+        listing: new RegExp(`/decyzje/${part}/(?:\\d+,strona|[^/]+,\\d+)\\.html$`, "u"),
+        item: /\/download\/[^?#]+\.(?:pdf|docx)$/iu
+    })),
+    { id: "uke-kary", body: "Prezes Urzędu Komunikacji Elektronicznej", start: "https://bip.uke.gov.pl/kary-pieniezne/", listing: /\/kary-pieniezne\/(?:\d+,strona|[^/]+,\d+)\.html$/u, item: /\/download\/[^?#]+\.(?:pdf|docx)$/iu }
+];
+export const ukeAdapter = seededAdapter("UKE", "UKE — decyzje i kary Prezesa UKE", UKE_SEEDS);
+// RIO: the chambers on the common BIP platform; resolutions of the board (uchwały kolegium,
+// rozstrzygnięcia nadzorcze) found by the BIP's search, files on the bip-api host. Plus the
+// positions and resolutions of the National Council of RIO (rio.gov.pl).
+const RIO_CHAMBERS = [["warszawa", "w Warszawie"], ["bialystok", "w Białymstoku"], ["bydgoszcz", "w Bydgoszczy"], ["gdansk", "w Gdańsku"], ["kielce", "w Kielcach"], ["krakow", "w Krakowie"], ["poznan", "w Poznaniu"], ["szczecin", "w Szczecinie"], ["zielonagora", "w Zielonej Górze"]];
+const RIO_PHRASES = ["uchwała kolegium", "rozstrzygnięcie nadzorcze", "wyjaśnienia"];
+export const RIO_SEEDS = [
+    ...RIO_CHAMBERS.map(([city, where]) => {
+        const host = `bip.${city}.rio.gov.pl`;
+        const search = (phrase, page) => `https://${host}/wyszukiwanie?searchPhrase=${encodeURIComponent(phrase)}&size=50&page=${page}&sortBy=0&lang=PL`;
+        const pages = RIO_PHRASES.flatMap((phrase) => Array.from({ length: 20 }, (_, page) => search(phrase, page)));
+        return {
+            id: `rio-${city}`,
+            body: `Regionalna Izba Obrachunkowa ${where}`,
+            start: pages[0],
+            starts: pages.slice(1),
+            pageLimit: 1500,
+            listing: null,
+            item: /\/kategorie\/\d+-[^/]+\/artykuly\/\d+-[^/?]*(?:uchwal|rozstrzygn|wyjasn|stanowisk)[^/]*$/u,
+            attachment: /\/api\/attachments\/\d+$/u,
+            itemHosts: [`bip-api.${city}.rio.gov.pl`]
+        };
+    }),
+    { id: "krrio-stanowiska", body: "Krajowa Rada Regionalnych Izb Obrachunkowych", start: "https://rio.gov.pl/181/stanowiska-krrio.html", listing: /rio\.gov\.pl\/\d+\/[^/]*(?:stanowisk|uchwal)[^/]*\.html$/u, item: /\.(?:pdf|docx)$/iu },
+    { id: "krrio-uchwaly", body: "Krajowa Rada Regionalnych Izb Obrachunkowych", start: "https://rio.gov.pl/180/uchwaly-krrio.html", listing: /rio\.gov\.pl\/\d+\/[^/]*(?:stanowisk|uchwal)[^/]*\.html$/u, item: /\.(?:pdf|docx)$/iu }
+];
+export const rioAdapter = seededAdapter("RIO", "RIO — uchwały kolegiów, rozstrzygnięcia nadzorcze i stanowiska KR RIO", RIO_SEEDS);
+// KRRiT (gov.pl/web/krrit): decisions of the Chairman (kary dla nadawców) and positions; the
+// sections are found from the start page by their names, the decisions are gov.pl attachments.
+export const KRRIT_SEEDS = [
+    { id: "krrit", body: "Przewodniczący Krajowej Rady Radiofonii i Telewizji", start: "https://www.gov.pl/web/krrit", listing: /\/web\/krrit\/[^?#]*(?:decyzj|ukaran|kar[ay]|stanowisk|uchwal|rozstrzygni)[^?#]*(?:\?page=\d+)?$/u, item: /\/attachment\/[0-9a-f-]{36}$/u, pageLimit: 600 }
+];
+export const krritAdapter = seededAdapter("KRRIT", "KRRiT — decyzje Przewodniczącego (kary) i stanowiska", KRRIT_SEEDS);
+// KNF: the site search (knf.gov.pl/wyniki_wyszukiwania) returns its documents as JSON inside the
+// page: yearly lists of penalties imposed by KNF, positions (stanowiska) of KNF and UKNF.
+const KNF_QUERIES = ["Wykaz kar nałożonych przez KNF", "stanowisko UKNF", "stanowisko KNF", "komunikat KNF w sprawie"];
+export const knfAdapter = {
+    source: "KNF",
+    label: "KNF — wykazy kar i stanowiska KNF/UKNF",
+    progress: (db) => {
+        const state = db.state("KNF");
+        if (!state)
+            return "nie rozpoczęto";
+        const head = state.rounds ? `pełny przegląd zakończony ${state.lastRoundAt?.slice(0, 10)}; ` : "";
+        return `${head}zapytanie ${state.query + 1} z ${KNF_QUERIES.length}, strona ${state.page}`;
+    },
+    async run(ctx) {
+        let state = ctx.db.state("KNF") ?? { query: 0, page: 1, rounds: 0, lastRoundAt: null };
+        while (ctx.open) {
+            const html = (await ctx.html(`https://www.knf.gov.pl/wyniki_wyszukiwania?searchText=${encodeURIComponent(KNF_QUERIES[state.query])}&perPage=50&page=${state.page}`)) ?? "";
+            const flat = html.replace(/\\"/gu, '"').replace(/\\\\/gu, "\\");
+            const files = new Map();
+            for (const match of flat.matchAll(/"title":"([^"]{3,400})","href":"(https?:\/\/(?:www\.)?knf\.gov\.pl\/knf\/pl\/komponenty\/img\/[^"]+\.pdf)"/gu))
+                files.set(match[2], match[1]);
+            for (const [url, title] of files) {
+                if (!ctx.open)
+                    break;
+                // A yearly list of penalties keeps its title while the file name changes with each update.
+                const year = /Wykaz kar nałożonych przez KNF w (\d{4})/u.exec(title)?.[1];
+                const sourceId = year ? `kary-${year}` : url;
+                if (!year && ctx.db.has("KNF", sourceId))
+                    continue;
+                if (year && ctx.db.state(`KNF:kary:${year}`) === url)
+                    continue;
+                const text = await documentText(ctx, url).catch(() => null);
+                ctx.store({
+                    source: "KNF", sourceId, court: "Komisja Nadzoru Finansowego", courtType: "AUTHORITY", division: null,
+                    signatures: [title.replace(/\s*\(plik PDF\)\s*$/u, "").slice(0, 120)], date: year ? null : rulingDate((text ?? "").slice(0, 2000)) ?? numericDate(title),
+                    kind: year ? "wykaz kar" : "stanowisko", judges: [], keywords: [], legalBases: [], summary: title, url, modified: null
+                }, text);
+                if (year)
+                    ctx.db.saveState(`KNF:kary:${year}`, url);
+            }
+            if (!ctx.open)
+                break;
+            const total = Number(/"totalCount":(\d+)/u.exec(flat)?.[1] ?? 0);
+            if (state.page * 50 < total)
+                state = { ...state, page: state.page + 1 };
+            else if (state.query + 1 < KNF_QUERIES.length)
+                state = { ...state, query: state.query + 1, page: 1 };
+            else {
+                ctx.db.saveState("KNF", { query: 0, page: 1, rounds: state.rounds + 1, lastRoundAt: ctx.now().toISOString() });
+                return;
+            }
+            ctx.db.saveState("KNF", state);
+        }
+        ctx.db.saveState("KNF", state);
+    }
+};
+// Rzecznik Finansowy (rf.gov.pl): positions and opinions behind Imperva's check, read on the
+// session the user opened in the application's window (as RPO).
+export const RF_HOST = "rf.gov.pl";
+const RF_LISTS = ["https://rf.gov.pl/publikacje/stanowiska-rzecznika-finansowego/", "https://rf.gov.pl/publikacje/istotne-pogledy-rzecznika-finansowego/"];
+export const RF_WAITING = "czeka na potwierdzenie w oknie Rzecznika Finansowego (Baza orzeczeń → „Otwórz stronę RF”); pobieranie idzie na Twojej sesji i wznowi się samo";
+export const rfAdapter = {
+    source: "RF",
+    label: "Rzecznik Finansowy — stanowiska i istotne poglądy",
+    progress: (db) => {
+        const waiting = db.state("RF:waiting");
+        const state = db.state("RF");
+        const base = state?.completedAt ? `pobrane w całości (${state.completedAt.slice(0, 10)}); dociąganie nowych` : state ? "pełne pobieranie w toku" : "nie rozpoczęto";
+        return waiting ? `${base}; ${RF_WAITING}` : base;
+    },
+    async run(ctx) {
+        const session = lawSourceSessionHeaders(RF_HOST);
+        const wait = () => {
+            ctx.waiting = RF_WAITING;
+            ctx.db.saveState("RF:waiting", { at: ctx.now().toISOString() });
+        };
+        if (!session)
+            return wait();
+        try {
+            const queue = [...RF_LISTS];
+            const seen = new Set(queue);
+            while (queue.length && ctx.open && seen.size < 400) {
+                const page = queue.shift();
+                const html = (await ctx.html(page, { headers: session })) ?? "";
+                if (isImpervaPage(html))
+                    return wait();
+                for (const match of html.matchAll(/<a\b[^>]*href="([^"#]+)"[^>]*>([\s\S]*?)<\/a>/giu)) {
+                    let url;
+                    try {
+                        url = new URL(match[1].replace(/&amp;/gu, "&"), page).toString();
+                    }
+                    catch {
+                        continue;
+                    }
+                    if (new URL(url).host !== RF_HOST)
+                        continue;
+                    if (/\/publikacje\/(?:stanowiska|istotne)[^?#]*\/page\/\d+\/?$/u.test(url) && !seen.has(url)) {
+                        seen.add(url);
+                        queue.push(url);
+                        continue;
+                    }
+                    if (!/\.(?:pdf|docx)$/iu.test(url) && !/\/publikacje\/(?:stanowiska|istotne)[^/]*\/[^/]+\/?$/u.test(url))
+                        continue;
+                    if (RF_LISTS.includes(url) || ctx.db.has("RF", url))
+                        continue;
+                    const label = squeeze(plainText(match[2]));
+                    const response = await ctx.get(url, { headers: session });
+                    if (!response)
+                        continue;
+                    const bytes = new Uint8Array(await response.arrayBuffer());
+                    let text;
+                    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)
+                        text = await pdfText(ctx, bytes);
+                    else {
+                        const body = new TextDecoder("utf-8").decode(bytes);
+                        if (isImpervaPage(body))
+                            return wait();
+                        const main = /<article\b[\s\S]*?<\/article>/u.exec(body)?.[0] ?? /<main\b[\s\S]*?<\/main>/u.exec(body)?.[0] ?? body;
+                        text = squeeze(plainText(main.replace(/<(?:nav|header|footer|aside|script|style)\b[\s\S]*?<\/(?:nav|header|footer|aside|script|style)>/giu, "")));
+                    }
+                    ctx.store({
+                        source: "RF", sourceId: url, court: "Rzecznik Finansowy", courtType: "AUTHORITY", division: null,
+                        signatures: [authoritySignature(label, (text ?? "").slice(0, 1500)) ?? (label || url.split("/").filter(Boolean).pop() || url).slice(0, 120)],
+                        date: rulingDate((text ?? "").slice(0, 2000)) ?? numericDate(label), kind: "stanowisko", judges: [], keywords: [], legalBases: [], summary: label || null, url, modified: null
+                    }, text);
+                }
+            }
+            ctx.db.saveState("RF", { completedAt: ctx.now().toISOString() });
+            ctx.db.saveState("RF:waiting", null);
+        }
+        catch (error) {
+            if (/HTTP_40[13]/u.test(error instanceof Error ? error.message : String(error)))
+                return wait();
+            throw error;
+        }
+    }
+};
+export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter, knfAdapter, ukeAdapter, rioAdapter, krritAdapter, rfAdapter];
 // ── schedule and status ──
 /** Sources not downloaded as a whole, with the reason shown in the settings window. */
 export const CASE_LAW_NOT_BULK = [
@@ -1131,6 +1370,8 @@ export const CASE_LAW_NOT_BULK = [
     { source: "WSD KIRP", reason: "orzeczenia nie są już publikowane (wsd.kirp.pl przekierowuje na kirp.pl)" },
     { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
     { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
+    { source: "RIO Katowice, Łódź, Lublin, Olsztyn, Opole, Rzeszów, Wrocław", reason: "BIP-y na innych systemach niż pozostałe izby; uchwały dostępne w ich BIP-ach, bez pobierania do bazy" },
+    { source: "ZUS — interpretacje", reason: "publikowane w archiwach RAR; odczyt wymaga dodatkowej biblioteki (czeka na zgodę)" },
     { source: "OIRP Toruń", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" },
     { source: "Pozostałe izby", reason: "brak publicznego archiwum orzeczeń I instancji (DR-12, tabela izb)" }
 ];
