@@ -8,7 +8,9 @@ export type CaseLawSearchFetch = (
 export type CaseLawSearchSource =
   | "SAOS"
   | "CBOSA"
-  | "SN";
+  | "SN"
+  // The server's database of official sources (case-law-sync.ts) other than SAOS.
+  | "BAZA";
 
 export type CaseLawSearchRequest = {
   source: CaseLawSearchSource;
@@ -18,6 +20,8 @@ export type CaseLawSearchRequest = {
   sn?: Omit<SupremeCourtSearchFilters, "tresc" | "strona" | "rozmiar_strony">;
   // SAOS only: court type (SUPREME, COMMON, ...) and form (SENTENCE = wyrok, DECISION, RESOLUTION).
   saos?: { courtType?: string; judgmentType?: string };
+  // BAZA only: the databases to search (CaseLawSource codes); all official ones when absent.
+  bases?: string[];
 };
 
 export type CaseLawSearchCandidate = {
@@ -28,6 +32,8 @@ export type CaseLawSearchCandidate = {
   court?: string;
   courtType?: string;
   sourceUrl: string;
+  // BAZA: the database the decision comes from (UODO, KIO, OSD, NIL, ...).
+  database?: string;
   contentScope: "DISCOVERY";
 };
 
@@ -47,7 +53,9 @@ export const CASE_LAW_SEARCH_HOSTS = [
   "saos.org.pl",
   "www.saos.org.pl",
   "orzeczenia.nsa.gov.pl",
-  "sn.pl"
+  "sn.pl",
+  // source=BAZA reads the server's database; the court portal stands for its official sources.
+  "orzeczenia.ms.gov.pl"
 ] as const;
 
 const SAOS_ENDPOINT =
@@ -575,6 +583,7 @@ function cbosaCandidate(
 export function caseLawSearchEntryUrl(
   source: CaseLawSearchSource
 ): string {
+  if (source === "BAZA") return "https://orzeczenia.ms.gov.pl/";
   return source === "SAOS"
     ? SAOS_ENDPOINT
     : source === "SN"
@@ -587,7 +596,8 @@ export function caseLawSearchEntryUrl(
 const LOCAL_SOURCES: Record<CaseLawSearchSource, string[]> = {
   SAOS: ["SP", "SN", "TK", "KIO"],
   CBOSA: ["CBOSA"],
-  SN: ["SN"]
+  SN: ["SN"],
+  BAZA: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF"]
 };
 
 /** Hits from the local database of official rulings, or null when it holds none for the query. */
@@ -600,7 +610,9 @@ export function searchLocalDatabase(
   if (!database || query.length < 2) return null;
   if (request.sn && Object.values(request.sn).some((value) => value !== undefined && value !== "")) return null;
   if (request.saos && (request.saos.courtType || request.saos.judgmentType)) return null;
-  const wanted = new Set(LOCAL_SOURCES[request.source]);
+  const official = LOCAL_SOURCES[request.source];
+  const asked = request.source === "BAZA" && request.bases?.length ? official.filter((base) => request.bases!.includes(base)) : official;
+  const wanted = new Set(asked);
   const cards = database.search(query, limit * 5).filter((card) => wanted.has(card.source) && card.url).slice(0, limit);
   if (!cards.length) return null;
   return {
@@ -615,6 +627,7 @@ export function searchLocalDatabase(
       ...(card.court ? { court: card.court } : {}),
       ...(card.courtType ? { courtType: card.courtType } : {}),
       sourceUrl: card.url!,
+      ...(request.source === "BAZA" ? { database: card.source } : {}),
       contentScope: "DISCOVERY" as const
     })),
     reason: "LOCAL_DATABASE"
@@ -644,6 +657,9 @@ export class CaseLawSearchService {
     // The server's database of official rulings (case-law-sync.ts) is read before the source.
     const local = searchLocalDatabase(request, query, limit);
     if (local) return local;
+    if (request.source === "BAZA") {
+      return { source: "BAZA", status: "NOT_FOUND", query, candidates: [], reason: sharedCaseLawDatabase() ? "LOCAL_DATABASE_NO_HITS" : "LOCAL_DATABASE_UNAVAILABLE" };
+    }
 
     if (request.source === "SN") {
       return await this.searchSn(query, limit, request.sn ?? {});

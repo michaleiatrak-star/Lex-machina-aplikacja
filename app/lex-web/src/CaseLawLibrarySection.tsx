@@ -62,6 +62,18 @@ const RPO_VERIFICATION = {
   label: "BIP RPO"
 };
 
+const RF_VERIFICATION = {
+  url: "https://rf.gov.pl/publikacje/stanowiska-rzecznika-finansowego/",
+  host: "rf.gov.pl",
+  label: "Rzecznik Finansowy"
+};
+
+const SESSION_SOURCES: Record<string, { verification: typeof RPO_VERIFICATION; button: string }> = {
+  NIL: { verification: NIL_VERIFICATION, button: N_("Otwórz folder NIL") },
+  RPO: { verification: RPO_VERIFICATION, button: N_("Otwórz BIP RPO") },
+  RF: { verification: RF_VERIFICATION, button: N_("Otwórz stronę RF") }
+};
+
 function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string {
   if (!run) return "";
   const head = t("ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}", {
@@ -399,10 +411,10 @@ export function CaseLawLibrarySection() {
                           {t("Pobierz teraz")}
                         </button>
                       ) : null}
-                      {item.source === "NIL" || item.source === "RPO" ? (
+                      {SESSION_SOURCES[item.source] ? (
                         sessionWindow === item.source ? (
                           <LawSourceVerification
-                            verification={item.source === "NIL" ? NIL_VERIFICATION : RPO_VERIFICATION}
+                            verification={SESSION_SOURCES[item.source]!.verification}
                             autoStart={false}
                             onVerified={() => {
                               setSessionWindow("");
@@ -411,7 +423,7 @@ export function CaseLawLibrarySection() {
                           />
                         ) : (
                           <button type="button" className="case-access-link case-law-session-button" onClick={() => setSessionWindow(item.source)}>
-                            {item.source === "NIL" ? t("Otwórz folder NIL") : t("Otwórz BIP RPO")}
+                            {t(SESSION_SOURCES[item.source]!.button)}
                           </button>
                         )
                       ) : null}

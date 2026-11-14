@@ -237,6 +237,7 @@ const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
       "Search Polish case-law candidates. source=SN: the official sn.pl search form (text of the decision and its reasons, signature, form, date range, chamber, panel, judges); hits carry the decision's card. " +
       "source=CBOSA for NSA/WSA. SAOS is an academic aggregator (lowest rank) with partial coverage: common courts current, SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA; use it for older rulings and common courts, as a citator, and as the fallback when the court's official source fails. " +
       "A known signature goes straight to the official registry (verify_case_reference / CBOSA / court portal), not here and not to web search. For recent rulings (SN after 2016, TK after 2015, KIO after 2018, or the last 2-3 years) run web_search with an abstract legal phrase (never case data) to find signatures in secondary sources, in parallel with source=SN or source=CBOSA. " +
+      "source=BAZA searches the server's database of official sources downloaded in full (court portal, CBOSA, SN, TK, KIO, UODO, EUREKA, disciplinary courts of the bars and the medical chamber, WSD, URE, RPO, KNF, UKE, RIO, KRRiT, Rzecznik Finansowy, Sejm prints); its hits carry the official card and their full text is read with read_case_law_text (by signature). It is the only way to the decisions of disciplinary courts, NIL, URE, RPO, KNF, UKE, RIO, KRRiT and Rzecznik Finansowy. " +
       "This is discovery only: returned candidates are NOT verified for citation. After selecting a candidate, run the applicable verification workflow before citing it.",
     parameters: {
       type: "object",
@@ -247,7 +248,12 @@ const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
           type: "string",
           description: "Full-text legal phrase (SN: searched in the decision and its reasons). May be empty for SN when other fields are given. Do not fabricate a case signature."
         },
-        source: { type: "string", enum: ["SN", "SAOS", "CBOSA"] },
+        source: { type: "string", enum: ["SN", "SAOS", "CBOSA", "BAZA"] },
+        bases: {
+          type: "array",
+          items: { type: "string", enum: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF"] },
+          description: "BAZA only: which official databases to search (OSD = disciplinary courts of the bars of attorneys and legal advisers, WSD = Wyższy Sąd Dyscyplinarny adwokatury, NIL = medical courts, URE/RPO/UODO/UKE/KRRIT = decisions and statements of these authorities, KNF = penalty lists and positions of KNF/UKNF, RIO = resolutions of regional audit chambers and their national council, RF = positions of Rzecznik Finansowy, EUREKA = tax interpretations, SEJM = parliamentary prints). All when omitted."
+        },
         limit: { type: "integer", minimum: 1, maximum: 10 },
         signature: { type: "string", description: "SN only: case signature, e.g. II CSKP 89/26." },
         form: { type: "string", enum: SN_FORMS, description: "SN only: form of the decision." },
@@ -274,7 +280,7 @@ const CASE_TEXT_TOOL_SCHEMA: NormalizedToolSchema = {
   function: {
     name: CASE_TEXT_TOOL_NAME,
     description:
-      "Read further portions of a ruling whose text the application fetched in this session (SN after verify_case_reference, SAOS or the WSD portal), " +
+      "Read further portions of a ruling whose text the application fetched in this session (SN after verify_case_reference, SAOS, the WSD portal or a hit of search_case_law source=BAZA), " +
       "when the excerpt you got is shortened ('[… doczytaj read_case_law_text z offset=N …]'). Returns about 15 000 characters from offset and nextOffset.",
     parameters: {
       type: "object",
@@ -734,6 +740,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- The first supported courtFamily is SN. Pass claim + signature + courtFamily; pass card_url only when the user gave a card link or ID. Never invent an sn.pl URL.",
   "- SN source = the decision's card (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) returned by verify_case_reference: cite it, never a PDF/text address. A blob: link is a temporary copy in one browser tab; the old /sites/orzecznictwo/Orzeczenia… PDF directory no longer serves decisions. Neither proves anything; no hit there is not evidence that a decision is unpublished.",
   "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl (court portal; SAOS as fallback); TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
+  "- Decisions of disciplinary courts (bars of attorneys and legal advisers, WSD, medical courts NIL), of URE, RPO, UODO, UKE and KRRiT, KNF penalty lists and positions, RIO resolutions, Rzecznik Finansowy positions, tax interpretations (EUREKA) and Sejm prints: search_case_law source=BAZA (optionally bases=[...]); read the full text with read_case_law_text. No hit there means the database does not hold it, not that the decision does not exist.",
   "- With the case-law library enabled, search_case_law_library finds decisions downloaded earlier (by signature, court or phrase); cite their card.",
   "- SAOS is an academic aggregator (lowest rank, coverage: common courts current, SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA): to confirm a ruling use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
   "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
@@ -895,7 +902,8 @@ export class LegalVerificationToolRuntime {
           (
             source !== "SAOS" &&
             source !== "CBOSA" &&
-            source !== "SN"
+            source !== "SN" &&
+            source !== "BAZA"
           )
         ) {
           throw new Error(
@@ -914,6 +922,7 @@ export class LegalVerificationToolRuntime {
             query,
             ...(Object.keys(sn).length ? { sn } : {}),
             ...(source === "SAOS" ? { saos: saosSearchFilters(input) } : {}),
+            ...(source === "BAZA" && Array.isArray(input.bases) ? { bases: input.bases.map(String) } : {}),
             source:
               source as CaseLawSearchSource,
             ...(limit !== undefined
@@ -1915,7 +1924,8 @@ export class LegalVerificationToolRuntime {
           (
             source !== "SAOS" &&
             source !== "CBOSA" &&
-            source !== "SN"
+            source !== "SN" &&
+            source !== "BAZA"
           )
         ) {
           this.resolverAudit.push({
@@ -1955,6 +1965,8 @@ export class LegalVerificationToolRuntime {
                 ? { limit }
                 : {}),
               ...(Object.keys(snFilters).length ? { sn: snFilters } : {}),
+              ...(source === "BAZA" && Array.isArray(call.input.bases) ? { bases: call.input.bases } : {}),
+              ...(source === "SAOS" ? { courtType: call.input.courtType, judgmentType: call.input.judgmentType } : {}),
               url:
                 caseLawSearchEntryUrl(
                   typedSource

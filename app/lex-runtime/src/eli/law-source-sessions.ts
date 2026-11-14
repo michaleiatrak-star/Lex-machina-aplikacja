@@ -31,6 +31,8 @@ export const LAW_SOURCES_WITH_CHECK: readonly VerifiedLawSource[] = [
   { host: "naczelnaizbalekarska.sharepoint.com", code: "NIL", url: "https://naczelnaizbalekarska.sharepoint.com/:f:/s/POS/EiRRs6eE8sNGtSJJRT69kHwBLaKO5R-jbumgeU3WZObHgg?e=VKXz6e", label: "NIL — prawomocne orzeczenia sądów lekarskich (na Twojej sesji)" },
   // Rzecznik Praw Obywatelskich: general submissions (wystąpienia generalne) in the BIP behind Imperva's
   // check; the user passes it in the application's window, the server reads on that session.
+  // Rzecznik Finansowy: positions behind Imperva's check, read on the user's session (source RF).
+  { host: "rf.gov.pl", code: "RF", url: "https://rf.gov.pl/publikacje/stanowiska-rzecznika-finansowego/", label: "Rzecznik Finansowy — stanowiska (na Twojej sesji)" },
   { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" },
   // Not a law source: Google search on the user's own session (Ustawienia > Wyszukiwarka
   // internetowa, off by default). The user passes Google's consent page and captcha; results
