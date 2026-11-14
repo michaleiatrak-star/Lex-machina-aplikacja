@@ -571,3 +571,7 @@ li.anomaly-error > strong {
     grid-column: auto;
   }
 }
+
+.case-law-session-button {
+  margin-left: 6px;
+}

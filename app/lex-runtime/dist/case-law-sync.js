@@ -714,16 +714,16 @@ async function documentText(ctx, url) {
     const main = /<article\b[\s\S]*?<\/article>/u.exec(html)?.[0] ?? /<main\b[\s\S]*?<\/main>/u.exec(html)?.[0] ?? html;
     return squeeze(plainText(main.replace(/<(?:nav|header|footer|aside)\b[\s\S]*?<\/(?:nav|header|footer|aside)>/giu, "")));
 }
-function storeDisciplinary(ctx, seed, url, label, text) {
+function storeDisciplinary(ctx, seed, url, label, text, source = "OSD") {
     const head = (text ?? "").slice(0, 2000);
     ctx.store({
-        source: "OSD", sourceId: url, court: seed.body, courtType: "DISCIPLINARY", division: null,
-        signatures: [disciplinarySignature(label, head, decodeURIComponent(url.split("/").pop() ?? "")) ?? label.slice(0, 80)].filter(Boolean),
-        date: rulingDate(head), kind: /postanowieni/iu.test(head.slice(0, 300)) ? "postanowienie" : "orzeczenie",
+        source, sourceId: url, court: seed.body, courtType: source === "OSD" ? "DISCIPLINARY" : "AUTHORITY", division: null,
+        signatures: [(source === "OSD" ? disciplinarySignature(label, head, decodeURIComponent(url.split("/").pop() ?? "")) : authoritySignature(label, head)) ?? label.slice(0, 80)].filter(Boolean),
+        date: rulingDate(head), kind: source === "OSD" ? (/postanowieni/iu.test(head.slice(0, 300)) ? "postanowienie" : "orzeczenie") : "decyzja",
         judges: [], keywords: [], legalBases: [], summary: null, url, modified: null
     }, text);
 }
-async function crawlSeed(ctx, seed) {
+async function crawlSeed(ctx, seed, source = "OSD") {
     const queue = [seed.start];
     const seen = new Set(queue);
     const items = new Map();
@@ -743,8 +743,17 @@ async function crawlSeed(ctx, seed) {
             if (link.host !== new URL(seed.start).host)
                 continue;
             const href = link.toString();
-            if (seed.item.test(href))
-                items.set(href, squeeze(plainText(match[2])));
+            if (seed.item.test(href)) {
+                // The link's own text, or (a bare "Pobierz") the table row it sits in.
+                let label = squeeze(plainText(match[2]));
+                if (label.length < 12) {
+                    const row = html.lastIndexOf("<tr", match.index);
+                    const end = html.indexOf("</tr>", match.index);
+                    if (row >= 0 && end > row)
+                        label = squeeze(plainText(html.slice(row, end)));
+                }
+                items.set(href, label);
+            }
             else if (seed.listing?.test(href) && !seen.has(href)) {
                 seen.add(href);
                 queue.push(href);
@@ -754,9 +763,9 @@ async function crawlSeed(ctx, seed) {
     for (const [url, label] of items) {
         if (!ctx.open)
             return false;
-        if (ctx.db.has("OSD", url))
+        if (ctx.db.has(source, url))
             continue;
-        storeDisciplinary(ctx, seed, url, label, await documentText(ctx, url).catch(() => null));
+        storeDisciplinary(ctx, seed, url, label, await documentText(ctx, url).catch(() => null), source);
     }
     return ctx.open;
 }
@@ -1014,7 +1023,107 @@ export const nilAdapter = {
         }
     }
 };
-export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, sejmAdapter];
+// ── Decisions of authorities published as tables of files (URE) ──
+const AUTHORITY_SIGNATURE = /\b([A-ZŁŚŻ]{2,5}(?:[.-][A-Z0-9]{1,6})*[ .-]?\d{1,5}\/\d{4}|[A-ZŁŚŻ][a-ząćęłńóśźż]{2,12} \d{1,5}\/\d{4}|[IVXL]{1,5}\.\d{3,4}(?:\.\d{1,5}){1,3}\.\d{4})\b/u;
+export function authoritySignature(...texts) {
+    for (const text of texts) {
+        const found = AUTHORITY_SIGNATURE.exec(text.normalize("NFKC"))?.[1];
+        if (found)
+            return squeeze(found);
+    }
+    return null;
+}
+const URE_START = "https://bip.ure.gov.pl/bip/taryfy-i-inne-decyzje-b";
+export const URE_SEEDS = ["cieplo", "energia-elektryczna", "inne-decyzje-informacj", "paliwa-ciekle", "paliwa-gazowe", "wodor"].map((part) => ({
+    id: `ure-${part}`,
+    body: "Prezes Urzędu Regulacji Energetyki",
+    start: `${URE_START}/${part}`,
+    listing: new RegExp(`/taryfy-i-inne-decyzje-b/${part}/\\d+,[^/]+\\.html$`, "u"),
+    item: /\/download\/[^?#]+$/u
+}));
+export const ureAdapter = {
+    source: "URE",
+    label: "URE — decyzje, taryfy i informacje Prezesa URE",
+    progress: (db) => {
+        const state = db.state("URE");
+        if (!state)
+            return "nie rozpoczęto";
+        const head = state.rounds ? `pełny przegląd zakończony ${state.lastRoundAt?.slice(0, 10)}; ` : "";
+        return `${head}dział ${state.seed + 1} z ${URE_SEEDS.length} (${URE_SEEDS[state.seed]?.id.replace("ure-", "") ?? ""})`;
+    },
+    async run(ctx) {
+        let state = ctx.db.state("URE") ?? { seed: 0, rounds: 0, lastRoundAt: null };
+        while (ctx.open) {
+            if (!(await crawlSeed(ctx, URE_SEEDS[state.seed], "URE")))
+                break;
+            const next = state.seed + 1;
+            state = next >= URE_SEEDS.length ? { seed: 0, rounds: state.rounds + 1, lastRoundAt: ctx.now().toISOString() } : { ...state, seed: next };
+            ctx.db.saveState("URE", state);
+            if (state.seed === 0)
+                return;
+        }
+        ctx.db.saveState("URE", state);
+    }
+};
+// ── RPO (bip.brpo.gov.pl): general submissions, on the session the user opened in the application ──
+export const RPO_HOST = "bip.brpo.gov.pl";
+const RPO_LIST = "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779";
+export const RPO_WAITING = "czeka na potwierdzenie w oknie BIP RPO (Baza orzeczeń → „Otwórz BIP RPO”); pobieranie idzie na Twojej sesji i wznowi się samo";
+const isImpervaPage = (html) => /_Incapsula_Resource|Incapsula incident/u.test(html.slice(0, 4000));
+export const rpoAdapter = {
+    source: "RPO",
+    label: "RPO — wystąpienia generalne Rzecznika Praw Obywatelskich",
+    progress: (db) => {
+        const waiting = db.state("RPO:waiting");
+        const state = db.state("RPO");
+        const base = state?.completedAt ? `pobrane w całości (${state.completedAt.slice(0, 10)}); dociąganie nowych` : state ? "pełne pobieranie w toku" : "nie rozpoczęto";
+        return waiting ? `${base}; ${RPO_WAITING}` : base;
+    },
+    async run(ctx) {
+        const session = lawSourceSessionHeaders(RPO_HOST);
+        const wait = () => {
+            ctx.waiting = RPO_WAITING;
+            ctx.db.saveState("RPO:waiting", { at: ctx.now().toISOString() });
+        };
+        if (!session)
+            return wait();
+        try {
+            const list = (await ctx.html(RPO_LIST, { headers: session })) ?? "";
+            if (isImpervaPage(list))
+                return wait();
+            // One row per submission: its link to the case page and the row's text (addressee, reference, date, subject).
+            for (const row of list.split(/<tr\b/iu).slice(1)) {
+                if (!ctx.open)
+                    return;
+                const href = /href="([^"#]+)"/u.exec(row)?.[1];
+                if (!href)
+                    continue;
+                const url = new URL(href.replace(/&amp;/gu, "&"), RPO_LIST).toString();
+                if (new URL(url).host !== RPO_HOST || url === RPO_LIST || ctx.db.has("RPO", url))
+                    continue;
+                const summary = squeeze(plainText(row.slice(0, row.search(/<\/tr>/iu) > 0 ? row.search(/<\/tr>/iu) : undefined)));
+                const page = await ctx.html(url, { headers: session });
+                if (page && isImpervaPage(page))
+                    return wait();
+                const main = page ? /<article\b[\s\S]*?<\/article>/u.exec(page)?.[0] ?? /<main\b[\s\S]*?<\/main>/u.exec(page)?.[0] ?? page : "";
+                const text = main ? squeeze(plainText(main.replace(/<(?:nav|header|footer|aside)\b[\s\S]*?<\/(?:nav|header|footer|aside)>/giu, ""))) : null;
+                ctx.store({
+                    source: "RPO", sourceId: url, court: "Rzecznik Praw Obywatelskich", courtType: "AUTHORITY", division: null,
+                    signatures: [authoritySignature(summary) ?? summary.slice(0, 80)], date: (/(\d{4}-\d{2}-\d{2})/u.exec(summary)?.[1]) ?? numericDate(summary),
+                    kind: "wystąpienie generalne", judges: [], keywords: [], legalBases: [], summary, url, modified: null
+                }, text ?? summary);
+            }
+            ctx.db.saveState("RPO", { completedAt: ctx.now().toISOString() });
+            ctx.db.saveState("RPO:waiting", null);
+        }
+        catch (error) {
+            if (/HTTP_40[13]/u.test(error instanceof Error ? error.message : String(error)))
+                return wait();
+            throw error;
+        }
+    }
+};
+export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter];
 // ── schedule and status ──
 /** Sources not downloaded as a whole, with the reason shown in the settings window. */
 export const CASE_LAW_NOT_BULK = [

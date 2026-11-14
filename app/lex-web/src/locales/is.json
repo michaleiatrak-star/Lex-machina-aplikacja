@@ -2858,5 +2858,6 @@
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Í netþjónsham sækir netþjónninn opinberu dómagagnagrunnana í heild (elstu fyrst) og síðan aðeins það nýja. Rofið niðurhal heldur áfram þar sem það stöðvaðist. Sami dómur úr tveimur gagnagrunnum er vistaður einu sinni.",
  "Pobieranie działa tylko w trybie serwerowym.": "Niðurhal keyrir aðeins í netþjónsham.",
  "pobieranie trwa": "niðurhal í gangi",
- "Otwórz folder NIL": "Opna NIL-möppuna"
+ "Otwórz folder NIL": "Opna NIL-möppuna",
+ "Otwórz BIP RPO": "Opna BIP RPO"
 }

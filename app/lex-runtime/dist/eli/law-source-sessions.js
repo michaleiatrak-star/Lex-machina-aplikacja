@@ -10,6 +10,9 @@ export const LAW_SOURCES_WITH_CHECK = [
     // only views them; the user opens the folder in the application's window and the server downloads on
     // that session, with the rights the user has there (case-law-sync.ts, source NIL).
     { host: "naczelnaizbalekarska.sharepoint.com", code: "NIL", url: "https://naczelnaizbalekarska.sharepoint.com/:f:/s/POS/EiRRs6eE8sNGtSJJRT69kHwBLaKO5R-jbumgeU3WZObHgg?e=VKXz6e", label: "NIL — prawomocne orzeczenia sądów lekarskich (na Twojej sesji)" },
+    // Rzecznik Praw Obywatelskich: general submissions (wystąpienia generalne) in the BIP behind Imperva's
+    // check; the user passes it in the application's window, the server reads on that session.
+    { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" },
     // Not a law source: Google search on the user's own session (Ustawienia > Wyszukiwarka
     // internetowa, off by default). The user passes Google's consent page and captcha; results
     // are leads only, verified at the official source.

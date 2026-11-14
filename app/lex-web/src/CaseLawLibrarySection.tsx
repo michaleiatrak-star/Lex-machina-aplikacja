@@ -57,6 +57,12 @@ const NIL_VERIFICATION = {
   label: "NIL"
 };
 
+const RPO_VERIFICATION = {
+  url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779",
+  host: "bip.brpo.gov.pl",
+  label: "BIP RPO"
+};
+
 function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string {
   if (!run) return "";
   const head = t("ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}", {
@@ -90,7 +96,7 @@ export function CaseLawLibrarySection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const titleId = useId();
-  const [nilWindow, setNilWindow] = useState(false);
+  const [sessionWindow, setSessionWindow] = useState("");
 
   const load = useCallback(async (search: string) => {
     try {
@@ -381,12 +387,19 @@ export function CaseLawLibrarySection() {
                       <strong>{item.label}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {item.progress}
                       {item.running ? ` · ${t("pobieranie trwa")}` : ""}
                       {item.lastRun ? <small className="field-help"> {runText(item.lastRun)}</small> : null}
-                      {item.source === "NIL" ? (
-                        nilWindow ? (
-                          <LawSourceVerification verification={NIL_VERIFICATION} autoStart={false} onVerified={() => { setNilWindow(false); void load(query); }} />
+                      {item.source === "NIL" || item.source === "RPO" ? (
+                        sessionWindow === item.source ? (
+                          <LawSourceVerification
+                            verification={item.source === "NIL" ? NIL_VERIFICATION : RPO_VERIFICATION}
+                            autoStart={false}
+                            onVerified={() => {
+                              setSessionWindow("");
+                              void load(query);
+                            }}
+                          />
                         ) : (
-                          <button type="button" className="case-access-link" onClick={() => setNilWindow(true)}>
-                            {t("Otwórz folder NIL")}
+                          <button type="button" className="case-access-link case-law-session-button" onClick={() => setSessionWindow(item.source)}>
+                            {item.source === "NIL" ? t("Otwórz folder NIL") : t("Otwórz BIP RPO")}
                           </button>
                         )
                       ) : null}

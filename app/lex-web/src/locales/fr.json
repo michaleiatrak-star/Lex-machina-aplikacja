@@ -2858,5 +2858,6 @@
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "En mode serveur, le serveur télécharge l’intégralité des bases officielles de jurisprudence (les plus anciennes d’abord), puis uniquement les nouveautés. Un téléchargement interrompu reprend là où il s’est arrêté. La même décision provenant de deux bases n’est enregistrée qu’une fois.",
  "Pobieranie działa tylko w trybie serwerowym.": "Le téléchargement ne fonctionne qu’en mode serveur.",
  "pobieranie trwa": "téléchargement en cours",
- "Otwórz folder NIL": "Ouvrir le dossier NIL"
+ "Otwórz folder NIL": "Ouvrir le dossier NIL",
+ "Otwórz BIP RPO": "Ouvrir le BIP du RPO"
 }

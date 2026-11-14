@@ -116,3 +116,13 @@ describe("NIL na sesji użytkownika i tekst DOCX", () => {
         expect(run.requests).toBe(0);
     });
 });
+describe("RPO na sesji użytkownika i sygnatury urzędów", () => {
+    it("RPO bez sesji czeka; sygnatury URE i RPO rozpoznawane", async () => {
+        const { rpoAdapter, runAdapter, authoritySignature } = await import("./case-law-sync.js");
+        const run = await runAdapter(rpoAdapter, database(), (async () => { throw new Error("bez sesji nic nie pobieramy"); }), 10, 0, now);
+        expect(run.waiting).toMatch(/BIP RPO/u);
+        expect(authoritySignature("(629 KB) Ciepło 289/2026 1 października 2026")).toBe("Ciepło 289/2026");
+        expect(authoritySignature("EE 282/2025 23 grudnia 2025")).toBe("EE 282/2025");
+        expect(authoritySignature("Minister Zdrowia VII.501.12.2025 2025-03-01")).toBe("VII.501.12.2025");
+    });
+});

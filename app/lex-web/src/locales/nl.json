@@ -2858,5 +2858,6 @@
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "In servermodus downloadt de server de volledige officiële jurisprudentiedatabanken (oudste eerst), daarna alleen nieuwe stukken. Een onderbroken download gaat verder waar hij stopte. Dezelfde uitspraak uit twee databanken wordt één keer opgeslagen.",
  "Pobieranie działa tylko w trybie serwerowym.": "Downloaden werkt alleen in servermodus.",
  "pobieranie trwa": "bezig met downloaden",
- "Otwórz folder NIL": "NIL-map openen"
+ "Otwórz folder NIL": "NIL-map openen",
+ "Otwórz BIP RPO": "BIP van de RPO openen"
 }

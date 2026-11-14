@@ -2858,5 +2858,6 @@
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Serverio režimu serveris atsisiunčia visas oficialias teismų praktikos duomenų bazes (seniausias pirmiausia), vėliau tik naujus. Nutrūkęs atsisiuntimas tęsiamas nuo sustojimo vietos. Tas pats sprendimas iš dviejų duomenų bazių išsaugomas vieną kartą.",
  "Pobieranie działa tylko w trybie serwerowym.": "Atsisiuntimas veikia tik serverio režimu.",
  "pobieranie trwa": "vyksta atsisiuntimas",
- "Otwórz folder NIL": "Atidaryti NIL aplanką"
+ "Otwórz folder NIL": "Atidaryti NIL aplanką",
+ "Otwórz BIP RPO": "Atidaryti RPO BIP"
 }
