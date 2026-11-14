@@ -2,6 +2,7 @@ import { todayWarsaw } from "./warsaw-date.js";
 import { caseTextExcerpt, caseTextPortion, holdCaseLawText } from "./case-law-texts.js";
 import { MAX_EVIDENCE_CHARS } from "./legal-source-verifier.js";
 import { caseLawRepository } from "./case-law-store.js";
+import { sharedCaseLawDatabase } from "./case-law-db.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import {
   SupremeCourtCaseVerifier,
@@ -777,20 +778,37 @@ function saosSearchFilters(input: Record<string, unknown>): { courtType?: string
   return { ...(courtType ? { courtType } : {}), ...(judgmentType ? { judgmentType } : {}) };
 }
 
+export function searchCaseLawLibraryForTest(input: Record<string, unknown>): string {
+  return searchCaseLawLibrary(input);
+}
+
 function searchCaseLawLibrary(input: Record<string, unknown>): string {
   const repository = caseLawRepository();
-  if (!repository?.libraryEnabled()) {
-    return JSON.stringify({ status: "DISABLED", instruction: "The case-law library is off (Settings). Use search_case_law or verify_case_reference." });
-  }
   const query = typeof input.query === "string" ? input.query.trim().slice(0, 200) : "";
   const limit = typeof input.limit === "number" ? Math.min(10, Math.max(1, Math.trunc(input.limit))) : 5;
+  // The server's database of official sources (case-law-sync.ts) is searched with the library:
+  // it is local too, so it answers offline as well.
+  const database = sharedCaseLawDatabase();
+  const stored = database && query.length >= 2
+    ? database.search(query, limit * 3).filter((card) => card.source !== "SAOS" && card.url).slice(0, limit).map((card) => ({
+        cardUrl: card.url!, database: card.source, court: card.court, signature: card.signatures[0] ?? "", date: card.date, form: card.kind
+      }))
+    : [];
+  if (!repository?.libraryEnabled()) {
+    if (stored.length) {
+      return JSON.stringify({ status: "FOUND", query, entries: stored, instruction: "Decisions from the server's database of official sources; the card (cardUrl) is the source to cite; read the text with read_case_law_text (signature). Verify before citing as VERIFIED." });
+    }
+    return JSON.stringify({ status: "DISABLED", instruction: "The case-law library is off (Settings). Use search_case_law or verify_case_reference." });
+  }
   if (query.length < 2) return JSON.stringify({ status: "INVALID_QUERY" });
-  const entries = repository.catalog(query, limit).map(({ sha256: _sha, ...entry }) => entry);
+  const library = repository.catalog(query, limit).map(({ sha256: _sha, ...entry }) => entry);
+  const seen = new Set(library.map((entry) => entry.cardUrl));
+  const entries = [...library, ...stored.filter((entry) => !seen.has(entry.cardUrl))].slice(0, limit * 2);
   return JSON.stringify({
     status: entries.length ? "FOUND" : "NOT_FOUND",
     query,
     entries,
-    instruction: "Local copies of official decisions; the card (cardUrl) is the source to cite. Verify before citing as VERIFIED."
+    instruction: "Local copies of official decisions (library and the server's database); the card (cardUrl) is the source to cite; text of a database entry: read_case_law_text (signature). Verify before citing as VERIFIED."
   });
 }
 
@@ -1461,7 +1479,7 @@ export class LegalVerificationToolRuntime {
   }
 
   schemas(): NormalizedToolSchema[] {
-    if (this.offline) return [TOOL_SCHEMA, CASE_LIBRARY_TOOL_SCHEMA];
+    if (this.offline) return [TOOL_SCHEMA, CASE_LIBRARY_TOOL_SCHEMA, CASE_TEXT_TOOL_SCHEMA];
     return [
       TOOL_SCHEMA,
       INTERPRETATION_TOOL_SCHEMA,
@@ -1888,7 +1906,7 @@ export class LegalVerificationToolRuntime {
     const results: NormalizedToolResult[] = [];
 
     for (const call of calls) {
-      if (this.offline && call.name !== CASE_LIBRARY_TOOL_NAME && call.name !== TOOL_NAME) {
+      if (this.offline && call.name !== CASE_LIBRARY_TOOL_NAME && call.name !== TOOL_NAME && call.name !== CASE_TEXT_TOOL_NAME) {
         this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: call.name, capability: "network", decision: "DENY", reason: "OFFLINE_MODE" });
         results.push({ tool_use_id: call.id, content: JSON.stringify({ status: "OUT_OF_SCOPE", error: "OFFLINE_MODE", note: OFFLINE_NOTE }) });
         continue;

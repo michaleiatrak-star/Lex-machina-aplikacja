@@ -163,3 +163,20 @@ describe("KNF, UKE, RIO, KRRiT, RF: sygnatury i daty urzędów", () => {
     expect(CASE_LAW_ADAPTERS.map((adapter) => adapter.source)).toEqual(expect.arrayContaining(["KNF", "UKE", "RIO", "KRRIT", "RF"]));
   });
 });
+
+describe("biblioteka orzeczeń w czacie obejmuje bazę serwera", () => {
+  it("search_case_law_library zwraca orzeczenie z bazy serwera także przy wyłączonej bibliotece", async () => {
+    const { setSharedCaseLawDatabase } = await import("./case-law-db.js");
+    const db = database();
+    db.upsert({ source: "KNF", sourceId: "kary-2025", court: "Komisja Nadzoru Finansowego", courtType: "AUTHORITY", division: null, signatures: ["Wykaz kar nałożonych przez KNF w 2025"], date: null, kind: "wykaz kar", judges: [], keywords: [], legalBases: [], summary: null, url: "https://knf.gov.pl/knf/pl/komponenty/img/kary_KNF_2025.pdf", modified: null }, "kara pieniężna nałożona na dom maklerski ".repeat(5), []);
+    setSharedCaseLawDatabase(db);
+    try {
+      const { searchCaseLawLibraryForTest } = await import("./verification-tool-runtime.js");
+      const result = JSON.parse(searchCaseLawLibraryForTest({ query: "dom maklerski" }));
+      expect(result.status).toBe("FOUND");
+      expect(result.entries[0]).toMatchObject({ database: "KNF" });
+    } finally {
+      setSharedCaseLawDatabase(null);
+    }
+  });
+});
