@@ -369,8 +369,15 @@ export class PublicWebSearch implements WebSearchProvider {
           : provider === "duckduckgo" || provider === "ddg"
             ? ["duckduckgo"]
             : [];
+    // An engine read through a paid or limited API (Brave, Firecrawl, Gemini, SearXNG) that is
+    // refused for its limit, credits or key falls back to reading results pages: Google on the
+    // user's session and DuckDuckGo's HTML results (user, 2026-11-14).
+    const API_ENGINES: SearchEngineName[] = ["brave", "firecrawl", "gemini", "searxng"];
+    const SCRAPED: SearchEngineName[] = settings.googleSession ? ["google", "duckduckgo"] : ["duckduckgo"];
+    const apiRefused = (message: string) => /^(?:RATE_LIMITED|CREDITS_EXHAUSTED|KEY_REJECTED|NOT_CONFIGURED|QUOTA|HTTP_(?:4\d\d|5\d\d))/u.test(message);
     let verificationRequired: string | undefined;
-    for (const engine of engines) {
+    for (let index = 0; index < engines.length; index += 1) {
+      const engine = engines[index]!;
       try {
         const hits = withoutBlocked(await this.searchEngine(engine, query, maxResults, settings));
         if (hits.length > 0) {
@@ -380,6 +387,9 @@ export class PublicWebSearch implements WebSearchProvider {
         const message = error instanceof Error ? error.message : String(error);
         if (message.startsWith(LAW_SOURCE_VERIFICATION_REQUIRED)) verificationRequired ??= message;
         errors.push(`${engine}:${message}`);
+        if (API_ENGINES.includes(engine) && apiRefused(message)) {
+          for (const fallback of SCRAPED) if (!engines.includes(fallback)) engines.push(fallback);
+        }
       }
     }
 
