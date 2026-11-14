@@ -208,7 +208,7 @@ export function CaseLawLibrarySection() {
                         onChange={(event) => setQuery(event.target.value)}
                       />
                     </label>
-                    <label>
+                    <label className="case-law-filter-court">
                       {t("Sąd")}
                       <select value={court} onChange={(event) => setCourt(event.target.value)}>
                         <option value="">{t("Wszystkie sądy")}</option>
@@ -219,7 +219,7 @@ export function CaseLawLibrarySection() {
                         ))}
                       </select>
                     </label>
-                    <label>
+                    <label className="case-law-filter-sort">
                       {t("Sortowanie")}
                       <select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
                         {(Object.keys(SORT_LABELS) as Sort[]).map((key) => (
@@ -229,7 +229,7 @@ export function CaseLawLibrarySection() {
                         ))}
                       </select>
                     </label>
-                    <button type="submit" className="chat-secondary-action" disabled={busy}>
+                    <button type="submit" className="chat-secondary-action case-law-filter-submit" disabled={busy}>
                       {t("Szukaj")}
                     </button>
                   </form>
@@ -316,7 +316,7 @@ export function CaseLawLibrarySection() {
                   ) : null}
                 </div>
                 {listed.length ? (
-                  <div className="core-law-list">
+                  <div className="case-law-list">
                     <ul>
                       {listed.map((entry) => (
                         <li key={entry.cardUrl}>
@@ -334,12 +334,14 @@ export function CaseLawLibrarySection() {
                               })
                             }
                           />
-                          <a href={entry.cardUrl} target="_blank" rel="noreferrer" title={entry.cardUrl}>
-                            {label(entry)}
-                          </a>
-                          <small> {t("· pobrane")} {entry.fetchedAt.slice(0, 10)}</small>
-                          {entry.snippet ? <small className="field-help"> … {entry.snippet} …</small> : null}
-                          <button type="button" disabled={busy} onClick={() => void remove([entry.cardUrl])}>
+                          <span className="case-law-entry">
+                            <a href={entry.cardUrl} target="_blank" rel="noreferrer" title={entry.cardUrl}>
+                              {label(entry)}
+                            </a>
+                            <small> {t("· pobrane")} {entry.fetchedAt.slice(0, 10)}</small>
+                            {entry.snippet ? <small className="field-help"> … {entry.snippet} …</small> : null}
+                          </span>
+                          <button type="button" className="case-access-link" disabled={busy} onClick={() => void remove([entry.cardUrl])}>
                             {t("Usuń")}
                           </button>
                         </li>
