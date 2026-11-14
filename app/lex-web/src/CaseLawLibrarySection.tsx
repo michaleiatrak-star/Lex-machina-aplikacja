@@ -1,31 +1,81 @@
-import { t } from "./i18n";
-import { useCallback, useEffect, useState } from "react";
+import { N_, t } from "./i18n";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   ApiError,
   getCaseLawLibrary,
   removeCaseLawLibraryEntry,
   setCaseLawLibrary,
-  type CaseLawCatalogEntry
+  type CaseLawCatalogEntry,
+  type CaseLawServerStatus
 } from "./api.js";
+import { CASE_RANGE_PRESETS, rangeForPreset, type CaseRangePreset } from "./CaseAccessAdminPanel.js";
 import { InfoTip } from "./InfoTip";
 
 function label(entry: CaseLawCatalogEntry): string {
   return [entry.court, entry.form, entry.signature, entry.date].filter(Boolean).join(" ") || entry.cardUrl;
 }
 
+type Sort = "date-desc" | "date-asc" | "fetched-desc" | "signature";
+const SORT_LABELS: Record<Sort, string> = {
+  "date-desc": N_("Data orzeczenia: najnowsze"),
+  "date-asc": N_("Data orzeczenia: najstarsze"),
+  "fetched-desc": N_("Ostatnio pobrane"),
+  signature: N_("Sygnatura")
+};
+type RangeField = "date" | "fetched";
+
+// The day an entry falls on for the range: the ruling's date or the day it was downloaded.
+const dayOf = (entry: CaseLawCatalogEntry, field: RangeField) => ((field === "date" ? entry.date : entry.fetchedAt) ?? "").slice(0, 10);
+
+/** Entries matching the court and date filters, in the chosen order (the text search runs on the server). */
+export function filterCaseLaw(
+  entries: readonly CaseLawCatalogEntry[],
+  args: { court: string; sort: Sort; range: { from: string; to: string }; field: RangeField }
+): CaseLawCatalogEntry[] {
+  const listed = entries.filter((entry) => {
+    if (args.court && entry.court !== args.court) return false;
+    const day = dayOf(entry, args.field);
+    if (args.range.from && (!day || day < args.range.from)) return false;
+    if (args.range.to && (!day || day > args.range.to)) return false;
+    return true;
+  });
+  const by = (key: (entry: CaseLawCatalogEntry) => string, desc = false) => (a: CaseLawCatalogEntry, b: CaseLawCatalogEntry) =>
+    (desc ? -1 : 1) * key(a).localeCompare(key(b), "pl");
+  if (args.sort === "date-desc") listed.sort(by((entry) => entry.date ?? "", true));
+  else if (args.sort === "date-asc") listed.sort(by((entry) => entry.date ?? "9999"));
+  else if (args.sort === "fetched-desc") listed.sort(by((entry) => entry.fetchedAt, true));
+  else listed.sort(by((entry) => entry.signature ?? entry.cardUrl));
+  return listed;
+}
+
+function cursorText(cursor: CaseLawServerStatus["sources"][number]["cursor"]): string {
+  if (!cursor) return t("pobieranie jeszcze nie ruszyło");
+  if (cursor.phase === "FULL") return t("pierwsze pobranie: rok {year}, strona {page}", { year: cursor.year, page: cursor.page + 1 });
+  return t("komplet pobrany {date}; dalej tylko zmiany", { date: (cursor.completedAt ?? "").slice(0, 10) });
+}
+
 /**
- * The case-law library (off by default): every decision downloaded from an
- * official source is catalogued by court, signature and date, searchable here
- * and by the model. Off: decisions stay only in the case files where they were
- * used, and quotes are marked on that copy.
+ * The case-law library (off by default): every decision downloaded from an official source is
+ * catalogued by court, signature and date, searchable here and by the model. Settings show one row;
+ * the list opens in a window. In server mode the window also shows the database of all rulings the
+ * server downloads from the bulk sources.
  */
 export function CaseLawLibrarySection() {
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(true);
   const [entries, setEntries] = useState<CaseLawCatalogEntry[]>([]);
+  const [server, setServer] = useState<CaseLawServerStatus | null>(null);
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [court, setCourt] = useState("");
+  const [sort, setSort] = useState<Sort>("date-desc");
+  const [preset, setPreset] = useState<CaseRangePreset>("all");
+  const [range, setRange] = useState({ from: "", to: "" });
+  const [field, setField] = useState<RangeField>("date");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const titleId = useId();
 
   const load = useCallback(async (search: string) => {
     try {
@@ -33,6 +83,7 @@ export function CaseLawLibrarySection() {
       setEnabled(library.enabled);
       setAvailable(library.available);
       setEntries(library.entries);
+      setServer(library.server ?? null);
       setError("");
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.code : String(failure));
@@ -42,6 +93,27 @@ export function CaseLawLibrarySection() {
   useEffect(() => {
     void load("");
   }, [load]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const courts = useMemo(() => [...new Set(entries.map((entry) => entry.court).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pl")), [entries]);
+  const listed = useMemo(() => filterCaseLaw(entries, { court, sort, range, field }), [entries, court, sort, range, field]);
+
+  // Selection covers only what is listed: a filter change drops the hidden ones.
+  useEffect(() => {
+    setSelected((current) => {
+      const visible = new Set(listed.map((entry) => entry.cardUrl));
+      const next = new Set([...current].filter((url) => visible.has(url)));
+      return next.size === current.size ? current : next;
+    });
+  }, [listed]);
 
   async function toggle(next: boolean): Promise<void> {
     setBusy(true);
@@ -55,75 +127,264 @@ export function CaseLawLibrarySection() {
     }
   }
 
-  async function remove(entry: CaseLawCatalogEntry): Promise<void> {
+  async function remove(urls: string[]): Promise<void> {
     setBusy(true);
     try {
-      await removeCaseLawLibraryEntry(entry.cardUrl);
+      for (const url of urls) await removeCaseLawLibraryEntry(url);
+      setSelected(new Set());
       await load(query);
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
     } finally {
       setBusy(false);
     }
   }
 
+  const filtered = Boolean(query || court || range.from || range.to || sort !== "date-desc");
+  const serverDocs = server?.sources.reduce((sum, item) => sum + item.documents, 0) ?? 0;
+  const status = enabled ? t("pozycji: {count}", { count: entries.length }) : t("wyłączona");
+
   return (
     <section className="core-law-updates">
-      <div className="maintenance-heading">
-        <div>
+      <div className="chat-card matter-compact-row">
+        <span className="matter-compact-heading">
           <strong>
             {t("Baza orzeczeń (RAG)")}
             <InfoTip>{t("Orzeczenia pobrane z oficjalnych baz, katalogowane według sądu, sygnatury i daty. Źródłem jest karta orzeczenia.")}</InfoTip>
           </strong>
-        </div>
-        <span>{enabled ? `pozycji: ${entries.length}${query ? " (wyszukane)" : ""}` : "wyłączona"}</span>
+          <span className={entries.length ? "matter-compact-count has-entries" : "matter-compact-count"}>
+            {status}
+            {server?.active ? ` · ${t("serwer: {count}", { count: serverDocs })}` : ""}
+          </span>
+        </span>
+        <span className="matter-compact-actions">
+          <button type="button" className="chat-secondary-action" onClick={() => setOpen(true)}>
+            {t("Pokaż")}
+          </button>
+        </span>
+        {error && !open ? <p className="chat-error matter-compact-error">{error}</p> : null}
       </div>
-      <label className="core-law-auto">
-        <input type="checkbox" checked={enabled} disabled={busy || !available} onChange={(event) => void toggle(event.target.checked)} />
-        {t("Zapisuj pobrane orzeczenia w bazie")}
-        <InfoTip>{t("Baza jest przeszukiwana także przez model. Wyłączona: orzeczenie trafia tylko do akt sprawy, w której je użyto.")}</InfoTip>
-      </label>
-      {enabled ? (
-        <>
-          <div className="core-law-add">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void load(query);
-            }}
-          >
-            <input
-              type="search"
-              value={query}
-              placeholder={t("Sygnatura, sąd albo fraza z treści")}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <button type="submit" disabled={busy}>
-              {t("Szukaj")}
-            </button>
-          </form>
-          </div>
-          {entries.length ? (
-            <div className="core-law-list">
-            <ul>
-              {entries.map((entry) => (
-                <li key={entry.cardUrl}>
-                  <a href={entry.cardUrl} target="_blank" rel="noreferrer" title={entry.cardUrl}>
-                    {label(entry)}
-                  </a>
-                  <small> {t("· pobrane")} {entry.fetchedAt.slice(0, 10)}</small>
-                  {entry.snippet ? <small className="field-help"> … {entry.snippet} …</small> : null}
-                  <button type="button" disabled={busy} onClick={() => void remove(entry)}>
-                    {t("Usuń")}
-                  </button>
-                </li>
-              ))}
-            </ul>
+      {open ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <section className="chat-card matter-section-dialog case-law-library-dialog">
+            <div className="matter-section-dialog-head">
+              <div>
+                <p className="eyebrow">{t("Ustawienia")}</p>
+                <h2 id={titleId}>{t("Baza orzeczeń (RAG)")}</h2>
+              </div>
+              <button type="button" className="chat-secondary-action" onClick={() => setOpen(false)}>
+                {t("Zamknij")}
+              </button>
             </div>
-          ) : (
-            <p className="field-help">{query ? t("Brak trafień.") : t("Baza jest pusta.")}</p>
-          )}
-        </>
+            <label className="core-law-auto">
+              <input type="checkbox" checked={enabled} disabled={busy || !available} onChange={(event) => void toggle(event.target.checked)} />
+              {t("Zapisuj pobrane orzeczenia w bazie")}
+              <InfoTip>{t("Baza jest przeszukiwana także przez model. Wyłączona: orzeczenie trafia tylko do akt sprawy, w której je użyto.")}</InfoTip>
+            </label>
+            {enabled ? (
+              <>
+                <div className="case-access-filters" role="search">
+                  <form
+                    className="case-access-filters-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void load(query);
+                    }}
+                  >
+                    <label className="case-access-filter-search">
+                      {t("Szukaj")}
+                      <input
+                        type="search"
+                        value={query}
+                        placeholder={t("Sygnatura, sąd albo fraza z treści")}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      {t("Sąd")}
+                      <select value={court} onChange={(event) => setCourt(event.target.value)}>
+                        <option value="">{t("Wszystkie sądy")}</option>
+                        {courts.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t("Sortowanie")}
+                      <select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
+                        {(Object.keys(SORT_LABELS) as Sort[]).map((key) => (
+                          <option key={key} value={key}>
+                            {t(SORT_LABELS[key])}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className="chat-secondary-action" disabled={busy}>
+                      {t("Szukaj")}
+                    </button>
+                  </form>
+                  <div className="case-access-filters-row case-access-range">
+                    <span className="case-access-filter-label">{t("Zakres")}</span>
+                    <select aria-label={t("Data, której dotyczy zakres")} value={field} onChange={(event) => setField(event.target.value as RangeField)}>
+                      <option value="date">{t("data orzeczenia")}</option>
+                      <option value="fetched">{t("data pobrania")}</option>
+                    </select>
+                    <div className="case-access-chips" role="group" aria-label={t("Zakres dat")}>
+                      {CASE_RANGE_PRESETS.map(([key, name]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={preset === key ? "case-access-chip active" : "case-access-chip"}
+                          aria-pressed={preset === key}
+                          onClick={() => {
+                            setPreset(key);
+                            const next = rangeForPreset(key, new Date(), { ...range, field: "created" });
+                            setRange({ from: next.from, to: next.to });
+                          }}
+                        >
+                          {t(name)}
+                        </button>
+                      ))}
+                    </div>
+                    {preset === "custom" ? (
+                      <span className="case-access-dates">
+                        <label>
+                          {t("od")}
+                          <input type="date" value={range.from} max={range.to || undefined} onChange={(event) => setRange({ ...range, from: event.target.value })} />
+                        </label>
+                        <label>
+                          {t("do")}
+                          <input type="date" value={range.to} min={range.from || undefined} onChange={(event) => setRange({ ...range, to: event.target.value })} />
+                        </label>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="case-access-results">
+                    <span>{t("Wyświetlono {shown} z {all}", { shown: listed.length, all: entries.length })}</span>
+                    {filtered ? (
+                      <button
+                        type="button"
+                        className="case-access-link"
+                        onClick={() => {
+                          setCourt("");
+                          setSort("date-desc");
+                          setPreset("all");
+                          setRange({ from: "", to: "" });
+                          if (query) {
+                            setQuery("");
+                            void load("");
+                          }
+                        }}
+                      >
+                        {t("Wyczyść filtry")}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className={selected.size ? "case-access-list-head has-selection" : "case-access-list-head"}>
+                  <label className="case-access-select-all">
+                    <input
+                      type="checkbox"
+                      ref={(element) => {
+                        if (element) element.indeterminate = selected.size > 0 && selected.size < listed.length;
+                      }}
+                      checked={listed.length > 0 && selected.size === listed.length}
+                      disabled={busy || listed.length === 0}
+                      onChange={(event) => setSelected(event.target.checked ? new Set(listed.map((entry) => entry.cardUrl)) : new Set())}
+                    />
+                    {selected.size ? t("Zaznaczono {count}", { count: selected.size }) : t("Zaznacz wszystkie widoczne ({count})", { count: listed.length })}
+                  </label>
+                  {selected.size ? (
+                    <>
+                      <button type="button" className="case-access-link" disabled={busy} onClick={() => setSelected(new Set())}>
+                        {t("Odznacz")}
+                      </button>
+                      <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void remove([...selected])}>
+                        {t("Usuń zaznaczone ({count})", { count: selected.size })}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+                {listed.length ? (
+                  <div className="core-law-list">
+                    <ul>
+                      {listed.map((entry) => (
+                        <li key={entry.cardUrl}>
+                          <input
+                            type="checkbox"
+                            aria-label={t("Zaznacz {name}", { name: label(entry) })}
+                            checked={selected.has(entry.cardUrl)}
+                            disabled={busy}
+                            onChange={(event) =>
+                              setSelected((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.add(entry.cardUrl);
+                                else next.delete(entry.cardUrl);
+                                return next;
+                              })
+                            }
+                          />
+                          <a href={entry.cardUrl} target="_blank" rel="noreferrer" title={entry.cardUrl}>
+                            {label(entry)}
+                          </a>
+                          <small> {t("· pobrane")} {entry.fetchedAt.slice(0, 10)}</small>
+                          {entry.snippet ? <small className="field-help"> … {entry.snippet} …</small> : null}
+                          <button type="button" disabled={busy} onClick={() => void remove([entry.cardUrl])}>
+                            {t("Usuń")}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="field-help">{query || filtered ? t("Brak trafień.") : t("Baza jest pusta.")}</p>
+                )}
+              </>
+            ) : null}
+            {server && (server.active || server.sources.length) ? (
+              <div className="case-law-server">
+                <h3>
+                  {t("Baza serwera — wszystkie orzeczenia")}
+                  <InfoTip>{t("W trybie serwerowym serwer pobiera całe bazy orzeczeń (od najstarszych), potem już tylko zmiany. Model czyta tę bazę przed sięgnięciem do źródła.")}</InfoTip>
+                </h3>
+                <ul>
+                  {server.sources.map((item) => (
+                    <li key={item.source}>
+                      <strong>{item.source}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {cursorText(item.cursor)}
+                    </li>
+                  ))}
+                  {server.notBulk.map((item) => (
+                    <li key={item.source}>
+                      <strong>{item.source}</strong>: {item.reason}
+                    </li>
+                  ))}
+                </ul>
+                {server.lastRun ? (
+                  <p className="field-help">
+                    {t("Ostatni przebieg {date}: stron {pages}, nowych lub zmienionych {stored}", {
+                      date: server.lastRun.at.slice(0, 16).replace("T", " "),
+                      pages: server.lastRun.pages,
+                      stored: server.lastRun.stored
+                    })}
+                    {server.lastRun.error ? ` · ${t("błąd: {error}", { error: server.lastRun.error })}` : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {error ? <p className="chat-inline-error">{error}</p> : null}
+          </section>
+        </div>
       ) : null}
-      {error ? <p className="chat-inline-error">{error}</p> : null}
     </section>
   );
 }

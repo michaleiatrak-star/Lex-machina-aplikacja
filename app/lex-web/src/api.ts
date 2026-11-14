@@ -4181,7 +4181,16 @@ export function resolveCaseLaw(input: { cardUrl?: string; signature?: string; ca
 
 export type CaseLawCatalogEntry = Omit<CaseLawCopy, "text"> & { chars: number; snippet?: string };
 
-export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; available: boolean; entries: CaseLawCatalogEntry[] }> {
+// Baza orzeczeń serwera (tryb serwerowy): synchronizacja całych źródeł, stan każdego źródła.
+export type CaseLawSyncCursor = { phase: "FULL" | "INCREMENTAL"; year: number; page: number; since: string | null; completedAt: string | null };
+export type CaseLawServerStatus = {
+  active: boolean;
+  sources: Array<{ source: string; documents: number; cursor: CaseLawSyncCursor | null }>;
+  lastRun: { at: string; source: string; pages: number; stored: number; error?: string } | null;
+  notBulk: Array<{ source: string; reason: string }>;
+};
+
+export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; available: boolean; entries: CaseLawCatalogEntry[]; server?: CaseLawServerStatus }> {
   return json(`/api/case-law/library${query ? `?q=${encodeURIComponent(query)}` : ""}`);
 }
 
@@ -4199,7 +4208,7 @@ export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }>
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
-export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
+export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "brave" | "firecrawl" | "gemini";
 
 export type SearchEngineScore = {
   engine: SearchEngineName;
@@ -4223,10 +4232,13 @@ export type WebSearchSettings = {
   searxngUrlForced: boolean;
   firecrawlConfigured: boolean;
   firecrawlKeyForced: boolean;
+  braveConfigured?: boolean;
+  braveKeyForced?: boolean;
   googleSession: boolean;
   /** Keep the Google session after a restart (cookies sealed on this computer). */
   googleSessionKeep: boolean;
   googleSessionSaved: boolean;
+  googleSessionActive?: boolean;
   providerForced: string | null;
 };
 
@@ -4236,6 +4248,10 @@ export function getWebSearchSettings(): Promise<WebSearchSettings> {
 
 export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
+}
+
+export function setBraveApiKey(braveApiKey: string): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ braveApiKey }) });
 }
 
 export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSettings> {

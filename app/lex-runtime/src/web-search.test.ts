@@ -11,6 +11,7 @@ import {
   assertPublicWebSearchQuery,
   classifyWebSearchHits,
   parseDuckDuckGoHtml,
+  pickGeminiSearchModel,
   type WebSearchProvider
 } from "./web-search.js";
 
@@ -142,5 +143,56 @@ describe("web_search", () => {
     expect(
       JSON.parse(blocked!.content).status
     ).toBe("POLICY_BLOCKED");
+  });
+});
+
+describe("Gemini + Google i Brave", () => {
+  it("wybiera aktualny model Flash z listy modeli klucza", () => {
+    expect(
+      pickGeminiSearchModel([
+        { name: "models/gemini-2.0-flash", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/gemini-3.1-flash-lite", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/gemini-3.1-flash-preview", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/gemini-3.1-flash", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/gemini-3.1-flash-image", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"] }
+      ])
+    ).toBe("gemini-3.1-flash");
+    expect(pickGeminiSearchModel([{ name: "models/gemini-3-pro", supportedGenerationMethods: ["generateContent"] }])).toBeNull();
+  });
+
+  it("404 dla modelu: pobiera listę modeli i ponawia z aktualnym (zamiast HTTP_404)", async () => {
+    const asked: string[] = [];
+    const fetchImpl = (async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = String(input);
+      asked.push(url.replace("https://generativelanguage.googleapis.com/v1beta/", ""));
+      if (url.includes("/models?")) {
+        return new Response(JSON.stringify({ models: [{ name: "models/gemini-9.0-flash", supportedGenerationMethods: ["generateContent"] }] }), { status: 200 });
+      }
+      if (url.includes("gemini-2.5-flash")) return new Response("{}", { status: 404 });
+      expect(JSON.parse(String(init?.body)).tools).toEqual([{ google_search: {} }]);
+      return new Response(
+        JSON.stringify({
+          candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: "https://isap.sejm.gov.pl/x", title: "isap.sejm.gov.pl" } }] } }]
+        }),
+        { status: 200 }
+      );
+    }) as typeof fetch;
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    try {
+      const hits = await new PublicWebSearch({}, fetchImpl).searchEngine("gemini", "kodeks cywilny", 3);
+      expect(asked).toEqual(["models/gemini-2.5-flash:generateContent", "models?pageSize=200", "models/gemini-9.0-flash:generateContent"]);
+      expect(hits.map((hit) => hit.url)).toEqual(["https://isap.sejm.gov.pl/x"]);
+    } finally {
+      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    }
+  });
+
+  it("Brave: odrzucony klucz, wyczerpany kredyt i limit jako czytelne kody", async () => {
+    for (const [status, code] of [[401, "KEY_REJECTED"], [402, "CREDITS_EXHAUSTED"], [429, "RATE_LIMITED"]] as const) {
+      const fetchImpl = (async () => new Response("", { status })) as unknown as typeof fetch;
+      await expect(new PublicWebSearch({ BRAVE_SEARCH_API_KEY: "BSAtestkey1234567890" }, fetchImpl).searchEngine("brave", "x", 3)).rejects.toThrow(code);
+    }
+    await expect(new PublicWebSearch({}, (async () => new Response("")) as unknown as typeof fetch).searchEngine("brave", "x", 3)).rejects.toThrow("NOT_CONFIGURED");
   });
 });

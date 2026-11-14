@@ -4,6 +4,7 @@ import {
   ApiError,
   getWebSearchSettings,
   runWebSearchTest,
+  setBraveApiKey,
   setFirecrawlApiKey,
   setGoogleSession,
   setGoogleSessionKeep,
@@ -14,15 +15,20 @@ import {
 import { InfoTip } from "./InfoTip";
 import { InlineEdit } from "./InlineEdit";
 import { PencilIcon } from "./CaseAccessAdminPanel";
+import { LawSourceVerification } from "./LawSourceVerification.js";
 
 const SEARXNG_EXAMPLE = "http://localhost:8888";
+// The Google window as the chat opens it (eli/law-source-sessions.ts): the user confirms in it.
+const GOOGLE_VERIFICATION = { url: "https://www.google.com/search?q=kodeks+karny&hl=pl", host: "www.google.com", label: "Google" };
 const FIRECRAWL_EXAMPLE = "fc-…";
+const BRAVE_EXAMPLE = "BSA…";
 
 const ENGINE_LABELS: Record<SearchEngineName, string> = {
   google: "Google",
   gemini: "Gemini + Google",
   searxng: "SearXNG",
   duckduckgo: "DuckDuckGo",
+  brave: "Brave",
   firecrawl: "Firecrawl"
 };
 
@@ -30,10 +36,10 @@ function number(value: number): string {
   return value.toLocaleString(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
-function errorText(code: string | undefined): string {
+function errorText(code: string | undefined, engine?: SearchEngineName): string {
   switch (code) {
     case "NOT_CONFIGURED":
-      return t("brak adresu");
+      return engine === "searxng" ? t("brak adresu") : t("brak klucza");
     case "RATE_LIMITED":
       return t("serwer odrzucił zapytania (limit)");
     case "BOT_CHECK":
@@ -45,7 +51,7 @@ function errorText(code: string | undefined): string {
     case "KEY_REJECTED":
       return t("klucz odrzucony");
     case "LAW_SOURCE_VERIFICATION_REQUIRED:www.google.com":
-      return t("potrzebne potwierdzenie w oknie Google (pojawi się w czacie)");
+      return t("potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)");
     default:
       return code ?? "";
   }
@@ -59,8 +65,11 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [settings, setSettings] = useState<WebSearchSettings | null>(null);
   const [editing, setEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
+  const [editingBrave, setEditingBrave] = useState(false);
   const [busy, setBusy] = useState<"" | "test" | "save">("");
   const [error, setError] = useState("");
+  const [googleWindow, setGoogleWindow] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState("");
 
   useEffect(() => {
     void getWebSearchSettings()
@@ -88,6 +97,21 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     try {
       setSettings(await setFirecrawlApiKey(next));
       setEditingKey(false);
+      setError("");
+      return true;
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveBrave(next: string): Promise<boolean> {
+    setBusy("save");
+    try {
+      setSettings(await setBraveApiKey(next));
+      setEditingBrave(false);
       setError("");
       return true;
     } catch (failure) {
@@ -163,6 +187,29 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
         </InfoTip>
       </label>
       {settings.googleSession ? (
+        <div className="web-search-google-window">
+          <span>
+            {settings.googleSessionActive ? t("Sesja Google aktywna.") : t("Brak sesji Google: potwierdź w oknie Google, zanim wyszukiwarka zostanie użyta.")}
+          </span>
+          {googleWindow ? (
+            <LawSourceVerification
+              verification={GOOGLE_VERIFICATION}
+              autoStart={false}
+              onVerified={() => {
+                setGoogleWindow(false);
+                setGoogleMessage(t("Potwierdzone w oknie Google — sesja aktywna."));
+                void getWebSearchSettings().then(setSettings).catch(() => undefined);
+              }}
+            />
+          ) : (
+            <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => { setGoogleMessage(""); setGoogleWindow(true); }}>
+              {settings.googleSessionActive ? t("Odnów sesję w oknie Google") : t("Potwierdź w oknie Google")}
+            </button>
+          )}
+          {googleMessage ? <small>{googleMessage}</small> : null}
+        </div>
+      ) : null}
+      {settings.googleSession ? (
         <label className="core-law-auto web-search-keep">
           <input
             type="checkbox"
@@ -222,6 +269,37 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
       </div>
 
       <div className="web-search-url">
+        <span>{t("Klucz Brave:")}</span>
+        {editingBrave ? (
+          <InlineEdit value="" label={t("Klucz Brave")} placeholder={BRAVE_EXAMPLE} maxLength={130} onCancel={() => setEditingBrave(false)} onSave={saveBrave} />
+        ) : (
+          <>
+            <code>{settings.braveConfigured ? t("zapisany (zaszyfrowany)") : t("nie ustawiono")}</code>
+            {admin && !settings.braveKeyForced ? (
+              <button
+                type="button"
+                className="matter-title-pencil"
+                title={t("Zmień klucz Brave")}
+                aria-label={t("Zmień klucz Brave")}
+                disabled={Boolean(busy)}
+                onClick={() => setEditingBrave(true)}
+              >
+                <PencilIcon />
+              </button>
+            ) : null}
+            {admin && settings.braveConfigured && !settings.braveKeyForced ? (
+              <button type="button" disabled={Boolean(busy)} onClick={() => void saveBrave("")}>
+                {t("Usuń klucz")}
+              </button>
+            ) : null}
+          </>
+        )}
+        <InfoTip>
+          {t("Brave Search API to oficjalne API własnego indeksu Brave (cały internet). Usługa płatna według cennika Brave, z miesięcznym kredytem w planie; klucz zakładasz na api-dashboard.search.brave.com. Aplikacja przechowuje go zaszyfrowany i wysyła tylko ogólne frazy, nigdy dane sprawy.")}
+        </InfoTip>
+      </div>
+
+      <div className="web-search-url">
         <span>{t("Klucz Firecrawl:")}</span>
         {editingKey ? (
           <InlineEdit
@@ -276,7 +354,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
                   {" · "}{t("Trafność")}: {item.relevance}%
                   {" · "}{t("Czas (mediana)")}: {item.medianMs === null ? "—" : t("{value} s", { value: number(item.medianMs / 1000) })}
                 </small>
-                {item.error && item.answered < item.queries ? <small className="web-search-score-error">{errorText(item.error)}</small> : null}
+                {item.error && item.answered < item.queries ? <small className="web-search-score-error">{errorText(item.error, item.engine)}</small> : null}
               </li>
             ))}
           </ol>

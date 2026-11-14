@@ -2,7 +2,7 @@ import { isBlockedUrl } from "./blocked-jurisdictions.js";
 import { LAW_SOURCE_VERIFICATION_REQUIRED, clearLawSourceSession, isChallengePage, lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
-import { effectiveSearchOrder, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
+import { effectiveSearchOrder, braveApiKey, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
 export class WebSearchError extends Error {
     code;
     constructor(code, detail) {
@@ -186,6 +186,22 @@ async function readLimitedText(response) {
         .subarray(0, MAX_BODY_BYTES)
         .toString("utf8");
 }
+const GEMINI_SEARCH_DEFAULT = "gemini-2.5-flash";
+// The model found for this run of the application after a 404 (see searchGemini).
+let geminiSearchModel = null;
+/**
+ * A Flash model the key can call with generateContent: no lite, image, audio, live, TTS or embedding
+ * variants; a stable name before a preview; the highest version first.
+ */
+export function pickGeminiSearchModel(models) {
+    const names = models
+        .filter((model) => (model.supportedGenerationMethods ?? []).includes("generateContent"))
+        .map((model) => (model.name ?? "").replace(/^models\//u, ""))
+        .filter((name) => /^gemini-[\d.]+-flash/u.test(name) && !/lite|image|audio|live|tts|embedding|thinking-exp/u.test(name));
+    const version = (name) => Number(/^gemini-([\d.]+)/u.exec(name)?.[1] ?? 0);
+    names.sort((a, b) => version(b) - version(a) || Number(/preview|exp/u.test(a)) - Number(/preview|exp/u.test(b)) || a.length - b.length);
+    return names[0] ?? null;
+}
 export class PublicWebSearch {
     env;
     fetchImpl;
@@ -207,35 +223,26 @@ export class PublicWebSearch {
             throw new WebSearchError("WEB_SEARCH_DISABLED");
         }
         const errors = [];
-        const braveKey = this.env.BRAVE_SEARCH_API_KEY?.trim();
-        if (braveKey &&
-            (provider === "auto" || provider === "brave")) {
-            try {
-                const hits = withoutBlocked(await this.searchBrave(query, maxResults, braveKey));
-                if (hits.length > 0) {
-                    return { provider: "brave", hits };
-                }
-            }
-            catch (error) {
-                errors.push(`brave:${error instanceof Error ? error.message : String(error)}`);
-            }
-        }
         // Auto: the order measured by the comparison test (Ustawienia > Wyszukiwarka internetowa),
         // then the remaining engines; a named provider runs alone.
-        const settings = this.settings();
+        // A key given to this instance (server configuration, tests) counts as configured Brave.
+        const base = this.settings();
+        const settings = this.env.BRAVE_SEARCH_API_KEY?.trim() ? { ...base, braveConfigured: true } : base;
         const engines = provider === "auto"
             ? effectiveSearchOrder(settings)
             : provider === "searxng"
                 ? ["searxng"]
                 : provider === "firecrawl"
                     ? ["firecrawl"]
-                    : provider === "gemini"
-                        ? ["gemini"]
-                        : provider === "google"
-                            ? ["google"]
-                            : provider === "duckduckgo" || provider === "ddg"
-                                ? ["duckduckgo"]
-                                : [];
+                    : provider === "brave"
+                        ? ["brave"]
+                        : provider === "gemini"
+                            ? ["gemini"]
+                            : provider === "google"
+                                ? ["google"]
+                                : provider === "duckduckgo" || provider === "ddg"
+                                    ? ["duckduckgo"]
+                                    : [];
         let verificationRequired;
         for (const engine of engines) {
             try {
@@ -262,6 +269,12 @@ export class PublicWebSearch {
         }
         if (engine === "google")
             return this.searchGoogle(query, maxResults);
+        if (engine === "brave") {
+            const key = this.env.BRAVE_SEARCH_API_KEY?.trim() || braveApiKey();
+            if (!key)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchBrave(query, maxResults, key);
+        }
         if (engine === "gemini") {
             const key = await geminiSearchKey();
             if (!key)
@@ -349,8 +362,7 @@ export class PublicWebSearch {
      * address without downloading the page.
      */
     async searchGemini(query, maxResults, apiKey) {
-        const model = (this.env.LEX_GEMINI_SEARCH_MODEL ?? "gemini-2.5-flash").trim();
-        const response = await this.fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        const ask = (model) => this.fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey, "User-Agent": USER_AGENT },
             body: JSON.stringify({
@@ -359,6 +371,17 @@ export class PublicWebSearch {
             }),
             signal: AbortSignal.timeout(this.timeoutMs)
         });
+        const configured = this.env.LEX_GEMINI_SEARCH_MODEL?.trim();
+        let response = await ask(configured || geminiSearchModel || GEMINI_SEARCH_DEFAULT);
+        // 404: the model is not offered for this key any more (Google retires models). The models the
+        // key can use are listed and a current Flash model is taken, instead of a name fixed in code.
+        if (response.status === 404 && !configured) {
+            const found = await this.discoverGeminiModel(apiKey);
+            if (found) {
+                geminiSearchModel = found;
+                response = await ask(found);
+            }
+        }
         if (response.status === 429)
             throw new Error("RATE_LIMITED");
         if (response.status === 401 || response.status === 403)
@@ -367,6 +390,21 @@ export class PublicWebSearch {
             throw new Error(`HTTP_${response.status}`);
         const hits = parseGeminiGrounding(JSON.parse(await readLimitedText(response)), maxResults);
         return Promise.all(hits.map(async (hit) => ({ ...hit, url: await this.resolveRedirect(hit.url) })));
+    }
+    async discoverGeminiModel(apiKey) {
+        try {
+            const response = await this.fetchImpl("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+                headers: { "x-goog-api-key": apiKey, "User-Agent": USER_AGENT },
+                signal: AbortSignal.timeout(this.timeoutMs)
+            });
+            if (!response.ok)
+                return null;
+            const payload = JSON.parse(await readLimitedText(response));
+            return pickGeminiSearchModel(payload.models ?? []);
+        }
+        catch {
+            return null;
+        }
     }
     async resolveRedirect(url) {
         if (!/^https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\//u.test(url))
@@ -415,6 +453,8 @@ export class PublicWebSearch {
         const url = new URL("https://api.search.brave.com/res/v1/web/search");
         url.searchParams.set("q", query);
         url.searchParams.set("count", String(maxResults));
+        url.searchParams.set("search_lang", "pl");
+        url.searchParams.set("country", "PL");
         const response = await this.fetchImpl(url, {
             headers: {
                 Accept: "application/json",
@@ -423,6 +463,12 @@ export class PublicWebSearch {
             },
             signal: AbortSignal.timeout(this.timeoutMs)
         });
+        if (response.status === 401 || response.status === 403)
+            throw new Error("KEY_REJECTED");
+        if (response.status === 402)
+            throw new Error("CREDITS_EXHAUSTED");
+        if (response.status === 429)
+            throw new Error("RATE_LIMITED");
         if (!response.ok) {
             throw new Error(`HTTP_${response.status}`);
         }

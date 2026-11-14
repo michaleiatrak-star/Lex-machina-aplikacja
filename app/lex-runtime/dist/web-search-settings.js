@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-// Paid-beyond-a-limit engines last among the untested: Firecrawl (monthly credits), Gemini with
-// Google Search (free quota, then billed per query on the user's Google key).
-export const SEARCH_ENGINES = ["google", "searxng", "duckduckgo", "firecrawl", "gemini"];
+// Untested order: Brave (only with a key the administrator entered: an official API of a whole-web
+// index) before DuckDuckGo, as before; paid-beyond-a-limit engines last: Firecrawl (monthly
+// credits), Gemini with Google Search (free quota, then billed per query on the user's Google key).
+export const SEARCH_ENGINES = ["google", "searxng", "brave", "duckduckgo", "firecrawl", "gemini"];
 // The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
 let geminiKeySource = null;
 export function configureGeminiSearchKey(source) {
@@ -41,6 +42,7 @@ function rootKey(create) {
 }
 const KEY_AAD = Buffer.from("lex-web-search:firecrawl", "utf8");
 const GOOGLE_AAD = Buffer.from("lex-web-search:google-session", "utf8");
+const BRAVE_AAD = Buffer.from("lex-web-search:brave", "utf8");
 function seal(secret, aad = KEY_AAD) {
     const key = rootKey(true);
     if (!key)
@@ -68,6 +70,13 @@ function unseal(sealed, aad = KEY_AAD) {
 /** The Firecrawl key: env FIRECRAWL_API_KEY (server configuration) or the sealed one from Settings. */
 export function firecrawlApiKey() {
     return process.env.FIRECRAWL_API_KEY?.trim() || unseal(stored().firecrawl);
+}
+/** The Brave Search API key: env BRAVE_SEARCH_API_KEY (server configuration) or the sealed one from Settings. */
+export function braveApiKey() {
+    return process.env.BRAVE_SEARCH_API_KEY?.trim() || unseal(stored().brave, BRAVE_AAD);
+}
+export function braveKeyForced() {
+    return Boolean(process.env.BRAVE_SEARCH_API_KEY?.trim());
 }
 export function firecrawlKeyForced() {
     return Boolean(process.env.FIRECRAWL_API_KEY?.trim());
@@ -117,6 +126,7 @@ export function webSearchSettings() {
         order: [...new Set(order)],
         lastTest: file.lastTest && Array.isArray(file.lastTest.scores) ? file.lastTest : null,
         firecrawlConfigured: Boolean(firecrawlApiKey()),
+        braveConfigured: Boolean(braveApiKey()),
         // On by default (user, 2026-11-10: attached and selected); off only when turned off in Settings.
         googleSession: file.googleSession !== false,
         googleSessionKeep: file.googleSession !== false && file.googleSessionKeep === true,
@@ -134,6 +144,8 @@ function write(next) {
     const merged = { ...stored(), ...next };
     if (!merged.firecrawl)
         delete merged.firecrawl;
+    if (!merged.brave)
+        delete merged.brave;
     if (!merged.googleCookies)
         delete merged.googleCookies;
     const temporary = `${settingsFile}.${process.pid}.tmp`;
@@ -249,6 +261,17 @@ export function setFirecrawlApiKey(raw) {
     write({ order: current.order.filter((item) => item !== "firecrawl"), firecrawl: key ? seal(key) : undefined });
     return webSearchSettings();
 }
+/** Saves (or with "" removes) the Brave Search API key; a new key drops Brave's measured place. */
+export function setBraveApiKey(raw) {
+    if (braveKeyForced())
+        throw new Error("WEB_SEARCH_BRAVE_KEY_FORCED");
+    const key = typeof raw === "string" ? raw.trim() : "";
+    if (key && !/^[A-Za-z0-9_-]{16,120}$/u.test(key))
+        throw new Error("WEB_SEARCH_BRAVE_KEY_INVALID");
+    const current = webSearchSettings();
+    write({ order: current.order.filter((item) => item !== "brave"), brave: key ? seal(key, BRAVE_AAD) : undefined });
+    return webSearchSettings();
+}
 /** Saves the test result; the order is every engine that scored above zero, best first. */
 export function saveWebSearchTest(result) {
     const order = [...result.scores]
@@ -267,9 +290,11 @@ export function effectiveSearchOrder(settings = webSearchSettings()) {
         ? Boolean(settings.searxngUrl)
         : engine === "firecrawl"
             ? settings.firecrawlConfigured
-            : engine === "google"
-                ? settings.googleSession
-                : true;
+            : engine === "brave"
+                ? settings.braveConfigured
+                : engine === "google"
+                    ? settings.googleSession
+                    : true;
     // Google on the user's session goes first once the user turned it on (their choice, not the test's).
     if (settings.googleSession) {
         const rest = effectiveSearchOrder({ ...settings, googleSession: false });

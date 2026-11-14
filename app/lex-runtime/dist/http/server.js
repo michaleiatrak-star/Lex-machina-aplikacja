@@ -395,8 +395,8 @@ export async function startLocalServer(options) {
             });
             // Daily ELI check while the application runs, not only at start.
             coreLawIndex.startSchedule();
-            // The local database of rulings (case-law-db.ts): LEX_CASE_LAW_SYNC=1 (server mode).
-            startCaseLawSync();
+            // The local database of rulings (case-law-db.ts): on in server mode, or LEX_CASE_LAW_SYNC=1.
+            startCaseLawSync(() => serverMode.isEnabled());
             // Another legal system chosen in Settings: its acts are read and downloaded at once (the previous
             // jurisdiction's are no longer updated on a desktop; server mode keeps every jurisdiction).
             mcpConnectors.onJurisdictionChange(() => {

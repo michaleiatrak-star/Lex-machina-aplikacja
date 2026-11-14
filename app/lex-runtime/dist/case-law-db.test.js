@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { CaseLawDatabase, SAOS_DUMP, saosRecord, syncSaos } from "./case-law-db.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CASE_LAW_NOT_BULK, CaseLawDatabase, SAOS_DUMP, caseLawSyncStatus, saosRecord, startCaseLawSync, syncSaos } from "./case-law-db.js";
 const item = (id, signature, date, extra = {}) => ({
     id,
     courtType: "COMMON",
@@ -70,5 +70,27 @@ describe("local case-law database (SAOS first)", () => {
         expect(db.upsert(record.card, record.text, record.links)).toBe(false);
         expect(db.upsert({ ...record.card, modified: "2021-02-01T00:00:00.000" }, record.text, record.links)).toBe(true);
         db.close();
+    });
+});
+describe("synchronizacja bazy orzeczeń: tryb serwerowy", () => {
+    afterEach(() => {
+        delete process.env.LEX_CASE_LAW_SYNC;
+        delete process.env.LEX_CASE_LAW_DB_DIR;
+        vi.unstubAllGlobals();
+    });
+    it("włączona w trybie serwerowym bez zmiennej; LEX_CASE_LAW_SYNC=0 wyłącza; desktop — wyłączona", () => {
+        process.env.LEX_CASE_LAW_DB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "lex-sync-"));
+        vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("NO_NETWORK_IN_TEST"); }));
+        let server = true;
+        const stop = startCaseLawSync(() => server, 60_000, 1);
+        expect(caseLawSyncStatus().active).toBe(true);
+        stop();
+        server = false;
+        startCaseLawSync(() => server, 60_000, 1)();
+        expect(caseLawSyncStatus().active).toBe(false);
+        process.env.LEX_CASE_LAW_SYNC = "0";
+        startCaseLawSync(() => true, 60_000, 1)();
+        expect(caseLawSyncStatus().active).toBe(false);
+        expect(CASE_LAW_NOT_BULK.map((item) => item.source)).toEqual(["SN", "CBOSA", "EUREKA"]);
     });
 });
