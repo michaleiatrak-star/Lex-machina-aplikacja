@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { CASE_LAW_NOT_BULK, CaseLawDatabase, SAOS_DUMP, caseLawSyncStatus, saosRecord, startCaseLawSync, syncSaos } from "./case-law-db.js";
 const item = (id, signature, date, extra = {}) => ({
     id,
@@ -72,25 +72,15 @@ describe("local case-law database (SAOS first)", () => {
         db.close();
     });
 });
-describe("synchronizacja bazy orzeczeń: tryb serwerowy", () => {
-    afterEach(() => {
+describe("synchronizacja bazy orzeczeń: tylko źródła oficjalne", () => {
+    it("SAOS (kopia nieoficjalna) nie jest pobierany hurtowo, także w trybie serwerowym i z LEX_CASE_LAW_SYNC=1", () => {
+        process.env.LEX_CASE_LAW_SYNC = "1";
+        startCaseLawSync(() => true, 60_000)();
         delete process.env.LEX_CASE_LAW_SYNC;
-        delete process.env.LEX_CASE_LAW_DB_DIR;
-        vi.unstubAllGlobals();
-    });
-    it("włączona w trybie serwerowym bez zmiennej; LEX_CASE_LAW_SYNC=0 wyłącza; desktop — wyłączona", () => {
-        process.env.LEX_CASE_LAW_DB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "lex-sync-"));
-        vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("NO_NETWORK_IN_TEST"); }));
-        let server = true;
-        const stop = startCaseLawSync(() => server, 60_000, 1);
-        expect(caseLawSyncStatus().active).toBe(true);
-        stop();
-        server = false;
-        startCaseLawSync(() => server, 60_000, 1)();
-        expect(caseLawSyncStatus().active).toBe(false);
-        process.env.LEX_CASE_LAW_SYNC = "0";
-        startCaseLawSync(() => true, 60_000, 1)();
-        expect(caseLawSyncStatus().active).toBe(false);
-        expect(CASE_LAW_NOT_BULK.map((item) => item.source)).toEqual(["SN", "CBOSA", "EUREKA"]);
+        const status = caseLawSyncStatus();
+        expect(status.active).toBe(false);
+        expect(status.sources).toEqual([]);
+        expect(CASE_LAW_NOT_BULK.map((item) => item.source)).not.toContain("SAOS");
+        expect(CASE_LAW_NOT_BULK.map((item) => item.source)).toContain("Sądy dyscyplinarne");
     });
 });

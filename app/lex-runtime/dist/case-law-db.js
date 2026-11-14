@@ -214,42 +214,29 @@ export function sharedCaseLawDatabase() {
     shared = process.env.VITEST || !fs.existsSync(path.join(directory, "case-law.sqlite")) ? null : new CaseLawDatabase(directory);
     return shared;
 }
-// Sources the local database does not download in full: SN's own base asks for a person's
-// verification (captcha), which the application does not get around; CBOSA and EUREKA have no bulk
-// adapter yet. Their rulings are read one by one when the work needs them, as before.
+// Official sources and disciplinary case law: none is downloaded in full yet. SAOS is an unofficial
+// copy and is never downloaded in bulk. SN's own base asks for a person's verification (captcha),
+// which the application does not get around; the others have no adapter for the whole base yet.
+// Their rulings are read one by one, from the official page, when the work needs them.
 export const CASE_LAW_NOT_BULK = [
-    { source: "SN", reason: "baza sn.pl wymaga weryfikacji człowieka — orzeczenia SN pobierane pojedynczo; do 2016 r. także przez SAOS" },
+    { source: "SN", reason: "baza sn.pl wymaga weryfikacji człowieka — orzeczenia SN pobierane pojedynczo" },
+    { source: "Portal Orzeczeń Sądów Powszechnych", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
     { source: "CBOSA", reason: "brak adaptera pobierania całej bazy — orzeczenia NSA/WSA pobierane pojedynczo" },
+    { source: "TK", reason: "brak adaptera pobierania całej bazy — orzeczenia pobierane pojedynczo" },
+    { source: "Sądy dyscyplinarne", reason: "brak adaptera pobierania całej bazy — orzeczenia z portali sądów dyscyplinarnych pobierane pojedynczo" },
     { source: "EUREKA", reason: "brak adaptera pobierania całej bazy — interpretacje pobierane pojedynczo" }
 ];
-let lastRun = null;
+const lastRun = null;
 let syncActive = false;
 /**
- * Background synchronisation, a run every interval, each a bounded number of pages (resumable). On in
- * server mode (every ruling the bulk sources give, for all the firm's users) or with
- * LEX_CASE_LAW_SYNC=1; LEX_CASE_LAW_SYNC=0 turns it off. Server mode can be switched while the
- * application runs, so every tick asks again.
+ * Background synchronisation of the whole bases. Downloads only official sources; none has a bulk
+ * adapter yet, so no run starts. SAOS (an unofficial copy) is not downloaded, also with
+ * LEX_CASE_LAW_SYNC=1. The interval stays so that an adapter added later runs on the same schedule.
  */
-export function startCaseLawSync(isServerMode = () => false, intervalMs = 60 * 60 * 1000, pagesPerRun = 200) {
-    const wanted = () => process.env.LEX_CASE_LAW_SYNC === "1" || (process.env.LEX_CASE_LAW_SYNC !== "0" && isServerMode());
-    let running = false;
+export function startCaseLawSync(isServerMode = () => false, intervalMs = 60 * 60 * 1000) {
+    void isServerMode;
     const tick = () => {
-        syncActive = wanted();
-        if (running || !syncActive)
-            return;
-        running = true;
-        const database = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
-        shared = database;
-        void syncSaos(database, { maxPages: pagesPerRun })
-            .then((result) => {
-            lastRun = { at: new Date().toISOString(), source: "SAOS", pages: result.pages, stored: result.stored };
-        })
-            .catch((error) => {
-            lastRun = { at: new Date().toISOString(), source: "SAOS", pages: 0, stored: 0, error: error instanceof Error ? error.message : String(error) };
-        })
-            .finally(() => {
-            running = false;
-        });
+        syncActive = false;
     };
     tick();
     const timer = setInterval(tick, intervalMs);
@@ -258,11 +245,5 @@ export function startCaseLawSync(isServerMode = () => false, intervalMs = 60 * 6
 }
 /** What the settings window shows: whether the sync runs, how much each source holds, where it is. */
 export function caseLawSyncStatus() {
-    const database = sharedCaseLawDatabase();
-    return {
-        active: syncActive,
-        sources: database ? [{ source: "SAOS", documents: database.count("SAOS"), cursor: database.cursor("SAOS") }] : [],
-        lastRun,
-        notBulk: CASE_LAW_NOT_BULK
-    };
+    return { active: syncActive, sources: [], lastRun, notBulk: CASE_LAW_NOT_BULK };
 }

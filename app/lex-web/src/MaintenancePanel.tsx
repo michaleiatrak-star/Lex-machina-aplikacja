@@ -418,7 +418,17 @@ export function MaintenancePanel({
     void refresh(next);
   }
 
-  if (!desktop) return null;
+  // Przeglądarka (także dostęp do serwera): bez aktualizacji programu; administrator
+  // zarządza tu bazą orzeczeń i wyszukiwarką, które działają po stronie serwera.
+  if (!desktop) {
+    if (!embedded || user.appRole !== "ADMIN") return null;
+    return (
+      <div className="maintenance-panel maintenance-panel-embedded">
+        <CaseLawLibrarySection />
+        <WebSearchSection admin />
+      </div>
+    );
+  }
 
   if (minimized && !embedded) {
     return (

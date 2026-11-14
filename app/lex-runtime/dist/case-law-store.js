@@ -32,6 +32,11 @@ export function courtOfCard(cardUrl) {
         return "TSUE";
     return host;
 }
+// The library (RAG) keeps official sources only: SAOS is an unofficial copy, used to find a ruling
+// and read in the case, never kept in the library (also an earlier copy is not shown or used).
+export function inLibrary(cardUrl) {
+    return courtOfCard(cardUrl) !== "SAOS";
+}
 // One key per decision: sn.pl and www.sn.pl cards of the same ID are one card.
 function cardKey(cardUrl) {
     try {
@@ -148,15 +153,15 @@ export class CaseLawRepository {
     }
     /** The case's copy first, then the library (when enabled). */
     get(cardUrl, caseId) {
-        return (caseId ? this.forCase(caseId)?.get(cardUrl) : null) ?? (this.libraryEnabled() ? this.library.get(cardUrl) : null) ?? null;
+        return (caseId ? this.forCase(caseId)?.get(cardUrl) : null) ?? (this.libraryEnabled() && inLibrary(cardUrl) ? this.library.get(cardUrl) : null) ?? null;
     }
     /** Saves into the case (when given) and into the library (when enabled). */
     put(input, caseId) {
         const inCase = caseId ? this.forCase(caseId)?.put(input) ?? null : null;
-        const inLibrary = this.libraryEnabled() ? this.library.put(input) : null;
-        if (inLibrary)
-            this.indexEntry(inLibrary);
-        return inCase ?? inLibrary;
+        const kept = this.libraryEnabled() && inLibrary(input.cardUrl) ? this.library.put(input) : null;
+        if (kept)
+            this.indexEntry(kept);
+        return inCase ?? kept;
     }
     indexFile() {
         return path.join(this.root, "library", "index.json");
@@ -171,7 +176,7 @@ export class CaseLawRepository {
     }
     /** The library catalogue: newest first; a query matches the signature, court or text. */
     catalog(query = "", limit = 50) {
-        const all = this.index().sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
+        const all = this.index().filter((item) => inLibrary(item.cardUrl)).sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
         const wanted = query.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase("pl");
         if (!wanted)
             return all.slice(0, limit);

@@ -2852,5 +2852,6 @@
  "Potwierdzone w oknie Google — sesja aktywna.": "Bekräftat i Google-fönstret — sessionen är aktiv.",
  "Odnów sesję w oknie Google": "Förnya sessionen i Google-fönstret",
  "Potwierdź w oknie Google": "Bekräfta i Google-fönstret",
- "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "bekräftelse krävs i Google-fönstret (knappen ovan eller i chatten)"
+ "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "bekräftelse krävs i Google-fönstret (knappen ovan eller i chatten)",
+ "najlepsza w teście: {name} {score}/10": "bäst i testet: {name} {score}/10"
 }

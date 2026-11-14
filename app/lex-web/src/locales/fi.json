@@ -2852,5 +2852,6 @@
  "Potwierdzone w oknie Google — sesja aktywna.": "Vahvistettu Google-ikkunassa — istunto aktiivinen.",
  "Odnów sesję w oknie Google": "Uusi istunto Google-ikkunassa",
  "Potwierdź w oknie Google": "Vahvista Google-ikkunassa",
- "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "vahvistus tarvitaan Google-ikkunassa (yllä oleva painike tai keskustelussa)"
+ "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "vahvistus tarvitaan Google-ikkunassa (yllä oleva painike tai keskustelussa)",
+ "najlepsza w teście: {name} {score}/10": "paras testissä: {name} {score}/10"
 }

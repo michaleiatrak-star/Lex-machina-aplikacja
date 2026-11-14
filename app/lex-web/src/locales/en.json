@@ -2858,5 +2858,6 @@
  "Potwierdzone w oknie Google — sesja aktywna.": "Confirmed in the Google window — session active.",
  "Odnów sesję w oknie Google": "Renew session in the Google window",
  "Potwierdź w oknie Google": "Confirm in the Google window",
- "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "confirmation needed in the Google window (button above or in the chat)"
+ "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "confirmation needed in the Google window (button above or in the chat)",
+ "najlepsza w teście: {name} {score}/10": "best in test: {name} {score}/10"
 }

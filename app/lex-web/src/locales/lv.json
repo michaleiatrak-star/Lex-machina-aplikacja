@@ -2852,5 +2852,6 @@
  "Potwierdzone w oknie Google — sesja aktywna.": "Apstiprināts Google logā — sesija aktīva.",
  "Odnów sesję w oknie Google": "Atjaunot sesiju Google logā",
  "Potwierdź w oknie Google": "Apstiprināt Google logā",
- "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "nepieciešams apstiprinājums Google logā (poga augstāk vai tērzēšanā)"
+ "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "nepieciešams apstiprinājums Google logā (poga augstāk vai tērzēšanā)",
+ "najlepsza w teście: {name} {score}/10": "labākā testā: {name} {score}/10"
 }

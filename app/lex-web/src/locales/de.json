@@ -2852,5 +2852,6 @@
  "Potwierdzone w oknie Google — sesja aktywna.": "Im Google-Fenster bestätigt — Sitzung aktiv.",
  "Odnów sesję w oknie Google": "Sitzung im Google-Fenster erneuern",
  "Potwierdź w oknie Google": "Im Google-Fenster bestätigen",
- "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "Bestätigung im Google-Fenster nötig (Schaltfläche oben oder im Chat)"
+ "potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)": "Bestätigung im Google-Fenster nötig (Schaltfläche oben oder im Chat)",
+ "najlepsza w teście: {name} {score}/10": "beste im Test: {name} {score}/10"
 }

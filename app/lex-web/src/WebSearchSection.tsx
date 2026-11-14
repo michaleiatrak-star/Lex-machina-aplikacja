@@ -1,5 +1,5 @@
 import { currentLocale, t } from "./i18n";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   ApiError,
   getWebSearchSettings,
@@ -70,6 +70,17 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [error, setError] = useState("");
   const [googleWindow, setGoogleWindow] = useState(false);
   const [googleMessage, setGoogleMessage] = useState("");
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   useEffect(() => {
     void getWebSearchSettings()
@@ -160,20 +171,51 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
 
   if (!settings) return error ? <p className="field-error">{error}</p> : null;
   const order = settings.effectiveOrder.map((engine) => ENGINE_LABELS[engine]).join(" → ");
+  const summary = settings.providerForced ? t("ustawione w konfiguracji serwera: {value}", { value: settings.providerForced }) : order;
+  const best = settings.lastTest?.scores[0];
   return (
-    <section className="core-law-updates web-search-settings">
-      <div className="maintenance-heading">
-        <div>
+    <section className="core-law-updates">
+      <div className="chat-card matter-compact-row">
+        <span className="matter-compact-heading">
           <strong>
             {t("Wyszukiwarka internetowa")}
             <InfoTip>
               {t("Wyszukiwarka służy tylko do znajdowania tropów: każdy przepis i orzeczenie z wyników aplikacja sprawdza w źródle urzędowym (ELI, SN, NSA, SAOS). Test wysyła 8 pytań prawnych do każdej wyszukiwarki z tego komputera i ocenia je w skali 0–10: dostępność (3 pkt), źródła w pierwszej piątce (3 pkt: urzędowe w całości, darmowe artykuły i komentarze, także z serwisów komercyjnych, w 70%; płatne bazy za logowaniem się nie liczą), trafność (2 pkt), szybkość (2 pkt). Najlepsza jest pytana jako pierwsza.")}
             </InfoTip>
           </strong>
-        </div>
-        <span>{settings.providerForced ? t("ustawione w konfiguracji serwera: {value}", { value: settings.providerForced }) : order}</span>
+          <span className="matter-compact-count has-entries">
+            {summary}
+            {best ? ` · ${t("najlepsza w teście: {name} {score}/10", { name: ENGINE_LABELS[best.engine], score: number(best.score) })}` : ""}
+          </span>
+        </span>
+        <span className="matter-compact-actions">
+          <button type="button" className="chat-secondary-action" onClick={() => setOpen(true)}>
+            {t("Pokaż")}
+          </button>
+        </span>
+        {error && !open ? <p className="chat-error matter-compact-error">{error}</p> : null}
       </div>
-
+      {open ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <section className="chat-card matter-section-dialog web-search-settings">
+            <div className="matter-section-dialog-head">
+              <div>
+                <p className="eyebrow">{t("Ustawienia")}</p>
+                <h2 id={titleId}>{t("Wyszukiwarka internetowa")}</h2>
+                <small>{summary}</small>
+              </div>
+              <button type="button" className="chat-secondary-action" onClick={() => setOpen(false)}>
+                {t("Zamknij")}
+              </button>
+            </div>
       <label className="core-law-auto">
         <input
           type="checkbox"
@@ -364,13 +406,16 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
       )}
 
       {admin ? (
-        <button type="button" disabled={Boolean(busy) || Boolean(settings.providerForced)} onClick={() => void test()}>
+        <button type="button" className="chat-secondary-action" disabled={Boolean(busy) || Boolean(settings.providerForced)} onClick={() => void test()}>
           {busy === "test" ? t("Testowanie wyszukiwarek… (do 2 minut)") : t("Uruchom test wyszukiwarek")}
         </button>
       ) : (
         <small>{t("Zmienia administrator.")}</small>
       )}
       {error ? <p className="field-error">{error}</p> : null}
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
