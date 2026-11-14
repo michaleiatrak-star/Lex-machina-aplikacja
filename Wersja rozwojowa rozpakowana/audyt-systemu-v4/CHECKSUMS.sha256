@@ -1,6 +1,6 @@
 f1306e7d29cbbac14d14f7a3c096c646d340ab41c8bae37f1250c6c3916e5978  ./PORTABILITY-MANIFEST.md
 2cf33abe59a4fc8cfb7ca289790b86a818eaf6c885379d4ef2fa5c63d749ac3b  ./README.md
-374b5bd38bd5820a73697b204e90b5ba5e8fcc7d2ef75c68d71a599691d9999d  ./SKILL.md
+455cc3a808e9713731e7865fa2715ed7644afcf4b08d5d7195981fe3374e5eb5  ./SKILL.md
 6ab72bd687f07b8de1615a237b2c3813b4375c88775ae09e9c16136a424cb68b  ./agents/openai.yaml
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
 4e1fb6c25693e16536b9397c060ecfb476328c75513dd15b7b77732009c02e52  ./modules/MOD-DESCRIPTION.md
@@ -10,8 +10,8 @@ f06c3969a5625a2560967736e6ff8646e822d6af40573c4a77910816f281cf7d  ./modules/MOD-
 1e9a008f510d7c111cf383cc8d189de424c03d1b319d7261dbf05001aeabd803  ./modules/MOD-WSTAWKI.md
 134eaa7d63b7b973dac02b5c8509a47a6a84c275fb7b3d9bf2ea95c1e3af9f5b  ./references/ALIASY-NAZW-AKTOW.md
 8a69f6dd59b87d0c7f03073108b7d14db9cf6d98eb6367ff8488534f0a614fba  ./references/AUDIT-JOURNAL.md
-f4004971a11295af098d00e5c06cbf9e4d23e9bde72e50310f8009efc5b04f33  ./references/CHANGELOG.md
-e7740174fe8894baaf9ea9cd5da5df31a862fad4cc071c831ccec7b438fbb06a  ./references/CHECKLIST-DEDUP.md
+97d11cee5072fe7b0c7e0268013452b1f8328f6ec48f654b341f95f0ef16b1f9  ./references/CHANGELOG.md
+ab6fb86a3771c34a9c09220e260f8d831224751eb33ab594004300c19b801d68  ./references/CHECKLIST-DEDUP.md
 07e3147e3888c7e81ff3f7ca82de4434653787ce1ff03f5be03f05736c86fcf0  ./references/COWORK-HARMONOGRAM-NATYWNY.md
 1f88191f1bdb4d3170f23c48f9874b499f750e94ad13d6cd14c2f234a7ead034  ./references/F-108-lista-MS-egzamin-2026.md
 4daada2cfff51f2f20f9129cd04893336fe7d5e8c7a439b57579326d5d84b1fb  ./references/F-113-PREFLIGHT-2026-08-26.md
@@ -20,6 +20,7 @@ baa43c96154b351da65b3af2c3971ba95f1b2c4199d317c77bb9c36a825c659e  ./references/F
 2efd55dbc611204a517f0bec3a2e90087f6ffb7c1ab7da72926d75e572a71f92  ./references/FORMAT-RAPORTU-ROZNIC.md
 81bd5703506a077e4297d684c41d5f83d89310d4437b5ca057a51183d24e507d  ./references/HARMONOGRAM-CRON.md
 3e942ed743bd772dc42b93bff517a69ca72b1121f9a70575853b1384c9382307  ./references/HISTORIA-ZMIAN-PLIKOW.md
+7aad761ad35b13ec38804c1469b90effb2b8b45d93f7dfeda974f7e9ad3f76f7  ./references/METODYKA-MODULY-DR.md
 51eb171184ccb5b1a915258215d13c45835ce7d5f1007f98cec53a32e83b4ba3  ./references/PAMIEC-TRWALA-ROUTER.md
 130d83bf178bce74155d999e5569e344dd2c454fc8e21e311ece0f7f97e599ae  ./references/PLAN-POMIARU-BRAMEK-UNIWERSALNY.md
 4dbdcec1400c5e3e8aa2d7d1bc5f9bf90d9526a5e1770bf6b9a49a5870e8c7f6  ./references/PLAN-TESTU-BRAMEK-F113.md
@@ -29,11 +30,11 @@ b27452efd9a7f3cdb30f4d045594ba0aa4ce71190f41faaccb5efd8f0d28a657  ./references/R
 7d686fdded7384b7019838905dbd4315db145e4a0167f1dee30909a629c07f2b  ./references/REJESTR-BRAMEK-POMIAR.json
 722f681125e6308658fb3b47433a57a3355409a245477df47f6a2e937c3981d4  ./references/REJESTR-KORPUSU-POMIAROWEGO.md
 6ae8e0d9e087d1ca377e66e641f21b21e8e6d6a5d42e4284ee41208dd6b43f0f  ./references/SCHEDULED-TASK-COWORK.md
-bfac9ff481590d64373a55c926a58f8b23e530626104814759be78b9aa775045  ./references/SKRYPTY-RECZNE.md
+0c3931385aec5296faf7d018b51542b242877809f25d52f0e2792848e76b9342  ./references/SKRYPTY-RECZNE.md
 82a72e5ef250fdbbbd184bd943bfc2a408d5b6a459a8a3d913624c48573dc4b9  ./references/SYNC-DZU-AUTOMATYCZNY.md
 2413e6f5b42f1883970fc1398c4946cd746342f5b1eea697a53d8c209cf59073  ./references/WARN-OTWARTE.md
 b53258f9480de7129bdc392b9fbd403dde496cfa6e17720c70b21a6a99b417b3  ./references/mapa_dzu_2026-08-28.md
-77a2a41660754f24c60539532026b07c2c536295c83e2eb7847dd70d10595cef  ./references/mapa_dzu_2026-10-04.md
+775eebf50159bd8864e5f52f8922a1924f6be9e27cc7736a7a58d1ec21b87ae2  ./references/mapa_dzu_2026-10-04.md
 739de991711f7fce2ef84d99cbf0bbe7cb670ba00040d72bb19cd105d611560d  ./references/migracja-jurysdykcji/E2-MD5-terminy.tsv
 de37fa13fcde1cf12dbd30791956571c03dccbda188c9e68d40bb1609cecee67  ./references/migracja-jurysdykcji/PLAN-I-MAPA.md
 24e8f5b4e4230b0d790a4bd12fd8a42abfe8cea7486a63d0dbb3f80fe30988ee  ./references/raporty-pokrycia-2026-08-13/00-indeks-raportow-pokrycia.md
@@ -50,7 +51,7 @@ db33c3e885beb20fdc33296dd08bdbcdb722f78c9a77455ac09ee55c338a4df5  ./references/r
 1964f5482b6bf80d6f5abe0da61fc4076d4151431b54e035560b7ec1fd79235b  ./scripts/README.md
 81bdca1dbdf527be6e3a3c5caa0620ff9ec1af29361bd84c68aa14d2b543c410  ./scripts/_lex_common.py
 d0f6f0559b46c41958494a7a1327c9c15b6a54f0f33b8d80fd9b5b0a9e3fc580  ./scripts/audit_amendment_scope.py
-0f2628bd15e17bd321b179493d15b16eca7a4eb8494d80de919ab866592ba526  ./scripts/audit_tj_inventory.py
+17a9004611b4ac9d10b53b327c8bc2aea5f053ce7525df3e3bbbae9317cf7ee8  ./scripts/audit_tj_inventory.py
 b113f1e89b2793db5ec3fdbf9b5f478cbe447acbd5b27b99c767591c399504fc  ./scripts/bootstrap_last_sync_date.py
 e256c3a7a452de7442a9613d0a4a48149dce68266e49bb902e07ee6951e0e56b  ./scripts/build_ramie_kontrolne.py
 ffb97d05cdba8ba94b18c6e183eb7aa9bb280a0a9e60bf75b945af2104fa68c4  ./scripts/build_ramie_kontrolne_f113.py
@@ -69,6 +70,7 @@ edc50353be897bdc525b56e02074f4149bddc1df42e1ff49f651327923599d4b  ./scripts/chec
 c1b4949c032d4cd1d724b18716a227d8b3c214a2f137b8dc7967da92206c195c  ./scripts/check_kontrakt_rachunek.py
 dced4d4eae046188d9cee9a69f6cd0863c46f2e30caffa1ff8e0ff3f7b3a1c1c  ./scripts/check_limit_plikow.py
 85abb9fa7b9305935a37ad3ebe73852607f422d5452844fe57d3e1341db7681c  ./scripts/check_mapy_aktow.py
+fe765c16c4b059e3c197e0326321f84085059cffe22edfd96ee5e01766f0a252  ./scripts/check_nowelizacje.py
 be560e094d73cdce8beaf318a8213200e883402e88a3ffe9b87f9078574f89ca  ./scripts/check_nowelizacje_po_tj.py
 aa17310524ada7589b89c9b193439b4de843d31402bde31ac72f964a68878ab3  ./scripts/check_oplaty_mapa.py
 b025882a32f6f317b397b8f200525eeaf2309b384c4a31f666352840edb13fcc  ./scripts/check_osiagalnosc_shared.py
@@ -81,6 +83,7 @@ bd1cc9d482faae58cf40bd7a6aadc8bf171fc2ff033495c5cafa7c9df3ce993f  ./scripts/chec
 c69f123a4b97e3d3d26921c164797b2ff95cdee5747d542139753dc583121387  ./scripts/check_sync_aktow.py
 f381ef7f583f3b482b194a39eb5df70bb148688908d26fa770a8bb43568ee853  ./scripts/check_tabele_satelickie.py
 9abbaec72564bbc1cf339ce9fdfe65d7261392fc0ca85d3962790720d54c6850  ./scripts/check_testy_skilli.py
+5924f2d3b78a0b5a2ae83e7cb13478b83c9829914aa5aeb7d4de3377ecc2f29a  ./scripts/check_uchylone.py
 f71e6af29553b38c9b7d402a664b40ea622b7e1e5abcc88b3a4371110f1d783a  ./scripts/check_utrata_tresci.py
 a907be83eefb776e8b427dfb356a38087a0300914693d67e2e621fd2620253bd  ./scripts/check_wartosci_prawne.py
 0d0b478e9680a6b8a3bf341d5c40a5cba845bd252f88686882ad38dd2e8355d9  ./scripts/check_wejscie_dokumentu.py

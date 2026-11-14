@@ -1,6 +1,6 @@
 ---
 name: prawo-polskie-v2
-version: "6.88"
+version: "6.104"
 type: domain-router
 status: production
 compatibility: "live_web_lookup, cross_skill_file_read"
@@ -10,20 +10,20 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.88 (2026-11-13): konektory MCP po zgłoszeniu ActiFlow: eurlex_tekst (treść aktu UE z Cellar, artykuł, domyślnie najnowsza konsolidacja); eurlex_lookup bez fałszywej daty końca (MAX z dat Cellar, data sprzeczna ze statusem pominięta), tytul_aktu bez „- Deklaracja”, konsolidacja_najnowsza i tekst_url_cellar; CBOSA: awaria kanału zawsze ERROR z przyczyną (kod, etap DNS/TCP/TLS/HTTP, IP, retryable) i kanałem zastępczym, cbosa_diagnoza, User-Agent z LEX_CBOSA_USER_AGENT; isap_lookup: „ustawa o …” rozpoznaje akt bazowy.
-  6.87 (2026-11-12): HIERARCHIA-ZRODEL i PRAWO-HARDGATE-ORZECZENIA: orzeczenia odczytane na portalu samego sądu dyscyplinarnego (wsd.adwokatura.pl, wsd.kirp.pl, nil.org.pl/orzeczenia) = RZĄD 2A, jak orzeczenia sądów z ich portali.
-  6.86 (2026-11-11, ELI 2026-11-11): ROUTING-MAP: związki metropolitalne (pomorski 2026/912, śląski 2025/186) → dr-08 mod-zwiazki-metropolitalne; zmiany po t.j. z ELI: deweloperska 2026/1077, prawo autorskie 2026/1477, CIT, USG, USP, ogłaszanie aktów, czystość, rewitalizacja, MPZP, UGN, wdrożeniowa (2026/912); słowa kluczowe DR-08: związek metropolitalny.
-  6.85 (2026-11-11): konektory MCP — strona ochrony antybotowej kończy się LAW_SOURCE_VERIFICATION_REQUIRED:<host> (okno weryfikacji aplikacji, nie brak danych); sesja z okna dokładana do zapytań (wspolne/sesja-przegladarki.mjs).
-  6.84 (2026-11-11): ROUTING-MAP, ISAP-METRYKI-AKTOW, leksykon ORKA-BAS, kotwice opłat: nowe t.j. UFP 2026/1447, polityka rozwoju 2026/1366, POŚ 2026/1453, Prawo geodezyjne 2026/1389, SUS 2026/1474 (powołane artykuły porównane w ELI).
-  6.83 (2026-11-11): ROUTING-MAP: ustawa o PSP — t.j. Dz.U. 2026 poz. 1473 (sync z dr-13 3.22).
-  6.82 (2026-11-09): ROUTING-MAP i słowa kluczowe DR-09: umowa przewozu, Prawo przewozowe, CMR z protokołami, Konwencja montrealska i system warszawski, COTIF/CIM, konosamenty → mod-umowa-przewozu-CMR-konwencje-przewozowe
-  6.81 (2026-10-22, AUDYT-2026-10-22): ROUTING-MAP: KW t.j. Dz.U. 2026 poz. 1372, PSWN t.j. Dz.U. 2026 poz. 1362
-  6.72 (2026-10-20, PROBE-2026-10-21): routing błyskawiczny DR-02: uprowadzenie / wywiezienie dziecka za granicę (z DR-14 przy elemencie zagranicznym)
-  6.65 (2026-10-17c, AUDYT-2026-10-17c): ROUTING-MAP: rozporządzenie MS w sprawie siedzib i obszarów właściwości sądów powszechnych (t.j. Dz.U. 2026 poz. 492) → DR-12 mod-wlasciwosc-miejscowa-sadow-powszechnych.
-  6.64 (2026-10-17b, AUDYT-2026-10-17b): ROUTING-MAP: ZZ — ⏳ zm. 2026/1340 od 30.10.2026; nowy wiersz ustawy o informowaniu pracowników (2006/550 + 2026/1340); nowy wiersz ustawy o ochronie i pomocy dla pokrzywdzonego i świadka (t.j. 2026/1306). ELI 2026-10-17.
-  6.63 (2026-10-17a, AUDYT-2026-10-17a): ROUTING-MAP: KPW — nowy t.j. Dz.U. 2026 poz. 1336 (obwieszczenie z 2.10.2026, ogłoszone 15.10.2026; stan prawny na 27.09.2026; obejmuje Dz.U. 2025 poz. 1178, 1661, 1814, 1818, 1872 i 2026 poz. 473; brak zmian po t.j. — ELI 2026-10-17) (wiersz KPW i wiersz grzywna/mandat).
-  6.62 (2026-10-15c, AUDYT-2026-10-15c): ROUTING-MAP — t.j. transport kolejowy 2026/1324, Prawo wodne 2026/1335, odpady 2026/1328; VAT: 2026/507 art. 6 od 1.11.2028; nowy wiersz ustawy o CEIDG (t.j. 2026/30, zm. 2026/507 etapami).
-  6.61 (2026-10-12c, AUDYT-2026-10-12c): korekta — t.j. UPEA 2026/1311 obejmuje zm. 2026/1003 (art. 17 § 1a w dwóch brzmieniach, nowe od 28.10.2026).
+  Wersja bieżąca: 6.104 (2026-11-14): DR-03 komplet: 71 modułów + 8 części kwalifikatora w formacie wskazań; poprawki zagrożeń art. 234-244b KK, przedawnienie cyber, art. 244 przy nakazie Policji, tabela kar frameworku
+  6.103 (2026-11-14): DR-02 komplet: ostatnie 10 modułów (ubezpieczenia obowiązkowe, cudzoziemcy, parabanki, piecza, fundacja rodzinna, pomoc publiczna, frankowa 2026/985, doradca restr., reklama, KSH-uzupełnienie, weksle/kontrola)
+  6.102 (2026-11-14): DR-02: mobbing wg art. 94³ KP od 2026-11-05 (2026/1046), skład sądu, timeshare/zastaw, transakcje handlowe, przedsiębiorcy zagraniczni
+  6.101 (2026-11-14): DR-02: spółdzielnie, własność lokali, UOKiK, KW, prawa konsumenta, ochrona lokatorów, prawo spółdzielcze, fundacje/stowarzyszenia, deweloperska, UZNK w formacie wskazań
+  6.100 (2026-11-14): DR-01: wszystkie 15 modułów w formacie wskazań z kwalifikatorem (poprawki: art. 157-160 Konstytucji, referendum lokalne, inicjatywa obywatelska, referendum zatwierdzające)
+  6.99 (2026-11-14): 2026/912 w modułach DR-08/DR-09; poprawki: skarga na uchwałę RIO do WSA (art. 98 USG), decyzja WZ wygasa po 5 latach (art. 64c UPZP)
+  6.98 (2026-11-14): Bazy urzędów i sądów dyscyplinarnych w orzeczenia-sadowe-v2; KAS na t.j. 2026/1492 (poprawki art. 63, 77, 82-83 UKAS); DR-02: Prawo przedsiębiorców, zastaw rejestrowy (2025/1792 i 2026/1073 jeszcze nie obowiązują)
+  6.97 (2026-11-14): DR-02: konwersja modułów KC i KRO na wskazania z kwalifikatorem (W-1; poprawki: art. 442¹, 88 § 2, 388 § 2, 554, 1007 § 2–4)
+  6.96 (2026-11-14): METODYKA W-1: 26 modułów PrRestr (t.j. 2026/533) i PrUp (t.j. 2026/913) — wartości i terminy zgodne z t.j.; nagłówki z kontraktem wskazań i znacznikami [OD] (2026/1206, 2026/176, 2026/1466)
+  6.95 (2026-11-14): Moduł wrogiego przejęcia: skrót OfPubl (monitoring ustawy o ofercie publicznej); rejestr: W-4 dla 2026/1074 i 2026/1206
+  6.94 (2026-11-14): METODYKA W-1…W-7: mod-ustawa-KRS-rejestr-sadowy (t.j. 2025/869 + 7 nowelizacji, pułapka MSiG od 2025-11-29) i mod-KSH-wrogie-przejecie (KSH + uoof t.j. 2025/592, art. 80a–80b); DR-12: OIRP Katowice i Rzeszów; rejestr zmian w czasie
+  6.93 (2026-11-13): REJESTR-ZMIAN-W-CZASIE: zmiany nadchodzące modułów paczki 2 DR-02 (UGH 2026/1040, KK 2026/1466, NBP 2026/1098) i odczyty W-4 w tabeli C
+  6.92 (2026-11-13): REJESTR-ZMIAN-W-CZASIE: KSCU 2026/346 (od 2028-09-30) w tabeli A; tabela B: przepisy przejściowe KPC 2026/473 art. 15, 2026/830 art. 19, 2026/1046 art. 5; tabela C: odczyty W-4 dla 2026/346, 473, 830, 1046
+  6.91 (2026-11-13): REJESTR-ZMIAN-W-CZASIE (JUR:rejestr-zmian-w-czasie): zmiany z datą przyszłą (tabela generowana z ELI, wiersz znika w dniu wejścia w życie) i przepisy czasowe z okresem Od–Do (2026/1440 art. 3; 2026/176 art. 28, 29, 31–34 — z treści nowelizacji w ELI 2026-11-13); STAN-PRAWNY-PL: odesłanie przed KROKIEM T-2; JURYSDYKCJA: nowy klucz
 ---
 
 > **Universal runtime:** przed wykonaniem zastosuj kanoniczny `shared/UNIVERSAL-RUNTIME-ADAPTER.md` z osobnego skilla `shared`. Lokalna sekcja adaptera poniżej jedynie go doprecyzowuje.

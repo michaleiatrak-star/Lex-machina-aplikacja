@@ -1,5 +1,8 @@
 # mod-KRO-przysposobienie-adopcja-miedzynarodowa
 
+**Akt:** KRO — t.j. Dz.U. 2026 poz. 236 (po t.j. bez zmian).
+**Moduł wskazuje przepis i jego funkcję (kwalifikator), nie zastępuje brzmienia.** Kwalifikatory sprawdzone z t.j. w ELI 2026-11-14 (terminy i progi: W-1).
+
 **Wersja:** 1.0 | **Dodano:** 2026-07-19
 **Rola w systemie:** odpowiedź na pytanie użytkownika o pełne pokrycie
 prawa rodzinnego — przysposobienie (adopcja) było dotąd CAŁKOWITĄ LUKĄ
@@ -71,7 +74,7 @@ CAŁKOWITE (art. 124¹-125¹ KRO) — NAJDALEJ IDĄCA forma:
   — ⭐ POTWIERDZONE WPROST W ŹRÓDŁACH: prawo polskie NIE ZEZWALA na
   wspólne przysposobienie przez ZWIĄZKI OSÓB TEJ SAMEJ PŁCI (spójne z
   brakiem instytucji małżeństwa jednopłciowego w prawie krajowym —
-  patrz `mod-KRO-zawarcie-malzenstwa-bigamia-transgraniczne.md` Część D)
+  patrz `mod-KRO-zawarcie-malzenstwa-bigamia-transgraniczne.md` sekcja E)
 □ ZGODA WSPÓŁMAŁŻONKA (art. 116 KRO): przysposobienie przez JEDNEGO z
   małżonków NIE MOŻE nastąpić BEZ ZGODY drugiego — WYJĄTEK: gdy
   współmałżonek NIE MA zdolności do czynności prawnych albo porozumienie

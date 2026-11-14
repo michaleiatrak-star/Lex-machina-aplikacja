@@ -39,7 +39,7 @@
 > KC (spółka cywilna, art. 860-875; swoboda umów art. 353¹) — Dz.U. 2025
 >   poz. 1071 ze zm.
 >   https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU20260000795
-> Prawo przedsiębiorców (JDG, CEIDG) — Dz.U. 2025 poz. 1480 t.j.
+> Prawo przedsiębiorców (JDG, CEIDG) — Dz.U. 2026 poz. 1484 t.j.
 >   https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU20250001480
 > ```
 
@@ -396,7 +396,7 @@ sprawdź DODATKOWO:
 | PCC od umowy spółki, opodatkowanie form działalności | DR-06 → moduły PIT/CIT/PCC |
 | Rejestracja w KRS | DR-02/`mod-ustawa-KRS-rejestr-sadowy` |
 | Spór między wspólnikami — pismo procesowe | `pisma-procesowe-v3` |
-| Rejestracja JDG / działalność nierejestrowana | DR-02/`mod-KSH-spolki-handlowe` (sekcja "FORMY DZIAŁALNOŚCI") |
+| Rejestracja JDG / działalność nierejestrowana | DR-02/`mod-prawo-przedsiebiorcow` |
 
 ---
 

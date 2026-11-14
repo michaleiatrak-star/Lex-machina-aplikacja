@@ -95,7 +95,7 @@ describe("weryfikacja w trybie offline", () => {
   it("przepis z lokalnej kopii; brak aktu w kopii i wyszukiwanie orzeczeń: odmowa OFFLINE_MODE bez sieci", async () => {
     const ledger = new VerificationLedger();
     const tools = runtime(ledger, true);
-    expect(tools.schemas().map((schema) => schema.function.name).sort()).toEqual(["search_case_law_library", "verify_legal_reference"]);
+    expect(tools.schemas().map((schema) => schema.function.name).sort()).toEqual(["read_case_law_text", "search_case_law_library", "verify_legal_reference"]);
     const [kw, missing, search] = await tools.runTools([
       { id: "a", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
       { id: "b", name: "verify_legal_reference", input: { claim: "art. 1 XYZ", kind: "statute", act: "XYZ" } },

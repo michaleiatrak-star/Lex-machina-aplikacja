@@ -1,5 +1,9 @@
 # mod-rzeczy-znalezione-zasiedzenie
 
+**Akt:** KC — t.j. Dz.U. 2026 poz. 795 (zm. 2026/507 [OD 2028-11-01: 2026/507] — art. 860 § 3–4, umowa spółki cywilnej przez CEIDG; nie dotyczy przepisów modułu).
+**Akt:** RzeczZnal (ustawa o rzeczach znalezionych) — t.j. Dz.U. 2023 poz. 501 (zm. 2026/184 — art. 7, 15 i in., od 2026-05-19).
+**Moduł wskazuje przepis i jego funkcję (kwalifikator), nie zastępuje brzmienia.** Kwalifikatory sprawdzone z t.j. w ELI 2026-11-14 (terminy i progi: W-1).
+
 **Wersja:** 1.1 | **Dodano:** 2026-07-18 | **Aktualizacja:** 2026-10-12 (Dz.U. 2026 poz. 184)
 **Rola w systemie:** odpowiedź na wskazanie użytkownika ("rzeczy
 znalezione, przywłaszczenie mienia i zasiedzenie"). Stan przed tym
@@ -259,19 +263,15 @@ NIE KONSTYTUTYWNY. Oznacza to, że data zasiedzenia w postanowieniu sądu
 wskazuje moment W PRZESZŁOŚCI (upływ terminu), a nie datę wydania
 orzeczenia.
 
-### 12. Ograniczenie dla nieruchomości ROLNYCH (art. 172 §3 KC)
+### 12. Nieruchomości rolne — art. 172 § 3 KC UCHYLONY
 
-```
-Nabycie NIERUCHOMOŚCI ROLNEJ (w rozumieniu ustawy o kształtowaniu
-  ustroju rolnego) przez zasiedzenie MOŻE nastąpić WYŁĄCZNIE na rzecz
-  ROLNIKA INDYWIDUALNEGO (w rozumieniu tej samej ustawy)
-LIMIT POWIERZCHNIOWY: powierzchnia NABYWANEJ nieruchomości rolnej
-  ŁĄCZNIE z nieruchomościami rolnymi JUŻ stanowiącymi własność tej
-  osoby NIE MOŻE przekroczyć 300 HA użytków rolnych
-GENEZA: przepis dodany ustawą o wstrzymaniu sprzedaży nieruchomości
-  Zasobu Własności Rolnej Skarbu Państwa — kontekst ochrony struktury
-  agrarnej przed nadmierną koncentracją ziemi
-```
+Art. 172 § 3 KC jest w t.j. KC (Dz.U. 2026 poz. 795) **„(uchylony)”** (ELI 2026-11-13). Poprzedni opis tej
+sekcji (zasiedzenie nieruchomości rolnej tylko na rzecz rolnika indywidualnego, limit 300 ha) przedstawiał
+jednostkę uchyloną jako obowiązującą — błąd.
+- Ograniczenia nabycia nieruchomości rolnych: ustawa o kształtowaniu ustroju rolnego — brzmienie i stan
+  prawny z ELI, nie z tego modułu.
+- Zasiedzenie następuje z mocy prawa w dniu upływu terminu: przy terminie, który upłynął, gdy § 3 obowiązywał,
+  stosuj brzmienie historyczne KC z ELI na tę datę (W-1, W-4 METODYKA-MODULY-DR).
 
 ### 13. Współwłasność — pułapka praktyczna
 

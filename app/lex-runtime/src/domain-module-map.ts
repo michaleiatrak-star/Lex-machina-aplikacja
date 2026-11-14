@@ -135,7 +135,16 @@ function moduleHead(file: string | null): string {
   if (!file) return "";
   let head = "";
   try {
-    head = fs.readFileSync(file, "utf8").slice(0, 2_500);
+    // The act header of a converted module (lines "**Akt:** …" and the "Moduł wskazuje przepis…"
+    // contract) says which act and amendments apply, not what the module is about: it does not
+    // count toward the window of 2 500 characters that describes the module.
+    head = fs
+      .readFileSync(file, "utf8")
+      .slice(0, 12_000)
+      .split("\n")
+      .filter((line) => !/^\*\*(?:Akt|Inne akty|Brzmienie):?\*\*|^\*\*Moduł wskazuje przepis/u.test(line))
+      .join("\n")
+      .slice(0, 2_500);
   } catch {
     return "";
   }

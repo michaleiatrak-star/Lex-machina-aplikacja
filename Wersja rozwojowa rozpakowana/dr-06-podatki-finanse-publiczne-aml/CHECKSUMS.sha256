@@ -1,12 +1,12 @@
-d295235f544128347f5d2bb4bfd1f0d3062940f0dbb90ba8c0ee69662531f307  ./MAPA-AKTOW.md
+0d20490a845f4f98a501bcb027b72ee4093a0c02ecc90f6ade969b41c225b2a3  ./MAPA-AKTOW.md
 0339ff7dbb3747573f2b26997627864b98c7246b62561e11c7336aaf57a3a6ff  ./MAPA-POKRYCIA.md
 7c457e1307ad99afea550a549ede21895435a27f83e9063245575b7342edcca4  ./PORTABILITY-MANIFEST.md
-7729a97d4cf4bc3ac326cd1abebe819cf9b2fb7fe2750e78f20759b2379f307a  ./SKILL.md
+60ba6a1990a18a0db0ae167e9f59fd0c028c1083305eb2a3c806d9b77f29f2ba  ./SKILL.md
 0723118e130945c731bd069a055c853011fcada42c7815680bd87b474239c8c5  ./agents/openai.yaml
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
 b957886f0c5a16a23f9690b0466af0ad5708097c1a1fddf05d14a4fcf1379099  ./modules/mod-CIT-podatek-dochodowy-prawne.md
 76792f739a6a93b22fe253d39fc6a69f22dd21f5422161d63d7fb290f07c0a53  ./modules/mod-JPK-ksiegi-elektroniczne-e-sprawozdania.md
-e0dfab7c09ea15fe3a018b18f00156e12cb57e343d5f328e96c31414edbc5fec  ./modules/mod-KAS-kontrola-celno-skarbowa.md
+b5d8f543fb2e3d07708daf4390a3d8c54d5fc3805b4f59a440a0dc635eabeb61  ./modules/mod-KAS-kontrola-celno-skarbowa.md
 2cd6165d6754bb874fbdb2869e1b5cc130c572f22f014300bf2c74da9d8b0401  ./modules/mod-OP-czynnosci-sprawdzajace-dzial-V.md
 aaaaeb22acb2ae070f3ed720534bcc62dc2936c58e41f876a411f669cd7b2b31  ./modules/mod-OP-dzial-IV-rozdzial-11-dowody.md
 73dfb4695b8bf5ae90fb10327db0844bed796ae9eeb0ef900b807050b4ebe085  ./modules/mod-OP-kontrola-podatkowa-dzial-VI.md
@@ -18,7 +18,7 @@ a0b1d9dd600318e946460b27456b3e06e21750515a8d7c9c3b54ca27228976ba  ./modules/mod-
 f4ba3a9ab509bc44edc79d12ef6bdeaec606e67a1260a0701f670c2de7cd658e  ./modules/mod-PKWiU-klasyfikacje-statystyczne.md
 730ba02cbb2ddeffe511e7eb0f73d991703d2053e8855b0849869732bde1a558  ./modules/mod-UCC-clo-taryfa-celna.md
 9d83d7d96ef227b9e9243c22c90505c2aa5d4c1dd0d7a7dd2d0f03947c9470ca  ./modules/mod-UFP-finanse-publiczne-NIK-RIO.md
-08df98e7a6bcddbe48cedb4ff80d8b3e41446ee78fe637eef54b784781260f8b  ./modules/mod-VAT-WIS-tryb-i-ochrona.md
+7eef5af2043bd0976fcf5985008976b6a0c73b41f0ca09e3c05847a4a089a7ed  ./modules/mod-VAT-WIS-tryb-i-ochrona.md
 dc765870d538d3deb9e41c7ae19cfd123f27dd8cea60a1e65400457d78a0aed3  ./modules/mod-VAT-ewidencja-deklaracje.md
 1ab3f15c0d1aa55c1278971ae76b7280b3a014377b611fecacdcf4c63dc6d6c2  ./modules/mod-VAT-import-towarow-i-zwolnienia-importowe.md
 dfd1234f0afc5bbd33d2317b7448a6c5b568a127d5d450b39e466a05f46e3130  ./modules/mod-VAT-klasyfikacja-produktow-baza-niejednoznacznosci.md
@@ -34,9 +34,9 @@ a05ccbadd5b279fad5d38dfc27d671cd06952c24a11690218da6aa3052301180  ./modules/mod-
 8d13953db71598b977fdfada55b6bfeb80cbb67626a8cf210258884290a3c70b  ./modules/mod-clo-podroznych-limity-towary-zabronione.md
 893673da0ea96ff46483ce31ae782a8d6f3b1bc72a2e00adab29b013ecc4afc7  ./modules/mod-interpretacje-definicje-podatkowe.md
 7ef7ff30a0f1d807c60fcfa742c000896e74da9ca0e21a75e0877f0a2ed824ea  ./modules/mod-kasy-rejestrujace-fiskalizacja.md
-a6acf82148af843a61c08ee45a89c489c0d52d54b6dfe86a267ce79f2e6e10b0  ./modules/mod-limit-platnosci-gotowkowych.md
+c0d3267a3cf75535e7de3a88045f39c4e8885ec44f35b784c75ec73a8a49ec93  ./modules/mod-limit-platnosci-gotowkowych.md
 b95429c53a3179532f58c8a1b0017d19a73a6bb2b937c0b4b112bd5c1de3302b  ./modules/mod-odliczenia-uzytek-mieszany-firma-prywatny-KUP.md
-e65e4d432c70733f1d68a72325800ae12d3e1de682ffec22ae94fa847c57816c  ./modules/mod-podatki-sektorowe-bankowy-gry-tonazowy-cukrowy-detaliczny.md
+3587ececc1ee13513be60c7ba1d2e491ac3760841a4099a4fc0431d5846c8ddf  ./modules/mod-podatki-sektorowe-bankowy-gry-tonazowy-cukrowy-detaliczny.md
 1153f48f3febf1c229dbc614b1b7594a462c87d7038a14ea78146fdeca72e364  ./modules/mod-prawo-bankowe-KNF-BFG.md
 a01c7ba74fd06a70eebfa6e2a3c01ae9133d6baf53598086f39d53b3c3906ae3  ./modules/mod-rachunkowosc-budzetowa-JSFP.md
 04ea4965466be269b4e1f2bd62d0b4b954768d11d92b03a8670ef1e270e579a7  ./modules/mod-ustawa-AML-instytucje-obowiazkowe.md
@@ -73,6 +73,6 @@ eb72a362815ad764e1327b0167c9b50fbdff6fda69f39ee38a4d7b53612f0dec  ./modules/vat-
 f7b1b6e938fd2f581807c44123ed9c86b5809cbba8691e96016fad4b365380f5  ./modules/vat-podatek-od-towarow-i-uslug/part-05-grupa-srednia.md
 3e68b7cef36e384a60b951bc96ef2e0f2d8945e113af875b7c0b1c7d3ad8ce7c  ./modules/vat-podatek-od-towarow-i-uslug/part-06-grupa-zlozona.md
 96b0b7e6d97ec2eee1d0e3790763ad44fad0ec2d2a0aafb6404e60617d203450  ./references/BAZA-AKTOW-OKOLOAKCYZOWYCH.md
-b55393d05271d0441889e9ac233dace33c737367cadee0aec693c60bd6429f7d  ./references/BAZA-AKTOW-OKOLOPODATKOWYCH.md
-06b0aeb3e1728d1641e6d9243806c06c25e8a0b78e44fa42404e3c14d8e76e93  ./references/CHANGELOG.md
+917e190c5b7f72f753c2ca739edef6ca06b29e6a8e410d70bf7f7d605703c839  ./references/BAZA-AKTOW-OKOLOPODATKOWYCH.md
+d0e622f548bb62b506b8bd642ad158a8eb3a6ac8bcf5d21aa94028a1e0aaf66f  ./references/CHANGELOG.md
 0f04d7c347f094d44d41df4e026937cf23482a7e4ce7e3393ee611dad0c8e05a  ./references/HISTORIA-ZMIAN-PLIKOW.md

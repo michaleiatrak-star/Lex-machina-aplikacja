@@ -4,7 +4,7 @@ description: "Audyt jakości, spójności i bezpieczeństwa systemu prawnych ski
 dependencies:
   requires:
     - shared
-version: "6.261"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
+version: "6.268"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
 type: governance-audit
 compatibility: "host-neutral; file read/write, fresh legal-source lookup and optional archive/UI operations mapped by the runtime adapter"
 entrypoint: SKILL.md
@@ -30,6 +30,7 @@ references:
   - references/mapa_dzu_2026-08-28.md
   - references/ALIASY-NAZW-AKTOW.md
   - references/SKRYPTY-RECZNE.md
+  - references/METODYKA-MODULY-DR.md
   - references/PROTOKOL-WYKONAWCZY-F113.md
   - references/PLAN-TESTU-BRAMEK-F113.md
   - references/REGRESSION-TEST-PLAN.md
@@ -95,6 +96,8 @@ scripts:
   - scripts/check_coverage_coherence.py
   - scripts/sync_dzu_eli.py
   - scripts/audit_tj_inventory.py
+  - scripts/check_uchylone.py
+  - scripts/check_nowelizacje.py
   - scripts/audit_amendment_scope.py
   - scripts/check_status_podstaw.py
   - scripts/check_wyjatek_gate_eli.py
@@ -1341,4 +1344,4 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.261 | Ostatnia aktualizacja: 2026-11-11 (LEGAL GAUNTLET v3 E7). Stopkę aktualizuj razem z polem `version`.*
+*Wersja: 6.268 | Ostatnia aktualizacja: 2026-11-14 (Moduł wrogiego przejęcia). Stopkę aktualizuj razem z polem `version`.*
