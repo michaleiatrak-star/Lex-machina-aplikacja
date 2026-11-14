@@ -128,7 +128,9 @@ const checks = {
         JSON.stringify([
             "SN",
             "SAOS",
-            "CBOSA"
+            "CBOSA",
+            // Server database of offices' decisions and disciplinary courts (case-law-db.ts).
+            "BAZA"
         ]),
     saosDiscovery: saos.status === "FOUND" &&
         saos.verificationStatus ===
