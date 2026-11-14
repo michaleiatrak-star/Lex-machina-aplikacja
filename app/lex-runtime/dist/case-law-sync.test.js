@@ -71,3 +71,35 @@ describe("sądy dyscyplinarne izb: sygnatura i data z treści", () => {
         expect(rulingDate("ORZECZENIE z dnia 14 maja 2024 r. w składzie")).toBe("2024-05-14");
     });
 });
+describe("sądy dyscyplinarne izb: PDF wysłany jako application/octet-stream", () => {
+    it("plik rozpoznany po pierwszych bajtach trafia do odczytu PDF (OCR dla skanu)", async () => {
+        const { SyncContext, disciplinaryAdapter, DISCIPLINARY_SEEDS } = await import("./case-law-sync.js");
+        const fs = await import("node:fs");
+        const os = await import("node:os");
+        const path = await import("node:path");
+        const { CaseLawDatabase } = await import("./case-law-db.js");
+        const db = new CaseLawDatabase(fs.mkdtempSync(path.join(os.tmpdir(), "lex-osd-")));
+        const index = DISCIPLINARY_SEEDS.findIndex((seed) => seed.id === "oirp-rzeszow");
+        db.saveState("OSD", { seed: index, rounds: 0, lastRoundAt: null });
+        const pdf = new TextEncoder().encode("%PDF-1.4 skan");
+        const seen = [];
+        const ocr = { recognizePages: async (_data, pages) => { seen.push(pages); return pages.map((page) => ({ page, text: "ORZECZENIE Sygn. akt OSD 39/21 z dnia 12 maja 2021 r. w składzie" })); } };
+        const fetcher = (async (url) => {
+            if (url.includes("item.php"))
+                return new Response(pdf, { headers: { "content-type": "application/octet-stream" } });
+            return new Response('<a href="/item.php?id=1240">OSD 39 21</a>', { headers: { "content-type": "text/html" } });
+        });
+        const extractor = await import("./pdf-text-extractor.js");
+        const original = extractor.LocalPdfTextExtractor.prototype.extract;
+        extractor.LocalPdfTextExtractor.prototype.extract = async () => ({ text: "", pages: 1, bytes: pdf.length, pageTexts: [""] });
+        try {
+            const ctx = new SyncContext(db, fetcher, 2, 0, () => new Date("2026-11-14T00:00:00Z"), ocr);
+            await disciplinaryAdapter.run(ctx);
+        }
+        finally {
+            extractor.LocalPdfTextExtractor.prototype.extract = original;
+        }
+        expect(seen).toEqual([[1]]);
+        expect(db.count("OSD")).toBe(1);
+    });
+});

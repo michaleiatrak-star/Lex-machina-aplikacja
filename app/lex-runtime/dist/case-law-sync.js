@@ -636,6 +636,7 @@ export const DISCIPLINARY_SEEDS = [
     { id: "oirp-wroclaw", body: "Okręgowy Sąd Dyscyplinarny OIRP we Wrocławiu", start: "https://oirp.wroclaw.pl/akty-prawne/orzeczenia-postanowienia-osd", listing: null, item: /\/uploads\/pdf\/.+\.pdf$/iu },
     { id: "oirp-rzeszow", body: "Okręgowy Sąd Dyscyplinarny OIRP w Rzeszowie", start: "https://www.oirp.rzeszow.pl/radcowie/odpowiedzialnosc-dyscyplinarna", listing: /\/radcowie\/odpowiedzialnosc-dyscyplinarna\/\d{4}$/u, item: /\/item\.php\?id=\d+$/u },
     { id: "oirp-kielce", body: "Okręgowy Sąd Dyscyplinarny OIRP w Kielcach", start: "https://www.oirpkielce.pl/o-izbie/odpowiedzialnosc-dyscyplinarna/orzeczenia-osd", listing: /\/orzeczenia-osd\/\d{4}[^/]*$/u, item: /\.pdf$/iu },
+    { id: "oirp-katowice", body: "Okręgowy Sąd Dyscyplinarny OIRP w Katowicach", start: "https://www.oirp.katowice.pl/orzeczenia-sadu-dyscyplinarnego/orzeczenia-sadu-dyscyplinarnego.html", listing: /\/orzeczenia-sadu-dyscyplinarnego\/\d{4}-orzeczenia-sadu-dyscyplinarnego\.html$/u, item: /\/add\/vrecord\/.+\.pdf$/iu },
     { id: "ora-poznan", body: "Sąd Dyscyplinarny Izby Adwokackiej w Poznaniu", site: "https://ora.poznan.pl", search: "orzeczenie sądu dyscyplinarnego", title: /orzeczeni|postanowieni/iu }
 ];
 const SIGNATURE_AFTER_SYGN = /sygn(?:atura)?\.?\s*(?:akt)?\s*:?\s*((?:[A-Z]{1,4}\.?\s*){1,2}\d{1,4}\s*\/\s*\d{2,4})/iu;
@@ -700,11 +701,14 @@ async function documentText(ctx, url) {
     if (!response)
         return null;
     const type = response.headers.get("content-type") ?? "";
-    if (/pdf/iu.test(type) || /\.pdf$/iu.test(url))
-        return pdfText(ctx, new Uint8Array(await response.arrayBuffer()));
+    // A PDF is known by its first bytes: some chambers send it as application/octet-stream
+    // (OIRP Rzeszów, item.php?id=N with the file name only in content-disposition).
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)
+        return pdfText(ctx, bytes);
     if (!/html|text/iu.test(type))
         return null;
-    const html = await response.text();
+    const html = new TextDecoder("utf-8").decode(bytes);
     const main = /<article\b[\s\S]*?<\/article>/u.exec(html)?.[0] ?? /<main\b[\s\S]*?<\/main>/u.exec(html)?.[0] ?? html;
     return squeeze(plainText(main.replace(/<(?:nav|header|footer|aside)\b[\s\S]*?<\/(?:nav|header|footer|aside)>/giu, "")));
 }
@@ -757,7 +761,13 @@ async function crawlSeed(ctx, seed) {
 async function wpSeed(ctx, seed) {
     for (let page = 1; ctx.open; page += 1) {
         const reply = await ctx.get(`${seed.site}/wp-json/wp/v2/posts?search=${encodeURIComponent(seed.search)}&per_page=50&page=${page}&_fields=link,title,content,date`).catch(() => null);
-        const posts = reply ? (await reply.json()) : [];
+        let posts = [];
+        try {
+            posts = reply ? (await reply.json()) : [];
+        }
+        catch {
+            return true;
+        }
         if (!Array.isArray(posts) || !posts.length)
             return true;
         for (const post of posts) {
@@ -811,7 +821,6 @@ export const CASE_LAW_NOT_BULK = [
     { source: "WSD KIRP", reason: "orzeczenia nie są już publikowane (wsd.kirp.pl przekierowuje na kirp.pl)" },
     { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; aplikacja tego nie obchodzi" },
     { source: "OIRP Toruń", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" },
-    { source: "OIRP Katowice", reason: "strony lat bez plików orzeczeń w treści — do sprawdzenia" },
     { source: "Pozostałe izby", reason: "brak publicznego archiwum orzeczeń I instancji (DR-12, tabela izb)" }
 ];
 const runs = new Map();
