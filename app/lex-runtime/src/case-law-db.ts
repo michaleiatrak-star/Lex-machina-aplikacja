@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA" | "SP" | "TK" | "KIO" | "UODO" | "WSD" | "OSD" | "SEJM";
+export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA" | "SP" | "TK" | "KIO" | "UODO" | "WSD" | "OSD" | "SEJM" | "NIL";
 
 export type CaseLawCard = {
   id: string;

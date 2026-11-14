@@ -2857,5 +2857,6 @@
  "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "letzter Lauf {date}: neu {stored}, übersprungene Duplikate {duplicates}",
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Im Servermodus lädt der Server die gesamten amtlichen Rechtsprechungsdatenbanken herunter (die ältesten zuerst), danach nur noch Neues. Ein unterbrochener Download wird an der Abbruchstelle fortgesetzt. Dieselbe Entscheidung aus zwei Datenbanken wird einmal gespeichert.",
  "Pobieranie działa tylko w trybie serwerowym.": "Der Download läuft nur im Servermodus.",
- "pobieranie trwa": "Download läuft"
+ "pobieranie trwa": "Download läuft",
+ "Otwórz folder NIL": "NIL-Ordner öffnen"
 }

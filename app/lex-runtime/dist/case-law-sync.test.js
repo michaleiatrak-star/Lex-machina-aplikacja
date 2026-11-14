@@ -103,3 +103,16 @@ describe("sądy dyscyplinarne izb: PDF wysłany jako application/octet-stream", 
         expect(db.count("OSD")).toBe(1);
     });
 });
+describe("NIL na sesji użytkownika i tekst DOCX", () => {
+    it("DOCX: tekst z word/document.xml; NIL bez sesji z okna czeka, nie pobiera", async () => {
+        const { docxText, nilAdapter, runAdapter } = await import("./case-law-sync.js");
+        const docx = Buffer.from("UEsDBBQAAAAIACx0bl3HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgALHRuXVBLvCF2AAAAsAAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLMpt0rJTy7NTc0rsbMpt0rKT6kE0QUgoghElNj5B0W5Oke5+nm6KgRXpufpKSRmlyj4BfsoBKUW6CkY6xuZ2OiD1IHIIjBZgG5ElUJKXmaigrlCbmJRcqKCkYGRiUKRnkK5QnH20abElKrMVCxG6MOco4/kRgBQSwECFAMUAAAACAAsdG5dxxwXPAoAAAAIAAAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAxQAAAAIACx0bl1QS7whdgAAALAAAAARAAAAAAAAAAAAAACAATsAAAB3b3JkL2RvY3VtZW50LnhtbFBLBQYAAAAAAgACAIAAAADgAAAAAAA=", "base64");
+        expect(docxText(new Uint8Array(docx))).toContain("NSL Rep. 3/24");
+        const fetcher = (async () => {
+            throw new Error("bez sesji nic nie powinno być pobierane");
+        });
+        const run = await runAdapter(nilAdapter, database(), fetcher, 10, 0, now);
+        expect(run.waiting).toMatch(/folderu NIL/u);
+        expect(run.requests).toBe(0);
+    });
+});

@@ -2857,5 +2857,6 @@
  "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "última ejecución {date}: nuevos {stored}, duplicados omitidos {duplicates}",
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "En modo servidor, el servidor descarga las bases oficiales de jurisprudencia completas (las más antiguas primero) y después solo lo nuevo. Una descarga interrumpida se reanuda donde se detuvo. La misma resolución procedente de dos bases se guarda una sola vez.",
  "Pobieranie działa tylko w trybie serwerowym.": "La descarga solo funciona en modo servidor.",
- "pobieranie trwa": "descarga en curso"
+ "pobieranie trwa": "descarga en curso",
+ "Otwórz folder NIL": "Abrir la carpeta NIL"
 }

@@ -2857,5 +2857,6 @@
  "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "seneste kørsel {date}: nye {stored}, oversprungne dubletter {duplicates}",
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "I servertilstand henter serveren hele de officielle retspraksisdatabaser (ældste først) og derefter kun nyt. En afbrudt hentning fortsætter, hvor den stoppede. Den samme afgørelse fra to databaser gemmes én gang.",
  "Pobieranie działa tylko w trybie serwerowym.": "Hentningen kører kun i servertilstand.",
- "pobieranie trwa": "hentning i gang"
+ "pobieranie trwa": "hentning i gang",
+ "Otwórz folder NIL": "Åbn NIL-mappen"
 }

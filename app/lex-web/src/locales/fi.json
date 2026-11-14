@@ -2857,5 +2857,6 @@
  "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "viimeisin ajo {date}: uusia {stored}, ohitettuja kaksoiskappaleita {duplicates}",
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Palvelintilassa palvelin lataa viralliset oikeuskäytäntötietokannat kokonaan (vanhimmat ensin) ja sen jälkeen vain uudet. Keskeytynyt lataus jatkuu siitä, mihin se jäi. Sama ratkaisu kahdesta tietokannasta tallennetaan kerran.",
  "Pobieranie działa tylko w trybie serwerowym.": "Lataus toimii vain palvelintilassa.",
- "pobieranie trwa": "lataus käynnissä"
+ "pobieranie trwa": "lataus käynnissä",
+ "Otwórz folder NIL": "Avaa NIL-kansio"
 }

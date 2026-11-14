@@ -2857,5 +2857,6 @@
  "ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}": "pēdējā palaišana {date}: jauni {stored}, izlaisti dublikāti {duplicates}",
  "W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.": "Servera režīmā serveris lejupielādē visas oficiālās judikatūras datubāzes (vecākās vispirms), pēc tam tikai jauno. Pārtraukta lejupielāde turpinās no vietas, kur tā apstājās. Viens un tas pats nolēmums no divām datubāzēm tiek saglabāts vienreiz.",
  "Pobieranie działa tylko w trybie serwerowym.": "Lejupielāde darbojas tikai servera režīmā.",
- "pobieranie trwa": "notiek lejupielāde"
+ "pobieranie trwa": "notiek lejupielāde",
+ "Otwórz folder NIL": "Atvērt NIL mapi"
 }

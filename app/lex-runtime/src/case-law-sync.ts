@@ -6,6 +6,8 @@
 // (same signature and date) is not stored again.
 import { plainText } from "./eli/readers.js";
 import type { OcrEngine } from "./document-ingestion.js";
+import { inflateRawSync } from "node:zlib";
+import { lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
 import { CaseLawDatabase, defaultCaseLawDbDir, setSharedCaseLawDatabase, sharedCaseLawDatabase, type CaseLawCard, type CaseLawSource } from "./case-law-db.js";
 import { cbosaCaseNumber, cbosaDocIds, cbosaField, cbosaTotal, fetchCbosa, type CaseLawSearchFetch } from "./case-law-search.js";
 import { supremeCourtFullTextHtml, supremeCourtSearch } from "./case-law-verifier.js";
@@ -984,7 +986,100 @@ export const sejmAdapter: SyncAdapter = {
   }
 };
 
-export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, sejmAdapter];
+// ── DOCX text (word/document.xml) without a zip library ──
+export function docxText(data: Uint8Array): string {
+  const buffer = Buffer.from(data);
+  // End of central directory: the last "PK\x05\x06".
+  let end = -1;
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 66_000); i -= 1) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) return "";
+  const count = buffer.readUInt16LE(end + 10);
+  let at = buffer.readUInt32LE(end + 16);
+  for (let n = 0; n < count && at + 46 <= buffer.length; n += 1) {
+    if (buffer.readUInt32LE(at) !== 0x02014b50) break;
+    const method = buffer.readUInt16LE(at + 10);
+    const size = buffer.readUInt32LE(at + 20);
+    const nameLength = buffer.readUInt16LE(at + 28);
+    const extra = buffer.readUInt16LE(at + 30);
+    const comment = buffer.readUInt16LE(at + 32);
+    const local = buffer.readUInt32LE(at + 42);
+    const name = buffer.toString("utf8", at + 46, at + 46 + nameLength);
+    if (name === "word/document.xml") {
+      const start = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28);
+      const raw = buffer.subarray(start, start + size);
+      const xml = (method === 8 ? inflateRawSync(raw) : raw).toString("utf8");
+      return squeeze(plainText(xml.replace(/<\/w:p>/gu, "</p>").replace(/<w:tab\/>/gu, " ")));
+    }
+    at += 46 + nameLength + extra + comment;
+  }
+  return "";
+}
+
+// ── NIL (Portal Orzeczeń Sądowych, SharePoint): on the session the user opened in the application ──
+export const NIL_HOST = "naczelnaizbalekarska.sharepoint.com";
+const NIL_SITE = `https://${NIL_HOST}/sites/POS`;
+const NIL_FOLDERS: Array<[string, string]> = [["NSL", "Naczelny Sąd Lekarski"], ["OSL", "Okręgowe sądy lekarskie"]];
+export const NIL_WAITING = "czeka na otwarcie folderu NIL w oknie aplikacji (Baza orzeczeń → „Otwórz folder NIL”); pobieranie idzie na Twojej sesji i wznowi się samo";
+
+type NilFile = { Name: string; ServerRelativeUrl: string; TimeLastModified?: string };
+
+export const nilAdapter: SyncAdapter = {
+  source: "NIL",
+  label: "NIL — prawomocne orzeczenia sądów lekarskich",
+  progress: (db) => {
+    const waiting = db.state<{ at: string }>("NIL:waiting");
+    const state = db.state<{ completedAt: string | null }>("NIL");
+    const base = state?.completedAt ? `pobrane w całości (${state.completedAt.slice(0, 10)}); dociąganie nowych` : state ? "pełne pobieranie w toku" : "nie rozpoczęto";
+    return waiting ? `${base}; ${NIL_WAITING}` : base;
+  },
+  async run(ctx) {
+    const session = lawSourceSessionHeaders(NIL_HOST);
+    const wait = () => {
+      ctx.waiting = NIL_WAITING;
+      ctx.db.saveState("NIL:waiting", { at: ctx.now().toISOString() });
+    };
+    if (!session) return wait();
+    const headers = { ...session, accept: "application/json;odata=nometadata" };
+    try {
+      for (const [folder, court] of NIL_FOLDERS) {
+        const path = `/sites/POS/Shared Documents/PRAWOMOCNE ORZECZENIA/${folder}`;
+        const list = await ctx.get(`${NIL_SITE}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(path)}')/Files?$select=Name,ServerRelativeUrl,TimeLastModified&$top=5000`, { headers });
+        const files = ((list ? await list.json() : {}) as { value?: NilFile[] }).value ?? [];
+        for (const file of files) {
+          if (!ctx.open) return;
+          if (ctx.db.has("NIL", file.ServerRelativeUrl)) continue;
+          const reply = await ctx.get(`${NIL_SITE}/_api/web/GetFileByServerRelativeUrl('${encodeURIComponent(file.ServerRelativeUrl)}')/$value`, { headers: session });
+          if (!reply) continue;
+          const bytes = new Uint8Array(await reply.arrayBuffer());
+          const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+          const text = isPdf ? await pdfText(ctx, bytes).catch(() => "") : /\.docx$/iu.test(file.Name) ? docxText(bytes) : "";
+          const name = file.Name.replace(/\.(pdf|docx?)$/iu, "");
+          ctx.store(
+            {
+              source: "NIL", sourceId: file.ServerRelativeUrl, court, courtType: "DISCIPLINARY", division: folder,
+              signatures: [disciplinarySignature(text.slice(0, 1500)) ?? name], date: rulingDate(text.slice(0, 3000)), kind: "orzeczenie sądu lekarskiego",
+              judges: [], keywords: [], legalBases: [], summary: null, url: `https://${NIL_HOST}${encodeURI(file.ServerRelativeUrl)}`, modified: file.TimeLastModified ?? null
+            },
+            text
+          );
+        }
+      }
+      ctx.db.saveState("NIL", { completedAt: ctx.now().toISOString() });
+      ctx.db.saveState("NIL:waiting", null);
+    } catch (error) {
+      // The session ran out or lacks rights to the files: wait for the user's window again.
+      if (/HTTP_40[13]/u.test(error instanceof Error ? error.message : String(error))) return wait();
+      throw error;
+    }
+  }
+};
+
+export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, sejmAdapter];
 
 // ── schedule and status ──
 
@@ -993,7 +1088,6 @@ export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
   { source: "SAOS", reason: "kopia nieoficjalna — używana tylko do wyszukiwania, bez pobierania i bez zapisu w bazie" },
   { source: "WSD KIRP", reason: "orzeczenia nie są już publikowane (wsd.kirp.pl przekierowuje na kirp.pl)" },
   { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
-  { source: "NIL (sądy lekarskie)", reason: "folder orzeczeń udostępniony tylko do podglądu (pobieranie zablokowane przez właściciela) — orzeczenia czytane pojedynczo w przeglądarce" },
   { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
   { source: "OIRP Toruń", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" },
   { source: "Pozostałe izby", reason: "brak publicznego archiwum orzeczeń I instancji (DR-12, tabela izb)" }

@@ -25,6 +25,10 @@ export const LAW_SOURCES_WITH_CHECK: readonly VerifiedLawSource[] = [
   { host: "leginfo.legislature.ca.gov", code: "US-CA", url: "https://leginfo.legislature.ca.gov/faces/codes.xhtml", label: "California Legislative Information (kodeksy Kalifornii)" },
   { host: "www.oscn.net", code: "US-OK", url: "https://www.oscn.net/applications/oscn/index.asp?ftdb=STOKST", label: "OSCN (Oklahoma Statutes)" },
   { host: "www.capitol.hawaii.gov", code: "US-HI", url: "https://www.capitol.hawaii.gov/docs/HRS.htm", label: "Hawaii State Legislature (Hawaii Revised Statutes)" },
+  // Naczelna Izba Lekarska: final rulings of the medical courts (NSL, OSL) in a SharePoint folder. A guest
+  // only views them; the user opens the folder in the application's window and the server downloads on
+  // that session, with the rights the user has there (case-law-sync.ts, source NIL).
+  { host: "naczelnaizbalekarska.sharepoint.com", code: "NIL", url: "https://naczelnaizbalekarska.sharepoint.com/:f:/s/POS/EiRRs6eE8sNGtSJJRT69kHwBLaKO5R-jbumgeU3WZObHgg?e=VKXz6e", label: "NIL — prawomocne orzeczenia sądów lekarskich (na Twojej sesji)" },
   // Not a law source: Google search on the user's own session (Ustawienia > Wyszukiwarka
   // internetowa, off by default). The user passes Google's consent page and captcha; results
   // are leads only, verified at the official source.

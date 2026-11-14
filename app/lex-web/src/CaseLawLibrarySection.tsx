@@ -9,6 +9,7 @@ import {
   type CaseLawServerStatus
 } from "./api.js";
 import { CASE_RANGE_PRESETS, rangeForPreset, type CaseRangePreset } from "./CaseAccessAdminPanel.js";
+import { LawSourceVerification } from "./LawSourceVerification.js";
 import { InfoTip } from "./InfoTip";
 
 function label(entry: CaseLawCatalogEntry): string {
@@ -48,6 +49,14 @@ export function filterCaseLaw(
   return listed;
 }
 
+// NIL's folder of medical courts' rulings: opened in the application's window; the server downloads on
+// that session (like sn.pl), with the rights the user has there.
+const NIL_VERIFICATION = {
+  url: "https://naczelnaizbalekarska.sharepoint.com/:f:/s/POS/EiRRs6eE8sNGtSJJRT69kHwBLaKO5R-jbumgeU3WZObHgg?e=VKXz6e",
+  host: "naczelnaizbalekarska.sharepoint.com",
+  label: "NIL"
+};
+
 function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string {
   if (!run) return "";
   const head = t("ostatni przebieg {date}: nowych {stored}, pominiętych duplikatów {duplicates}", {
@@ -81,6 +90,7 @@ export function CaseLawLibrarySection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const titleId = useId();
+  const [nilWindow, setNilWindow] = useState(false);
 
   const load = useCallback(async (search: string) => {
     try {
@@ -371,6 +381,15 @@ export function CaseLawLibrarySection() {
                       <strong>{item.label}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {item.progress}
                       {item.running ? ` · ${t("pobieranie trwa")}` : ""}
                       {item.lastRun ? <small className="field-help"> {runText(item.lastRun)}</small> : null}
+                      {item.source === "NIL" ? (
+                        nilWindow ? (
+                          <LawSourceVerification verification={NIL_VERIFICATION} autoStart={false} onVerified={() => { setNilWindow(false); void load(query); }} />
+                        ) : (
+                          <button type="button" className="case-access-link" onClick={() => setNilWindow(true)}>
+                            {t("Otwórz folder NIL")}
+                          </button>
+                        )
+                      ) : null}
                     </li>
                   ))}
                   {server.notBulk.map((item) => (
