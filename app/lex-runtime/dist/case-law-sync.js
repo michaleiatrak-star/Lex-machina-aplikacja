@@ -813,13 +813,121 @@ export const disciplinaryAdapter = {
         ctx.db.saveState("OSD", state);
     }
 };
-export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter];
+// ── Sejm (api.sejm.gov.pl): prints (bills with their justifications) and legislative processes ──
+// The current term first, then the earlier ones; after the full pass every run re-reads the current
+// term's lists and fetches what changed (changeDate) since the previous run.
+const SEJM = "https://api.sejm.gov.pl/sejm";
+const SEJM_PDF_MAX = 12 * 1024 * 1024;
+async function sejmPrint(ctx, term, print) {
+    const parts = [];
+    for (const name of (print.attachments ?? []).filter((file) => /\.pdf$/iu.test(file))) {
+        if (!ctx.open)
+            break;
+        const reply = await ctx.get(`${SEJM}/term${term}/prints/${encodeURIComponent(print.number)}/${encodeURIComponent(name)}`).catch(() => null);
+        if (!reply)
+            continue;
+        const bytes = new Uint8Array(await reply.arrayBuffer());
+        if (bytes.length <= SEJM_PDF_MAX)
+            parts.push(await pdfText(ctx, bytes).catch(() => ""));
+    }
+    ctx.store({
+        source: "SEJM", sourceId: `druk:${term}/${print.number}`, court: "Sejm RP", courtType: "LEGISLATIVE", division: `${term}. kadencja`,
+        signatures: [`druk nr ${print.number} (${term}. kadencja)`], date: print.documentDate ?? null, kind: "druk sejmowy", judges: [], keywords: [],
+        legalBases: [], summary: print.title ?? null, url: `${SEJM}/term${term}/prints/${encodeURIComponent(print.number)}`, modified: print.changeDate ?? null
+    }, parts.filter(Boolean).join("\n\n") || print.title || null);
+}
+async function sejmProcess(ctx, term, number) {
+    const reply = await ctx.get(`${SEJM}/term${term}/processes/${encodeURIComponent(number)}`, { headers: { accept: "application/json" } });
+    if (!reply)
+        return;
+    const process = (await reply.json());
+    const stages = (process.stages ?? []).flatMap((stage) => [`${stage.date ?? ""} ${stage.stageName ?? ""}`, ...(stage.children ?? []).map((child) => `  ${child.date ?? ""} ${child.stageName ?? ""}`)]);
+    ctx.store({
+        source: "SEJM", sourceId: `proces:${term}/${number}`, court: "Sejm RP", courtType: "LEGISLATIVE", division: `${term}. kadencja`,
+        signatures: [`proces nr ${number} (${term}. kadencja)`, ...(process.ELI ? [process.ELI] : [])], date: process.processStartDate ?? null,
+        kind: `przebieg procesu legislacyjnego${process.documentType ? ` — ${process.documentType}` : ""}`, judges: [], keywords: [], legalBases: [],
+        summary: process.title ?? null, url: `${SEJM}/term${term}/processes/${encodeURIComponent(number)}`, modified: process.changeDate ?? null
+    }, [process.title ?? "", process.passed === undefined ? "" : process.passed ? "uchwalono" : "", ...stages].filter(Boolean).join("\n"));
+}
+export const sejmAdapter = {
+    source: "SEJM",
+    label: "Sejm — druki i przebieg procesów legislacyjnych",
+    progress: (db) => {
+        const state = db.state("SEJM");
+        if (!state)
+            return "nie rozpoczęto";
+        if (state.phase === "INCREMENTAL")
+            return `pobrane w całości (${state.since?.slice(0, 10) ?? "?"}); dociąganie zmian bieżącej kadencji`;
+        return `pełne pobieranie: ${state.term}. kadencja, ${state.kind === "prints" ? "druki" : "procesy"}, pozycja ${state.index + 1}`;
+    },
+    async run(ctx) {
+        const terms = (await (await ctx.get(`${SEJM}/term`, { headers: { accept: "application/json" } }))?.json());
+        const current = terms?.find((term) => term.current)?.num ?? terms?.at(-1)?.num ?? 10;
+        let state = ctx.db.state("SEJM") ?? { phase: "FULL", term: current, kind: "prints", index: 0, since: null, current };
+        const save = () => ctx.db.saveState("SEJM", state);
+        const list = async (term, kind) => {
+            const reply = await ctx.get(`${SEJM}/term${term}/${kind}${kind === "processes" ? "?limit=5000" : ""}`, { headers: { accept: "application/json" } }).catch(() => null);
+            return reply ? (await reply.json()) : [];
+        };
+        if (state.phase === "INCREMENTAL") {
+            // The current term's lists, only what changed since the previous run (a new term starts its full pass).
+            const since = state.since ?? "";
+            const startedAt = ctx.now().toISOString();
+            if (current !== state.current)
+                state = { phase: "FULL", term: current, kind: "prints", index: 0, since: null, current };
+            else {
+                for (const print of await list(current, "prints")) {
+                    if (!ctx.open)
+                        return save();
+                    if ((print.changeDate ?? "") > since.slice(0, 19))
+                        await sejmPrint(ctx, current, print);
+                }
+                for (const process of await list(current, "processes")) {
+                    if (!ctx.open)
+                        return save();
+                    if ((process.changeDate ?? "") > since.slice(0, 19))
+                        await sejmProcess(ctx, current, process.number);
+                }
+                state = { ...state, since: startedAt };
+                return save();
+            }
+        }
+        while (ctx.open) {
+            const items = state.kind === "prints" ? await list(state.term, "prints") : await list(state.term, "processes");
+            for (; state.index < items.length && ctx.open; state.index += 1) {
+                const item = items[state.index];
+                const id = `${state.kind === "prints" ? "druk" : "proces"}:${state.term}/${item.number}`;
+                if (!ctx.db.has("SEJM", id)) {
+                    if (state.kind === "prints")
+                        await sejmPrint(ctx, state.term, item);
+                    else
+                        await sejmProcess(ctx, state.term, item.number);
+                }
+                save();
+            }
+            if (state.index < items.length)
+                return save();
+            if (state.kind === "prints")
+                state = { ...state, kind: "processes", index: 0 };
+            else if (state.term > 1)
+                state = { ...state, term: state.term - 1, kind: "prints", index: 0 };
+            else
+                state = { phase: "INCREMENTAL", term: current, kind: "prints", index: 0, since: ctx.now().toISOString(), current };
+            save();
+            if (state.phase === "INCREMENTAL")
+                return;
+        }
+    }
+};
+export const CASE_LAW_ADAPTERS = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, sejmAdapter];
 // ── schedule and status ──
 /** Sources not downloaded as a whole, with the reason shown in the settings window. */
 export const CASE_LAW_NOT_BULK = [
     { source: "SAOS", reason: "kopia nieoficjalna — używana tylko do wyszukiwania, bez pobierania i bez zapisu w bazie" },
     { source: "WSD KIRP", reason: "orzeczenia nie są już publikowane (wsd.kirp.pl przekierowuje na kirp.pl)" },
-    { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; aplikacja tego nie obchodzi" },
+    { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
+    { source: "NIL (sądy lekarskie)", reason: "folder orzeczeń udostępniony tylko do podglądu (pobieranie zablokowane przez właściciela) — orzeczenia czytane pojedynczo w przeglądarce" },
+    { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
     { source: "OIRP Toruń", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" },
     { source: "Pozostałe izby", reason: "brak publicznego archiwum orzeczeń I instancji (DR-12, tabela izb)" }
 ];
