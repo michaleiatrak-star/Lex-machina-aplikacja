@@ -6,8 +6,7 @@ import {
   removeCaseLawLibraryEntry,
   setCaseLawLibrary,
   type CaseLawCatalogEntry,
-  type CaseLawServerStatus
-} from "./api.js";
+  type CaseLawServerStatus, runCaseLawSource } from "./api.js";
 import { CASE_RANGE_PRESETS, rangeForPreset, type CaseRangePreset } from "./CaseAccessAdminPanel.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
 import { InfoTip } from "./InfoTip";
@@ -387,6 +386,19 @@ export function CaseLawLibrarySection() {
                       <strong>{item.label}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {item.progress}
                       {item.running ? ` · ${t("pobieranie trwa")}` : ""}
                       {item.lastRun ? <small className="field-help"> {runText(item.lastRun)}</small> : null}
+                      {server.active && !item.running ? (
+                        <button
+                          type="button"
+                          className="case-access-link case-law-session-button"
+                          onClick={() => {
+                            void runCaseLawSource(item.source)
+                              .then((reply) => setServer(reply.server))
+                              .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+                          }}
+                        >
+                          {t("Pobierz teraz")}
+                        </button>
+                      ) : null}
                       {item.source === "NIL" || item.source === "RPO" ? (
                         sessionWindow === item.source ? (
                           <LawSourceVerification

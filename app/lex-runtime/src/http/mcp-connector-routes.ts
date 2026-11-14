@@ -1,4 +1,4 @@
-import { caseLawSyncStatus } from "../case-law-sync.js";
+import { caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
 import type { Express, Request, Response } from "express";
 import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
@@ -706,6 +706,12 @@ export function registerMcpConnectorRoutes(
       entries: repository?.catalog(query, 1000) ?? [],
       server: caseLawSyncStatus()
     });
+  });
+  // "Pobierz teraz" in the window: one source's run at once (administrator; server mode).
+  app.post("/api/case-law/sync/run", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const source = typeof req.body?.source === "string" ? req.body.source : "";
+    res.json({ started: runCaseLawSourceNow(source), server: caseLawSyncStatus() });
   });
   app.put("/api/case-law/library", (req, res) => {
     if (!requireUser(req, res, authService)) return;

@@ -4193,6 +4193,10 @@ export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; avail
   return json(`/api/case-law/library${query ? `?q=${encodeURIComponent(query)}` : ""}`);
 }
 
+export function runCaseLawSource(source: string): Promise<{ started: boolean; server: CaseLawServerStatus }> {
+  return json("/api/case-law/sync/run", { method: "POST", body: JSON.stringify({ source }) });
+}
+
 export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean }> {
   return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
 }

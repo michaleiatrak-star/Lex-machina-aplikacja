@@ -2859,5 +2859,6 @@
  "Pobieranie działa tylko w trybie serwerowym.": "Lataus toimii vain palvelintilassa.",
  "pobieranie trwa": "lataus käynnissä",
  "Otwórz folder NIL": "Avaa NIL-kansio",
- "Otwórz BIP RPO": "Avaa RPO:n BIP"
+ "Otwórz BIP RPO": "Avaa RPO:n BIP",
+ "Pobierz teraz": "Lataa nyt"
 }

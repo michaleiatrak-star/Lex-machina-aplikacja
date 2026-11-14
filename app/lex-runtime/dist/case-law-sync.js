@@ -1154,7 +1154,27 @@ export async function runAdapter(adapter, database, fetcher, budget, gapMs, now 
  * desktop; =0 turns it off). Every tick starts each source that is not running, with a request
  * budget; the sources run side by side (different hosts), each at most one run at a time.
  */
+let startedWith = null;
+/**
+ * Starts one source's run now (the window's "Pobierz teraz"), with the options the schedule runs with.
+ * False when the source is unknown, already running, or the download is not switched on here.
+ */
+export function runCaseLawSourceNow(source) {
+    const options = startedWith;
+    const adapter = (options?.adapters ?? CASE_LAW_ADAPTERS).find((item) => item.source === source);
+    if (!options || !adapter || running.has(adapter.source) || !syncActive)
+        return false;
+    const held = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
+    setSharedCaseLawDatabase(held);
+    const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+    running.add(adapter.source);
+    void runAdapter(adapter, options.database ? options.database() : held, adapter.source === "SN" && options.snFetcher ? options.snFetcher : fetcher, options.budget ?? 600, options.gapMs ?? 1_000, undefined, options.ocr ?? null)
+        .then((run) => runs.set(adapter.source, run))
+        .finally(() => running.delete(adapter.source));
+    return true;
+}
 export function startCaseLawSync(options = {}) {
+    startedWith = options;
     const isServerMode = options.isServerMode ?? (() => false);
     const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     const adapters = options.adapters ?? CASE_LAW_ADAPTERS;

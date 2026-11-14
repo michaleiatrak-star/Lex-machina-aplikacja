@@ -2865,5 +2865,6 @@
  "Pobieranie działa tylko w trybie serwerowym.": "Downloading runs only in server mode.",
  "pobieranie trwa": "downloading",
  "Otwórz folder NIL": "Open the NIL folder",
- "Otwórz BIP RPO": "Open the RPO public information bulletin"
+ "Otwórz BIP RPO": "Open the RPO public information bulletin",
+ "Pobierz teraz": "Download now"
 }
