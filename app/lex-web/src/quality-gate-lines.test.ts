@@ -142,4 +142,27 @@ describe("the model's work trace is not part of the answer (live test 2026-11-15
     expect(out).not.toMatch(/verify_case_reference|HARD-GATES|dr-04-prawo/u);
     expect(isWorkTraceLine("Sąd pracy (art. 476 § 1 KPC) jest właściwy; DR-04 to dziedzina.")).toBe(false);
   });
+  it("ślad pracy z testu SDI 8/12: linia „Ślad: PRIMARY …”, „Faza 1-Z”, „Oś sporu”, nazwy narzędzi w tabeli", () => {
+    const answer = [
+      "Nie mogę teraz powiedzieć, o czym jest orzeczenie SN o sygn. SDI 8/12.",
+      "",
+      "| Źródło | Wynik |",
+      "|---|---|",
+      "| sn.pl (`verify_case_reference`) | HTTP 403 |",
+      "| SAOS (`search_case_law`, courtType=SUPREME) | brak odpowiedzi |",
+      "",
+      "2. Porównam brzmienie (`verify_legal_reference` z datą z 2012 r.) z dzisiejszym.",
+      "Faza 1-Z: brak trafienia, nic nie dopasowywałem na siłę.",
+      "CN-GATE",
+      "Oś sporu 1: brak → norma centralna: brak",
+      "Ślad: PRIMARY orzeczenia-sadowe-v2, Faza 1-0 A (sygnatura znana).",
+      "Aplikacja skierowała tę sprawę do `orzeczenia-sadowe-v2`."
+    ].join("\n");
+    const plain = withoutQualityGateLines(answer);
+    expect(plain).toContain("| sn.pl (sprawdzenie sygnatury) | HTTP 403 |");
+    expect(plain).toContain("| SAOS (wyszukiwarka orzeczeń, courtType=SUPREME) | brak odpowiedzi |");
+    expect(plain).toContain("Porównam brzmienie (sprawdzenie przepisu w ELI z datą z 2012 r.) z dzisiejszym.");
+    expect(plain).not.toMatch(/verify_|search_|orzeczenia-sadowe-v2|Faza 1|Oś sporu|CN-GATE|PRIMARY/u);
+    expect(plain).toContain("Nie mogę teraz powiedzieć");
+  });
 });

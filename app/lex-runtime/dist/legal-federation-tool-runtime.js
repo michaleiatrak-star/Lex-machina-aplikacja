@@ -1,4 +1,5 @@
 import { US_JURISDICTIONS } from "./eli/us-states.js";
+import { isOutage, markOutage, outageResult, recentOutage } from "./source-outage.js";
 import { VAQUILL_SNAPSHOT, VAQUILL_STATUTES, vaquillUrl } from "./eli/us-vaquill.js";
 import { personalDataIn } from "./tool-broker-policy.js";
 import { activeCountry } from "./jurisdiction.js";
@@ -913,8 +914,21 @@ export class LegalFederationToolRuntime {
         // Intentionally sequential: several upstreams publish explicit rate limits.
         for (const call of calls) {
             const source = sourceFrom(call.input);
+            const down = source ? recentOutage(source) : 0;
+            if (source && down) {
+                events.push({ tool: call.name, source, decision: "BLOCK", outcome: "SOURCE_UNAVAILABLE", detail: { error: "SOURCE_RECENTLY_UNAVAILABLE" } });
+                results.push({ tool_use_id: call.id, content: outageResult(source, down) });
+                continue;
+            }
             try {
+                const started = performance.now();
                 const content = await this.execute(call);
+                // Diagnostics of slow turns (LEX_TOOL_TIMES=1): tool, source, time; never the query.
+                if (process.env.LEX_TOOL_TIMES === "1")
+                    process.stderr.write(`TOOL_TIME:${call.name}:${source ?? "-"}:${Math.round(performance.now() - started)}\n`);
+                // A connector that answers with a failure status instead of throwing (SAOS: attempts used up).
+                if (content.length < 4000 && /"status"\s*:\s*"(?:ERROR|TIMEOUT|SOURCE_UNAVAILABLE|UNAVAILABLE)"/u.test(content) && isOutage(content))
+                    markOutage(source);
                 events.push({
                     tool: call.name,
                     ...(source
@@ -963,6 +977,8 @@ export class LegalFederationToolRuntime {
                                     "AUX_SOURCE_HOST_FORBIDDEN",
                                     "AUX_SOURCE_DNS_PRIVATE"
                                 ].includes(error.code))));
+                if (!policyBlocked && isOutage(message))
+                    markOutage(source);
                 events.push({
                     tool: call.name,
                     ...(source

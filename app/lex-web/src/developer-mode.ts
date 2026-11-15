@@ -158,7 +158,7 @@ export function plainSystemText(content: string): string {
 // Wiersze kontrolne modułów (CN-GATE, WYJ-GATE S1-S4, REM-GATE, wynik bramki, tryb zdegradowany):
 // ślad wykonania dla audytu, nie treść dla prawnika ani laika. Widoczne w trybie dewelopera.
 const QUALITY_GATE_LINE =
-  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:(?:CN|WYJ|REM)-GATE\b|(?:CN|REM)-\d+\b|S[1-4](?:\s*[(–—:-]|\s+\p{L}+(?:\s+\p{L}+)?\s*[:)]|\s*\*\*)|→\s*WYNIK:|TRYB\s+ZDEGRADOWANY)/u;
+  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:(?:CN|WYJ|REM)-GATE\b|(?:CN|REM)-\d+\b|Oś sporu \d+\s*:|S[1-4](?:\s*[(–—:-]|\s+\p{L}+(?:\s+\p{L}+)?\s*[:)]|\s*\*\*)|→\s*WYNIK:|TRYB\s+ZDEGRADOWANY)/u;
 
 // Sekcje kontrolne pisane przez model (test 500, C12 na żywo: forma 0 we wszystkich przypadkach):
 // ślad routingu KROK 3A, „Kontrole przy tej odpowiedzi”, bloki z etykietą bramki (CN/OŚ/WYJ/REM-GATE).
@@ -240,15 +240,45 @@ function withoutControlSections(lines: string[]): string[] {
 // tool names are developer information, not part of the answer.
 const SKILL_FILE = /\b[a-z0-9]+(?:-[a-z0-9]+)*-v\d+\/[\w./-]*\.md\b|\bdr-\d{2}-[a-z-]+(?:\/[\w./-]+)?\b|\b(?:shared|references|modules)\/[\w./-]+\.md\b/u;
 const TOOL_NAME = /\b(?:verify_[a-z_]+|search_[a-z_]+|fetch_[a-z_]+|web_search|read_[a-z_]+|lookup_[a-z_]+)\b/gu;
+// "Ślad: PRIMARY orzeczenia-sadowe-v2, Faza 1-0 A …", "Faza 1-Z: brak trafienia …", "Aplikacja skierowała
+// tę sprawę do `orzeczenia-sadowe-v2`" (live test 2026-11-15, SDI 8/12): the skill's own path, not the answer.
+const TRACE_LABEL = /^\s*(?:[-*•]\s*)?(?:\*\*)?\s*(?:Ślad(?:\s+pracy)?(?:\*\*)?\s*:|Faza\s+\d+-[0-9A-Z]+\b)/u;
+const SKILL_ID = /`?\b(?:[a-z]+-)+v\d+\b`?/u;
 export function isWorkTraceLine(line: string): boolean {
-  return SKILL_FILE.test(line) || (line.match(TOOL_NAME)?.length ?? 0) >= 2;
+  return (
+    SKILL_FILE.test(line) ||
+    (line.match(TOOL_NAME)?.length ?? 0) >= 2 ||
+    TRACE_LABEL.test(line) ||
+    (SKILL_ID.test(line) && /\b(?:PRIMARY|SECONDARY|skill\w*|skierowa\w*|routing\w*|ścieżk\w*)\b/iu.test(line))
+  );
+}
+
+// One tool name left in a sentence or a table row: its meaning in words.
+const TOOL_WORDS: Readonly<Record<string, string>> = {
+  verify_case_reference: "sprawdzenie sygnatury",
+  verify_case_quote: "sprawdzenie cytatu z orzeczenia",
+  verify_legal_reference: "sprawdzenie przepisu w ELI",
+  verify_interpretation: "sprawdzenie interpretacji",
+  search_case_law: "wyszukiwarka orzeczeń",
+  search_case_law_library: "biblioteka orzeczeń",
+  read_case_law_text: "odczyt tekstu orzeczenia",
+  search_federated_legal_sources: "wyszukiwanie w źródłach prawnych",
+  web_search: "wyszukiwarka internetowa"
+};
+
+export function withoutToolNames(line: string): string {
+  return line
+    .replace(/\s*\(\s*`?((?:verify|search|fetch|read|lookup)_[a-z_]+|web_search)`?((?:,[^)]*)?)\)/gu, (_match, tool: string, rest: string) =>
+      TOOL_WORDS[tool] ? ` (${TOOL_WORDS[tool]}${rest ?? ""})` : rest ? ` (${rest.replace(/^,\s*/u, "")})` : "")
+    .replace(/`?\b((?:verify|search|fetch|read|lookup)_[a-z_]+|web_search)\b`?/gu, (_match, tool: string) => TOOL_WORDS[tool] ?? "narzędzie aplikacji");
 }
 
 export function withoutQualityGateLines(content: string): string {
   const lines = content.split("\n");
   const kept = withoutControlSections(lines).filter((line) => !QUALITY_GATE_LINE.test(line) && !isWorkTraceLine(line));
-  if (kept.length === lines.length) return content;
-  return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;
+  const plain = kept.map(withoutToolNames);
+  if (kept.length === lines.length) return plain.join("\n");
+  return `${plain.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;
 }
 
 export function plainAnswerText(content: string): string {

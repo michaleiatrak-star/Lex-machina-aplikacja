@@ -63,6 +63,8 @@ export function chatTurnJournalPath(env: NodeJS.ProcessEnv = process.env): strin
 
 export function modelKindOf(provider: string, model: string): ChatTurnRecord["modelKind"] {
   if (model.startsWith("local/")) return "local";
+  // Account clients (Claude Code, Codex, Gemini CLI) are named by the model id, the provider is the vendor.
+  if (model.startsWith("account/")) return "account";
   return /account|session/iu.test(provider) ? "account" : "api";
 }
 

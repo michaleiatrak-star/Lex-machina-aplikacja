@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { isOutage, markOutage, outageResult, recentOutage } from "./source-outage.js";
 import { caseTextExcerpt, caseTextPortion, holdCaseLawText } from "./case-law-texts.js";
 import { MAX_EVIDENCE_CHARS } from "./legal-source-verifier.js";
 import { caseLawRepository } from "./case-law-store.js";
@@ -1877,6 +1878,22 @@ export class LegalVerificationToolRuntime {
   // One turn: the same call with the same input asks the source once.
   private readonly answered = new Map<string, string>();
 
+  /** One call; with LEX_TOOL_TIMES=1 its time goes to stderr (tool, source, ms; never the query). */
+  private async timedFresh(call: NormalizedToolCall): Promise<NormalizedToolResult[]> {
+    // A source that just did not answer is not asked again for a few minutes (source-outage.ts).
+    const source = call.name === CASE_SEARCH_TOOL_NAME && typeof call.input.source === "string" ? call.input.source : null;
+    const down = source ? recentOutage(source) : 0;
+    if (source && down) return [{ tool_use_id: call.id, content: outageResult(source, down) }];
+    const started = performance.now();
+    const results = await this.runFresh([call]);
+    if (process.env.LEX_TOOL_TIMES === "1") {
+      process.stderr.write(`TOOL_TIME:${call.name}:${source ?? "-"}:${Math.round(performance.now() - started)}\n`);
+    }
+    const content = results[0]?.content ?? "";
+    if (source && content.length < 4000 && /"status"\s*:\s*"(?:ERROR|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE|OUT_OF_SCOPE)"/u.test(content) && isOutage(content)) markOutage(source);
+    return results;
+  }
+
   async runTools(
     calls: NormalizedToolCall[]
   ): Promise<NormalizedToolResult[]> {
@@ -1884,7 +1901,7 @@ export class LegalVerificationToolRuntime {
     const fresh = calls.filter((call, index) => !this.answered.has(key(call)) && calls.findIndex((other) => key(other) === key(call)) === index);
     // The calls of one model step run side by side (each its own source requests); before,
     // one after another: 3 provisions took 34–48 s.
-    const ran = new Map((await runConcurrently(fresh, VERIFICATION_CONCURRENCY, (call) => this.runFresh([call]))).flat().map((result) => [result.tool_use_id, result.content] as const));
+    const ran = new Map((await runConcurrently(fresh, VERIFICATION_CONCURRENCY, (call) => this.timedFresh(call))).flat().map((result) => [result.tool_use_id, result.content] as const));
     const now = new Map<string, string>();
     for (const call of fresh) {
       const content = ran.get(call.id) ?? "";

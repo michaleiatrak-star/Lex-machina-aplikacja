@@ -263,4 +263,10 @@ describe("a claim that everything was verified", () => {
         const already = "Zweryfikowano 5/5 pozycji (poza art. 7 ⚠️ [NIEWERYFIKOWANE]).";
         expect(qualifyCompleteVerificationClaims(already)).toBe(already);
     });
+    it("🟨 [KOTWICA-URZĘDOWA] przy sygnaturze orzeczenia albo bez kotwicy w rejestrze → ⚠️ [NIEWERYFIKOWANE]", () => {
+        const ledger = new VerificationLedger();
+        const { text } = stripUnbackedVerificationMarkers("Orzeczenie SN o sygn. SDI 8/12 🟨 [KOTWICA-URZĘDOWA] nie zostało odczytane.\nArt. 80 Prawa o adwokaturze 🟨 [KOTWICA-URZĘDOWA: arslege.pl, lexlege.pl]", ledger);
+        expect(text).not.toContain("KOTWICA");
+        expect(text.match(/⚠️ \[NIEWERYFIKOWANE\]/gu)).toHaveLength(2);
+    });
 });

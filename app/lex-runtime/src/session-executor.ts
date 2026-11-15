@@ -3738,10 +3738,11 @@ export class SafeSessionExecutor implements SessionExecutor {
           if (corpusTools.handles(call.name)) {
             const target = [call.input.skill, call.input.path].filter((part) => typeof part === "string").join("/");
             step("SKILLS", target || call.name);
-          } else {
-            step("MODEL", `narzędzie ${call.name}`);
           }
         }
+        // The tools of one model step run side by side: one step in the journal, named by the tools.
+        const toolNames = [...new Set(calls.filter((call) => !corpusTools.handles(call.name)).map((call) => call.name))].sort();
+        if (toolNames.length) step("MODEL", `${toolNames.length > 1 ? "narzędzia" : "narzędzie"} ${toolNames.join(" + ")}`);
         const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
         const courtCalls = calls.filter((call) => courtTools?.handles(call.name) ?? false);
@@ -3772,20 +3773,22 @@ export class SafeSessionExecutor implements SessionExecutor {
             !(federationTools?.handles(call.name) ?? false)
         );
 
-        const corpusResults = corpusCalls.length > 0
-          ? await corpusTools.runTools(corpusCalls)
-          : [];
-        const coreLawResults =
-          coreLawTools &&
-          coreLawCalls.length > 0
-            ? await coreLawTools.runTools(
-                coreLawCalls
-              )
-            : [];
-        const reportResults = reportCalls.length > 0
-          ? await reportTools.runTools(reportCalls)
-          : [];
-        const courtResults = courtTools && courtCalls.length > 0 ? await courtTools.runTools(courtCalls) : [];
+        // Every group starts at once (different sources and hosts): before, one group waited for
+        // the previous one, so search_federated_legal_sources (50 s) and search_case_law (98 s)
+        // of one model step took their sum (live test 2026-11-15, SDI 8/12).
+        const none = Promise.resolve([] as NormalizedToolResult[]);
+        const corpusRun = corpusCalls.length > 0 ? corpusTools.runTools(corpusCalls) : none;
+        const coreLawRun = coreLawTools && coreLawCalls.length > 0 ? coreLawTools.runTools(coreLawCalls) : none;
+        const reportRun = reportCalls.length > 0 ? reportTools.runTools(reportCalls) : none;
+        const courtRun = courtTools && courtCalls.length > 0 ? courtTools.runTools(courtCalls) : none;
+        const caseFileRun = caseFileTools && caseFileCalls.length > 0 ? caseFileTools.runTools(caseFileCalls) : none;
+        const reviewRun = independentReview && reviewCalls.length > 0 ? independentReview.runTools(reviewCalls) : none;
+        const widgetRun = widgetTools && widgetCalls.length > 0 ? widgetTools.runTools(widgetCalls) : none;
+        const federationRun = federationTools && federationCalls.length > 0 ? federationTools.runTools(federationCalls, federationEvents) : none;
+        const verificationRun = verificationCalls.length > 0 && verificationTools ? verificationTools.runTools(verificationCalls) : none;
+        const [corpusResults, coreLawResults, reportResults, courtResults, caseFileResults, reviewResults, widgetResults, federationResults, verificationResults] =
+          await Promise.all([corpusRun, coreLawRun, reportRun, courtRun, caseFileRun, reviewRun, widgetRun, federationRun, verificationRun]);
+        if (toolNames.length) step("MODEL", "model (po wynikach narzędzi)");
         for (const event of courtTools?.auditEvents().slice(-courtCalls.length) ?? []) {
           // The address went to the GUGiK geocoder (a public register), the party's name never.
           audit.record("gate", "ADDRESS_GEOCODED", event.status === "FOUND" ? "OK" : "DEGRADED", {
@@ -3795,24 +3798,6 @@ export class SafeSessionExecutor implements SessionExecutor {
             kinds: event.disclosed.join(",")
           });
         }
-        const caseFileResults = caseFileTools && caseFileCalls.length > 0
-          ? await caseFileTools.runTools(caseFileCalls)
-          : [];
-        const reviewResults = independentReview && reviewCalls.length > 0
-          ? await independentReview.runTools(reviewCalls)
-          : [];
-        const widgetResults = widgetTools && widgetCalls.length > 0
-          ? await widgetTools.runTools(widgetCalls)
-          : [];
-        const federationResults =
-          federationTools &&
-          federationCalls.length > 0
-            ? await federationTools
-                .runTools(
-                  federationCalls,
-                  federationEvents
-                )
-            : [];
 
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
@@ -3861,15 +3846,6 @@ export class SafeSessionExecutor implements SessionExecutor {
             );
           }
         }
-
-        const verificationResults =
-          verificationCalls.length > 0 &&
-          verificationTools
-            ? await verificationTools
-                .runTools(
-                  verificationCalls
-                )
-            : [];
 
         // The chat's own SN tools stopped by sn.pl's check: the same verification window
         // as the case-law search (the connector), then the question again.

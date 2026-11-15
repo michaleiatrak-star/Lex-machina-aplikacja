@@ -24,6 +24,9 @@ export function chatTurnJournalPath(env = process.env) {
 export function modelKindOf(provider, model) {
     if (model.startsWith("local/"))
         return "local";
+    // Account clients (Claude Code, Codex, Gemini CLI) are named by the model id, the provider is the vendor.
+    if (model.startsWith("account/"))
+        return "account";
     return /account|session/iu.test(provider) ? "account" : "api";
 }
 /** Error code only: the part before the first ':' (codes carry no text of the case). */

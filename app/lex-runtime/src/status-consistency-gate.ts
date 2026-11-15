@@ -562,7 +562,19 @@ export function stripUnbackedVerificationMarkers(
           return "";
         })
   );
-  const stripped = removed > 0 ? lines.join("\n") : text;
+  // 🟨 [KOTWICA-URZĘDOWA] is given by the substitute-source check of a provision (E-4) and comes
+  // from the ledger; any other is the model's own, also at a ruling's signature, which it never
+  // fits (live test 2026-11-15: "SDI 8/12 🟨 [KOTWICA-URZĘDOWA]" with every source down, then
+  // a "correction" of it in each later answer). It becomes ⚠️ [NIEWERYFIKOWANE].
+  const anchorRecords = ledger.all().some((record) => record.officialAnchor);
+  const anchored = lines.map((line, index) =>
+    line.replace(/🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu, (match) => {
+      if (anchorRecords && !caseLines.has(index + 1)) return match;
+      removed += 1;
+      return "⚠️ [NIEWERYFIKOWANE]";
+    })
+  );
+  const stripped = removed > 0 ? anchored.join("\n") : text;
   // "✅ ✅ [VER: …]": a model's own ✅ before the marker it copied (user report 2026-11-06).
   return { text: stripped.replace(/✅(?:[ \t]*✅)+/gu, "✅"), removed };
 }

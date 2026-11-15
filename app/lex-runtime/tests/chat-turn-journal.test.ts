@@ -19,6 +19,7 @@ describe("dziennik czasu tur czatu", () => {
     expect(errorCode(new Error("LOCAL_MODEL_HTTP_RESPONSE_TIMEOUT: Jan Kowalski"))).toBe("LOCAL_MODEL_HTTP_RESPONSE_TIMEOUT");
     expect(modelKindOf("openai", "local/bielik-11b-v3-q4km")).toBe("local");
     expect(modelKindOf("anthropic", "claude-x")).toBe("api");
+    expect(modelKindOf("anthropic", "account/anthropic/default")).toBe("account");
   });
 
   it("podsumowanie ścieżek: mediana, 95%, błędy; plik ograniczony do 500 tur", () => {
