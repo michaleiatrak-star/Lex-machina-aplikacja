@@ -2924,5 +2924,14 @@
  "słabe": "faible",
  "częściowe": "partielle",
  "pełne": "complète",
- "{count} tur czatu": "{count} tours de chat"
+ "{count} tur czatu": "{count} tours de chat",
+ "odmowa dostępu": "accès refusé",
+ "weryfikacja CAPTCHA": "vérification CAPTCHA",
+ "brak odpowiedzi w czasie": "pas de réponse à temps",
+ "limit zapytań": "limite de requêtes",
+ "błąd certyfikatu": "erreur de certificat",
+ "błąd": "erreur",
+ "W SearXNG odpowiedziały: {engines}": "Ont répondu dans SearXNG : {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Aucun moteur de SearXNG n’a donné de résultats",
+ "odmówiły: {engines}": "ont refusé : {engines}"
 }

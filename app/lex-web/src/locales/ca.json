@@ -2924,5 +2924,14 @@
  "słabe": "feble",
  "częściowe": "parcial",
  "pełne": "completa",
- "{count} tur czatu": "{count} torns de xat"
+ "{count} tur czatu": "{count} torns de xat",
+ "odmowa dostępu": "accés denegat",
+ "weryfikacja CAPTCHA": "verificació CAPTCHA",
+ "brak odpowiedzi w czasie": "sense resposta a temps",
+ "limit zapytań": "límit de consultes",
+ "błąd certyfikatu": "error de certificat",
+ "błąd": "error",
+ "W SearXNG odpowiedziały: {engines}": "Han respost a SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Cap cercador de SearXNG no ha donat resultats",
+ "odmówiły: {engines}": "han rebutjat: {engines}"
 }

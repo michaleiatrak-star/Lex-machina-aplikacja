@@ -2924,5 +2924,14 @@
  "słabe": "vājš",
  "częściowe": "daļējs",
  "pełne": "pilns",
- "{count} tur czatu": "{count} tērzēšanas kārtas"
+ "{count} tur czatu": "{count} tērzēšanas kārtas",
+ "odmowa dostępu": "piekļuve liegta",
+ "weryfikacja CAPTCHA": "CAPTCHA pārbaude",
+ "brak odpowiedzi w czasie": "nav atbildes laikā",
+ "limit zapytań": "vaicājumu limits",
+ "błąd certyfikatu": "sertifikāta kļūda",
+ "błąd": "kļūda",
+ "W SearXNG odpowiedziały: {engines}": "SearXNG atbildēja: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Neviena SearXNG meklētājprogramma nedeva rezultātus",
+ "odmówiły: {engines}": "atteicās: {engines}"
 }

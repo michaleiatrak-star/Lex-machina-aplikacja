@@ -2930,5 +2930,14 @@
  "słabe": "weak",
  "częściowe": "partial",
  "pełne": "full",
- "{count} tur czatu": "{count} chat turns"
+ "{count} tur czatu": "{count} chat turns",
+ "odmowa dostępu": "access denied",
+ "weryfikacja CAPTCHA": "CAPTCHA check",
+ "brak odpowiedzi w czasie": "no answer in time",
+ "limit zapytań": "query limit",
+ "błąd certyfikatu": "certificate error",
+ "błąd": "error",
+ "W SearXNG odpowiedziały: {engines}": "Answered in SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "No search engine in SearXNG gave results",
+ "odmówiły: {engines}": "refused: {engines}"
 }

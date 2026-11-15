@@ -176,6 +176,31 @@ export function parseFirecrawlResults(payload, maxResults) {
         .filter((item) => item.title && /^https?:\/\//i.test(item.url))
         .slice(0, maxResults);
 }
+// Which engines of the local SearXNG answered and which refused (Settings > search test, user 2026-11-15).
+const searxngEngines = { answered: new Map(), refused: new Map() };
+function recordSearxngEngines(payload) {
+    for (const item of Array.isArray(payload.results) ? payload.results : []) {
+        for (const engine of Array.isArray(item.engines) ? item.engines : []) {
+            if (typeof engine === "string")
+                searxngEngines.answered.set(engine, (searxngEngines.answered.get(engine) ?? 0) + 1);
+        }
+    }
+    for (const entry of Array.isArray(payload.unresponsive_engines) ? payload.unresponsive_engines : []) {
+        if (Array.isArray(entry) && typeof entry[0] === "string")
+            searxngEngines.refused.set(entry[0], String(entry[1] ?? ""));
+    }
+}
+export function resetSearxngEngineReport() {
+    searxngEngines.answered.clear();
+    searxngEngines.refused.clear();
+}
+/** Engines with results (and how many), engines that refused (and why) since the last reset. */
+export function searxngEngineReport() {
+    return {
+        answered: [...searxngEngines.answered].map(([name, results]) => ({ name, results })).sort((a, b) => b.results - a.results),
+        refused: [...searxngEngines.refused].filter(([name]) => !searxngEngines.answered.has(name)).map(([name, reason]) => ({ name, reason }))
+    };
+}
 export function parseSearxngResults(payload, maxResults) {
     return (Array.isArray(payload.results) ? payload.results : [])
         .map((item) => ({
@@ -485,6 +510,7 @@ export class PublicWebSearch {
         catch {
             throw new Error("BOT_CHECK");
         }
+        recordSearxngEngines(payload);
         return parseSearxngResults(payload, maxResults);
     }
     /**

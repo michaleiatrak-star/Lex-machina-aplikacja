@@ -2924,5 +2924,14 @@
  "słabe": "zwak",
  "częściowe": "gedeeltelijk",
  "pełne": "volledig",
- "{count} tur czatu": "{count} chatbeurten"
+ "{count} tur czatu": "{count} chatbeurten",
+ "odmowa dostępu": "toegang geweigerd",
+ "weryfikacja CAPTCHA": "CAPTCHA-controle",
+ "brak odpowiedzi w czasie": "geen antwoord op tijd",
+ "limit zapytań": "limiet voor zoekopdrachten",
+ "błąd certyfikatu": "certificaatfout",
+ "błąd": "fout",
+ "W SearXNG odpowiedziały: {engines}": "Antwoordden in SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Geen zoekmachine in SearXNG gaf resultaten",
+ "odmówiły: {engines}": "weigerden: {engines}"
 }

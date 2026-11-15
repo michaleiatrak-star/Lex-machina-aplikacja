@@ -11,6 +11,7 @@ import {
   setupLocalSearxng,
   type LocalSearxngResult,
   type SearchEngineName,
+  type SearchEngineScore,
   type WebSearchSettings
 } from "./api.js";
 import { localSearxngRecommended, onWebSearchSetupRequest, takeWebSearchSetupRequest } from "./web-search-setup-prompt.js";
@@ -58,6 +59,28 @@ function localSearxngText(result: LocalSearxngResult): string {
     directory: result.directory,
     command: result.commands.join(" && ")
   });
+}
+
+const SOURCE_ENGINE_NAMES: Record<string, string> = { google: "Google", bing: "Bing", brave: "Brave", qwant: "Qwant", mojeek: "Mojeek", duckduckgo: "DuckDuckGo", startpage: "Startpage", wikipedia: "Wikipedia" };
+
+function engineRefusal(reason: string): string {
+  if (/access denied|forbidden/iu.test(reason)) return t("odmowa dostępu");
+  if (/captcha/iu.test(reason)) return t("weryfikacja CAPTCHA");
+  if (/timeout/iu.test(reason)) return t("brak odpowiedzi w czasie");
+  if (/too many|rate/iu.test(reason)) return t("limit zapytań");
+  if (/ssl|certificate/iu.test(reason)) return t("błąd certyfikatu");
+  return t("błąd");
+}
+
+/** "W SearXNG odpowiedziały: Brave (24), Bing (10) · odmówiły: Google (odmowa dostępu)". */
+export function searxngEnginesLine(engines: NonNullable<SearchEngineScore["engines"]>): string {
+  const name = (value: string) => SOURCE_ENGINE_NAMES[value] ?? value;
+  const answered = engines.answered.map((item) => `${name(item.name)} (${item.results})`).join(", ");
+  const refused = engines.refused.map((item) => `${name(item.name)} (${engineRefusal(item.reason)})`).join(", ");
+  return [
+    answered ? t("W SearXNG odpowiedziały: {engines}", { engines: answered }) : t("W SearXNG żadna wyszukiwarka nie dała wyników"),
+    ...(refused ? [t("odmówiły: {engines}", { engines: refused })] : [])
+  ].join(" · ");
 }
 
 function number(value: number): string {
@@ -426,6 +449,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
                   {" · "}{t("Czas (mediana)")}: {item.medianMs === null ? "—" : t("{value} s", { value: number(item.medianMs / 1000) })}
                 </small>
                 {item.error && item.answered < item.queries ? <small className="web-search-score-error">{errorText(item.error, item.engine)}</small> : null}
+                {item.engines ? <small>{searxngEnginesLine(item.engines)}</small> : null}
               </li>
             ))}
           </ol>

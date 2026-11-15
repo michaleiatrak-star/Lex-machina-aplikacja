@@ -2924,5 +2924,14 @@
  "słabe": "débil",
  "częściowe": "parcial",
  "pełne": "completa",
- "{count} tur czatu": "{count} turnos de chat"
+ "{count} tur czatu": "{count} turnos de chat",
+ "odmowa dostępu": "acceso denegado",
+ "weryfikacja CAPTCHA": "verificación CAPTCHA",
+ "brak odpowiedzi w czasie": "sin respuesta a tiempo",
+ "limit zapytań": "límite de consultas",
+ "błąd certyfikatu": "error de certificado",
+ "błąd": "error",
+ "W SearXNG odpowiedziały: {engines}": "Respondieron en SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Ningún buscador de SearXNG dio resultados",
+ "odmówiły: {engines}": "rechazaron: {engines}"
 }

@@ -2924,5 +2924,14 @@
  "słabe": "nõrk",
  "częściowe": "osaline",
  "pełne": "täielik",
- "{count} tur czatu": "{count} vestlusvooru"
+ "{count} tur czatu": "{count} vestlusvooru",
+ "odmowa dostępu": "juurdepääs keelatud",
+ "weryfikacja CAPTCHA": "CAPTCHA kontroll",
+ "brak odpowiedzi w czasie": "vastust ei tulnud õigel ajal",
+ "limit zapytań": "päringute piirang",
+ "błąd certyfikatu": "sertifikaadi viga",
+ "błąd": "viga",
+ "W SearXNG odpowiedziały: {engines}": "SearXNG-is vastasid: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Ükski SearXNG-i otsingumootor ei andnud tulemusi",
+ "odmówiły: {engines}": "keeldusid: {engines}"
 }

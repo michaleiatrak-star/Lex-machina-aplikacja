@@ -2924,5 +2924,14 @@
  "słabe": "schwach",
  "częściowe": "teilweise",
  "pełne": "vollständig",
- "{count} tur czatu": "{count} Chat-Runden"
+ "{count} tur czatu": "{count} Chat-Runden",
+ "odmowa dostępu": "Zugriff verweigert",
+ "weryfikacja CAPTCHA": "CAPTCHA-Prüfung",
+ "brak odpowiedzi w czasie": "keine Antwort rechtzeitig",
+ "limit zapytań": "Abfragelimit",
+ "błąd certyfikatu": "Zertifikatsfehler",
+ "błąd": "Fehler",
+ "W SearXNG odpowiedziały: {engines}": "In SearXNG antworteten: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Keine Suchmaschine in SearXNG lieferte Ergebnisse",
+ "odmówiły: {engines}": "abgelehnt: {engines}"
 }

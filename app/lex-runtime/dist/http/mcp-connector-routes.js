@@ -5,7 +5,7 @@ import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
-import { PublicWebSearch } from "../web-search.js";
+import { PublicWebSearch, resetSearxngEngineReport, searxngEngineReport } from "../web-search.js";
 import { runWebSearchBenchmark } from "../web-search-benchmark.js";
 import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, setStartpageSession, setStartpageSessionKeep, STARTPAGE_HOST, webSearchDataDirectory, webSearchSettings } from "../web-search-settings.js";
 import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
@@ -606,7 +606,12 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         const search = new PublicWebSearch(process.env, fetch, 10_000, 1_500);
         const settings = webSearchSettings();
         try {
+            resetSearxngEngineReport();
             const result = await runWebSearchBenchmark(SEARCH_ENGINES, (engine, query, max) => search.searchEngine(engine, query, max, settings));
+            const engines = searxngEngineReport();
+            if (engines.answered.length || engines.refused.length) {
+                result.scores = result.scores.map((score) => (score.engine === "searxng" ? { ...score, engines } : score));
+            }
             saveWebSearchTest(result);
             res.json(webSearchView());
         }

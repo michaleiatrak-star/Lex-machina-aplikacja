@@ -2924,5 +2924,14 @@
  "słabe": "schwaach",
  "częściowe": "deelweis",
  "pełne": "komplett",
- "{count} tur czatu": "{count} Chat-Ronnen"
+ "{count} tur czatu": "{count} Chat-Ronnen",
+ "odmowa dostępu": "Zougang refuséiert",
+ "weryfikacja CAPTCHA": "CAPTCHA-Kontroll",
+ "brak odpowiedzi w czasie": "keng Äntwert an der Zäit",
+ "limit zapytań": "Ufroelimitt",
+ "błąd certyfikatu": "Zertifikatsfeeler",
+ "błąd": "Feeler",
+ "W SearXNG odpowiedziały: {engines}": "Am SearXNG hunn geäntwert: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Keng Sichmaschinn am SearXNG huet Resultater geliwwert",
+ "odmówiły: {engines}": "refuséiert: {engines}"
 }

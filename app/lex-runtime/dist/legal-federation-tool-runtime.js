@@ -411,6 +411,14 @@ const FETCH_AUXILIARY_SOURCE_SCHEMA = {
                 claim: {
                     type: "string",
                     description: "Optional exact public legal proposition being researched. Do not include client-specific facts."
+                },
+                find: {
+                    type: "string",
+                    description: "Optional phrase to find in a long page (a signature, an article, a term): the passages around it come back instead of the page from the start. A neutral legal phrase only."
+                },
+                offset: {
+                    type: "integer",
+                    description: "Optional character position to read from (the previous result's nextOffset): the next part of a long page."
                 }
             }
         }
@@ -756,6 +764,58 @@ function extraFrom(input) {
         !Array.isArray(extra)
         ? extra
         : {};
+}
+const PAGE_PART_CHARS = 40_000;
+const PASSAGE_RADIUS = 1_500;
+const MAX_PASSAGES = 8;
+/** Passages of a page around a phrase (case and spacing ignored), joined, with their count. */
+export function pagePassages(text, phrase) {
+    const words = phrase.toLocaleLowerCase("pl").split(/\s+/u).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+    if (!words.length)
+        return { text: "", passages: 0 };
+    const pattern = new RegExp(words.join("\\s+"), "giu");
+    const ranges = [];
+    for (let match = pattern.exec(text); match && ranges.length < MAX_PASSAGES * 3; match = pattern.exec(text)) {
+        const start = Math.max(0, match.index - PASSAGE_RADIUS);
+        const end = Math.min(text.length, match.index + match[0].length + PASSAGE_RADIUS);
+        const last = ranges.at(-1);
+        if (last && start <= last[1])
+            last[1] = Math.max(last[1], end);
+        else
+            ranges.push([start, end]);
+    }
+    const kept = ranges.slice(0, MAX_PASSAGES);
+    return { text: kept.map(([start, end]) => `[znak ${start}]\n${text.slice(start, end)}`).join("\n\n[…]\n\n"), passages: kept.length };
+}
+/** Pages read in the last half hour, by the address asked for (at most 40). */
+const pageMemory = (() => {
+    const pages = new Map();
+    const TTL = 30 * 60_000;
+    return {
+        get(url) {
+            const entry = pages.get(url);
+            if (!entry)
+                return undefined;
+            if (Date.now() - entry.at > TTL) {
+                pages.delete(url);
+                return undefined;
+            }
+            return entry.page;
+        },
+        put(url, page) {
+            pages.delete(url);
+            pages.set(url, { at: Date.now(), page });
+            while (pages.size > 40)
+                pages.delete(pages.keys().next().value);
+            return page;
+        },
+        clear() {
+            pages.clear();
+        }
+    };
+})();
+export function clearPageMemoryForTest() {
+    pageMemory.clear();
 }
 export class LegalFederationToolRuntime {
     auxiliarySourceFetcher;
@@ -1196,9 +1256,15 @@ export class LegalFederationToolRuntime {
                 requestedTier === "R2A") {
                 throw new Error("AUX_SOURCE_REQUIRES_R2B_R3");
             }
-            const fetched = await this
-                .auxiliarySourceFetcher
-                .fetch(rawUrl);
+            // A page read in this half hour is not fetched again (its next part, a phrase in it).
+            const fetched = pageMemory.get(rawUrl) ??
+                pageMemory.put(rawUrl, await this
+                    .auxiliarySourceFetcher
+                    .fetch(rawUrl));
+            const find = typeof call.input.find === "string" ? call.input.find.trim().slice(0, 120) : "";
+            if (find && /\[(?:LM)?PII:/iu.test(find))
+                throw new Error("AUX_SOURCE_CASE_DATA_FORBIDDEN");
+            const offset = typeof call.input.offset === "number" && Number.isFinite(call.input.offset) ? Math.max(0, Math.trunc(call.input.offset)) : 0;
             const finalKnownTier = classifyKnownLegalSourceUrl(fetched.finalUrl);
             if (finalKnownTier === "R1" ||
                 finalKnownTier === "R2A") {
@@ -1238,7 +1304,10 @@ export class LegalFederationToolRuntime {
                 },
                 crossCheckStatus: "PENDING"
             };
-            const textLimit = 80_000;
+            // One part of a long page at a time (before: the first 80 000 characters, the rest lost).
+            const textLimit = PAGE_PART_CHARS;
+            const part = find ? pagePassages(fetched.text, find) : { text: fetched.text.slice(offset, offset + textLimit), offset };
+            const nextOffset = !find && offset + textLimit < fetched.text.length ? offset + textLimit : null;
             // LEX/Legalis and other paid services answer with a login or offer page: its text is
             // not the document, only what the search snippet showed can serve as a lead.
             const loginWall = fetched.text.length < 6_000 &&
@@ -1276,15 +1345,20 @@ export class LegalFederationToolRuntime {
                                 .updatedAt
                         }
                         : {}),
-                    text: fetched.text
-                        .slice(0, textLimit),
-                    textTruncated: fetched.text
-                        .length >
-                        textLimit
+                    text: part.text,
+                    textLength: fetched.text.length,
+                    ...(find
+                        ? { find, passages: "passages" in part ? part.passages : 0 }
+                        : { offset }),
+                    ...(nextOffset !== null ? { nextOffset } : {}),
+                    textTruncated: nextOffset !== null
                 },
                 instruction: (loginWall
                     ? "This is a login or paywall page, not the document: do not quote it; use only the leads the search result showed. "
                     : "") +
+                    (nextOffset !== null
+                        ? `The page has ${fetched.text.length} characters; this is a part. Read further with offset=${nextOffset}, or look for a phrase with find, when what you need is not here. `
+                        : "") +
                     "This is auxiliary R2B/R3 research material, a lead: verify every signature, Dz.U. reference and date it gives at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing. Do not create VERIFIED/SUPPORTED from it and do not use it as the sole legal basis. For a legal proposition, obtain a real R1/R2A verification record for the same claim."
             });
         }

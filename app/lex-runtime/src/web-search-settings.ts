@@ -47,6 +47,8 @@ export type SearchEngineScore = {
   queries: number;
   answered: number;
   error?: string;
+  /** SearXNG only: its source engines that gave results and those that refused. */
+  engines?: { answered: Array<{ name: string; results: number }>; refused: Array<{ name: string; reason: string }> };
 };
 
 export type WebSearchTestResult = {

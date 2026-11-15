@@ -2924,5 +2924,14 @@
  "słabe": "veik",
  "częściowe": "að hluta",
  "pełne": "full",
- "{count} tur czatu": "{count} spjallumferðir"
+ "{count} tur czatu": "{count} spjallumferðir",
+ "odmowa dostępu": "aðgangi hafnað",
+ "weryfikacja CAPTCHA": "CAPTCHA-athugun",
+ "brak odpowiedzi w czasie": "ekkert svar í tæka tíð",
+ "limit zapytań": "fyrirspurnatakmark",
+ "błąd certyfikatu": "skilríkjavilla",
+ "błąd": "villa",
+ "W SearXNG odpowiedziały: {engines}": "Svöruðu í SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Engin leitarvél í SearXNG skilaði niðurstöðum",
+ "odmówiły: {engines}": "höfnuðu: {engines}"
 }

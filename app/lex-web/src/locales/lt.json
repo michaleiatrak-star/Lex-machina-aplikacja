@@ -2924,5 +2924,14 @@
  "słabe": "silpna",
  "częściowe": "dalinė",
  "pełne": "visa",
- "{count} tur czatu": "{count} pokalbio ėjimai"
+ "{count} tur czatu": "{count} pokalbio ėjimai",
+ "odmowa dostępu": "prieiga uždrausta",
+ "weryfikacja CAPTCHA": "CAPTCHA patikra",
+ "brak odpowiedzi w czasie": "neatsakė laiku",
+ "limit zapytań": "užklausų limitas",
+ "błąd certyfikatu": "sertifikato klaida",
+ "błąd": "klaida",
+ "W SearXNG odpowiedziały: {engines}": "SearXNG atsakė: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Nė viena SearXNG paieškos sistema nedavė rezultatų",
+ "odmówiły: {engines}": "atsisakė: {engines}"
 }

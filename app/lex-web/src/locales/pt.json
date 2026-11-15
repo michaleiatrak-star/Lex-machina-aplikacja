@@ -2924,5 +2924,14 @@
  "słabe": "fraca",
  "częściowe": "parcial",
  "pełne": "completa",
- "{count} tur czatu": "{count} turnos de chat"
+ "{count} tur czatu": "{count} turnos de chat",
+ "odmowa dostępu": "acesso negado",
+ "weryfikacja CAPTCHA": "verificação CAPTCHA",
+ "brak odpowiedzi w czasie": "sem resposta a tempo",
+ "limit zapytań": "limite de pedidos",
+ "błąd certyfikatu": "erro de certificado",
+ "błąd": "erro",
+ "W SearXNG odpowiedziały: {engines}": "Responderam no SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Nenhum motor no SearXNG deu resultados",
+ "odmówiły: {engines}": "recusaram: {engines}"
 }

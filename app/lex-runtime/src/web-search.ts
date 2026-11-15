@@ -278,6 +278,35 @@ export function parseFirecrawlResults(payload: FirecrawlSearchPayload, maxResult
     .slice(0, maxResults);
 }
 
+type SearxngPayload = { results?: Array<{ engines?: unknown }>; unresponsive_engines?: unknown };
+
+// Which engines of the local SearXNG answered and which refused (Settings > search test, user 2026-11-15).
+const searxngEngines = { answered: new Map<string, number>(), refused: new Map<string, string>() };
+
+function recordSearxngEngines(payload: SearxngPayload): void {
+  for (const item of Array.isArray(payload.results) ? payload.results : []) {
+    for (const engine of Array.isArray(item.engines) ? item.engines : []) {
+      if (typeof engine === "string") searxngEngines.answered.set(engine, (searxngEngines.answered.get(engine) ?? 0) + 1);
+    }
+  }
+  for (const entry of Array.isArray(payload.unresponsive_engines) ? payload.unresponsive_engines : []) {
+    if (Array.isArray(entry) && typeof entry[0] === "string") searxngEngines.refused.set(entry[0], String(entry[1] ?? ""));
+  }
+}
+
+export function resetSearxngEngineReport(): void {
+  searxngEngines.answered.clear();
+  searxngEngines.refused.clear();
+}
+
+/** Engines with results (and how many), engines that refused (and why) since the last reset. */
+export function searxngEngineReport(): { answered: Array<{ name: string; results: number }>; refused: Array<{ name: string; reason: string }> } {
+  return {
+    answered: [...searxngEngines.answered].map(([name, results]) => ({ name, results })).sort((a, b) => b.results - a.results),
+    refused: [...searxngEngines.refused].filter(([name]) => !searxngEngines.answered.has(name)).map(([name, reason]) => ({ name, reason }))
+  };
+}
+
 export function parseSearxngResults(
   payload: { results?: Array<{ url?: unknown; title?: unknown; content?: unknown }> },
   maxResults: number
@@ -606,6 +635,7 @@ export class PublicWebSearch implements WebSearchProvider {
     } catch {
       throw new Error("BOT_CHECK");
     }
+    recordSearxngEngines(payload as SearxngPayload);
     return parseSearxngResults(payload, maxResults);
   }
 

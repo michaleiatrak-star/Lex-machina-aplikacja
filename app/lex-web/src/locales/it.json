@@ -2924,5 +2924,14 @@
  "słabe": "debole",
  "częściowe": "parziale",
  "pełne": "completa",
- "{count} tur czatu": "{count} turni di chat"
+ "{count} tur czatu": "{count} turni di chat",
+ "odmowa dostępu": "accesso negato",
+ "weryfikacja CAPTCHA": "verifica CAPTCHA",
+ "brak odpowiedzi w czasie": "nessuna risposta in tempo",
+ "limit zapytań": "limite di richieste",
+ "błąd certyfikatu": "errore del certificato",
+ "błąd": "errore",
+ "W SearXNG odpowiedziały: {engines}": "Hanno risposto in SearXNG: {engines}",
+ "W SearXNG żadna wyszukiwarka nie dała wyników": "Nessun motore in SearXNG ha dato risultati",
+ "odmówiły: {engines}": "hanno rifiutato: {engines}"
 }
