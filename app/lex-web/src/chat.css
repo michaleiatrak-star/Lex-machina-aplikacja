@@ -4576,3 +4576,22 @@ mark.restored {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Uprawnienia do spraw: the list in a window (wider: filters, roles and the bulk bar), 50 a page. */
+.matter-section-dialog.case-access-dialog {
+  width: min(960px, calc(100vw - 32px));
+}
+
+.case-access-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.case-access-pager span {
+  color: var(--muted, inherit);
+  font-size: 0.9em;
+}

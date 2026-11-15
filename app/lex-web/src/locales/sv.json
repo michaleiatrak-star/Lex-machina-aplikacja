@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG kunde inte startas ({error}). Filerna finns i {directory}; starta manuellt: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Skapar lokal SearXNG… (första starten kan ta några minuter)",
  "Utwórz lokalny SearXNG na tym komputerze": "Skapa lokal SearXNG på den här datorn",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programmet sparar en SearXNG-konfiguration (JSON-format på, endast adress 127.0.0.1) och startar den i Docker eller Podman om de är installerade. När sökmotorn svarar ställs adressen in automatiskt. Utan Docker och Podman får du färdiga filer och startkommandot."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programmet sparar en SearXNG-konfiguration (JSON-format på, endast adress 127.0.0.1) och startar den i Docker eller Podman om de är installerade. När sökmotorn svarar ställs adressen in automatiskt. Utan Docker och Podman får du färdiga filer och startkommandot.",
+ "{count} spraw": "{count} ärenden",
+ "Strony listy spraw": "Sidor i ärendelistan",
+ "Następna": "Nästa",
+ "Dostęp do spraw": "Åtkomst till ärenden",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Sida {page} av {pages} · ärenden {from}–{to} av {all}",
+ "Poprzednia": "Föregående"
 }

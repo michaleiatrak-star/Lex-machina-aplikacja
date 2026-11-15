@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG käivitamine ebaõnnestus ({error}). Failid on kaustas {directory}; käivitage käsitsi: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Kohaliku SearXNG loomine… (esimene käivitus võib võtta mõne minuti)",
  "Utwórz lokalny SearXNG na tym komputerze": "Loo selles arvutis kohalik SearXNG",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Rakendus salvestab SearXNG seadistuse (JSON-vorming sees, ainult aadress 127.0.0.1) ja käivitab selle Dockeris või Podmanis, kui need on paigaldatud. Kui otsingumootor vastab, määratakse aadress automaatselt. Ilma Dockeri ja Podmanita saate valmis failid ja käivituskäsu."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Rakendus salvestab SearXNG seadistuse (JSON-vorming sees, ainult aadress 127.0.0.1) ja käivitab selle Dockeris või Podmanis, kui need on paigaldatud. Kui otsingumootor vastab, määratakse aadress automaatselt. Ilma Dockeri ja Podmanita saate valmis failid ja käivituskäsu.",
+ "{count} spraw": "{count} asja",
+ "Strony listy spraw": "Asjade loendi lehed",
+ "Następna": "Järgmine",
+ "Dostęp do spraw": "Juurdepääs asjadele",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Leht {page}/{pages} · asjad {from}–{to}/{all}",
+ "Poprzednia": "Eelmine"
 }

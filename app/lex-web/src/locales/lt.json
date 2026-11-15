@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Nepavyko paleisti SearXNG ({error}). Failai yra aplanke {directory}; paleiskite rankiniu būdu: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Kuriamas vietinis SearXNG… (pirmasis paleidimas gali užtrukti kelias minutes)",
  "Utwórz lokalny SearXNG na tym komputerze": "Sukurti vietinį SearXNG šiame kompiuteryje",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programa išsaugo SearXNG konfigūraciją (įjungtas JSON formatas, tik adresas 127.0.0.1) ir paleidžia ją Docker arba Podman, jei jie įdiegti. Kai paieškos sistema atsako, adresas nustatomas automatiškai. Be Docker ir Podman gausite paruoštus failus ir paleidimo komandą."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programa išsaugo SearXNG konfigūraciją (įjungtas JSON formatas, tik adresas 127.0.0.1) ir paleidžia ją Docker arba Podman, jei jie įdiegti. Kai paieškos sistema atsako, adresas nustatomas automatiškai. Be Docker ir Podman gausite paruoštus failus ir paleidimo komandą.",
+ "{count} spraw": "{count} bylų",
+ "Strony listy spraw": "Bylų sąrašo puslapiai",
+ "Następna": "Kitas",
+ "Dostęp do spraw": "Prieiga prie bylų",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Puslapis {page} iš {pages} · bylos {from}–{to} iš {all}",
+ "Poprzednia": "Ankstesnis"
 }

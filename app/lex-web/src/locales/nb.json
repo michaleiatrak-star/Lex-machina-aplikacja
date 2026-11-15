@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Kunne ikke starte SearXNG ({error}). Filene ligger i {directory}; start manuelt: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Oppretter lokal SearXNG… (første oppstart kan ta noen minutter)",
  "Utwórz lokalny SearXNG na tym komputerze": "Opprett lokal SearXNG på denne datamaskinen",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programmet lagrer en SearXNG-konfigurasjon (JSON-format på, kun adresse 127.0.0.1) og starter den i Docker eller Podman hvis de er installert. Når søkemotoren svarer, settes adressen automatisk. Uten Docker og Podman får du ferdige filer og startkommandoen."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Programmet lagrer en SearXNG-konfigurasjon (JSON-format på, kun adresse 127.0.0.1) og starter den i Docker eller Podman hvis de er installert. Når søkemotoren svarer, settes adressen automatisk. Uten Docker og Podman får du ferdige filer og startkommandoen.",
+ "{count} spraw": "{count} saker",
+ "Strony listy spraw": "Sider i sakslisten",
+ "Następna": "Neste",
+ "Dostęp do spraw": "Tilgang til saker",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Side {page} av {pages} · saker {from}–{to} av {all}",
+ "Poprzednia": "Forrige"
 }

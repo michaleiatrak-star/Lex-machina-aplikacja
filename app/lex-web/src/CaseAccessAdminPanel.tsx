@@ -1,7 +1,7 @@
 import { currentLocale, N_, t } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { InlineEdit } from "./InlineEdit";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   ApiError,
   archiveCase,
@@ -227,8 +227,23 @@ export function splitCasesForUser(
 // Settings → Użytkownicy: who can open which case, and changing it where the
 // administrator owns the case. A case is encrypted with its own key, so only
 // its OWNER can grant or revoke access; other cases are shown read-only.
+// The list in the window, 50 cases a page: a firm with hundreds of cases gets a short page, and
+// "select all visible" and the bulk change apply to the cases on it.
+export const CASE_ACCESS_PAGE_SIZE = 50;
+
+export function pageOf<T>(items: T[], page: number, size = CASE_ACCESS_PAGE_SIZE): { items: T[]; page: number; pages: number; from: number; to: number } {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(Math.max(page, 0), pages - 1);
+  const start = current * size;
+  const slice = items.slice(start, start + size);
+  return { items: slice, page: current, pages, from: slice.length ? start + 1 : 0, to: start + slice.length };
+}
+
 export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string }) {
   const [cases, setCases] = useState<CaseAccessOverviewItem[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const titleId = useId();
   const [users, setUsers] = useState<AuthenticatedUser[]>([]);
   const [userFilter, setUserFilter] = useState("");
   const [caseQuery, setCaseQuery] = useState("");
@@ -276,7 +291,19 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   }, [shown, userFilter]);
 
   const listed = userFilter ? [...visible.member, ...visible.other] : shown;
-  const manageable = listed.filter((item) => item.canManage && !item.archivedAt);
+  // A new search, person, sort or range starts at the first page.
+  useEffect(() => setPage(0), [caseQuery, userFilter, caseSort, caseRange]);
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDialogOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialogOpen]);
+  const paged = pageOf(listed, page);
+  const memberIds = new Set(visible.member.map((item) => item.caseId));
+  const manageable = paged.items.filter((item) => item.canManage && !item.archivedAt);
   const selectedVisible = manageable.filter((item) => bulkSelected.has(item.caseId)).length;
   // A bulk change applies only to cases in view: narrowing the search or range drops the others.
   const manageableKey = manageable.map((item) => item.caseId).join("|");
@@ -606,10 +633,56 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
     );
   }
 
+  const pager =
+    paged.pages > 1 ? (
+      <nav className="case-access-pager" aria-label={t("Strony listy spraw")}>
+        <button type="button" className="chat-secondary-action" disabled={paged.page === 0} onClick={() => setPage(paged.page - 1)}>
+          {t("Poprzednia")}
+        </button>
+        <span>
+          {t("Strona {page} z {pages} · sprawy {from}–{to} z {all}", { page: paged.page + 1, pages: paged.pages, from: paged.from, to: paged.to, all: listed.length })}
+        </span>
+        <button type="button" className="chat-secondary-action" disabled={paged.page >= paged.pages - 1} onClick={() => setPage(paged.page + 1)}>
+          {t("Następna")}
+        </button>
+      </nav>
+    ) : null;
+
   return (
-    <section className="case-access-admin-panel">
+    <section className="case-access-admin-panel core-law-updates">
+      <div className="chat-card matter-compact-row">
+        <span className="matter-compact-heading">
+          <strong>{t("Uprawnienia do spraw")}</strong>
+          <span className="matter-compact-count has-entries">{t("{count} spraw", { count: cases.length })}</span>
+        </span>
+        <span className="matter-compact-actions">
+          <button type="button" className="chat-secondary-action" onClick={() => setDialogOpen(true)}>
+            {t("Pokaż")}
+          </button>
+        </span>
+      </div>
+      {dialogOpen ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setDialogOpen(false);
+          }}
+        >
+          <section className="chat-card matter-section-dialog case-access-dialog">
+            <div className="matter-section-dialog-head">
+              <div>
+                <p className="eyebrow">{t("Ustawienia")}</p>
+                <h2 id={titleId}>{t("Uprawnienia do spraw")}</h2>
+              </div>
+              <button type="button" className="chat-secondary-action" onClick={() => setDialogOpen(false)}>
+                {t("Zamknij")}
+              </button>
+            </div>
       <p className="eyebrow">
-        {t("Uprawnienia do spraw")}
+        {t("Dostęp do spraw")}
         <InfoTip>
           {t("Dostęp zmieniasz tylko w sprawach, których jesteś właścicielem; pozostałe są do wglądu.")}
           {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => ` ${ROLE_HELP[role]}`).join("")}
@@ -921,20 +994,33 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         </div>
         </div>
       ) : null}
+      {pager}
       {userFilter ? (
         <>
-          <h3>{t("Sprawy z dostępem (")}{visible.member.length})</h3>
-          {visible.member.length ? visible.member.map((item) => renderCase(item, false)) : (
+          {paged.items.some((item) => memberIds.has(item.caseId)) || paged.page === 0 ? (
+            <h3>{t("Sprawy z dostępem (")}{visible.member.length})</h3>
+          ) : null}
+          {paged.items.some((item) => memberIds.has(item.caseId)) ? (
+            paged.items.filter((item) => memberIds.has(item.caseId)).map((item) => renderCase(item, false))
+          ) : paged.page === 0 ? (
             <p className="field-help">{t("Brak spraw.")}</p>
-          )}
-          <h3>{t("Pozostałe sprawy (")}{visible.other.length})</h3>
-          {visible.other.map((item) => renderCase(item, true))}
+          ) : null}
+          {paged.items.some((item) => !memberIds.has(item.caseId)) ? (
+            <>
+              <h3>{t("Pozostałe sprawy (")}{visible.other.length})</h3>
+              {paged.items.filter((item) => !memberIds.has(item.caseId)).map((item) => renderCase(item, true))}
+            </>
+          ) : null}
         </>
       ) : shown.length ? (
-        shown.map((item) => renderCase(item, false))
+        paged.items.map((item) => renderCase(item, false))
       ) : (
-        <p className="field-help">{cases.length ? t("Brak spraw pasujących do wyszukiwania lub zakresu dat.") : "Brak spraw."}</p>
+        <p className="field-help">{cases.length ? t("Brak spraw pasujących do wyszukiwania lub zakresu dat.") : t("Brak spraw.")}</p>
       )}
+      {pager}
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

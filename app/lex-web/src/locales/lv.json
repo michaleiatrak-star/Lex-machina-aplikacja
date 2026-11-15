@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Neizdevās palaist SearXNG ({error}). Faili ir mapē {directory}; palaidiet manuāli: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Veido lokālo SearXNG… (pirmā palaišana var aizņemt dažas minūtes)",
  "Utwórz lokalny SearXNG na tym komputerze": "Izveidot lokālo SearXNG šajā datorā",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Lietotne saglabā SearXNG konfigurāciju (ieslēgts JSON formāts, tikai adrese 127.0.0.1) un palaiž to Docker vai Podman, ja tie ir instalēti. Kad meklētājs atbild, adrese tiek iestatīta automātiski. Bez Docker un Podman jūs saņemat gatavus failus un palaišanas komandu."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Lietotne saglabā SearXNG konfigurāciju (ieslēgts JSON formāts, tikai adrese 127.0.0.1) un palaiž to Docker vai Podman, ja tie ir instalēti. Kad meklētājs atbild, adrese tiek iestatīta automātiski. Bez Docker un Podman jūs saņemat gatavus failus un palaišanas komandu.",
+ "{count} spraw": "{count} lietas",
+ "Strony listy spraw": "Lietu saraksta lapas",
+ "Następna": "Nākamā",
+ "Dostęp do spraw": "Piekļuve lietām",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Lapa {page} no {pages} · lietas {from}–{to} no {all}",
+ "Poprzednia": "Iepriekšējā"
 }

@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG kon niet worden gestart ({error}). De bestanden staan in {directory}; start handmatig: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Lokale SearXNG wordt aangemaakt… (de eerste start kan enkele minuten duren)",
  "Utwórz lokalny SearXNG na tym komputerze": "Lokale SearXNG op deze computer aanmaken",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "De applicatie slaat een SearXNG-configuratie op (JSON-formaat aan, alleen adres 127.0.0.1) en start die in Docker of Podman als die geïnstalleerd zijn. Zodra de zoekmachine antwoordt, wordt het adres automatisch ingesteld. Zonder Docker en Podman krijgt u de kant-en-klare bestanden en het startcommando."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "De applicatie slaat een SearXNG-configuratie op (JSON-formaat aan, alleen adres 127.0.0.1) en start die in Docker of Podman als die geïnstalleerd zijn. Zodra de zoekmachine antwoordt, wordt het adres automatisch ingesteld. Zonder Docker en Podman krijgt u de kant-en-klare bestanden en het startcommando.",
+ "{count} spraw": "{count} zaken",
+ "Strony listy spraw": "Pagina’s van de zakenlijst",
+ "Następna": "Volgende",
+ "Dostęp do spraw": "Toegang tot zaken",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Pagina {page} van {pages} · zaken {from}–{to} van {all}",
+ "Poprzednia": "Vorige"
 }

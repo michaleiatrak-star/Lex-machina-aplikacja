@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Impossibile avviare SearXNG ({error}). I file sono in {directory}; avvialo manualmente: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Creazione di SearXNG locale… (il primo avvio può richiedere alcuni minuti)",
  "Utwórz lokalny SearXNG na tym komputerze": "Crea SearXNG locale su questo computer",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "L’applicazione salva una configurazione di SearXNG (formato JSON attivo, solo indirizzo 127.0.0.1) e la avvia in Docker o Podman, se installati. Quando il motore risponde, l’indirizzo viene impostato automaticamente. Senza Docker né Podman ricevi i file pronti e il comando di avvio."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "L’applicazione salva una configurazione di SearXNG (formato JSON attivo, solo indirizzo 127.0.0.1) e la avvia in Docker o Podman, se installati. Quando il motore risponde, l’indirizzo viene impostato automaticamente. Senza Docker né Podman ricevi i file pronti e il comando di avvio.",
+ "{count} spraw": "{count} pratiche",
+ "Strony listy spraw": "Pagine dell’elenco delle pratiche",
+ "Następna": "Successiva",
+ "Dostęp do spraw": "Accesso alle pratiche",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Pagina {page} di {pages} · pratiche {from}–{to} di {all}",
+ "Poprzednia": "Precedente"
 }

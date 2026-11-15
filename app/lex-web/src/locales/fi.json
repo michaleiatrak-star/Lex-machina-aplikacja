@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG:n käynnistys epäonnistui ({error}). Tiedostot ovat kansiossa {directory}; käynnistä käsin: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Luodaan paikallista SearXNG:tä… (ensimmäinen käynnistys voi kestää muutaman minuutin)",
  "Utwórz lokalny SearXNG na tym komputerze": "Luo paikallinen SearXNG tälle tietokoneelle",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Sovellus tallentaa SearXNG-määrityksen (JSON-muoto käytössä, vain osoite 127.0.0.1) ja käynnistää sen Dockerissa tai Podmanissa, jos ne on asennettu. Kun hakukone vastaa, osoite asetetaan automaattisesti. Ilman Dockeria ja Podmania saat valmiit tiedostot ja käynnistyskomennon."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Sovellus tallentaa SearXNG-määrityksen (JSON-muoto käytössä, vain osoite 127.0.0.1) ja käynnistää sen Dockerissa tai Podmanissa, jos ne on asennettu. Kun hakukone vastaa, osoite asetetaan automaattisesti. Ilman Dockeria ja Podmania saat valmiit tiedostot ja käynnistyskomennon.",
+ "{count} spraw": "{count} asiaa",
+ "Strony listy spraw": "Asialuettelon sivut",
+ "Następna": "Seuraava",
+ "Dostęp do spraw": "Pääsy asioihin",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Sivu {page}/{pages} · asiat {from}–{to}/{all}",
+ "Poprzednia": "Edellinen"
 }

@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG konnte nicht gestartet werden ({error}). Die Dateien liegen in {directory}; manuell starten: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Lokales SearXNG wird erstellt… (der erste Start kann einige Minuten dauern)",
  "Utwórz lokalny SearXNG na tym komputerze": "Lokales SearXNG auf diesem Computer erstellen",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Die Anwendung speichert eine SearXNG-Konfiguration (JSON-Format aktiv, nur Adresse 127.0.0.1) und startet sie in Docker oder Podman, falls installiert. Sobald die Suchmaschine antwortet, wird die Adresse automatisch gesetzt. Ohne Docker und Podman erhalten Sie die fertigen Dateien und den Startbefehl."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Die Anwendung speichert eine SearXNG-Konfiguration (JSON-Format aktiv, nur Adresse 127.0.0.1) und startet sie in Docker oder Podman, falls installiert. Sobald die Suchmaschine antwortet, wird die Adresse automatisch gesetzt. Ohne Docker und Podman erhalten Sie die fertigen Dateien und den Startbefehl.",
+ "{count} spraw": "{count} Akten",
+ "Strony listy spraw": "Seiten der Aktenliste",
+ "Następna": "Weiter",
+ "Dostęp do spraw": "Zugriff auf Akten",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Seite {page} von {pages} · Akten {from}–{to} von {all}",
+ "Poprzednia": "Zurück"
 }

@@ -2868,5 +2868,11 @@
  "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Ekki tókst að ræsa SearXNG ({error}). Skrárnar eru í {directory}; ræstu handvirkt: {command}",
  "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Býr til staðbundið SearXNG… (fyrsta ræsing getur tekið nokkrar mínútur)",
  "Utwórz lokalny SearXNG na tym komputerze": "Búa til staðbundið SearXNG á þessari tölvu",
- "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Forritið vistar SearXNG-stillingar (JSON-snið virkt, aðeins vistfang 127.0.0.1) og ræsir þær í Docker eða Podman ef þau eru uppsett. Þegar leitarvélin svarar er vistfangið stillt sjálfkrafa. Án Docker og Podman færðu tilbúnar skrár og skipunina til að ræsa."
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Forritið vistar SearXNG-stillingar (JSON-snið virkt, aðeins vistfang 127.0.0.1) og ræsir þær í Docker eða Podman ef þau eru uppsett. Þegar leitarvélin svarar er vistfangið stillt sjálfkrafa. Án Docker og Podman færðu tilbúnar skrár og skipunina til að ræsa.",
+ "{count} spraw": "{count} mál",
+ "Strony listy spraw": "Síður málalistans",
+ "Następna": "Næsta",
+ "Dostęp do spraw": "Aðgangur að málum",
+ "Strona {page} z {pages} · sprawy {from}–{to} z {all}": "Síða {page} af {pages} · mál {from}–{to} af {all}",
+ "Poprzednia": "Fyrri"
 }
