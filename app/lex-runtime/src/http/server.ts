@@ -1,3 +1,5 @@
+import { PublicWebSearch } from "../web-search.js";
+import { configurePortalSearch } from "../official-portal-search.js";
 import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
 import { startCaseLawSync, type SyncFetch } from "../case-law-sync.js";
 import { SkillAutoUpdater } from "../skill-auto-update.js";
@@ -763,6 +765,9 @@ export async function startLocalServer(options?: {
     ),
     anomalyJournal
   );
+  // Official portals searched before the model answers a question about case law,
+  // interpretations or an authority's decisions (official-portal-search.ts).
+  configurePortalSearch(async (query, maxResults) => (await new PublicWebSearch().search(query, maxResults)).hits);
   const documentAstGenerator =
     new LegalDocumentAstGenerator(
       sessionExecutor

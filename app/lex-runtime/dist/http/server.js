@@ -1,3 +1,5 @@
+import { PublicWebSearch } from "../web-search.js";
+import { configurePortalSearch } from "../official-portal-search.js";
 import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
 import { startCaseLawSync } from "../case-law-sync.js";
 import { SkillAutoUpdater } from "../skill-auto-update.js";
@@ -417,6 +419,9 @@ export async function startLocalServer(options) {
     // sn.pl with the session the user verified in the app's sn.pl window,
     // as the SN connector of the case-law search does.
     new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true, context?.offline === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
+    // Official portals searched before the model answers a question about case law,
+    // interpretations or an authority's decisions (official-portal-search.ts).
+    configurePortalSearch(async (query, maxResults) => (await new PublicWebSearch().search(query, maxResults)).hits);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     // OCR on the card: a text model idle for a minute gives the card back first (the next answer
     // starts it again); during a series of documents, when it answers every few seconds, it stays.

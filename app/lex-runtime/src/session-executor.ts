@@ -1,3 +1,4 @@
+import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock, type ChatTurnRecord } from "./chat-turn-journal.js";
 import type { LlmImage } from "./providers/types.js";
@@ -2793,6 +2794,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the council's consolidated text, as the chat did (RD 121/26: the central norm was never read).
     const ethicsCited = legalTurn && activeCountry() === "PL" ? citedEthicsParagraphs([...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)), latestUserTurn(request.query)].join("\n")) : [];
     const ethicsFound = Promise.all(ethicsCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs)));
+    // A question about case law, interpretations or an authority's decisions: the courts' and the
+    // authorities' portals searched before the model answers (site:orzeczenia.ms.gov.pl, site:sn.pl,
+    // site:orzeczenia.nsa.gov.pl, site:eureka.mf.gov.pl …), in parallel with SAOS and sn.pl. Only
+    // the protected (pseudonymised) question's legal words leave the computer.
+    const portalSearch = currentPortalSearch();
+    const portalFound =
+      legalTurn && activeCountry() === "PL" && portalSearch && !offline && !request.conversationalOnly
+        ? searchOfficialPortals(latestUserTurn(protectedQuery), portalSearch)
+        : Promise.resolve(null);
     if (ethicsCited.length) step("VERIFY", `kodeks etyki: ${ethicsCited.map((item) => `${item.code.key} § ${item.paragraphs.join(", ")}`).join("; ")}`);
     if (saosSignatures.length) step("VERIFY", `SAOS (tekst orzeczeń z akt): ${saosSignatures.join(", ")}`);
     if (wsdSignatures.length) {
@@ -2827,6 +2837,32 @@ export class SafeSessionExecutor implements SessionExecutor {
       audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
         results: ethicsResults.map((result) => (result.status === "FOUND" ? `${result.code.key}: ${result.paragraphs.map((item) => `§ ${item.paragraph} ${item.text ? "OK" : "BRAK"}`).join(", ")} (${result.source.url})` : `${result.code.key}: ${result.detail}`))
       });
+    }
+    const portalResult = await portalFound;
+    if (portalResult?.hits.length) {
+      const prompt = portalSearchPrompt(portalResult);
+      if (prompt) pathSections.push(prompt);
+      // Every hit's signatures are leads (⚠️) until a registry confirms them.
+      for (const hit of portalResult.hits) leadCaseLawTexts.push(`${hit.title}\n${hit.snippet}`);
+      const found = portalSignatures(portalResult.hits.filter((hit) => hit.official));
+      // Official portal hits go to the registries at once: SN rulings to sn.pl, interpretations to EUREKA.
+      const snCalls = signaturesIn(found.cases.join("\n"))
+        .filter((item) => item.court === "SN")
+        .slice(0, 3)
+        .map((item, index) => ({ id: `portal-sn-${index}`, name: "verify_case_reference", input: { claim: item.signature, signature: item.signature, courtFamily: "SN" } }));
+      const interpretationCalls = found.interpretations.slice(0, 3).map((signature, index) => ({ id: `portal-int-${index}`, name: "verify_interpretation", input: { signature } }));
+      if (verificationTools && snCalls.length + interpretationCalls.length) {
+        await verificationTools.runTools([...snCalls, ...interpretationCalls]).catch(() => undefined);
+      }
+      step("VERIFY", `portale urzędowe: ${portalResult.hits.filter((hit) => hit.official).length} trafień urzędowych, ${portalResult.hits.filter((hit) => !hit.official).length} tropów; do rejestrów: ${snCalls.length + interpretationCalls.length}`);
+      audit.record("gate", "OFFICIAL_PORTAL_SEARCH", "OK", {
+        queries: portalResult.queries.map((item) => item.query),
+        official: portalResult.hits.filter((hit) => hit.official).map((hit) => hit.url).slice(0, 10),
+        leads: portalResult.hits.filter((hit) => !hit.official).length,
+        signatures: [...found.cases, ...found.interpretations]
+      });
+    } else if (portalResult) {
+      audit.record("gate", "OFFICIAL_PORTAL_SEARCH", "DEGRADED", { queries: portalResult.queries.map((item) => item.query), hits: 0 });
     }
     const saosResults = await saosFound;
     if (saosResults.length) {

@@ -132,6 +132,21 @@ export function composeFile(): string {
 }
 
 /** SearXNG settings: the project's defaults plus the JSON format, no limiter, Polish results first. */
+export const SOURCE_ENGINES = ["google", "bing", "brave", "qwant", "mojeek", "duckduckgo", "startpage"];
+export const OFFICIAL_HOST_PATTERNS = [
+  "(.*\\.)?gov\\.pl$",
+  "(.*\\.)?sn\\.pl$",
+  "(.*\\.)?trybunal\\.gov\\.pl$",
+  "(.*\\.)?nsa\\.gov\\.pl$",
+  "(.*\\.)?sejm\\.gov\\.pl$",
+  "(.*\\.)?zus\\.pl$",
+  "(.*\\.)?eur-lex\\.europa\\.eu$",
+  "(.*\\.)?curia\\.europa\\.eu$",
+  "(.*\\.)?hudoc\\.echr\\.coe\\.int$",
+  "(.*\\.)?wsd\\.adwokatura\\.pl$",
+  "(.*\\.)?saos\\.org\\.pl$"
+];
+
 export function settingsFile(secret: string): string {
   return [
     "# Lex Machina — ustawienia lokalnego SearXNG (domyślne ustawienia projektu + poniższe zmiany).",
@@ -148,6 +163,14 @@ export function settingsFile(secret: string): string {
     "  formats:",
     "    - html",
     "    - json",
+    // More source engines than the project's defaults (user 2026-11-15): Google, Bing, Brave,
+    // Qwant and Mojeek beside DuckDuckGo and Startpage; an engine that refuses is skipped by SearXNG.
+    "engines:",
+    ...SOURCE_ENGINES.flatMap((name) => [`  - name: ${name}`, "    disabled: false", ...(name === "mojeek" ? ["    inactive: false"] : [])]),
+    // The courts' and the authorities' portals first in the results (hostnames plugin).
+    "hostnames:",
+    "  high_priority:",
+    ...OFFICIAL_HOST_PATTERNS.map((pattern) => `    - '${pattern}'`),
     ""
   ].join("\n");
 }
@@ -167,6 +190,9 @@ function readme(engine: string): string {
   ].join("\n");
 }
 
+/** Whether the last writeLocalSearxng changed settings.yml (a running instance then restarts). */
+let settingsChanged = false;
+
 /** Writes the files (an existing secret key is kept); returns the commands to start it by hand. */
 export function writeLocalSearxng(directory: string, engine = "docker"): string[] {
   const config = path.join(directory, "searxng");
@@ -178,7 +204,15 @@ export function writeLocalSearxng(directory: string, engine = "docker"): string[
   } catch {
     secret = "";
   }
-  fs.writeFileSync(settingsPath, settingsFile(secret || randomBytes(32).toString("hex")), { encoding: "utf8", mode: 0o600 });
+  let before = "";
+  try {
+    before = fs.readFileSync(settingsPath, "utf8");
+  } catch {
+    before = "";
+  }
+  const next = settingsFile(secret || randomBytes(32).toString("hex"));
+  settingsChanged = Boolean(before) && before !== next;
+  fs.writeFileSync(settingsPath, next, { encoding: "utf8", mode: 0o600 });
   fs.writeFileSync(path.join(directory, "docker-compose.yml"), composeFile(), "utf8");
   fs.writeFileSync(path.join(directory, "README.txt"), readme(engine), "utf8");
   return [`cd "${directory}"`, `${engine} compose up -d`];
@@ -214,6 +248,13 @@ export async function setupLocalSearxng(args: {
   // An instance already answering on the port (started before, or by the user): only the address.
   if (await localSearxngAnswers(fetcher)) {
     const commands = writeLocalSearxng(args.directory);
+    // New settings (an earlier version's file: fewer engines, no preferred official hosts): the
+    // container reads them only on a restart.
+    if (settingsChanged && fs.existsSync(path.join(args.directory, "docker-compose.yml"))) {
+      for (const candidate of ["docker", "podman"] as const) {
+        if ((await run(candidate, ["compose", "restart"], args.directory, 120_000)).code === 0) break;
+      }
+    }
     return { directory: args.directory, url: LOCAL_SEARXNG_URL, engine: null, started: false, reachable: true, commands };
   }
   const cwd = args.directory.length ? path.dirname(args.directory) : ".";

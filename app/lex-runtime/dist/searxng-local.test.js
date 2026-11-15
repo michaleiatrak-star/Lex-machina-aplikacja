@@ -170,4 +170,21 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         expect(calls.some((call) => /winget|brew/u.test(call))).toBe(false);
         expect(result).toMatchObject({ reachable: true, started: true });
     });
+    it("more source engines and the official portals first; a running instance restarts on new settings", async () => {
+        const dir = temp();
+        writeLocalSearxng(dir);
+        const settings = fs.readFileSync(path.join(dir, "searxng", "settings.yml"), "utf8");
+        for (const name of ["google", "bing", "brave", "qwant", "mojeek"])
+            expect(settings).toContain(`  - name: ${name}\n    disabled: false`);
+        expect(settings).toContain("    inactive: false");
+        expect(settings).toContain("hostnames:\n  high_priority:\n    - '(.*\\.)?gov\\.pl$'");
+        // An earlier version's file (no engines section): the answering instance is restarted once.
+        fs.writeFileSync(path.join(dir, "searxng", "settings.yml"), settings.split("engines:")[0], "utf8");
+        const calls = [];
+        await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
+        expect(calls).toEqual(["docker compose restart"]);
+        calls.length = 0;
+        await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
+        expect(calls).toEqual([]);
+    });
 });
