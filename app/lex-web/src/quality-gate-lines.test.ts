@@ -165,4 +165,25 @@ describe("the model's work trace is not part of the answer (live test 2026-11-15
     expect(plain).not.toMatch(/verify_|search_|orzeczenia-sadowe-v2|Faza 1|Oś sporu|CN-GATE|PRIMARY/u);
     expect(plain).toContain("Nie mogę teraz powiedzieć");
   });
+  it("REM-GATE z wierszami REM-0…REM-4 i ich wciętymi listami: znika cały blok (SDI 8/12, 2026-11-15)", () => {
+    const answer = [
+      "Albo wklej lub wgraj tekst orzeczenia.",
+      "",
+      "REM-GATE",
+      "REM-0 próby: 1 powołanie ⚠️. Odzyskano 0.",
+      "  - sn.pl (`verify_case_reference`, konektor `sn`): HTTP 403",
+      "  → ⚠️ [NIEWERYFIKOWANE], status OUT_OF_SCOPE",
+      "REM-2 braki: 1 pozycja ⬛ (treść orzeczenia).",
+      "  → ⬛ BLOKADA. Dokument zamykający lukę to tekst urzędowy z sn.pl.",
+      "REM-4 pokrycie:",
+      "  - ślad prób i ścieżki odblokowania: PEŁNA",
+      "",
+      "---",
+      "⚖️ **Zastrzeżenie:** Niniejsza analiza ma charakter informacyjny."
+    ].join("\n");
+    const plain = withoutQualityGateLines(answer);
+    expect(plain).not.toMatch(/REM-|BLOKADA|PEŁNA|sn\.pl \(/u);
+    expect(plain).toContain("Albo wklej lub wgraj tekst orzeczenia.");
+    expect(plain).toContain("⚖️ **Zastrzeżenie:**");
+  });
 });

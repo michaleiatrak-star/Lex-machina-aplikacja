@@ -16,7 +16,8 @@ import {
   expectedVerificationMarker,
   addMissingVerificationMarkers,
   verifiedLedgerMarkers,
-  markUnverifiedReferences
+  markUnverifiedReferences,
+  softenRemainingBlockers
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
@@ -4871,6 +4872,18 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (next === remarkedText) break;
       remarkedText = next;
     }
+    // Last resort: what the gate still objects to is shown ⚠️ and named over the answer, the
+    // answer is not blocked (user 2026-11-15). A false ✅ never stays.
+    const softenedClaims: string[] = [];
+    for (let round = 0; round < 2; round += 1) {
+      const check = new FinalizationGate().evaluate(remarkedText, ledger);
+      if (check.result !== "BLOCKED") break;
+      const softened = softenRemainingBlockers(remarkedText, check);
+      softenedClaims.push(...softened.marked.filter((claim) => !softenedClaims.includes(claim)));
+      if (softened.text === remarkedText) break;
+      remarkedText = softened.text;
+    }
+    if (softenedClaims.length) audit.record("gate", "HARD_GATE_SOFTENED", "DEGRADED", { claims: softenedClaims.slice(0, 20) });
     remarkedText = qualifyCompleteVerificationClaims(remarkedText);
     const processedDocumentCitations =
       remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
@@ -5529,6 +5542,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     // its source; no skill corpus; a structured document (AST) the application must parse.
     const structuredOutput = Boolean(request.documentAstOutput);
     const softGateWarnings = [
+      ...(softenedClaims.length || finalization.result === "BLOCKED"
+        ? [
+            `nie wszystkie powołania potwierdzono w źródłach${softenedClaims.length ? ` (${softenedClaims.slice(0, 6).join(", ")}${softenedClaims.length > 6 ? " i inne" : ""})` : ""} — miejsca oznaczone ⚠️ sprawdź przed użyciem odpowiedzi`
+          ]
+        : []),
       ...(statusConsistencyBlocked ? ["ten sam przepis ma w odpowiedzi różne oznaczenia weryfikacji — przyjmij ostrożniejsze (⚠️)"] : []),
       ...(workflowResourcesBlocked ? ["nie wszystkie materiały tego rodzaju pracy zostały wczytane"] : []),
       ...(workflowOutputBlocked ? ["odpowiedź może nie mieć wszystkich części wymaganych dla tego rodzaju pracy"] : []),
@@ -5541,9 +5559,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           : [])
     ];
     const presentationBlocked =
-      finalization.result === "BLOCKED" ||
       corpusBlocked ||
-      (structuredOutput && softGateWarnings.length > 0);
+      (structuredOutput && (finalization.result === "BLOCKED" || softGateWarnings.length > 0));
     audit.record(
       "gate",
       "G39H_WORKFLOW_FINALIZATION",

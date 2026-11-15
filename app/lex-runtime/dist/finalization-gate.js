@@ -1005,6 +1005,9 @@ leadCases = new Set()) {
             { claim: finding.reference.span ?? finding.reference.claim, marker }
         ]);
     }
+    return insertMarkersAfterClaims(text, byLine);
+}
+function insertMarkersAfterClaims(text, byLine) {
     if (byLine.size === 0)
         return text;
     const lines = text.split(/\r?\n/u);
@@ -1096,4 +1099,62 @@ ledgerMarkers = new Set(report.findings.flatMap((finding) => (finding.record?.st
             : `${current.trimEnd()} ${insert}`;
     }
     return lines.join("\n");
+}
+export const UNCONFIRMED_CASE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: sygnatury nie potwierdzono w bazach orzeczeń]";
+export const UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: brak potwierdzenia w tekście orzeczenia]";
+const BLOCKING_FINDINGS = new Set([
+    "MISSING_LEDGER_RECORD",
+    "MISSING_VERIFICATION_MARKER",
+    "VERIFICATION_MARKER_MISMATCH",
+    "UNVERIFIED_NOT_MARKED"
+]);
+/**
+ * Last resort after the corrective rounds (user 2026-11-15: no blocked answers, warnings
+ * instead): every place the hard gate still objects to is shown ⚠️ and named, never ✅.
+ * A case signature no source confirmed, a ✅ marker the ledger does not back, a case quote or
+ * proposition without evidence: the false ✅ goes, a ⚠️ with the reason comes in its place.
+ * Returns the claims it marked, for the warning over the answer.
+ */
+export function softenRemainingBlockers(text, report) {
+    const lines = text.split(/\r?\n/u);
+    const marked = new Set();
+    const evidence = [
+        ...report.caseQuoteFindings.filter((item) => item.status !== "VERIFIED").map((item) => ({ line: item.line, token: new RegExp(`✅\\s*\\[CASE-QUOTE:${item.evidenceHash}\\]`, "gu"), record: item.record })),
+        ...report.caseSupportFindings.filter((item) => item.status !== "SUPPORTED").map((item) => ({ line: item.line, token: new RegExp(`🔗\\s*\\[CASE-SUPPORT:${item.evidenceHash}\\]`, "gu"), record: item.record }))
+    ];
+    for (const item of evidence) {
+        const current = lines[item.line - 1] ?? "";
+        const next = current.replace(item.token, UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT);
+        if (next !== current) {
+            lines[item.line - 1] = next;
+            marked.add(item.record?.caseSignature ?? item.record?.claim ?? "cytat z orzeczenia");
+        }
+    }
+    // On a line the gate objects to, only the ✅ markers of that line's own VERIFIED provisions stay.
+    const owned = new Map();
+    for (const finding of report.findings) {
+        if (finding.status !== "VERIFIED" || finding.record?.status !== "VERIFIED")
+            continue;
+        const marker = expectedVerificationMarker(finding.record);
+        if (marker)
+            owned.set(finding.reference.line, (owned.get(finding.reference.line) ?? new Set()).add(marker));
+    }
+    const byLine = new Map();
+    for (const finding of report.findings) {
+        if (!BLOCKING_FINDINGS.has(finding.status))
+            continue;
+        const line = finding.reference.line;
+        const own = finding.record?.status === "VERIFIED" ? expectedVerificationMarker(finding.record) : null;
+        const keep = new Set([...(owned.get(line) ?? []), ...(own ? [own] : [])]);
+        lines[line - 1] = (lines[line - 1] ?? "").replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => keep.has(match.trimStart()) ? match : "");
+        if (own && (lines[line - 1] ?? "").includes(own))
+            continue;
+        const claim = finding.reference.span ?? finding.reference.claim;
+        byLine.set(line, [
+            ...(byLine.get(line) ?? []),
+            { claim, marker: finding.reference.kind === "case" ? UNCONFIRMED_CASE_MARKER_TEXT : UNVERIFIED_MARKER_TEXT }
+        ]);
+        marked.add(finding.reference.claim);
+    }
+    return { text: insertMarkersAfterClaims(lines.join("\n"), byLine), marked: [...marked] };
 }

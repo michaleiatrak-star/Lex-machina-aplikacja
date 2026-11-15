@@ -226,7 +226,8 @@ function withoutControlSections(lines: string[]): string[] {
         const following = lines.slice(next + 1).find((other) => other.trim());
         if (!following || !CONTROL_SECTION.test(following)) break;
       }
-      if (!SECTION_BODY.test(line) && !CONTROL_SECTION.test(line)) break;
+      // "REM-0 próby: …" with its indented list under "REM-GATE": the same block (live 2026-11-15, SDI 8/12).
+      if (!SECTION_BODY.test(line) && !CONTROL_SECTION.test(line) && !QUALITY_GATE_LINE.test(line)) break;
       next += 1;
     }
     index = next - 1;
