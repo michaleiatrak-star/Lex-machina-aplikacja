@@ -1136,6 +1136,18 @@ export function materialInWords(skill: string, message: string): boolean {
   return dates >= 3 || (message.length >= 300 && evidence >= 2 && dates + evidence >= 3);
 }
 
+/**
+ * A tool result that is a refusal or an outage (OUT_OF_SCOPE, sn.pl's check, a timeout): it repeats
+ * the signature asked about, so it never makes it an official anchor (🟨) or a lead (live test
+ * 2026-11-15: "SDI 8/12 🟨 [KOTWICA-URZĘDOWA]" with sn.pl 403 and SAOS down).
+ */
+export function failedSourceResult(content: string): boolean {
+  return (
+    /SN_WERYFIKACJA_WYMAGANA|LAW_SOURCE_VERIFICATION_REQUIRED/u.test(content) ||
+    /^(?:OUT_OF_SCOPE|ERROR|BLOCKED|DENIED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE|NOT_FOUND|POLICY_BLOCKED|DISABLED)$/u.test(/"status"\s*:\s*"([A-Z_]+)"/u.exec(content)?.[1] ?? "")
+  );
+}
+
 export type SessionExecutionResponse = {
   sessionId: string;
   status: "DRAFT_PRESENTABLE" | "BLOCKED";
@@ -3811,6 +3823,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         for (const result of federationResults) {
           caseSourceTexts.push(result.content);
           const call = federationCalls.find((item) => item.id === result.tool_use_id);
+          if (failedSourceResult(result.content)) continue;
           (call && officialCaseLawCall(call) ? officialCaseLawTexts : leadCaseLawTexts).push(result.content);
         }
         for (
@@ -3854,7 +3867,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         for (const result of verificationResults) {
           caseSourceTexts.push(result.content);
-          officialCaseLawTexts.push(result.content);
+          // A refusal or an outage repeats the signature it was asked about: never an official hit.
+          if (!failedSourceResult(result.content)) officialCaseLawTexts.push(result.content);
         }
 
         const byId = new Map(

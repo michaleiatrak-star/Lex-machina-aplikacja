@@ -538,9 +538,12 @@ function keepOtherReferencesMarked(before: string, after: string, ledger: Verifi
  * orzeczenia zostaje bez zmian: zmieniony znacznik orzeczenia nadal blokuje (G22).
  */
 export function stripUnbackedVerificationMarkers(
-  text: string,
+  input: string,
   ledger: VerificationLedger
 ): { text: string; removed: number } {
+  // "⚠️ [NIEWERYFIKOWANE — sn.pl HTTP 403, 2026-11-15]": the reason after a dash instead of a colon
+  // read as no marker, and the whole answer was blocked (live test 2026-11-15, SDI 8/12).
+  const text = input.replace(/(⚠️?\s*\[NIEWERYFIKOWANE)\s+[—–-]\s*(?=[^\]\r\n]*\])/gu, "$1: ");
   const ledgerMarkers = new Set(
     ledger
       .all()

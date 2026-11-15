@@ -424,7 +424,10 @@ function keepOtherReferencesMarked(before, after, ledger) {
  * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE]. Wiersz z sygnaturą
  * orzeczenia zostaje bez zmian: zmieniony znacznik orzeczenia nadal blokuje (G22).
  */
-export function stripUnbackedVerificationMarkers(text, ledger) {
+export function stripUnbackedVerificationMarkers(input, ledger) {
+    // "⚠️ [NIEWERYFIKOWANE — sn.pl HTTP 403, 2026-11-15]": the reason after a dash instead of a colon
+    // read as no marker, and the whole answer was blocked (live test 2026-11-15, SDI 8/12).
+    const text = input.replace(/(⚠️?\s*\[NIEWERYFIKOWANE)\s+[—–-]\s*(?=[^\]\r\n]*\])/gu, "$1: ");
     const ledgerMarkers = new Set(ledger
         .all()
         .map((record) => verificationMarker(record))

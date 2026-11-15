@@ -586,6 +586,15 @@ export function materialInWords(skill, message) {
     return dates >= 3 || (message.length >= 300 && evidence >= 2 && dates + evidence >= 3);
 }
 /**
+ * A tool result that is a refusal or an outage (OUT_OF_SCOPE, sn.pl's check, a timeout): it repeats
+ * the signature asked about, so it never makes it an official anchor (🟨) or a lead (live test
+ * 2026-11-15: "SDI 8/12 🟨 [KOTWICA-URZĘDOWA]" with sn.pl 403 and SAOS down).
+ */
+export function failedSourceResult(content) {
+    return (/SN_WERYFIKACJA_WYMAGANA|LAW_SOURCE_VERIFICATION_REQUIRED/u.test(content) ||
+        /^(?:OUT_OF_SCOPE|ERROR|BLOCKED|DENIED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE|NOT_FOUND|POLICY_BLOCKED|DISABLED)$/u.test(/"status"\s*:\s*"([A-Z_]+)"/u.exec(content)?.[1] ?? ""));
+}
+/**
  * Prefixes D01, D02... of own-key documents, in the order they reach the
  * model (context first, then case files read by tools). Shared-key documents
  * get none: their tokens are the chat's. Restoring an alias reads the
@@ -2679,6 +2688,8 @@ export class SafeSessionExecutor {
                 for (const result of federationResults) {
                     caseSourceTexts.push(result.content);
                     const call = federationCalls.find((item) => item.id === result.tool_use_id);
+                    if (failedSourceResult(result.content))
+                        continue;
                     (call && officialCaseLawCall(call) ? officialCaseLawTexts : leadCaseLawTexts).push(result.content);
                 }
                 for (const result of federationResults) {
@@ -2708,7 +2719,9 @@ export class SafeSessionExecutor {
                 }
                 for (const result of verificationResults) {
                     caseSourceTexts.push(result.content);
-                    officialCaseLawTexts.push(result.content);
+                    // A refusal or an outage repeats the signature it was asked about: never an official hit.
+                    if (!failedSourceResult(result.content))
+                        officialCaseLawTexts.push(result.content);
                 }
                 const byId = new Map([
                     ...corpusResults,

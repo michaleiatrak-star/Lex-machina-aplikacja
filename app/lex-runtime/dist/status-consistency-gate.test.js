@@ -269,4 +269,8 @@ describe("a claim that everything was verified", () => {
         expect(text).not.toContain("KOTWICA");
         expect(text.match(/⚠️ \[NIEWERYFIKOWANE\]/gu)).toHaveLength(2);
     });
+    it("⚠️ [NIEWERYFIKOWANE — powód] (myślnik) to ten sam znacznik co z dwukropkiem", () => {
+        const { text } = stripUnbackedVerificationMarkers("SN, sygn. SDI 8/12 ⚠️ [NIEWERYFIKOWANE — sn.pl HTTP 403, 2026-11-15].", new VerificationLedger());
+        expect(text).toBe("SN, sygn. SDI 8/12 ⚠️ [NIEWERYFIKOWANE: sn.pl HTTP 403, 2026-11-15].");
+    });
 });
