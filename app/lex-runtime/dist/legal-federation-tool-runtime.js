@@ -419,6 +419,10 @@ const FETCH_AUXILIARY_SOURCE_SCHEMA = {
                 offset: {
                     type: "integer",
                     description: "Optional character position to read from (the previous result's nextOffset): the next part of a long page."
+                },
+                question: {
+                    type: "string",
+                    description: "Optional question the page should answer (a neutral legal question, no case facts): the passages of the page that answer it come back, word for word, instead of the page from the start."
                 }
             }
         }
@@ -768,6 +772,57 @@ function extraFrom(input) {
 const PAGE_PART_CHARS = 40_000;
 const PASSAGE_RADIUS = 1_500;
 const MAX_PASSAGES = 8;
+const FOCUS_WINDOW = 1_200;
+const FOCUS_PASSAGES = 6;
+const FOCUS_STOPWORDS = new Set("a aby albo ale ani bo by być był czy co dla do gdy i ich ile jak jaki jaka jakie jest je jego jej już kiedy kto która które który lub ma może można na nad nie o od oraz po pod przez przy się są ta tak te tego tej ten to w we z za ze że the of and or to in is".split(" "));
+/** The words of a question as prefixes (Polish inflection: "kary umownej" finds "kara umowna"). */
+function focusTerms(question) {
+    return [...new Set(question
+            .toLocaleLowerCase("pl")
+            .split(/[^\p{L}\p{N}]+/u)
+            .filter((word) => word.length > 2 && !FOCUS_STOPWORDS.has(word))
+            .map((word) => (/^\d+$/u.test(word) ? word : word.slice(0, Math.max(4, Math.min(6, word.length - 2))))))];
+}
+/**
+ * The windows of a page that answer a question best (term coverage first, then frequency), word
+ * for word, in the page's order with their position: no model summarizes, nothing is paraphrased.
+ */
+export function relevantPassages(text, question) {
+    const terms = focusTerms(question);
+    if (!terms.length)
+        return { text: "", passages: 0 };
+    const lower = text.toLocaleLowerCase("pl");
+    const windows = [];
+    for (let start = 0; start < text.length; start += FOCUS_WINDOW / 2) {
+        const slice = lower.slice(start, start + FOCUS_WINDOW);
+        let covered = 0;
+        let hits = 0;
+        for (const term of terms) {
+            const count = slice.split(term).length - 1;
+            if (count) {
+                covered += 1;
+                hits += Math.min(count, 5);
+            }
+        }
+        if (covered)
+            windows.push({ start, score: covered * 10 + hits });
+    }
+    // At least half the question's words (or two) in a window, the best ones, not overlapping.
+    const needed = Math.min(terms.length, Math.max(2, Math.ceil(terms.length / 2)));
+    const chosen = [];
+    for (const window of windows.filter((item) => item.score >= needed * 10).sort((a, b) => b.score - a.score)) {
+        if (chosen.some((start) => Math.abs(start - window.start) < FOCUS_WINDOW))
+            continue;
+        chosen.push(window.start);
+        if (chosen.length >= FOCUS_PASSAGES)
+            break;
+    }
+    chosen.sort((a, b) => a - b);
+    return {
+        text: chosen.map((start) => `[znak ${start}]\n${text.slice(start, start + FOCUS_WINDOW)}`).join("\n\n[…]\n\n"),
+        passages: chosen.length
+    };
+}
 /** Passages of a page around a phrase (case and spacing ignored), joined, with their count. */
 export function pagePassages(text, phrase) {
     const words = phrase.toLocaleLowerCase("pl").split(/\s+/u).filter(Boolean).map((word) => word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
@@ -886,7 +941,8 @@ export class LegalFederationToolRuntime {
             "Use list_federated_legal_sources when you need source capabilities or a native schema. Search first, then fetch the actual document before relying on its contents.",
             "This federation is DISCOVERY/RESEARCH ONLY. It never creates a Lex Machina VERIFIED ledger entry and never bypasses Gate I.",
             "Every federated search/get/call result carries _lexSourcePolicy with sourceTier, provenance and verificationAuthority=LEX_NATIVE_ONLY. Preserve that metadata when reasoning about the result.",
-            "Use assess_legal_source for classification only. Use fetch_auxiliary_legal_source to retrieve a specific public R2B/R3 page through the SSRF-protected HTTPS channel; the fetched page remains auxiliary evidence.",
+            "Use assess_legal_source for classification only. Use fetch_auxiliary_legal_source to retrieve a specific public R2B/R3 page through the SSRF-protected HTTPS channel; the fetched page remains auxiliary evidence. " +
+                "Read a page for what you need: question= gives the passages that answer it (word for word, with their position), find= the passages around a signature or article, offset= the next part of a long page.",
             "R2B and R3 material is auxiliary only: it can never create VERIFIED or formal SUPPORTED status and can never be the sole legal basis. Cross-check the proposition against R1/R2A before using it.",
             "Use web_search for general internet discovery (current events, non-legal facts, locating a page) and to find signatures of recent rulings (SN after 2016, TK after 2015, KIO after 2018, last 2-3 years) in secondary sources, where SAOS has no data; secondary sources give only the signature, the thesis and quotes come only from the verified official text. A known signature goes straight to the official registry, not to web_search. Send only neutral public phrases, never case facts or PII tokens. Snippets are not evidence: verify R1/R2A hits with verify_legal_reference / verify_case_* and read R2B/R3 hits with fetch_auxiliary_legal_source before relying on them. Disciplinary case law and professional ethics are not in the MCP connectors or SAOS: rulings of the bar's and the legal advisers' disciplinary courts (WSD Adwokatury „WSD 113/22”, WSD KIRP, sądy dyscyplinarne izb) and of the other professions (Naczelny Sąd Lekarski: nil.org.pl; komornicy: komornik.pl; biegli rewidenci: pibr.org.pl; inżynierowie budownictwa: piib.org.pl; notariusze, pielęgniarki, aptekarze, rzecznicy patentowi: their chambers' sites) are searched with web_search (site:wsd.adwokatura.pl, site:wsd.kirp.pl, site:nil.org.pl and the like) and read with fetch_auxiliary_legal_source on the court's own portal; codes of ethics (Zbiór Zasad Etyki Adwokackiej i Godności Zawodu, Kodeks Etyki Radcy Prawnego) are read the same way, also as PDF, DOC or DOCX files. When sn.pl asks for its human check, a disciplinary ruling of SN (SDI, DSI) found by web_search on another page is a lead (⚠️) until confirmed on sn.pl.",
             "For R3 material, check publication/update date. Missing date or material older than 24 months requires an explicit staleness warning.",
@@ -1264,6 +1320,9 @@ export class LegalFederationToolRuntime {
             const find = typeof call.input.find === "string" ? call.input.find.trim().slice(0, 120) : "";
             if (find && /\[(?:LM)?PII:/iu.test(find))
                 throw new Error("AUX_SOURCE_CASE_DATA_FORBIDDEN");
+            const question = typeof call.input.question === "string" ? call.input.question.trim().slice(0, 300) : "";
+            if (question && /\[(?:LM)?PII:/iu.test(question))
+                throw new Error("AUX_SOURCE_CASE_DATA_FORBIDDEN");
             const offset = typeof call.input.offset === "number" && Number.isFinite(call.input.offset) ? Math.max(0, Math.trunc(call.input.offset)) : 0;
             const finalKnownTier = classifyKnownLegalSourceUrl(fetched.finalUrl);
             if (finalKnownTier === "R1" ||
@@ -1306,8 +1365,12 @@ export class LegalFederationToolRuntime {
             };
             // One part of a long page at a time (before: the first 80 000 characters, the rest lost).
             const textLimit = PAGE_PART_CHARS;
-            const part = find ? pagePassages(fetched.text, find) : { text: fetched.text.slice(offset, offset + textLimit), offset };
-            const nextOffset = !find && offset + textLimit < fetched.text.length ? offset + textLimit : null;
+            // A long page read for a question (or for the claim, when no part is asked for): the passages
+            // that answer it, word for word, in the page's order (user 2026-11-15: read like the assistant).
+            const focus = !find && !call.input.offset && (question || (publicClaim && fetched.text.length > textLimit)) ? question || publicClaim : "";
+            const focused = focus ? relevantPassages(fetched.text, focus) : null;
+            const part = find ? pagePassages(fetched.text, find) : focused && focused.passages ? focused : { text: fetched.text.slice(offset, offset + textLimit), offset };
+            const nextOffset = !find && !(focused && focused.passages) && offset + textLimit < fetched.text.length ? offset + textLimit : null;
             // LEX/Legalis and other paid services answer with a login or offer page: its text is
             // not the document, only what the search snippet showed can serve as a lead.
             const loginWall = fetched.text.length < 6_000 &&
@@ -1349,13 +1412,18 @@ export class LegalFederationToolRuntime {
                     textLength: fetched.text.length,
                     ...(find
                         ? { find, passages: "passages" in part ? part.passages : 0 }
-                        : { offset }),
+                        : focused && focused.passages
+                            ? { question: focus, passages: focused.passages }
+                            : { offset }),
                     ...(nextOffset !== null ? { nextOffset } : {}),
                     textTruncated: nextOffset !== null
                 },
                 instruction: (loginWall
                     ? "This is a login or paywall page, not the document: do not quote it; use only the leads the search result showed. "
                     : "") +
+                    (focused && focused.passages
+                        ? `These are the ${focused.passages} passages of the page (${fetched.text.length} characters) that best answer the question, word for word with their position; read more with find or offset when they are not enough. `
+                        : "") +
                     (nextOffset !== null
                         ? `The page has ${fetched.text.length} characters; this is a part. Read further with offset=${nextOffset}, or look for a phrase with find, when what you need is not here. `
                         : "") +

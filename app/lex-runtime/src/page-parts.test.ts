@@ -50,3 +50,33 @@ describe("długie strony: części, fraza, pamięć", () => {
     expect(pagePassages("tekst", "brak").passages).toBe(0);
   });
 });
+
+import { relevantPassages } from "./legal-federation-tool-runtime.js";
+
+describe("czytanie strony pod kątem pytania", () => {
+  const LONG = `${"Ogólne uwagi o zobowiązaniach i umowach handlowych. ".repeat(900)}Miarkowanie kary umownej: sąd może zmniejszyć karę, gdy jest rażąco wygórowana albo zobowiązanie wykonano w znacznej części; wierzyciel nie musi wykazywać szkody. ${"Inne zagadnienia procesowe i terminy. ".repeat(900)}`;
+
+  it("najtrafniejszy fragment dosłownie, z pozycją; odmiana słów (kara umowna / kary umownej)", () => {
+    const found = relevantPassages(LONG, "Kiedy sąd zmniejsza karę umowną rażąco wygórowaną?");
+    expect(found.passages).toBeGreaterThan(0);
+    expect(found.text).toContain("Miarkowanie kary umownej: sąd może zmniejszyć karę");
+    expect(found.text).toMatch(/^\[znak \d+\]/u);
+    expect(found.text.length).toBeLessThan(8_000);
+  });
+
+  it("narzędzie: question zwraca fragmenty zamiast początku strony; claim przy długiej stronie też", async () => {
+    const { tools } = runtime([LONG, LONG]);
+    const byQuestion = await call(tools, { url: "https://kancelaria.example.pl/q", question: "przesłanki miarkowania kary umownej" });
+    expect(byQuestion.retrieval.text).toContain("rażąco wygórowana");
+    expect(byQuestion.instruction).toContain("best answer the question");
+    expect(byQuestion.retrieval.nextOffset).toBeUndefined();
+    const byClaim = await call(tools, { url: "https://kancelaria.example.pl/c", claim: "kara umowna rażąco wygórowana podlega miarkowaniu" });
+    expect(byClaim.retrieval.text).toContain("rażąco wygórowana");
+  });
+
+  it("krótka strona z claim: cały tekst jak dotąd", async () => {
+    const { tools } = runtime(["Krótka strona o karze umownej."]);
+    const plain = await call(tools, { url: "https://kancelaria.example.pl/s", claim: "kara umowna" });
+    expect(plain.retrieval.text).toBe("Krótka strona o karze umownej.");
+  });
+});
