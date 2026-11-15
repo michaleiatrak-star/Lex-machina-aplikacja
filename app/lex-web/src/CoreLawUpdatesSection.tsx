@@ -68,6 +68,13 @@ export function coreLawActErrorText(code: string): string {
       return t("Ten akt jest już w kopii przepisów.");
     case "CORE_LAW_USER_ACT_NOT_FOUND":
       return t("Akt nie jest na liście dodanych przez użytkowników.");
+    case "AUTHENTICATION_REQUIRED":
+    case "SESSION_IDLE_EXPIRED":
+    case "SESSION_OVERALL_EXPIRED":
+    case "SESSION_REVOKED":
+      return t("Sesja wygasła albo aplikacja została zablokowana. Zaloguj się ponownie; stan kopii przepisów odświeży się sam.");
+    case "AUTHORIZATION_DENIED":
+      return t("Tę czynność może wykonać tylko administrator.");
     default:
       return code;
   }
@@ -102,11 +109,16 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
   const [found, setFound] = useState<{ act: CoreLawActLookup; presentAs: string | null } | null>(null);
   const admin = user.appRole === "ADMIN";
 
+  // The section stays mounted under the lock screen and keeps following a running check:
+  // a 401 there belongs to the lock screen (sign in again), not to this section, and the
+  // first status after signing in clears it.
   const load = useCallback(async () => {
     try {
       setStatus(await getCoreLawStatus());
+      setError("");
     } catch (failure) {
-      setError(failure instanceof ApiError ? failure.code : String(failure));
+      if (failure instanceof ApiError && failure.status === 401) return;
+      setError(failure instanceof ApiError ? coreLawActErrorText(failure.code) : String(failure));
     }
   }, []);
 

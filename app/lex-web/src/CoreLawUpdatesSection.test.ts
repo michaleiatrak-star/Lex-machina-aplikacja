@@ -49,6 +49,9 @@ describe("karta przepisów (RAG)", () => {
   it("opisuje odmowy ELI przy dodawaniu aktu po polsku", () => {
     expect(coreLawActErrorText("CORE_LAW_ACT_NOT_IN_FORCE")).toContain("nie obowiązuje");
     expect(coreLawActErrorText("CORE_LAW_ACT_REFERENCE_INVALID")).toContain("ISAP");
+    expect(coreLawActErrorText("AUTHENTICATION_REQUIRED")).toContain("Zaloguj się ponownie");
+    expect(coreLawActErrorText("SESSION_IDLE_EXPIRED")).toContain("Zaloguj się ponownie");
+    expect(coreLawActErrorText("AUTHORIZATION_DENIED")).toContain("administrator");
     expect(coreLawActErrorText("INNY_KOD")).toBe("INNY_KOD");
   });
 });
