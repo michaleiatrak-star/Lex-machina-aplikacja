@@ -155,6 +155,58 @@ async function numberSequence(ctx, source, newest, one) {
         ctx.db.saveState(source, state);
     }
 }
+function newestFirstState(state) {
+    if (!state)
+        return null;
+    if ("order" in state)
+        return state;
+    const max = state.max ?? 0;
+    return { order: "DESC", top: max, down: max, floor: Math.max(0, state.next - 1), max: state.max, completedAt: state.completedAt };
+}
+function newestFirstProgress(saved) {
+    const state = newestFirstState(saved);
+    if (!state)
+        return "nie rozpoczęto";
+    if (state.completedAt)
+        return `pobrane w całości (${state.completedAt.slice(0, 10)}); dociąganie nowych od nr ${state.top + 1}`;
+    return `pobieranie od najnowszych: nr ${state.down}${state.max ? ` (zakres 1–${state.max})` : ""}`;
+}
+async function newestFirstSequence(ctx, source, 
+/** Highest number holding a document (searched from `known`); null when it cannot be read. */
+newest, 
+/** True when the number held a document. */
+one, margin = 0) {
+    const saved = newestFirstState(ctx.db.state(source));
+    // `hit`, not `max`: max carries the margin, and searching from it would add the margin on every run.
+    const found = await newest(saved?.hit ?? saved?.max ?? 0);
+    let state = saved;
+    if (!state) {
+        if (!found)
+            return;
+        state = { order: "DESC", top: found, down: found, floor: 0, max: found + margin, hit: found, completedAt: null };
+    }
+    else if (found) {
+        const hit = Math.max(found, state.hit ?? 0);
+        state = { ...state, hit, max: Math.max(hit + margin, state.max ?? 0) };
+    }
+    ctx.db.saveState(source, state);
+    const step = async (id, next) => {
+        const held = await one(id);
+        state = { ...state, ...next, ...(held && id > (state.hit ?? 0) ? { hit: id, max: Math.max(id + margin, state.max ?? 0) } : {}) };
+        ctx.db.saveState(source, state);
+    };
+    // 1. New numbers up to the highest one known to hold a document.
+    while (ctx.open && state.top < (state.hit ?? 0))
+        await step(state.top + 1, { top: state.top + 1 });
+    // 2. The walk down, newest first.
+    while (ctx.open && state.down > state.floor) {
+        const down = state.down - 1;
+        await step(state.down, { down, ...(down <= state.floor && !state.completedAt ? { completedAt: ctx.now().toISOString() } : {}) });
+    }
+    // 3. The margin above the last hit: numbers there may still hold documents.
+    while (ctx.open && state.completedAt && state.max !== null && state.top < state.max)
+        await step(state.top + 1, { top: state.top + 1 });
+}
 // ── Portal Orzeczeń Sądów Powszechnych (orzeczenia.ms.gov.pl) ──
 const SP = "https://orzeczenia.ms.gov.pl";
 const SP_FIRST = "1950-01-01";
@@ -551,15 +603,14 @@ export function wsdRuling(html) {
 export const wsdAdapter = {
     source: "WSD",
     label: "Wyższy Sąd Dyscyplinarny Adwokatury (WSD) i kasacje SN — wsd.adwokatura.pl",
-    progress: (db) => numberProgress(db.state("WSD")),
+    progress: (db) => newestFirstProgress(db.state("WSD")),
     async run(ctx) {
-        await numberSequence(ctx, "WSD", async () => {
+        await newestFirstSequence(ctx, "WSD", async (known) => {
             // The register's first page lists only the oldest 30 rulings (WKD, numbers up to ~1700);
             // the WSD rulings of recent years carry higher numbers (user, 2026-11-15: no WSD in the
             // database). The highest number is found by probing upward until several steps hold nothing.
             const page = await ctx.html(`${WSD}/rejestry/showMain/orzecznictwo-19`);
             const ids = [...(page ?? "").matchAll(/rejestry\/show\/[^"#?]*?-(\d+)["#?]/gu)].map((match) => Number(match[1]));
-            const known = ctx.db.state("WSD")?.max ?? 0;
             let top = Math.max(known, ...ids, 0);
             if (!top)
                 return null;
@@ -574,15 +625,14 @@ export const wsdAdapter = {
                     misses++;
                 }
             }
-            // Numbers past the last hit, below the next probe, may still hold rulings.
-            return top + WSD_PROBE_STEP;
+            return top;
         }, async (id) => {
             if (ctx.db.has("WSD", String(id)))
-                return;
+                return true;
             const html = await ctx.html(`${WSD}/rejestry/show/${id}`);
             const ruling = html ? wsdRuling(html) : null;
             if (!ruling || !ruling.signature)
-                return;
+                return false;
             ctx.store({
                 source: "WSD", sourceId: String(id),
                 court: /Sądu Najwyższego/u.test(ruling.title) ? "Sąd Najwyższy" : "Sądownictwo dyscyplinarne adwokatury",
@@ -590,7 +640,10 @@ export const wsdAdapter = {
                 kind: ruling.title.split(/\s+z dnia/u)[0] ?? null, judges: [], keywords: [], legalBases: [], summary: null,
                 url: `${WSD}/rejestry/show/${id}`, modified: null
             }, ruling.text);
-        });
+            return true;
+        }, 
+        // Numbers past the last hit, below the next probe, may still hold rulings.
+        WSD_PROBE_STEP);
     }
 };
 // ── SN (sn.pl): with the session the user verified in the app's sn.pl window ──

@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Keine Entscheidungen dieser Kammer in der Serverdatenbank.",
  "Izby adwokackie": "Rechtsanwaltskammern (Adwokaci)",
  "Izby radców prawnych": "Kammern der Rechtsberater",
- "publikuje {published} z {count}": "{published} von {count} veröffentlichen"
+ "publikuje {published} z {count}": "{published} von {count} veröffentlichen",
+ "Najdłuższe ostatnie tury i ich kroki": "Längste letzte Runden und ihre Schritte",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

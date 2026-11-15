@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Inga avgöranden från denna kammare i serverdatabasen.",
  "Izby adwokackie": "Advokatsamfundets kammare",
  "Izby radców prawnych": "Kammare för juridiska rådgivare",
- "publikuje {published} z {count}": "{published} av {count} publicerar"
+ "publikuje {published} z {count}": "{published} av {count} publicerar",
+ "Najdłuższe ostatnie tury i ich kroki": "Längsta senaste omgångarna och deras steg",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

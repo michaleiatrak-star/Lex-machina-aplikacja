@@ -746,7 +746,17 @@ type ChatTurnsSummary = {
     maxMs: number;
     phasesP50Ms: Partial<Record<"PREPARE" | "ROUTING" | "SKILLS" | "MODEL" | "VERIFY" | "RESTORE", number>>;
   }>;
+  // Older runtimes do not send it.
+  slow?: Array<{ at: string; path: string; modelKind: "local" | "api" | "account"; totalMs: number; status: "OK" | "BLOCKED" | "ERROR"; steps: Array<{ step: string; ms: number }> }>;
 };
+
+/** "15.11 10:42 · pisma-procesowe-v3: 870 s (kontrola zgodności powołanych tekstów 400 s, narzędzie … 290 s)". */
+export function slowTurnLine(turn: NonNullable<ChatTurnsSummary["slow"]>[number]): string {
+  const sec = (ms: number) => Math.round(ms / 1000).toLocaleString(currentLocale());
+  const at = new Date(turn.at).toLocaleString(currentLocale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const steps = turn.steps.map((item) => `${item.step.replace(/^[A-Z]+ · /u, "")} ${sec(item.ms)} s`).join(", ");
+  return t("{at} · {path}: {total} s", { at, path: turn.path, total: sec(turn.totalMs) }) + (steps ? ` (${steps})` : "");
+}
 
 const PHASE_SHORT: Record<string, string> = {
   PREPARE: "anonimizacja",
@@ -790,6 +800,12 @@ function ChatTurnsSection() {
         <InfoTip>{t("Ostatnie")} {data.turns} {t("tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik:")} {data.file}</InfoTip>
       </strong>
       {data.paths.length === 0 ? <small>{t("Brak zapisanych tur.")}</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
+      {data.slow?.length ? (
+        <>
+          <strong>{t("Najdłuższe ostatnie tury i ich kroki")}</strong>
+          {data.slow.map((turn) => <small key={turn.at}>{slowTurnLine(turn)}</small>)}
+        </>
+      ) : null}
     </div>
   );
 }

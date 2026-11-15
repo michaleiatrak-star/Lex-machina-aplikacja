@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Nessuna decisione di questo ordine nella banca dati del server.",
  "Izby adwokackie": "Ordini degli avvocati",
  "Izby radców prawnych": "Ordini dei consulenti legali",
- "publikuje {published} z {count}": "pubblicano {published} su {count}"
+ "publikuje {published} z {count}": "pubblicano {published} su {count}",
+ "Najdłuższe ostatnie tury i ich kroki": "Turni recenti più lunghi e i loro passaggi",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

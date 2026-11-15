@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Ingen avgjørelser fra denne kretsen i serverdatabasen.",
  "Izby adwokackie": "Advokatkretser",
  "Izby radców prawnych": "Kretser for juridiske rådgivere",
- "publikuje {published} z {count}": "{published} av {count} publiserer"
+ "publikuje {published} z {count}": "{published} av {count} publiserer",
+ "Najdłuższe ostatnie tury i ich kroki": "Lengste nylige runder og trinnene deres",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

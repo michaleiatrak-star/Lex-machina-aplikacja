@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Selle koja lahendeid serveri andmebaasis ei ole.",
  "Izby adwokackie": "Advokatuuri kojad",
  "Izby radców prawnych": "Õigusnõustajate kojad",
- "publikuje {published} z {count}": "avaldab {published} / {count}"
+ "publikuje {published} z {count}": "avaldab {published} / {count}",
+ "Najdłuższe ostatnie tury i ich kroki": "Pikimad viimased käigud ja nende sammud",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

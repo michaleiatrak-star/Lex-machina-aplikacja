@@ -17,9 +17,28 @@ export type ChatTurnRecord = {
   attachments: number;
   totalMs: number;
   phasesMs: Partial<Record<ExecutionPhase, number>>;
+  /** The longest steps inside the stages (model call, a tool, a correction round), by step name. */
+  stepsMs?: Record<string, number>;
   status: "OK" | "BLOCKED" | "ERROR";
   error?: string;
 };
+
+/** A long turn with its longest steps: one slow turn is lost in the medians of its path. */
+export type SlowChatTurn = { at: string; path: string; modelKind: ChatTurnRecord["modelKind"]; totalMs: number; status: ChatTurnRecord["status"]; steps: Array<{ step: string; ms: number }> };
+
+const SLOW_TURN_MS = 120_000;
+const MAX_STEPS = 12;
+
+/**
+ * The name of a step without data of the case: the part before ':' (after it come signatures,
+ * counts, file names), digits replaced, at most 60 characters; reading the skill files is one step.
+ */
+export function stepName(phase: ExecutionPhase, detail?: string): string {
+  if (!detail) return phase;
+  const head = (detail.split(":")[0] ?? "").trim();
+  if (/[\\/]|\.md$/u.test(head) || /^skill\b/u.test(head)) return `${phase} · wczytanie skilli`;
+  return `${phase} · ${head.replace(/\d+/gu, "#").replace(/\s+/gu, " ").slice(0, 60)}`;
+}
 
 export type ChatPathSummary = {
   path: string;
@@ -53,25 +72,73 @@ export function errorCode(error: unknown): string {
   return (message.split(":")[0] ?? "").replace(/[^A-Z0-9_]/gu, "").slice(0, 80) || "UNKNOWN";
 }
 
-/** Stage times from the step reports: each stage lasts until the next one starts. */
+/** Stage and step times from the step reports: each lasts until the next one starts. */
 export class PhaseClock {
   private current: ExecutionPhase | null = null;
   private since = 0;
+  private step: string | null = null;
+  private stepSince = 0;
   readonly phasesMs: Partial<Record<ExecutionPhase, number>> = {};
+  private readonly steps = new Map<string, number>();
 
   constructor(private readonly now: () => number = () => performance.now()) {}
 
-  mark(phase: ExecutionPhase): void {
+  mark(phase: ExecutionPhase, detail?: string): void {
+    const step = stepName(phase, detail);
+    if (step !== this.step) {
+      this.closeStep();
+      this.step = step;
+      this.stepSince = this.now();
+    }
     if (phase === this.current) return;
-    this.close();
+    this.closePhase();
     this.current = phase;
     this.since = this.now();
   }
 
-  close(): void {
+  private closePhase(): void {
     if (this.current) this.phasesMs[this.current] = Math.round((this.phasesMs[this.current] ?? 0) + this.now() - this.since);
     this.current = null;
   }
+
+  private closeStep(): void {
+    if (this.step) this.steps.set(this.step, (this.steps.get(this.step) ?? 0) + this.now() - this.stepSince);
+    this.step = null;
+  }
+
+  close(): void {
+    this.closeStep();
+    this.closePhase();
+  }
+
+  /** The longest steps, at most 12, rounded to milliseconds. */
+  get stepsMs(): Record<string, number> {
+    return Object.fromEntries(
+      [...this.steps]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_STEPS)
+        .map(([step, ms]) => [step, Math.round(ms)])
+    );
+  }
+}
+
+/** The latest turns over two minutes, newest first, each with its four longest steps. */
+export function slowChatTurns(records: ChatTurnRecord[], limit = 5): SlowChatTurn[] {
+  return records
+    .filter((record) => record.totalMs >= SLOW_TURN_MS)
+    .slice(-limit)
+    .reverse()
+    .map((record) => ({
+      at: record.at,
+      path: record.path,
+      modelKind: record.modelKind,
+      totalMs: record.totalMs,
+      status: record.status,
+      steps: Object.entries(record.stepsMs ?? {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([step, ms]) => ({ step, ms }))
+    }));
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -141,8 +208,8 @@ export class ChatTurnJournal {
     });
   }
 
-  summary(): { file: string; turns: number; paths: ChatPathSummary[] } {
+  summary(): { file: string; turns: number; paths: ChatPathSummary[]; slow: SlowChatTurn[] } {
     const records = this.records();
-    return { file: this.file, turns: records.length, paths: summarizeChatTurns(records) };
+    return { file: this.file, turns: records.length, paths: summarizeChatTurns(records), slow: slowChatTurns(records) };
   }
 }

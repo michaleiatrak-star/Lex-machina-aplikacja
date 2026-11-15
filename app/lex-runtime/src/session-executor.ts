@@ -2015,7 +2015,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     request = {
       ...request,
       onStep: (phase, detail) => {
-        clock.mark(phase);
+        clock.mark(phase, detail);
         report?.(phase, detail);
       }
     };
@@ -2029,6 +2029,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         attachments: request.documentAttachments?.length ?? 0,
         totalMs: Math.round(performance.now() - started),
         phasesMs: clock.phasesMs,
+        stepsMs: clock.stepsMs,
         status,
         ...(error !== undefined ? { error: errorCode(error) } : {})
       });

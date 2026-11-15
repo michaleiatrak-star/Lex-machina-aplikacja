@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "No hay resoluciones de este colegio en la base del servidor.",
  "Izby adwokackie": "Colegios de abogados",
  "Izby radców prawnych": "Colegios de asesores jurídicos",
- "publikuje {published} z {count}": "publican {published} de {count}"
+ "publikuje {published} z {count}": "publican {published} de {count}",
+ "Najdłuższe ostatnie tury i ich kroki": "Turnos recientes más largos y sus pasos",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

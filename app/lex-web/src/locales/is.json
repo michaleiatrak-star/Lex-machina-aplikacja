@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Engir úrskurðir þessarar deildar í gagnagrunni þjónsins.",
  "Izby adwokackie": "Lögmannadeildir",
  "Izby radców prawnych": "Deildir lögfræðiráðgjafa",
- "publikuje {published} z {count}": "{published} af {count} birta"
+ "publikuje {published} z {count}": "{published} af {count} birta",
+ "Najdłuższe ostatnie tury i ich kroki": "Lengstu nýlegu umferðir og skref þeirra",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

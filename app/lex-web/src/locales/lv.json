@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Šīs palātas nolēmumu servera datubāzē nav.",
  "Izby adwokackie": "Advokātu palātas",
  "Izby radców prawnych": "Juridisko padomnieku palātas",
- "publikuje {published} z {count}": "publicē {published} no {count}"
+ "publikuje {published} z {count}": "publicē {published} no {count}",
+ "Najdłuższe ostatnie tury i ich kroki": "Garākie nesenie gājieni un to soļi",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

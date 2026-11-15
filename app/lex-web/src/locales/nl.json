@@ -2894,5 +2894,7 @@
  "Brak orzeczeń tej izby w bazie serwera.": "Geen uitspraken van deze orde in de serverdatabase.",
  "Izby adwokackie": "Ordes van advocaten",
  "Izby radców prawnych": "Ordes van juridisch adviseurs",
- "publikuje {published} z {count}": "{published} van {count} publiceren"
+ "publikuje {published} z {count}": "{published} van {count} publiceren",
+ "Najdłuższe ostatnie tury i ich kroki": "Langste recente beurten en hun stappen",
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s"
 }

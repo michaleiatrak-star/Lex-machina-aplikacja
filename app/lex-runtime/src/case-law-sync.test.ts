@@ -63,6 +63,38 @@ describe("pobieranie całych baz: wznawianie i deduplikacja", () => {
     expect(db.count("WSD")).toBe(45);
   });
 
+  it("WSD: pobieranie od najnowszych numerów; zakres nie rośnie bez nowych orzeczeń; stary stan rosnący przejęty", async () => {
+    const held = new Set(Array.from({ length: 47 }, (_, i) => i + 1));
+    const asked: number[] = [];
+    const fetcher: SyncFetch = async (url) => {
+      if (url.endsWith("/rejestry/showMain/orzecznictwo-19")) return new Response('<a href="https://wsd.adwokatura.pl/rejestry/show/orzeczenie-3">x</a>');
+      const n = Number(/\/rejestry\/show\/(\d+)$/u.exec(url)?.[1]);
+      asked.push(n);
+      if (!held.has(n)) return new Response('<ol class="breadcrumb">Orzecznictwo</ol><h1></h1><article>Orzecznictwo</article>');
+      return new Response(`<ol class="breadcrumb">Orzecznictwo</ol><h1>Orzeczenie WSD z dnia 12 lutego 2022 r.</h1><article>Orzecznictwo Sygnatura: WSD ${n}/21 Tagi treść ${"uzasadnienie ".repeat(20)}</article>`);
+    };
+    // A small budget: the probe and the newest numbers only.
+    const db = database();
+    await runAdapter(wsdAdapter, db, fetcher, 20, 0, now);
+    const stored = db.count("WSD");
+    expect(stored).toBeGreaterThan(0);
+    for (const n of [43, 42, 41].slice(0, stored)) expect(db.has("WSD", String(n))).toBe(true);
+    expect(db.has("WSD", "1")).toBe(false);
+    expect(wsdAdapter.progress(db)).toMatch(/^pobieranie od najnowszych: nr \d+ \(zakres 1–63\)$/u);
+    // Further runs finish the walk down; with no new rulings the range stays where it was.
+    for (let run = 0; run < 6; run++) await runAdapter(wsdAdapter, db, fetcher, 40, 0, now);
+    expect(db.count("WSD")).toBe(47);
+    expect(db.state<{ max: number }>("WSD")?.max).toBe(67);
+    expect(wsdAdapter.progress(db)).toMatch(/^pobrane w całości .*dociąganie nowych od nr 68$/u);
+    // A state saved by the former ascending walk: numbers below its `next` are not asked again.
+    const legacy = database();
+    legacy.saveState("WSD", { next: 30, max: 47, completedAt: null });
+    asked.length = 0;
+    await runAdapter(wsdAdapter, legacy, fetcher, 500, 0, now);
+    expect(asked.filter((n) => n < 30)).toEqual([]);
+    expect(legacy.count("WSD")).toBe(18);
+  });
+
   it("izby: każda izba z liczbą orzeczeń, izby bez publikacji z powodem, strona orzeczeń jednej izby", () => {
     const db = database();
     const ctx = new SyncContext(db, (async () => new Response("")) as SyncFetch, 10, 0, now);
