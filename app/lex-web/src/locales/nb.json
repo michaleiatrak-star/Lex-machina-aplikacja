@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Kretser for juridiske rådgivere",
  "publikuje {published} z {count}": "{published} av {count} publiserer",
  "Najdłuższe ostatnie tury i ich kroki": "Lengste nylige runder og trinnene deres",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "bekreftelse kreves i Startpage-vinduet (knappen over eller i chatten)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage på din økt (første søkemotor)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Søk går gjennom startpage.com (Google-resultater) med økten fra programmets vindu, som ved sn.pl. Ved første søk, og når Startpage igjen ber om verifisering, vises en knapp i chatten som åpner Startpage-vinduet: du består verifiseringen, vinduet lukker seg selv, og spørsmålet gjentas med resultater. Inntil da gir neste søkemotor resultatene. Fungerer i programmet på denne datamaskinen, ikke i servermodus. Startpages vilkår kan forby automatiserte søk: du slår dette på på eget ansvar.",
+ "Sesja Startpage aktywna.": "Startpage-økt aktiv.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Ingen Startpage-økt: bekreft i Startpage-vinduet før søkemotoren brukes.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Bekreftet i Startpage-vinduet — økt aktiv.",
+ "Odnów sesję w oknie Startpage": "Forny økten i Startpage-vinduet",
+ "Potwierdź w oknie Startpage": "Bekreft i Startpage-vinduet",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "lagres ved neste bekreftelse i Startpage-vinduet",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Uten dette valget varer Startpage-økten opptil 6 timer og avsluttes når programmet lukkes. Med det lagres informasjonskapslene fra Startpage-vinduet kryptert på denne datamaskinen (høyst 30 dager), og vinduet vises ikke ved hver oppstart. Når Startpage igjen ber om verifisering, slettes den lagrede økten og vinduet kommer tilbake. Å slå av valget sletter den lagrede økten."
 }

@@ -1,8 +1,8 @@
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
-import { LAW_SOURCE_VERIFICATION_REQUIRED } from "./eli/law-source-sessions.js";
+import { clearLawSourceSession, isChallengePage, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
-import { effectiveSearchOrder, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
+import { effectiveSearchOrder, firecrawlApiKey, geminiSearchKey, STARTPAGE_HOST, webSearchSettings } from "./web-search-settings.js";
 export class WebSearchError extends Error {
     code;
     constructor(code, detail) {
@@ -101,6 +101,45 @@ export function parseDuckDuckGoHtml(html, maxResults) {
         }
     }
     return hits.slice(0, maxResults);
+}
+/**
+ * Organic results of a Startpage results page (server-rendered; markup seen in 2024-2026:
+ * a.result-title / a.result-link with h2/h3, then p.description / .w-gl__description). Startpage's
+ * own links and ads ("Reklama", /do/ redirects) are skipped. Best effort: the markup changes.
+ */
+export function parseStartpageHtml(html, maxResults) {
+    const hits = [];
+    const seen = new Set();
+    const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a>/giu;
+    let match;
+    while ((match = anchor.exec(html)) !== null && hits.length < maxResults) {
+        const attributes = match[1] ?? "";
+        const classes = /\bclass\s*=\s*"([^"]*)"/iu.exec(attributes)?.[1] ?? "";
+        if (!/\b(?:result-title|result-link|w-gl__result-title)\b/u.test(classes))
+            continue;
+        const href = decodeEntities(/\bhref\s*=\s*"([^"]*)"/iu.exec(attributes)?.[1] ?? "");
+        if (!/^https?:\/\//iu.test(href))
+            continue;
+        let host = "";
+        try {
+            host = new URL(href).hostname;
+        }
+        catch {
+            continue;
+        }
+        if (/(^|\.)startpage\.com$/iu.test(host) || seen.has(href))
+            continue;
+        const body = match[2] ?? "";
+        const heading = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/iu.exec(body)?.[1] ?? body;
+        const title = decodeEntities(heading);
+        if (!title)
+            continue;
+        seen.add(href);
+        const after = html.slice(anchor.lastIndex, anchor.lastIndex + 4_000);
+        const snippet = /<(?:p|div|span)\b[^>]*class\s*=\s*"[^"]*\b(?:description|w-gl__description)\b[^"]*"[^>]*>([\s\S]*?)<\/(?:p|div|span)>/iu.exec(after)?.[1] ?? "";
+        hits.push({ title, url: href, snippet: decodeEntities(snippet).slice(0, 400) });
+    }
+    return hits;
 }
 /** Sources of a grounded Gemini answer: one hit per source, the passages it supports as snippet. */
 export function parseGeminiGrounding(payload, maxResults) {
@@ -237,7 +276,9 @@ export class PublicWebSearch {
                         ? ["gemini"]
                         : provider === "duckduckgo" || provider === "ddg"
                             ? ["duckduckgo"]
-                            : [];
+                            : provider === "startpage"
+                                ? ["startpage"]
+                                : [];
         // An engine read through a paid or limited API (Firecrawl, Gemini, SearXNG) that is refused for
         // its limit, credits or key falls back to reading results pages: DuckDuckGo's HTML results
         // (user, 2026-11-14).
@@ -269,6 +310,11 @@ export class PublicWebSearch {
     }
     /** One engine, no fallback (the comparison test and the auto order). */
     async searchEngine(engine, query, maxResults, settings = this.settings()) {
+        if (engine === "startpage") {
+            if (!settings.startpageSession)
+                throw new Error("NOT_CONFIGURED");
+            return this.searchStartpage(query, maxResults);
+        }
         if (engine === "searxng") {
             if (!settings.searxngUrl)
                 throw new Error("NOT_CONFIGURED");
@@ -439,6 +485,36 @@ export class PublicWebSearch {
             throw new Error("BOT_CHECK");
         }
         return parseSearxngResults(payload, maxResults);
+    }
+    /**
+     * Startpage on the user's session (as sn.pl): the cookies and User-Agent of the window in which the
+     * user passed Startpage's check. No session, or Startpage asks again (Anubis, a suspension page):
+     * the session is dropped and the window is shown to the user again (LAW_SOURCE_VERIFICATION_REQUIRED);
+     * the next engine answers this search.
+     */
+    async searchStartpage(query, maxResults) {
+        const required = `${LAW_SOURCE_VERIFICATION_REQUIRED}:${STARTPAGE_HOST}`;
+        const session = lawSourceSessionHeaders(STARTPAGE_HOST);
+        if (!session)
+            throw new Error(required);
+        const url = new URL(`https://${STARTPAGE_HOST}/sp/search`);
+        url.searchParams.set("query", query);
+        url.searchParams.set("cat", "web");
+        url.searchParams.set("language", "polski");
+        url.searchParams.set("lui", "polski");
+        const response = await this.fetchImpl(url, {
+            headers: { Accept: "text/html", "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6", ...session },
+            redirect: "follow",
+            signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        const html = await readLimitedText(response);
+        if (isChallengePage(response.status, html)) {
+            clearLawSourceSession(STARTPAGE_HOST);
+            throw new Error(required);
+        }
+        if (!response.ok)
+            throw new Error(`HTTP_${response.status}`);
+        return parseStartpageHtml(html, maxResults);
     }
     async searchDuckDuckGo(query, maxResults) {
         const url = new URL("https://html.duckduckgo.com/html/");

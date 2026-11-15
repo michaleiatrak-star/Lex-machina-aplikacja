@@ -89,9 +89,9 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
-import { configureGeminiSearchKey, configureWebSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, wokandaSessionDiskStore } from "../web-search-settings.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
-import { configureBrowserSessionsFile } from "../eli/law-source-sessions.js";
+import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -429,7 +429,8 @@ export async function startLocalServer(options?: {
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
   configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
   configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
-  // A Google session the user chose to keep survives a restart (sealed next to the settings).
+  // Startpage on the user's session: the cookies kept (sealed) across restarts when the user chose it.
+  configureLawSourceSessionStore(startpageSessionStore);
   // Courts' wokanda sessions from the user's verification windows survive a restart (sealed).
   configureWokandaSessionStore(wokandaSessionDiskStore);
   configureJurisdiction(path.join(caseFileStore.rootDir, "settings"));

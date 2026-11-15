@@ -501,7 +501,20 @@ li.anomaly-error > strong {
   color: var(--lm-t5);
 }
 
-/* Second-level option under "Google na Twojej sesji". */
+/* Startpage on the user's session: its state and the window button in one row. */
+.web-search-session-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 4px 22px;
+}
+
+.web-search-session-window small {
+  flex: 1 1 100%;
+}
+
+/* Second-level option under "Startpage na Twojej sesji". */
 .web-search-keep {
   margin-left: 22px;
   align-items: flex-start;

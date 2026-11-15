@@ -14,9 +14,13 @@ export const LAW_SOURCES_WITH_CHECK = [
     // check; the user passes it in the application's window, the server reads on that session.
     // Rzecznik Finansowy: positions behind Imperva's check, read on the user's session (source RF).
     { host: "rf.gov.pl", code: "RF", url: "https://rf.gov.pl/publikacje/stanowiska-rzecznika-finansowego/", label: "Rzecznik Finansowy — stanowiska (na Twojej sesji)" },
-    { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" }
-    // Google search on the user's session was removed (2026-11-15): google.com answers a request
+    { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" },
+    // Not a law source: Startpage search on the user's own session (Ustawienia > Wyszukiwarka
+    // internetowa, off by default). The user passes Startpage's check (Anubis) in the window; its
+    // results pages then answer without JavaScript. Results are leads only, verified at the official
+    // source. Google on the user's session was removed (2026-11-15): google.com answers a request
     // without JavaScript with its "enable JavaScript" page, so it gave no results.
+    { host: "www.startpage.com", code: "SEARCH", url: "https://www.startpage.com/sp/search?query=kodeks+karny&language=polski&lui=polski", label: "Startpage (wyszukiwanie na Twojej sesji)" }
 ];
 export const LAW_SOURCE_VERIFICATION_REQUIRED = "LAW_SOURCE_VERIFICATION_REQUIRED";
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
@@ -64,7 +68,7 @@ function keeps(host) {
 }
 // The check's own page, not the source's (Cloudflare "Just a moment…", DataDome's captcha frame).
 // Google: its "unusual traffic" page (/sorry/, reCAPTCHA) and the consent page before the first search.
-const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare|google\.com\/sorry\/|unusual traffic from your computer|nietypowy ruch|g-recaptcha|consent\.google\.com|Zanim przejdziesz do Google|Before you continue to Google/iu;
+const CHALLENGE = /Just a moment\.\.\.|cf-chl-|challenge-platform|captcha-delivery\.com|geo\.captcha|datadome|Attention Required! \| Cloudflare|google\.com\/sorry\/|unusual traffic from your computer|nietypowy ruch|g-recaptcha|consent\.google\.com|Zanim przejdziesz do Google|Before you continue to Google|\.within\.website\/x\/|Anubis could not load|Making sure you(?:'|&#39;|’)re not a bot|Verifying your request|Dostęp tymczasowo zawieszony|access (?:has been )?temporarily suspended|Twoja możliwość połączenia się ze Startpage/iu;
 // Auxiliary pages (R2B/R3: articles, commentaries, authorities' and chambers' sites) behind a bot
 // check, met while answering: the page the runtime itself tried to read, never one named by the
 // browser. Kept for this run, at most PAGE_CHECKS_MAX hosts.

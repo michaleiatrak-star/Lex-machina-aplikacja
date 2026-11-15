@@ -4229,7 +4229,7 @@ export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }>
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
-export type SearchEngineName = "searxng" | "duckduckgo" | "firecrawl" | "gemini";
+export type SearchEngineName = "startpage" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
 
 export type SearchEngineScore = {
   engine: SearchEngineName;
@@ -4254,7 +4254,20 @@ export type WebSearchSettings = {
   firecrawlConfigured: boolean;
   firecrawlKeyForced: boolean;
   providerForced: string | null;
+  startpageSession: boolean;
+  /** Keep the Startpage session after a restart (cookies sealed on this computer). */
+  startpageSessionKeep: boolean;
+  startpageSessionSaved: boolean;
+  startpageSessionActive?: boolean;
 };
+
+export function setStartpageSession(startpageSession: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ startpageSession }) });
+}
+
+export function setStartpageSessionKeep(startpageSessionKeep: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ startpageSessionKeep }) });
+}
 
 export function getWebSearchSettings(): Promise<WebSearchSettings> {
   return json("/api/settings/web-search");

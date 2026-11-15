@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Col·legis d’assessors jurídics",
  "publikuje {published} z {count}": "publiquen {published} de {count}",
  "Najdłuższe ostatnie tury i ich kroki": "Torns recents més llargs i els seus passos",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "cal confirmar a la finestra de Startpage (botó de dalt o al xat)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage a la teva sessió (primer cercador)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Les cerques passen per startpage.com (resultats de Google) amb la sessió de la finestra de l'aplicació, com a sn.pl. A la primera cerca, i quan Startpage torni a demanar verificació, apareixerà al xat un botó que obre la finestra de Startpage: superes la verificació, la finestra es tanca sola i la pregunta es repeteix amb resultats. Fins aleshores els resultats els dona el cercador següent. Funciona a l'aplicació d'aquest ordinador, no en mode servidor. Les condicions de Startpage poden prohibir les consultes automatitzades: ho actives sota la teva responsabilitat.",
+ "Sesja Startpage aktywna.": "Sessió de Startpage activa.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Sense sessió de Startpage: confirma a la finestra de Startpage abans de fer servir el cercador.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Confirmat a la finestra de Startpage — sessió activa.",
+ "Odnów sesję w oknie Startpage": "Renova la sessió a la finestra de Startpage",
+ "Potwierdź w oknie Startpage": "Confirma a la finestra de Startpage",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "es desarà a la propera confirmació a la finestra de Startpage",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Sense aquesta opció la sessió de Startpage dura fins a 6 hores i acaba en tancar l'aplicació. Amb ella, les galetes de la finestra de Startpage es desen xifrades en aquest ordinador (com a màxim 30 dies) i la finestra no apareix a cada inici. Quan Startpage torna a demanar verificació, la sessió desada s'elimina i la finestra torna. Desactivar l'opció elimina la sessió desada."
 }

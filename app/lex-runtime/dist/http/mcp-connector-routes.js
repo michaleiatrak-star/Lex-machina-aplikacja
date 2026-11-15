@@ -7,7 +7,8 @@ import { caseLawRepository } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
 import { PublicWebSearch } from "../web-search.js";
 import { runWebSearchBenchmark } from "../web-search-benchmark.js";
-import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, webSearchDataDirectory, webSearchSettings } from "../web-search-settings.js";
+import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, setStartpageSession, setStartpageSessionKeep, STARTPAGE_HOST, webSearchDataDirectory, webSearchSettings } from "../web-search-settings.js";
+import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
@@ -540,7 +541,9 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             engines: SEARCH_ENGINES,
             searxngUrlForced: searxngUrlForced(),
             firecrawlKeyForced: firecrawlKeyForced(),
-            providerForced: provider !== "auto" ? provider : null
+            providerForced: provider !== "auto" ? provider : null,
+            // A Startpage session from the window is held now (Settings show it and offer the window).
+            startpageSessionActive: lawSourceSessionHeaders(STARTPAGE_HOST) !== null
         };
     };
     app.get("/api/settings/web-search", (req, res) => {
@@ -556,6 +559,16 @@ export function registerMcpConnectorRoutes(app, dependencies) {
                 setSearxngUrl(req.body.searxngUrl ?? "");
             if (req.body && "firecrawlApiKey" in req.body)
                 setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
+            if (req.body && "startpageSession" in req.body)
+                setStartpageSession(req.body.startpageSession);
+            if (req.body && "startpageSessionKeep" in req.body) {
+                setStartpageSessionKeep(req.body.startpageSessionKeep);
+                if (req.body.startpageSessionKeep === true)
+                    keepLawSourceSession(STARTPAGE_HOST);
+            }
+            // Startpage turned off: its session is dropped now, not after its time runs out.
+            if (req.body?.startpageSession === false)
+                clearLawSourceSession(STARTPAGE_HOST);
         }
         catch (error) {
             res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });

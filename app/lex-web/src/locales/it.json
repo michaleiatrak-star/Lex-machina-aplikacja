@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Ordini dei consulenti legali",
  "publikuje {published} z {count}": "pubblicano {published} su {count}",
  "Najdłuższe ostatnie tury i ich kroki": "Turni recenti più lunghi e i loro passaggi",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "serve una conferma nella finestra di Startpage (pulsante sopra o nella chat)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage sulla tua sessione (primo motore di ricerca)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Le ricerche passano da startpage.com (risultati Google) con la sessione della finestra dell'applicazione, come per sn.pl. Alla prima ricerca, e quando Startpage chiede di nuovo una verifica, nella chat compare un pulsante che apre la finestra di Startpage: superi la verifica, la finestra si chiude da sola e la domanda viene ripetuta con i risultati. Fino ad allora i risultati li dà il motore successivo. Funziona nell'applicazione su questo computer, non in modalità server. I termini di Startpage possono vietare le richieste automatiche: lo attivi sotto la tua responsabilità.",
+ "Sesja Startpage aktywna.": "Sessione Startpage attiva.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Nessuna sessione Startpage: conferma nella finestra di Startpage prima di usare il motore di ricerca.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Confermato nella finestra di Startpage — sessione attiva.",
+ "Odnów sesję w oknie Startpage": "Rinnova la sessione nella finestra di Startpage",
+ "Potwierdź w oknie Startpage": "Conferma nella finestra di Startpage",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "verrà salvata alla prossima conferma nella finestra di Startpage",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Senza questa opzione la sessione di Startpage dura fino a 6 ore e termina alla chiusura dell'applicazione. Con essa, i cookie della finestra di Startpage vengono salvati cifrati su questo computer (al massimo 30 giorni) e la finestra non compare a ogni avvio. Quando Startpage chiede di nuovo una verifica, la sessione salvata viene eliminata e la finestra ritorna. Disattivare l'opzione elimina la sessione salvata."
 }

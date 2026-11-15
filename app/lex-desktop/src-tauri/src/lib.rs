@@ -471,6 +471,8 @@ const LAW_SOURCE_HOSTS: &[&str] = &[
     "leginfo.legislature.ca.gov",
     "www.oscn.net",
     "www.capitol.hawaii.gov",
+    // Startpage search on the user's session (its check, Anubis, passed by the user; off by default).
+    "www.startpage.com",
 ];
 
 fn law_source_url(raw: &str) -> Result<(tauri::Url, &'static str), String> {
@@ -1039,6 +1041,8 @@ mod tests {
         assert!(law_source_url("https://evil.example/").is_err());
         // Google search on the user's session was removed (2026-11-15): no Google window.
         assert!(law_source_url("https://www.google.com/search?q=kodeks+karny&hl=pl").is_err());
+        assert!(law_source_url("https://www.startpage.com/sp/search?query=kodeks+karny&language=polski").is_ok());
+        assert!(law_source_url("https://evil.startpage.com.example/").is_err());
         assert!(law_source_url("https://www.google.evil.example/").is_err());
         assert!(law_source_url("https://nysenate.gov.evil.example/").is_err());
         // Auxiliary pages met while answering: public https names only.

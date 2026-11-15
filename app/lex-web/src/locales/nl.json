@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Ordes van juridisch adviseurs",
  "publikuje {published} z {count}": "{published} van {count} publiceren",
  "Najdłuższe ostatnie tury i ich kroki": "Langste recente beurten en hun stappen",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "bevestiging nodig in het Startpage-venster (knop hierboven of in de chat)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage op je sessie (eerste zoekmachine)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Zoekopdrachten gaan via startpage.com (Google-resultaten) met de sessie van het venster van de applicatie, zoals bij sn.pl. Bij de eerste zoekopdracht, en wanneer Startpage opnieuw om verificatie vraagt, verschijnt in de chat een knop die het Startpage-venster opent: jij doorloopt de verificatie, het venster sluit vanzelf en de vraag wordt herhaald met resultaten. Tot dan levert de volgende zoekmachine de resultaten. Werkt in de applicatie op deze computer, niet in servermodus. De voorwaarden van Startpage kunnen geautomatiseerde zoekopdrachten verbieden: je zet dit op eigen verantwoordelijkheid aan.",
+ "Sesja Startpage aktywna.": "Startpage-sessie actief.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Geen Startpage-sessie: bevestig in het Startpage-venster voordat de zoekmachine wordt gebruikt.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Bevestigd in het Startpage-venster — sessie actief.",
+ "Odnów sesję w oknie Startpage": "Sessie vernieuwen in het Startpage-venster",
+ "Potwierdź w oknie Startpage": "Bevestigen in het Startpage-venster",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "wordt bewaard bij de volgende bevestiging in het Startpage-venster",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Zonder deze optie duurt de Startpage-sessie tot 6 uur en eindigt ze bij het sluiten van de applicatie. Met de optie worden de cookies van het Startpage-venster versleuteld op deze computer bewaard (hooguit 30 dagen) en verschijnt het venster niet bij elke start. Als Startpage opnieuw om verificatie vraagt, wordt de bewaarde sessie verwijderd en komt het venster terug. De optie uitzetten verwijdert de bewaarde sessie."
 }

@@ -2902,5 +2902,15 @@
  "Izby radców prawnych": "Chambers of legal advisers",
  "publikuje {published} z {count}": "{published} of {count} publish",
  "Najdłuższe ostatnie tury i ich kroki": "Longest recent turns and their steps",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "confirmation needed in the Startpage window (button above or in the chat)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage on your session (first search engine)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Searches go through startpage.com (Google results) on the session of the application's window, as with sn.pl. On the first search, and whenever Startpage asks for verification again, a button that opens the Startpage window appears in the chat: you pass the verification, the window closes by itself and the question is repeated with results. Until then the next search engine gives the results. Works in the application on this computer, not in server mode. Startpage's terms may prohibit automated queries: you turn this on at your own responsibility.",
+ "Sesja Startpage aktywna.": "Startpage session active.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "No Startpage session: confirm in the Startpage window before the search engine is used.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Confirmed in the Startpage window — session active.",
+ "Odnów sesję w oknie Startpage": "Renew the session in the Startpage window",
+ "Potwierdź w oknie Startpage": "Confirm in the Startpage window",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "will be saved at the next confirmation in the Startpage window",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Without this option the Startpage session lasts up to 6 hours and ends when the application closes. With it, the cookies of the Startpage window are saved encrypted on this computer (up to 30 days) and the window does not appear after every start. When Startpage asks for verification again, the saved session is deleted and the window returns. Turning the option off deletes the saved session."
 }

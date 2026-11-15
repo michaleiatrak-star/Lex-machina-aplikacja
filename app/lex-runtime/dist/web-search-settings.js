@@ -3,7 +3,7 @@ import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 // Untested order: SearXNG (with an address) and DuckDuckGo first; paid-beyond-a-limit engines last:
 // Firecrawl (monthly credits), Gemini with Google Search (free quota, then billed on the user's key).
-export const SEARCH_ENGINES = ["searxng", "duckduckgo", "firecrawl", "gemini"];
+export const SEARCH_ENGINES = ["startpage", "searxng", "duckduckgo", "firecrawl", "gemini"];
 // The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
 let geminiKeySource = null;
 export function configureGeminiSearchKey(source) {
@@ -122,7 +122,10 @@ export function webSearchSettings() {
         lastTest: file.lastTest && Array.isArray(file.lastTest.scores)
             ? { ...file.lastTest, scores: file.lastTest.scores.filter((score) => SEARCH_ENGINES.includes(score.engine)) }
             : null,
-        firecrawlConfigured: Boolean(firecrawlApiKey())
+        firecrawlConfigured: Boolean(firecrawlApiKey()),
+        startpageSession: file.startpageSession === true,
+        startpageSessionKeep: file.startpageSession === true && file.startpageSessionKeep === true,
+        startpageSessionSaved: file.startpageSession === true && file.startpageSessionKeep === true && Boolean(file.startpageCookies)
     };
 }
 export function searxngUrlForced() {
@@ -136,6 +139,8 @@ function write(next) {
     const merged = { ...stored(), ...next };
     if (!merged.firecrawl)
         delete merged.firecrawl;
+    if (!merged.startpageCookies)
+        delete merged.startpageCookies;
     // Fields of the removed engines (Brave key, Google session cookies) go at the next write.
     for (const legacy of ["brave", "googleSession", "googleSessionKeep", "googleCookies"])
         delete merged[legacy];
@@ -154,6 +159,56 @@ export function setSearxngUrl(raw) {
     write({ searxngUrl, order, lastTest: file.lastTest ?? null });
     return webSearchSettings();
 }
+export const STARTPAGE_HOST = "www.startpage.com";
+const STARTPAGE_AAD = Buffer.from("lex-web-search:startpage-session", "utf8");
+export function setStartpageSession(enabled) {
+    if (typeof enabled !== "boolean")
+        throw new Error("WEB_SEARCH_STARTPAGE_SESSION_INVALID");
+    // Turned off: the kept session goes too.
+    write(enabled ? { startpageSession: true } : { startpageSession: false, startpageCookies: undefined });
+    return webSearchSettings();
+}
+/** Keep (or stop keeping, which removes the saved cookies) the Startpage session across restarts. */
+export function setStartpageSessionKeep(enabled) {
+    if (typeof enabled !== "boolean")
+        throw new Error("WEB_SEARCH_STARTPAGE_SESSION_KEEP_INVALID");
+    write(enabled ? { startpageSessionKeep: true } : { startpageSessionKeep: false, startpageCookies: undefined });
+    return webSearchSettings();
+}
+/**
+ * The law-source session store (eli/law-source-sessions.ts) for Startpage: the window's cookies and
+ * User-Agent sealed (AES-256-GCM, own AAD) in web-search.json, only while the user keeps them.
+ */
+export const startpageSessionStore = {
+    keeps: (host) => host === STARTPAGE_HOST && Boolean(settingsFile) && webSearchSettings().startpageSessionKeep,
+    load(host) {
+        if (host !== STARTPAGE_HOST)
+            return null;
+        const text = unseal(stored().startpageCookies, STARTPAGE_AAD);
+        if (!text)
+            return null;
+        try {
+            const value = JSON.parse(text);
+            return typeof value.cookie === "string" && typeof value.userAgent === "string" && typeof value.at === "number"
+                ? { cookie: value.cookie, userAgent: value.userAgent, at: value.at }
+                : null;
+        }
+        catch {
+            return null;
+        }
+    },
+    save(host, session) {
+        if (host !== STARTPAGE_HOST || !settingsFile)
+            return;
+        if (!session) {
+            if (stored().startpageCookies)
+                write({ startpageCookies: undefined });
+            return;
+        }
+        if (webSearchSettings().startpageSessionKeep)
+            write({ startpageCookies: seal(JSON.stringify(session), STARTPAGE_AAD) });
+    }
+};
 const WOKANDA_AAD = Buffer.from("lex-wokanda:sessions", "utf8");
 /**
  * Sessions of the courts' wokanda windows (courts/wokanda.ts), sealed (AES-256-GCM, own AAD) next to
@@ -217,7 +272,17 @@ export function saveWebSearchTest(result) {
  * engine that can run (SearXNG only with an address).
  */
 export function effectiveSearchOrder(settings = webSearchSettings()) {
-    const usable = (engine) => engine === "searxng" ? Boolean(settings.searxngUrl) : engine === "firecrawl" ? settings.firecrawlConfigured : true;
+    const usable = (engine) => engine === "searxng"
+        ? Boolean(settings.searxngUrl)
+        : engine === "firecrawl"
+            ? settings.firecrawlConfigured
+            : engine === "startpage"
+                ? settings.startpageSession
+                : true;
+    // Startpage on the user's session goes first once the user turned it on (their choice, not the test's).
+    if (settings.startpageSession) {
+        return ["startpage", ...effectiveSearchOrder({ ...settings, startpageSession: false })];
+    }
     const tested = settings.order.filter(usable);
     const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
     return [...tested, ...rest];

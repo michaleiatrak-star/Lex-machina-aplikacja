@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Õigusnõustajate kojad",
  "publikuje {published} z {count}": "avaldab {published} / {count}",
  "Najdłuższe ostatnie tury i ich kroki": "Pikimad viimased käigud ja nende sammud",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "vajalik on kinnitus Startpage'i aknas (nupp ülal või vestluses)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage sinu seansil (esimene otsingumootor)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Otsingud käivad startpage.com kaudu (Google'i tulemused) rakenduse akna seansiga, nagu sn.pl puhul. Esimesel otsingul ja siis, kui Startpage taas kontrolli küsib, ilmub vestlusesse nupp, mis avab Startpage'i akna: läbid kontrolli, aken sulgub ise ja küsimust korratakse tulemustega. Seni annab tulemused järgmine otsingumootor. Töötab rakenduses selles arvutis, mitte serverirežiimis. Startpage'i tingimused võivad automaatsed päringud keelata: lülitad selle sisse omal vastutusel.",
+ "Sesja Startpage aktywna.": "Startpage'i seanss aktiivne.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Startpage'i seanss puudub: kinnita Startpage'i aknas enne otsingumootori kasutamist.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Kinnitatud Startpage'i aknas — seanss aktiivne.",
+ "Odnów sesję w oknie Startpage": "Uuenda seanssi Startpage'i aknas",
+ "Potwierdź w oknie Startpage": "Kinnita Startpage'i aknas",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "salvestatakse järgmisel kinnitamisel Startpage'i aknas",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Ilma selle valikuta kestab Startpage'i seanss kuni 6 tundi ja lõpeb rakenduse sulgemisel. Sellega salvestatakse Startpage'i akna küpsised krüpteeritult sellesse arvutisse (kuni 30 päeva) ja aken ei ilmu igal käivitamisel. Kui Startpage taas kontrolli küsib, salvestatud seanss kustutatakse ja aken tuleb tagasi. Valiku väljalülitamine kustutab salvestatud seansi."
 }

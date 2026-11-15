@@ -2896,5 +2896,15 @@
  "Izby radców prawnych": "Deildir lögfræðiráðgjafa",
  "publikuje {published} z {count}": "{published} af {count} birta",
  "Najdłuższe ostatnie tury i ich kroki": "Lengstu nýlegu umferðir og skref þeirra",
- "{at} · {path}: {total} s": "{at} · {path}: {total} s"
+ "{at} · {path}: {total} s": "{at} · {path}: {total} s",
+ "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "staðfesting þarf í Startpage-glugganum (hnappurinn að ofan eða í spjallinu)",
+ "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage á þinni lotu (fyrsta leitarvél)",
+ "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Leit fer í gegnum startpage.com (niðurstöður Google) með lotu forritsgluggans, eins og hjá sn.pl. Í fyrstu leit, og þegar Startpage biður aftur um staðfestingu, birtist hnappur í spjallinu sem opnar Startpage-gluggann: þú staðfestir, glugginn lokast sjálfur og spurningin er endurtekin með niðurstöðum. Þangað til gefur næsta leitarvél niðurstöðurnar. Virkar í forritinu á þessari tölvu, ekki í þjónsham. Skilmálar Startpage kunna að banna sjálfvirkar fyrirspurnir: þú kveikir á þessu á eigin ábyrgð.",
+ "Sesja Startpage aktywna.": "Startpage-lota virk.",
+ "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Engin Startpage-lota: staðfestu í Startpage-glugganum áður en leitarvélin er notuð.",
+ "Potwierdzone w oknie Startpage — sesja aktywna.": "Staðfest í Startpage-glugganum — lota virk.",
+ "Odnów sesję w oknie Startpage": "Endurnýja lotuna í Startpage-glugganum",
+ "Potwierdź w oknie Startpage": "Staðfesta í Startpage-glugganum",
+ "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "vistast við næstu staðfestingu í Startpage-glugganum",
+ "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Án þessa valkosts varir Startpage-lotan í allt að 6 klukkustundir og lýkur þegar forritinu er lokað. Með honum eru vafrakökur Startpage-gluggans vistaðar dulkóðaðar á þessari tölvu (í mesta lagi 30 daga) og glugginn birtist ekki við hverja ræsingu. Þegar Startpage biður aftur um staðfestingu er vistuðu lotunni eytt og glugginn kemur aftur. Ef slökkt er á valkostinum er vistuðu lotunni eytt."
 }

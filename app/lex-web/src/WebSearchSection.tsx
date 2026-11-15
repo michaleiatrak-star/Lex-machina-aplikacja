@@ -6,6 +6,8 @@ import {
   runWebSearchTest,
   setFirecrawlApiKey,
   setSearxngUrl,
+  setStartpageSession,
+  setStartpageSessionKeep,
   setupLocalSearxng,
   type LocalSearxngResult,
   type SearchEngineName,
@@ -14,11 +16,16 @@ import {
 import { InfoTip } from "./InfoTip";
 import { InlineEdit } from "./InlineEdit";
 import { PencilIcon } from "./CaseAccessAdminPanel";
+import { LawSourceVerification } from "./LawSourceVerification.js";
+
+// The Startpage window as the chat opens it (eli/law-source-sessions.ts): the user passes the check in it.
+const STARTPAGE_VERIFICATION = { url: "https://www.startpage.com/sp/search?query=kodeks+karny&language=polski&lui=polski", host: "www.startpage.com", label: "Startpage" };
 
 const SEARXNG_EXAMPLE = "http://localhost:8888";
 const FIRECRAWL_EXAMPLE = "fc-…";
 
 const ENGINE_LABELS: Record<SearchEngineName, string> = {
+  startpage: "Startpage",
   gemini: "Gemini + Google",
   searxng: "SearXNG",
   duckduckgo: "DuckDuckGo",
@@ -74,6 +81,8 @@ function errorText(code: string | undefined, engine?: SearchEngineName): string 
       return t("wyczerpany miesięczny limit planu darmowego");
     case "KEY_REJECTED":
       return t("klucz odrzucony");
+    case "LAW_SOURCE_VERIFICATION_REQUIRED:www.startpage.com":
+      return t("potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)");
     default:
       return code ?? "";
   }
@@ -92,6 +101,8 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [localMessage, setLocalMessage] = useState("");
   const [engineMissing, setEngineMissing] = useState(false);
   const [open, setOpen] = useState(false);
+  const [startpageWindow, setStartpageWindow] = useState(false);
+  const [startpageMessage, setStartpageMessage] = useState("");
   const titleId = useId();
 
   useEffect(() => {
@@ -134,6 +145,18 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.code : String(failure));
       return false;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveStartpage(change: () => Promise<WebSearchSettings>): Promise<void> {
+    setBusy("save");
+    try {
+      setSettings(await change());
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
     } finally {
       setBusy("");
     }
@@ -215,6 +238,61 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
               </button>
             </div>
       <small>{t("Gemini + Google: wyszukiwanie Google przez Twój klucz Google z ustawień modeli; ponad darmowy limit płatne według cennika Google.")}</small>
+
+      <label className="core-law-auto">
+        <input
+          type="checkbox"
+          checked={settings.startpageSession}
+          disabled={!admin || Boolean(busy)}
+          onChange={(event) => void saveStartpage(() => setStartpageSession(event.target.checked))}
+        />
+        <span>{t("Startpage na Twojej sesji (pierwsza wyszukiwarka)")}</span>
+        <InfoTip>
+          {t("Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.")}
+        </InfoTip>
+      </label>
+      {settings.startpageSession ? (
+        <div className="web-search-session-window">
+          <span>
+            {settings.startpageSessionActive ? t("Sesja Startpage aktywna.") : t("Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.")}
+          </span>
+          {startpageWindow ? (
+            <LawSourceVerification
+              verification={STARTPAGE_VERIFICATION}
+              autoStart={false}
+              onVerified={() => {
+                setStartpageWindow(false);
+                setStartpageMessage(t("Potwierdzone w oknie Startpage — sesja aktywna."));
+                void getWebSearchSettings().then(setSettings).catch(() => undefined);
+              }}
+            />
+          ) : (
+            <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => { setStartpageMessage(""); setStartpageWindow(true); }}>
+              {settings.startpageSessionActive ? t("Odnów sesję w oknie Startpage") : t("Potwierdź w oknie Startpage")}
+            </button>
+          )}
+          {startpageMessage ? <small>{startpageMessage}</small> : null}
+        </div>
+      ) : null}
+      {settings.startpageSession ? (
+        <label className="core-law-auto web-search-keep">
+          <input
+            type="checkbox"
+            checked={settings.startpageSessionKeep}
+            disabled={!admin || Boolean(busy)}
+            onChange={(event) => void saveStartpage(() => setStartpageSessionKeep(event.target.checked))}
+          />
+          <span>
+            {t("Pamiętaj sesję po ponownym uruchomieniu")}
+            {settings.startpageSessionKeep ? (
+              <small> · {settings.startpageSessionSaved ? t("sesja zapisana") : t("zapisze się po najbliższym potwierdzeniu w oknie Startpage")}</small>
+            ) : null}
+          </span>
+          <InfoTip>
+            {t("Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.")}
+          </InfoTip>
+        </label>
+      ) : null}
 
       <div className="web-search-url">
         <span>{t("Adres SearXNG:")}</span>
