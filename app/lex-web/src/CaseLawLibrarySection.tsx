@@ -1,3 +1,4 @@
+import { CaseLawBodies } from "./CaseLawBodies";
 import { N_, t } from "./i18n";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
@@ -410,6 +411,30 @@ export function CaseLawLibrarySection() {
                         >
                           {t("Pobierz teraz")}
                         </button>
+                      ) : null}
+                      {item.bodies?.length ? (
+                        item.source === "OSD" ? (
+                          <>
+                            <CaseLawBodies
+                              title={t("Izby adwokackie")}
+                              source={item.source}
+                              bodies={item.bodies.filter((body) => body.group === "ADWOKACI")}
+                              active={server.active}
+                              onServer={setServer}
+                              onError={setError}
+                            />
+                            <CaseLawBodies
+                              title={t("Izby radców prawnych")}
+                              source={item.source}
+                              bodies={item.bodies.filter((body) => body.group !== "ADWOKACI")}
+                              active={server.active}
+                              onServer={setServer}
+                              onError={setError}
+                            />
+                          </>
+                        ) : (
+                          <CaseLawBodies title={t("Sąd")} source={item.source} bodies={item.bodies} active={server.active} onServer={setServer} onError={setError} />
+                        )
                       ) : null}
                       {SESSION_SOURCES[item.source] ? (
                         sessionWindow === item.source ? (

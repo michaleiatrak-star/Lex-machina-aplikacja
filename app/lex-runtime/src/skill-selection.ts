@@ -341,6 +341,10 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
     skill: "orzeczenia-sadowe-v2",
     patterns: [
       /\bznajdz wyrok\b/,
+      // A named ruling the user asks about, not one they have to analyse (router [5]: "o czym
+      // mówi wyrok SN … sygn. SDI 9/12" ran the court-analysis pipeline, live test 2026-11-15).
+      /^(?![\s\S]*\b(?:przeanaliz|analiz|ocen|przejrz|zalacz|w zalacz|ponizej)[a-z]*\b)[\s\S]*\b(?:o czym (?:mowi|jest|traktuje|orzekl)|co (?:orzekl|rozstrzygnal|stwierdzil))[a-z]*\b[\s\S]*\b(?:wyrok|orzeczen|uchwal|postanowien|sad|sn)[a-z]*\b/,
+      /^(?![\s\S]*\b(?:przeanaliz|analiz|ocen|przejrz|zalacz|w zalacz|ponizej)[a-z]*\b)[\s\S]*\b(?:wyrok|orzeczen|uchwal|postanowien)[a-z]*\b[\s\S]{0,120}\bsygn(?:atur[a-z]*|\.|\b)/,
       /\bprecedens[a-z]*\b/,
       /\blinia orzecznicz[a-z]*\b/,
       /\bweryfikacj[a-z]* sygnatur[a-z]*\b/

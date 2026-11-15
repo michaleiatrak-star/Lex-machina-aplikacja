@@ -28,11 +28,20 @@ const ENGINE_LABELS: Record<SearchEngineName, string> = {
 function localSearxngText(result: LocalSearxngResult): string {
   if (result.reachable) return t("Lokalny SearXNG działa: {url}. Adres jest ustawiony.", { url: result.url });
   if (result.error === "CONTAINER_ENGINE_MISSING") {
-    return t("Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}", {
+    return t("Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Desktop i uruchom SearXNG” albo zainstaluj Dockera samodzielnie i uruchom: {command}", {
       directory: result.directory,
       command: result.commands.join(" && ")
     });
   }
+  if (result.error === "CONTAINER_ENGINE_NOT_RUNNING") {
+    return t("Docker jest zainstalowany, ale nie działa (Docker Desktop nie jest uruchomiony i nie udało się go uruchomić). Uruchom Docker Desktop, poczekaj, aż będzie gotowy, i kliknij ponownie „Utwórz lokalny SearXNG na tym komputerze”. Jeśli Docker był przed chwilą instalowany, najpierw uruchom ponownie komputer. Pliki są w {directory}.", { directory: result.directory });
+  }
+  if (result.error === "INSTALLED_RESTART_NEEDED") return t("Docker Desktop został zainstalowany. Uruchom ponownie komputer, a potem kliknij „Utwórz lokalny SearXNG na tym komputerze”.");
+  if (result.error?.startsWith("INSTALLER_MISSING:")) {
+    const tool = result.error.slice("INSTALLER_MISSING:".length);
+    return t("Nie można zainstalować Dockera automatycznie: brak instalatora pakietów ({tool}). Zainstaluj Docker Desktop ze strony docker.com i kliknij ponownie „Utwórz lokalny SearXNG na tym komputerze”.", { tool: tool === "linux" ? t("Linux: zainstaluj Dockera menedżerem pakietów systemu") : tool });
+  }
+  if (result.error?.startsWith("INSTALL_FAILED")) return t("Instalacja Docker Desktop nie powiodła się ({error}). Zainstaluj go ze strony docker.com i kliknij ponownie „Utwórz lokalny SearXNG na tym komputerze”.", { error: result.error.slice("INSTALL_FAILED: ".length) });
   if (result.error === "NOT_ANSWERING") {
     return t("SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).");
   }
@@ -57,6 +66,10 @@ function errorText(code: string | undefined, engine?: SearchEngineName): string 
       return t("serwer wymaga weryfikacji przeglądarki");
     case "JSON_FORMAT_DISABLED":
       return t("serwer nie udostępnia wyników w formacie JSON");
+    case "QUOTA_DAILY":
+      return t("wyczerpany dzienny darmowy limit klucza Gemini (odnawia się następnego dnia)");
+    case "QUOTA_ZERO":
+      return t("klucz Gemini nie ma darmowego limitu dla wyszukiwania Google; włącz płatności dla projektu w Google AI Studio");
     case "CREDITS_EXHAUSTED":
       return t("wyczerpany miesięczny limit planu darmowego");
     case "KEY_REJECTED":
@@ -74,9 +87,10 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [settings, setSettings] = useState<WebSearchSettings | null>(null);
   const [editing, setEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
-  const [busy, setBusy] = useState<"" | "test" | "save" | "searxng">("");
+  const [busy, setBusy] = useState<"" | "test" | "save" | "searxng" | "docker">("");
   const [error, setError] = useState("");
   const [localMessage, setLocalMessage] = useState("");
+  const [engineMissing, setEngineMissing] = useState(false);
   const [open, setOpen] = useState(false);
   const titleId = useId();
 
@@ -125,11 +139,12 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     }
   }
 
-  async function createLocalSearxng(): Promise<void> {
-    setBusy("searxng");
+  async function createLocalSearxng(install = false): Promise<void> {
+    setBusy(install ? "docker" : "searxng");
     setLocalMessage("");
     try {
-      const reply = await setupLocalSearxng();
+      const reply = await setupLocalSearxng(install);
+      setEngineMissing(reply.local.error === "CONTAINER_ENGINE_MISSING");
       setSettings(reply.settings);
       setLocalMessage(localSearxngText(reply.local));
       setError("");
@@ -247,6 +262,14 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
             {t("Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.")}
           </InfoTip>
           {localMessage ? <small>{localMessage}</small> : null}
+          {engineMissing ? (
+            <>
+              <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void createLocalSearxng(true)}>
+                {busy === "docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i uruchom SearXNG")}
+              </button>
+              <InfoTip>{t("Instalacja: Windows przez winget, macOS przez Homebrew; system poprosi o zgodę administratora, a po instalacji może być potrzebne ponowne uruchomienie komputera. Docker Desktop jest bezpłatny dla małych firm (do 250 pracowników i do 10 mln USD rocznego przychodu); większa kancelaria potrzebuje płatnej subskrypcji Docker.")}</InfoTip>
+            </>
+          ) : null}
         </div>
       ) : null}
 

@@ -46,6 +46,13 @@ describe("case-law follow-ups stay a case-law search", () => {
     expect(await primaryOf(`${FIRST}\n\nAsystent: Nie znaleziono w bazie SN.\n\nUżytkownik: ${followUp}`)).toBe("orzeczenia-sadowe-v2");
   }, 60_000);
 
+  it.each([
+    "o czym mówi wyrok który wydał Sąd Najwyższy dnia 10 maja 2012 r., sygn. akt SDI 9/12",
+    "Co orzekł Sąd Najwyższy w wyroku III CZP 25/11?"
+  ])("a named ruling asked about (%s) -> orzeczenia-sadowe-v2, no court analysis (live test 2026-11-15)", async (query) => {
+    expect(await primaryOf(query)).toBe("orzeczenia-sadowe-v2");
+  }, 60_000);
+
   it("a judgment the user has is still analysed", async () => {
     expect(await primaryOf("Przeanalizuj ten wyrok sądu rejonowego, który dostałem")).toBe("analiza-sadowa-v6");
   }, 60_000);

@@ -143,6 +143,23 @@ export class CaseLawDatabase {
     return row.n;
   }
 
+  /** Documents per issuing body (court, chamber) of a source, most first. */
+  courts(source: CaseLawSource): Array<{ court: string; documents: number }> {
+    return this.db
+      .prepare("SELECT json_extract(card, '$.court') AS court, COUNT(*) AS documents FROM documents WHERE source = ? GROUP BY court ORDER BY documents DESC")
+      .all(source)
+      .map((row) => ({ court: String((row as { court: unknown }).court ?? ""), documents: Number((row as { documents: number }).documents) }));
+  }
+
+  /** A page of a source's documents (optionally one body's), newest first. */
+  list(source: CaseLawSource, court: string | null, offset: number, limit: number): { total: number; cards: CaseLawCard[] } {
+    const where = court ? "source = ? AND json_extract(card, '$.court') = ?" : "source = ?";
+    const args = court ? [source, court] : [source];
+    const total = Number((this.db.prepare(`SELECT COUNT(*) AS n FROM documents WHERE ${where}`).get(...args) as { n: number }).n);
+    const rows = this.db.prepare(`SELECT card FROM documents WHERE ${where} ORDER BY date IS NULL, date DESC, id LIMIT ? OFFSET ?`).all(...args, limit, offset) as Array<{ card: string }>;
+    return { total, cards: rows.map((row) => JSON.parse(row.card) as CaseLawCard) };
+  }
+
   /** Whether a document of this source is held. */
   has(source: CaseLawSource, sourceId: string): boolean {
     return Boolean(this.db.prepare("SELECT 1 FROM documents WHERE id = ?").get(`${source}:${sourceId}`));

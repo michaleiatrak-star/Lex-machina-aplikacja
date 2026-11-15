@@ -42,199 +42,199 @@
  ],
  "totals": {
   "pl": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "en": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "de": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "fr": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "it": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "es": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "pt": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "nl": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "ca": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "lb": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "sv": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "da": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "nb": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "fi": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "is": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "fo": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "et": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "lv": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "lt": {
-   "całość": 88,
+   "całość": 89,
    "częściowo": 0,
    "wcale": 0
   },
   "cs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "sk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "hu": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "sl": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "hr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "bs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "sr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "cnr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "mk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "sq": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "ro": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "bg": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "el": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "mt": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "tr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "uk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "ka": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "hy": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "az": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   },
   "rw": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 86
+   "wcale": 87
   }
  },
  "components": [
@@ -1279,27 +1279,92 @@
    }
   },
   {
-   "component": "CaseLawLibrarySection",
-   "translatable": 48,
+   "component": "CaseLawBodies",
+   "translatable": 11,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 48,
-    "da": 48,
-    "de": 48,
-    "en": 48,
-    "es": 48,
-    "et": 48,
-    "fi": 48,
-    "fr": 48,
-    "is": 48,
-    "it": 48,
-    "lb": 48,
-    "lt": 48,
-    "lv": 48,
-    "nb": 48,
-    "nl": 48,
-    "pt": 48,
-    "sv": 48
+    "ca": 11,
+    "da": 11,
+    "de": 11,
+    "en": 11,
+    "es": 11,
+    "et": 11,
+    "fi": 11,
+    "fr": 11,
+    "is": 11,
+    "it": 11,
+    "lb": 11,
+    "lt": 11,
+    "lv": 11,
+    "nb": 11,
+    "nl": 11,
+    "pt": 11,
+    "sv": 11
+   },
+   "state": {
+    "pl": "całość",
+    "en": "całość",
+    "de": "całość",
+    "fr": "całość",
+    "it": "całość",
+    "es": "całość",
+    "pt": "całość",
+    "nl": "całość",
+    "ca": "całość",
+    "lb": "całość",
+    "sv": "całość",
+    "da": "całość",
+    "nb": "całość",
+    "fi": "całość",
+    "is": "całość",
+    "fo": "wcale",
+    "et": "całość",
+    "lv": "całość",
+    "lt": "całość",
+    "cs": "wcale",
+    "sk": "wcale",
+    "hu": "wcale",
+    "sl": "wcale",
+    "hr": "wcale",
+    "bs": "wcale",
+    "sr": "wcale",
+    "cnr": "wcale",
+    "mk": "wcale",
+    "sq": "wcale",
+    "ro": "wcale",
+    "bg": "wcale",
+    "el": "wcale",
+    "mt": "wcale",
+    "tr": "wcale",
+    "uk": "wcale",
+    "ka": "wcale",
+    "hy": "wcale",
+    "az": "wcale",
+    "rw": "wcale"
+   }
+  },
+  {
+   "component": "CaseLawLibrarySection",
+   "translatable": 50,
+   "notYetTranslatable": 0,
+   "translated": {
+    "ca": 50,
+    "da": 50,
+    "de": 50,
+    "en": 50,
+    "es": 50,
+    "et": 50,
+    "fi": 50,
+    "fr": 50,
+    "is": 50,
+    "it": 50,
+    "lb": 50,
+    "lt": 50,
+    "lv": 50,
+    "nb": 50,
+    "nl": 50,
+    "pt": 50,
+    "sv": 50
    },
    "state": {
     "pl": "całość",
@@ -5505,26 +5570,26 @@
   },
   {
    "component": "WebSearchSection",
-   "translatable": 46,
+   "translatable": 55,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 46,
-    "da": 46,
-    "de": 46,
-    "en": 46,
-    "es": 46,
-    "et": 46,
-    "fi": 46,
-    "fr": 46,
-    "is": 46,
-    "it": 46,
-    "lb": 46,
-    "lt": 46,
-    "lv": 46,
-    "nb": 46,
-    "nl": 46,
-    "pt": 46,
-    "sv": 46
+    "ca": 55,
+    "da": 55,
+    "de": 55,
+    "en": 55,
+    "es": 55,
+    "et": 55,
+    "fi": 55,
+    "fr": 55,
+    "is": 55,
+    "it": 55,
+    "lb": 55,
+    "lt": 55,
+    "lv": 55,
+    "nb": 55,
+    "nl": 55,
+    "pt": 55,
+    "sv": 55
    },
    "state": {
     "pl": "całość",

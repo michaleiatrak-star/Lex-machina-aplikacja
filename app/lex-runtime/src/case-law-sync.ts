@@ -589,6 +589,8 @@ export const tkAdapter: SyncAdapter = {
 
 // ── Portal Orzecznictwa Dyscyplinarnego Adwokatury (wsd.adwokatura.pl), by page number ──
 const WSD = "https://wsd.adwokatura.pl";
+const WSD_PROBE_STEP = 20;
+const WSD_PROBE_MISSES = 4;
 
 export function wsdRuling(html: string): { title: string; signature: string | null; text: string } | null {
   const crumbs = squeeze(plainText(/<(?:ol|ul|div)\b[^>]*(?:breadcrumb|okruszki)[^>]*>([\s\S]*?)<\/(?:ol|ul|div)>/iu.exec(html)?.[1] ?? ""));
@@ -602,16 +604,33 @@ export function wsdRuling(html: string): { title: string; signature: string | nu
 
 export const wsdAdapter: SyncAdapter = {
   source: "WSD",
-  label: "Orzecznictwo dyscyplinarne adwokatury (WSD)",
+  label: "Wyższy Sąd Dyscyplinarny Adwokatury (WSD) i kasacje SN — wsd.adwokatura.pl",
   progress: (db) => numberProgress(db.state<NumberState>("WSD")),
   async run(ctx) {
     await numberSequence(
       ctx,
       "WSD",
       async () => {
+        // The register's first page lists only the oldest 30 rulings (WKD, numbers up to ~1700);
+        // the WSD rulings of recent years carry higher numbers (user, 2026-11-15: no WSD in the
+        // database). The highest number is found by probing upward until several steps hold nothing.
         const page = await ctx.html(`${WSD}/rejestry/showMain/orzecznictwo-19`);
         const ids = [...(page ?? "").matchAll(/rejestry\/show\/[^"#?]*?-(\d+)["#?]/gu)].map((match) => Number(match[1]));
-        return ids.length ? Math.max(...ids) : null;
+        const known = ctx.db.state<NumberState>("WSD")?.max ?? 0;
+        let top = Math.max(known, ...ids, 0);
+        if (!top) return null;
+        for (let probe = top + WSD_PROBE_STEP, misses = 0; misses < WSD_PROBE_MISSES && ctx.open; probe += WSD_PROBE_STEP) {
+          const html = await ctx.html(`${WSD}/rejestry/show/${probe}`);
+          // An empty number is a page too, with "Orzecznictwo" in its menu: only a signature is a ruling.
+          if (html && wsdRuling(html)?.signature) {
+            top = probe;
+            misses = 0;
+          } else {
+            misses++;
+          }
+        }
+        // Numbers past the last hit, below the next probe, may still hold rulings.
+        return top + WSD_PROBE_STEP;
       },
       async (id) => {
         if (ctx.db.has("WSD", String(id))) return;
@@ -718,7 +737,7 @@ export const DISCIPLINARY_SEEDS: DisciplinarySeed[] = [
   { id: "oirp-rzeszow", body: "Okręgowy Sąd Dyscyplinarny OIRP w Rzeszowie", start: "https://www.oirp.rzeszow.pl/radcowie/odpowiedzialnosc-dyscyplinarna", listing: /\/radcowie\/odpowiedzialnosc-dyscyplinarna\/\d{4}$/u, item: /\/item\.php\?id=\d+$/u },
   { id: "oirp-kielce", body: "Okręgowy Sąd Dyscyplinarny OIRP w Kielcach", start: "https://www.oirpkielce.pl/o-izbie/odpowiedzialnosc-dyscyplinarna/orzeczenia-osd", listing: /\/orzeczenia-osd\/\d{4}[^/]*$/u, item: /\.pdf$/iu },
   { id: "oirp-katowice", body: "Okręgowy Sąd Dyscyplinarny OIRP w Katowicach", start: "https://www.oirp.katowice.pl/orzeczenia-sadu-dyscyplinarnego/orzeczenia-sadu-dyscyplinarnego.html", listing: /\/orzeczenia-sadu-dyscyplinarnego\/\d{4}-orzeczenia-sadu-dyscyplinarnego\.html$/u, item: /\/add\/vrecord\/.+\.pdf$/iu },
-  { id: "ora-poznan", body: "Sąd Dyscyplinarny Izby Adwokackiej w Poznaniu", site: "https://ora.poznan.pl", search: "orzeczenie sądu dyscyplinarnego", title: /orzeczeni|postanowieni/iu }
+  { id: "ora-poznan", body: "Sąd Dyscyplinarny Izby Adwokackiej w Poznaniu", site: "https://ora.poznan.pl", search: "orzeczenie sądu dyscyplinarnego", title: /(?:orzeczeni|postanowieni)\w* Sądu Dyscyplinarnego Izby Adwokackiej/iu }
 ];
 
 const SIGNATURE_AFTER_SYGN = /sygn(?:atura)?\.?\s*(?:akt)?\s*:?\s*((?:[A-Z]{1,4}\.?\s*){1,2}\d{1,4}\s*\/\s*\d{2,4})/iu;
@@ -894,9 +913,46 @@ async function wpSeed(ctx: SyncContext, seed: WpSeed): Promise<boolean> {
 
 type SeedState = { seed: number; rounds: number; lastRoundAt: string | null };
 
+/**
+ * Chambers without a public archive of first-instance disciplinary rulings (DR-12, table of the
+ * chambers, checked 2026-07-16 and 2026-10-03): shown in the database window beside the chambers
+ * downloaded, so a missing chamber reads as "does not publish", not as a gap of the application.
+ */
+export const DISCIPLINARY_NOT_PUBLISHED: Array<{ body: string; reason: string }> = [
+  ...["w Krakowie", "we Wrocławiu", "w Gdańsku", "w Katowicach", "w Warszawie", "w Lublinie", "w Szczecinie", "w Rzeszowie", "w Bydgoszczy", "w Zielonej Górze", "w Białymstoku", "w Bielsku-Białej", "w Koszalinie", "w Kielcach", "w Łodzi"].map((place) => ({
+    body: `Sąd Dyscyplinarny Izby Adwokackiej ${place}`,
+    reason: "izba nie publikuje orzeczeń (na stronie ORA tylko skład sądu dyscyplinarnego; sprawdzono 2026-11-15)"
+  })),
+  ...["w Częstochowie", "w Olsztynie", "w Opolu", "w Płocku", "w Radomiu", "w Siedlcach", "w Toruniu", "w Wałbrzychu"].map((place) => ({
+    body: `Sąd Dyscyplinarny Izby Adwokackiej ${place}`,
+    reason: "nie znaleziono archiwum orzeczeń na stronie ORA (sprawdzono 2026-11-15)"
+  })),
+  { body: "Okręgowy Sąd Dyscyplinarny OIRP w Krakowie", reason: "izba publikuje tylko statystyki postępowań, bez orzeczeń" },
+  ...["Białymstoku", "Olsztynie", "Zielonej Górze", "Łodzi", "Poznaniu", "Bydgoszczy", "Wałbrzychu", "Koszalinie", "Opolu"].map((city) => ({
+    body: `Okręgowy Sąd Dyscyplinarny OIRP w ${city}`,
+    reason: "nie znaleziono publicznego archiwum orzeczeń na stronie izby"
+  })),
+  { body: "Okręgowy Sąd Dyscyplinarny OIRP w Toruniu", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" }
+];
+
+/** One chamber's run ("Pobierz teraz" beside the chamber in the database window). */
+export function disciplinarySeedAdapter(id: string): SyncAdapter | null {
+  const seed = DISCIPLINARY_SEEDS.find((item) => item.id === id);
+  if (!seed) return null;
+  return {
+    source: `OSD:${seed.id}` as CaseLawSource,
+    label: seed.body,
+    progress: () => "",
+    async run(ctx) {
+      if ("site" in seed) await wpSeed(ctx, seed);
+      else await crawlSeed(ctx, seed);
+    }
+  };
+}
+
 export const disciplinaryAdapter: SyncAdapter = {
   source: "OSD",
-  label: "Sądy dyscyplinarne izb radców prawnych i adwokackich (I instancja)",
+  label: "Sądy dyscyplinarne izb adwokackich i izb radców prawnych (I instancja)",
   progress: (db) => {
     const state = db.state<SeedState>("OSD");
     if (!state) return "nie rozpoczęto";
@@ -1424,12 +1480,12 @@ export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdap
 export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
   { source: "SAOS", reason: "kopia nieoficjalna — używana tylko do wyszukiwania, bez pobierania i bez zapisu w bazie" },
   { source: "WSD KIRP", reason: "orzeczenia nie są już publikowane (wsd.kirp.pl przekierowuje na kirp.pl)" },
+  { source: "Sądy dyscyplinarne samorządu psychologów", reason: "samorząd powstaje na podstawie ustawy z 23.01.2026 r. (Dz.U. 2026 poz. 187), która w części o samorządzie wchodzi w życie 19.05.2028 (art. 161); orzeczeń jeszcze nie ma" },
   { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
   { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
   { source: "RIO Katowice, Łódź, Lublin, Olsztyn, Opole, Rzeszów, Wrocław", reason: "BIP-y na innych systemach niż pozostałe izby; uchwały dostępne w ich BIP-ach, bez pobierania do bazy" },
   { source: "ZUS — interpretacje", reason: "publikowane w archiwach RAR; odczyt wymaga dodatkowej biblioteki (czeka na zgodę)" },
-  { source: "OIRP Toruń", reason: "lista orzeczeń ładowana skryptem (menedżer plików), bez adresów do pobrania" },
-  { source: "Pozostałe izby", reason: "brak publicznego archiwum orzeczeń I instancji (DR-12, tabela izb)" }
+  { source: "Izby adwokackie i izby radców prawnych bez archiwum orzeczeń", reason: "wykaz izb i powód przy każdej — w pozycji sądów dyscyplinarnych I instancji (wybór izby)" }
 ];
 
 type AdapterRun = { at: string; requests: number; stored: number; duplicates: number; error?: string; waiting?: string };
@@ -1476,7 +1532,9 @@ let startedWith: CaseLawSyncOptions | null = null;
  */
 export function runCaseLawSourceNow(source: string): boolean {
   const options = startedWith;
-  const adapter = (options?.adapters ?? CASE_LAW_ADAPTERS).find((item) => item.source === source);
+  const adapter = source.startsWith("OSD:")
+    ? disciplinarySeedAdapter(source.slice(4))
+    : (options?.adapters ?? CASE_LAW_ADAPTERS).find((item) => item.source === source);
   if (!options || !adapter || running.has(adapter.source) || !syncActive) return false;
   const held = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
   setSharedCaseLawDatabase(held);
@@ -1521,9 +1579,50 @@ export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
   return () => clearInterval(timer);
 }
 
-export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; running: boolean; lastRun: AdapterRun | null };
+export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; running: boolean; lastRun: AdapterRun | null; bodies?: CaseLawBody[] };
 
 /** What the settings window shows: whether the download runs, and each source's count and place. */
+export type CaseLawBody = {
+  body: string;
+  documents: number;
+  /** The self-government the chamber belongs to: the bar (adwokatura) or the legal advisers (radcowie prawni). */
+  group?: "ADWOKACI" | "RADCOWIE";
+  /** The chamber's own download ("OSD:<seed>") when it publishes; the reason when it does not. */
+  run?: string;
+  running?: boolean;
+  lastRun?: AdapterRun | null;
+  notPublished?: string;
+};
+
+/** The bodies of a source (the chambers of the disciplinary courts; WSD, WKD, SN in the bar's portal). */
+export function sourceBodies(database: CaseLawDatabase, source: "OSD" | "WSD"): CaseLawBody[] {
+  const counted = new Map(database.courts(source).map((row) => [row.court, row.documents]));
+  if (source === "WSD") return [...counted].map(([body, documents]) => ({ body, documents }));
+  const bodies: CaseLawBody[] = DISCIPLINARY_SEEDS.map((seed) => ({
+    body: seed.body,
+    documents: counted.get(seed.body) ?? 0,
+    run: `OSD:${seed.id}`,
+    running: running.has(`OSD:${seed.id}`),
+    lastRun: runs.get(`OSD:${seed.id}`) ?? null
+  }));
+  const known = new Set(bodies.map((item) => item.body));
+  for (const [body, documents] of counted) if (!known.has(body)) bodies.push({ body, documents });
+  for (const item of DISCIPLINARY_NOT_PUBLISHED) bodies.push({ body: item.body, documents: counted.get(item.body) ?? 0, notPublished: item.reason });
+  return bodies.map((item) => ({ ...item, group: /Adwokack/iu.test(item.body) ? "ADWOKACI" : "RADCOWIE" }));
+}
+
+/** A page of the server database's documents of one source (and body): the database window's list. */
+export function caseLawServerDocuments(source: string, court: string | null, offset: number, limit: number) {
+  const database = sharedCaseLawDatabase();
+  const known = CASE_LAW_ADAPTERS.some((adapter) => adapter.source === source);
+  if (!database || !known) return { total: 0, items: [] as Array<{ id: string; court: string; signatures: string[]; date: string | null; kind: string | null; url: string | null }> };
+  const page = database.list(source as CaseLawSource, court, offset, limit);
+  return {
+    total: page.total,
+    items: page.cards.map((card) => ({ id: card.id, court: card.court, signatures: card.signatures, date: card.date, kind: card.kind, url: card.url }))
+  };
+}
+
 export function caseLawSyncStatus(): { active: boolean; sources: CaseLawSourceStatus[]; notBulk: typeof CASE_LAW_NOT_BULK } {
   const database = sharedCaseLawDatabase();
   return {
@@ -1534,7 +1633,8 @@ export function caseLawSyncStatus(): { active: boolean; sources: CaseLawSourceSt
       documents: database ? database.count(adapter.source) : 0,
       progress: database ? adapter.progress(database) : "nie rozpoczęto",
       running: running.has(adapter.source),
-      lastRun: runs.get(adapter.source) ?? null
+      lastRun: runs.get(adapter.source) ?? null,
+      ...(database && (adapter.source === "OSD" || adapter.source === "WSD") ? { bodies: sourceBodies(database, adapter.source) } : {})
     })),
     notBulk: CASE_LAW_NOT_BULK
   };

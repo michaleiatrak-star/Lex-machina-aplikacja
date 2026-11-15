@@ -110,6 +110,21 @@ export class CaseLawDatabase {
         const row = (source ? this.db.prepare("SELECT COUNT(*) AS n FROM documents WHERE source = ?").get(source) : this.db.prepare("SELECT COUNT(*) AS n FROM documents").get());
         return row.n;
     }
+    /** Documents per issuing body (court, chamber) of a source, most first. */
+    courts(source) {
+        return this.db
+            .prepare("SELECT json_extract(card, '$.court') AS court, COUNT(*) AS documents FROM documents WHERE source = ? GROUP BY court ORDER BY documents DESC")
+            .all(source)
+            .map((row) => ({ court: String(row.court ?? ""), documents: Number(row.documents) }));
+    }
+    /** A page of a source's documents (optionally one body's), newest first. */
+    list(source, court, offset, limit) {
+        const where = court ? "source = ? AND json_extract(card, '$.court') = ?" : "source = ?";
+        const args = court ? [source, court] : [source];
+        const total = Number(this.db.prepare(`SELECT COUNT(*) AS n FROM documents WHERE ${where}`).get(...args).n);
+        const rows = this.db.prepare(`SELECT card FROM documents WHERE ${where} ORDER BY date IS NULL, date DESC, id LIMIT ? OFFSET ?`).all(...args, limit, offset);
+        return { total, cards: rows.map((row) => JSON.parse(row.card)) };
+    }
     /** Whether a document of this source is held. */
     has(source, sourceId) {
         return Boolean(this.db.prepare("SELECT 1 FROM documents WHERE id = ?").get(`${source}:${sourceId}`));

@@ -154,6 +154,40 @@ async function readLimitedText(response) {
         .toString("utf8");
 }
 const GEMINI_SEARCH_DEFAULT = "gemini-2.5-flash";
+// Flash-Lite has its own free quota: the second try when the Flash quota is used up.
+const GEMINI_SEARCH_FALLBACK = "gemini-2.5-flash-lite";
+/**
+ * A 429 from the Gemini API (user, 2026-11-15: 0 of 8 answers, "limit"): which quota refused, from
+ * Google's QuotaFailure and RetryInfo details. A per-minute limit is waited out once; a used-up daily
+ * quota or a zero free quota is reported as such instead of "rate limit".
+ */
+export function geminiQuotaRefusal(body) {
+    let message = body;
+    let quotaIds = [];
+    let retryMs = null;
+    try {
+        const error = JSON.parse(body).error;
+        message = error?.message ?? body;
+        for (const detail of error?.details ?? []) {
+            const violations = detail.violations ?? [];
+            quotaIds = quotaIds.concat(violations.map((violation) => violation.quotaId ?? "").filter(Boolean));
+            const delay = typeof detail.retryDelay === "string" ? /^(\d+(?:\.\d+)?)s$/u.exec(detail.retryDelay) : null;
+            if (delay)
+                retryMs = Math.round(Number(delay[1]) * 1000);
+        }
+    }
+    catch {
+        // not JSON: the plain message decides
+    }
+    const ids = quotaIds.join(" ");
+    if (/limit:\s*0\b/u.test(message))
+        return { kind: "ZERO", retryMs };
+    if (/PerDay/u.test(ids))
+        return { kind: "DAY", retryMs };
+    if (/PerMinute/u.test(ids))
+        return { kind: "MINUTE", retryMs };
+    return { kind: "OTHER", retryMs };
+}
 // The model found for this run of the application after a 404 (see searchGemini).
 let geminiSearchModel = null;
 /**
@@ -318,6 +352,26 @@ export class PublicWebSearch {
                 geminiSearchModel = found;
                 response = await ask(found);
             }
+        }
+        let model = configured || geminiSearchModel || GEMINI_SEARCH_DEFAULT;
+        for (let attempt = 0; response.status === 429 && attempt < 2; attempt++) {
+            const refusal = geminiQuotaRefusal(await readLimitedText(response).catch(() => ""));
+            if (refusal.kind === "MINUTE" && attempt === 0 && (refusal.retryMs ?? 0) <= 60_000) {
+                await new Promise((resolve) => setTimeout(resolve, Math.max(refusal.retryMs ?? 10_000, 1000)));
+                response = await ask(model);
+                continue;
+            }
+            if ((refusal.kind === "DAY" || refusal.kind === "ZERO") && !configured && model !== GEMINI_SEARCH_FALLBACK) {
+                model = GEMINI_SEARCH_FALLBACK;
+                response = await ask(model);
+                if (response.status !== 429) {
+                    geminiSearchModel = model;
+                    break;
+                }
+                const second = geminiQuotaRefusal(await readLimitedText(response).catch(() => ""));
+                throw new Error(second.kind === "ZERO" || refusal.kind === "ZERO" ? "QUOTA_ZERO" : "QUOTA_DAILY");
+            }
+            throw new Error(refusal.kind === "DAY" ? "QUOTA_DAILY" : refusal.kind === "ZERO" ? "QUOTA_ZERO" : "RATE_LIMITED");
         }
         if (response.status === 429)
             throw new Error("RATE_LIMITED");

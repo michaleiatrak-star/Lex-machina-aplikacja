@@ -4183,9 +4183,27 @@ export type CaseLawCatalogEntry = Omit<CaseLawCopy, "text"> & { chars: number; s
 
 // Baza orzeczeń serwera (tryb serwerowy): synchronizacja całych źródeł, stan każdego źródła.
 export type CaseLawSyncRun = { at: string; requests: number; stored: number; duplicates: number; error?: string; waiting?: string };
+export type CaseLawBody = {
+  body: string;
+  documents: number;
+  group?: "ADWOKACI" | "RADCOWIE";
+  run?: string;
+  running?: boolean;
+  lastRun?: CaseLawSyncRun | null;
+  notPublished?: string;
+};
+
+export type CaseLawServerDocument = { id: string; court: string; signatures: string[]; date: string | null; kind: string | null; url: string | null };
+
+export function getCaseLawServerDocuments(source: string, court: string, offset = 0): Promise<{ total: number; items: CaseLawServerDocument[] }> {
+  const params = new URLSearchParams({ source, offset: String(offset) });
+  if (court) params.set("court", court);
+  return json(`/api/case-law/server/documents?${params.toString()}`);
+}
+
 export type CaseLawServerStatus = {
   active: boolean;
-  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; lastRun: CaseLawSyncRun | null }>;
+  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; lastRun: CaseLawSyncRun | null; bodies?: CaseLawBody[] }>;
   notBulk: Array<{ source: string; reason: string }>;
 };
 
@@ -4252,8 +4270,8 @@ export type LocalSearxngResult = {
   error?: string;
 };
 
-export function setupLocalSearxng(): Promise<{ local: LocalSearxngResult; settings: WebSearchSettings }> {
-  return json("/api/settings/web-search/searxng-local", { method: "POST", body: JSON.stringify({ start: true }) });
+export function setupLocalSearxng(install = false): Promise<{ local: LocalSearxngResult; settings: WebSearchSettings }> {
+  return json("/api/settings/web-search/searxng-local", { method: "POST", body: JSON.stringify({ start: true, install }) });
 }
 
 export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {

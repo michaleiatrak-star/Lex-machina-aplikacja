@@ -76,3 +76,13 @@ describe("semantic verdicts", () => {
     expect(semanticJudgePrompt("pytanie", documents)).toContain("DOKUMENT D1: orzeczenie I KZP 3/24");
   });
 });
+
+describe("a tool's status note is not a document (live test 2026-11-15)", () => {
+  it("SDI 9/12 with only an sn.pl 403 note: nothing to judge", async () => {
+    const { citedDocuments, carriesDocumentText } = await import("../src/case-content-grounding.js");
+    const note = "OUT_OF_SCOPE SN_SEARCH_HTTP_403 SDI 9/12 SN_WERYFIKACJA_WYMAGANA";
+    expect(carriesDocumentText(note)).toBe(false);
+    expect(citedDocuments("Nie mogę potwierdzić treści wyroku SDI 9/12.", [note])).toEqual([]);
+    expect(carriesDocumentText("Sąd Najwyższy po rozpoznaniu kasacji obwinionego adwokata od orzeczenia Wyższego Sądu Dyscyplinarnego oddalił kasację, uznając, że naruszenie zasad etyki polegało na")).toBe(true);
+  });
+});

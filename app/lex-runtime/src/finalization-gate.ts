@@ -1197,6 +1197,22 @@ export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
  * has no VERIFIED record and no marker yet, so an unverified claim is never
  * shown unmarked. Case-law findings are not marked here: they block.
  */
+/**
+ * "art. 278" found at the start of "art. 278 § 4 KK" is not that occurrence: a marker there splits
+ * the citation ("art. 278 ⚠️ [NIEWERYFIKOWANE] § 4 KK", live test 2026-11-15).
+ */
+function longerUnitAfter(line: string, end: number): boolean {
+  return /^(?:\s*(?:§|ust\.|pkt|lit\.|zd\.|zdanie)\s*\d|[\p{L}\d])/u.test(line.slice(end, end + 12));
+}
+
+/** A mention inside the application's own note ("⚠️ [PRZEPIS ODCZYTANY, …: … art. 278 …]") needs no marker of its own. */
+function insideApplicationNote(line: string, at: number): boolean {
+  const open = line.lastIndexOf("[", at);
+  if (open < 0) return false;
+  const close = line.lastIndexOf("]", at);
+  return close < open && /^\[(?:PRZEPIS ODCZYTANY|TREŚĆ|CYTAT|KONTROLA)/u.test(line.slice(open, open + 20));
+}
+
 export function markUnverifiedReferences(
   text: string,
   report: FinalizationReport,
@@ -1247,7 +1263,12 @@ export function markUnverifiedReferences(
       // next one, never a second marker on the same place (RD 121/26, 2026-11-12).
       const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
       let at = lineText.indexOf(claim);
-      while (at >= 0 && MARKED_AFTER.test(lineText.slice(at + claim.length, at + claim.length + 60))) at = lineText.indexOf(claim, at + claim.length);
+      while (
+        at >= 0 &&
+        (MARKED_AFTER.test(lineText.slice(at + claim.length, at + claim.length + 60)) ||
+          longerUnitAfter(lineText, at + claim.length) ||
+          insideApplicationNote(lineText, at))
+      ) at = lineText.indexOf(claim, at + claim.length);
       if (at < 0) continue;
       // After the act's short name, not inside the citation: "art. 4 pkt 1 RODO ⚠️", not
       // "art. 4 pkt 1 ⚠️ RODO" (RD 121/26; also "art. 95n pkt 1 Prawa o adwokaturze").

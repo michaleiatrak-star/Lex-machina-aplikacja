@@ -209,6 +209,21 @@ export type CitedDocument = {
 };
 
 /** Judgments and tax interpretations the answer cites whose text a source returned in the turn. */
+/**
+ * A tool's status note ("OUT_OF_SCOPE SN_SEARCH_HTTP_403 SDI 9/12 SN_WERYFIKACJA_WYMAGANA") names the
+ * signature but holds no text of the ruling: judging the answer against it produced "SDI 9/12 nie
+ * dotyczy pytania … Tekst dokumentu: notatka systemowa" (live test 2026-11-15).
+ */
+export function carriesDocumentText(text: string): boolean {
+  // Only a text with the application's status codes can be a bare note.
+  if (!/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/u.test(text)) return true;
+  const words = text
+    .replace(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/gu, " ")
+    .replace(/\b(?:OUT_OF_SCOPE|DISCOVERY_ONLY|FOUND|NOT_FOUND|AMBIGUOUS)\b/gu, " ")
+    .match(/\p{L}{3,}/gu);
+  return (words?.length ?? 0) >= 3;
+}
+
 export function citedDocuments(answer: string, sources: string[]): CitedDocument[] {
   const paragraphs = answer.split(/\n\s*\n/u);
   const cited = new Map<string, CitedDocument>();
@@ -221,7 +236,7 @@ export function citedDocuments(answer: string, sources: string[]): CitedDocument
     for (const item of found) {
       if (cited.has(item.key)) continue;
       const text = item.kind === "interpretation" ? interpretationTextFor(item.key, sources) : sourceTextFor(item.key, sources);
-      if (text) cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
+      if (text && carriesDocumentText(text)) cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
     }
   });
   // Provisions: what the answer says about a verified article against its wording.

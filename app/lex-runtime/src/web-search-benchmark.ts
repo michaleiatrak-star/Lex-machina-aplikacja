@@ -129,7 +129,8 @@ export async function runWebSearchBenchmark(
           const message = error instanceof Error ? error.message : String(error);
           outcomes.push({ ms: Date.now() - started, error: message });
           // Not configured: the remaining queries would fail the same way.
-          if (message === "NOT_CONFIGURED") {
+          // A used-up daily quota or no free quota: the same (QUOTA_DAILY, QUOTA_ZERO).
+          if (message === "NOT_CONFIGURED" || message.startsWith("QUOTA_")) {
             while (outcomes.length < queries.length) outcomes.push({ ms: 0, error: message });
             break;
           }

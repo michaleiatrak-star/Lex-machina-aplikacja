@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CaseLawDatabase } from "./case-law-db.js";
 import { searchLocalDatabase } from "./case-law-search.js";
-import { SyncContext, runAdapter, snAdapter, spAdapter, spSearchUrl } from "./case-law-sync.js";
+import { DISCIPLINARY_NOT_PUBLISHED, DISCIPLINARY_SEEDS, SyncContext, disciplinarySeedAdapter, runAdapter, snAdapter, sourceBodies, spAdapter, spSearchUrl, wsdAdapter } from "./case-law-sync.js";
 const database = () => new CaseLawDatabase(fs.mkdtempSync(path.join(os.tmpdir(), "lex-sync-")));
 const now = () => new Date("2026-01-03T12:00:00Z");
 function spListing(day, ids, total) {
@@ -44,6 +44,42 @@ describe("pobieranie całych baz: wznawianie i deduplikacja", () => {
         expect(ctx.store({ ...card, source: "CBOSA", sourceId: "A", court: "WSA w Warszawie", url: "https://orzeczenia.nsa.gov.pl/doc/A" }, "treść ".repeat(20))).toBe(true);
         expect(ctx.store({ ...card, source: "SP", sourceId: "B", court: "WSA w Warszawie", url: "https://orzeczenia.ms.gov.pl/details/$N/B" }, "treść ".repeat(20))).toBe(false);
         expect(ctx.duplicates).toBe(1);
+    });
+    it("WSD: numery ponad pierwszą stroną rejestru (nowe orzeczenia WSD) są pobierane", async () => {
+        const db = database();
+        // The register's first page shows numbers 1..3 (old WKD); the numbers run on to 47 with a few gaps.
+        const held = new Set(Array.from({ length: 47 }, (_, i) => i + 1).filter((n) => n !== 10 && n !== 31));
+        const fetcher = async (url) => {
+            if (url.endsWith("/rejestry/showMain/orzecznictwo-19"))
+                return new Response([1, 2, 3].map((n) => `<a href="https://wsd.adwokatura.pl/rejestry/show/orzeczenie-${n}">x</a>`).join(""));
+            const n = Number(/\/rejestry\/show\/(\d+)$/u.exec(url)?.[1]);
+            // An empty number is a page with the portal's menu ("Orzecznictwo") and no ruling.
+            if (!held.has(n))
+                return new Response('<ol class="breadcrumb">Orzecznictwo</ol><h1></h1><article>Orzecznictwo</article>');
+            return new Response(`<ol class="breadcrumb">Orzecznictwo</ol><h1>Orzeczenie WSD z dnia 12 lutego 2022 r.</h1><article>Orzecznictwo Sygnatura: WSD ${n}/21 Tagi treść ${"uzasadnienie ".repeat(20)}</article>`);
+        };
+        await runAdapter(wsdAdapter, db, fetcher, 500, 0, now);
+        expect(db.count("WSD")).toBe(45);
+    });
+    it("izby: każda izba z liczbą orzeczeń, izby bez publikacji z powodem, strona orzeczeń jednej izby", () => {
+        const db = database();
+        const ctx = new SyncContext(db, (async () => new Response("")), 10, 0, now);
+        const gdansk = DISCIPLINARY_SEEDS.find((seed) => seed.id === "oirp-gdansk");
+        for (const n of [1, 2, 3]) {
+            ctx.store({ source: "OSD", sourceId: `g${n}`, court: gdansk.body, courtType: "DISCIPLINARY", division: null, signatures: [`D ${n}/22`], date: `2022-0${n}-01`, kind: "orzeczenie", judges: [], keywords: [], legalBases: [], summary: null, url: `https://oirp.gda.pl/${n}.pdf`, modified: null }, "treść ".repeat(30));
+        }
+        const bodies = sourceBodies(db, "OSD");
+        expect(bodies.find((item) => item.body === gdansk.body)).toMatchObject({ documents: 3, run: "OSD:oirp-gdansk" });
+        expect(bodies.filter((item) => item.notPublished)).toHaveLength(DISCIPLINARY_NOT_PUBLISHED.length);
+        expect(bodies.some((item) => /Izby Adwokackiej w Krakowie/u.test(item.body) && item.notPublished)).toBe(true);
+        // Two separate self-governments: 24 bar chambers, 19 chambers of legal advisers.
+        expect(bodies.filter((item) => item.group === "ADWOKACI")).toHaveLength(24);
+        expect(bodies.filter((item) => item.group === "RADCOWIE")).toHaveLength(19);
+        const page = db.list("OSD", gdansk.body, 0, 2);
+        expect(page.total).toBe(3);
+        expect(page.cards.map((card) => card.signatures[0])).toEqual(["D 3/22", "D 2/22"]);
+        expect(disciplinarySeedAdapter("oirp-gdansk")?.source).toBe("OSD:oirp-gdansk");
+        expect(disciplinarySeedAdapter("nie-ma")).toBeNull();
     });
     it("SN bez sesji z okna sn.pl czeka na potwierdzenie i niczego nie gubi", async () => {
         const db = database();

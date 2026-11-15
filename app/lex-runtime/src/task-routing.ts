@@ -352,11 +352,13 @@ const CASE_LAW_LOOKUP =
 // "Wyrok ETPCz w sprawie Xero Flor przeciwko Polsce, co orzekł?": what a named court said in
 // someone else's case, with no judgment delivered, is looked up (router [5]), not analysed.
 const NAMED_JUDGMENT =
-  /(?<![\p{L}])(?:co\s+(?:\p{L}+\s+){0,3}(?:orzekł\p{L}*|orzekła|rozstrzygnął|rozstrzygnęł\p{L}*|stwierdził\p{L}*|uznał\p{L}*)|o\s+czym\s+(?:jest|był)|czego\s+dotyczy(?:ł)?|przeciwko\s+Polsce|C-\d+\/\d{2})(?![\p{L}])/iu;
+  /(?<![\p{L}])(?:co\s+(?:\p{L}+\s+){0,3}(?:orzekł\p{L}*|orzekła|rozstrzygnął|rozstrzygnęł\p{L}*|stwierdził\p{L}*|uznał\p{L}*)|o\s+czym\s+(?:jest|był|mówi|traktuje)|czego\s+dotyczy(?:ł)?|przeciwko\s+Polsce|C-\d+\/\d{2})(?![\p{L}])/iu;
 // A Supreme Court or NSA case number in the question ("co orzekł SN w III CZP 25/22?"); the
 // repertories of common courts ("I C 900/26") are the user's own proceedings.
 const TOP_COURT_SIGNATURE =
-  /(?<![\p{L}])[IVX]{1,4}\s+(?:CZP|CSK|CSKP|CNP|CNPP|CZ|CO|KZP|KK|KO|KS|KZ|PK|UK|UZP|PZP|PSK|PSKP|USK|USKP|NSNc|NSNk|NSNp|OSK|FSK|GSK|OPS|OPK|FPS|GPS)\s+\d+\/\d{2}(?![\p{L}\d])/u;
+  // The disciplinary repertories of the SN have no division numeral ("SDI 9/12", "SNO 11/16"; live
+  // test 2026-11-15) or one before DSI ("I DSI 3/24").
+  /(?<![\p{L}])(?:[IVX]{1,4}\s+(?:CZP|CSK|CSKP|CNP|CNPP|CZ|CO|KZP|KK|KO|KS|KZ|PK|UK|UZP|PZP|PSK|PSKP|USK|USKP|NSNc|NSNk|NSNp|OSK|FSK|GSK|OPS|OPK|FPS|GPS|DSI|DSK)|SDI|SNO|SDU)\s+\d+\/\d{2}(?![\p{L}\d])/u;
 // An analysis of the provision itself, besides the case law.
 const PROVISION_ANALYSIS =
   /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porównaj|wykaż|przesłank\p{L}*|znamion\p{L}*|wykładni\p{L}*|omów|wyjaśnij|przeanalizuj|analiz\p{L}*|co\s+mówi)(?![\p{L}])/iu;

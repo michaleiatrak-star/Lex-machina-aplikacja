@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LegalFederationToolRuntime } from "./legal-federation-tool-runtime.js";
-import { PublicWebSearch, assertPublicWebSearchQuery, classifyWebSearchHits, parseDuckDuckGoHtml, pickGeminiSearchModel } from "./web-search.js";
+import { PublicWebSearch, geminiQuotaRefusal, assertPublicWebSearchQuery, classifyWebSearchHits, parseDuckDuckGoHtml, pickGeminiSearchModel } from "./web-search.js";
 const DDG_HTML = `
 <div class="result">
   <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fisap.sejm.gov.pl%2Fisap.nsf%2Fdocument.xsp&amp;rut=x">Kodeks <b>cywilny</b></a>
@@ -100,6 +100,45 @@ describe("Gemini + Google i Firecrawl", () => {
             const hits = await new PublicWebSearch({}, fetchImpl).searchEngine("gemini", "kodeks cywilny", 3);
             expect(asked).toEqual(["models/gemini-2.5-flash:generateContent", "models?pageSize=200", "models/gemini-9.0-flash:generateContent"]);
             expect(hits.map((hit) => hit.url)).toEqual(["https://isap.sejm.gov.pl/x"]);
+        }
+        finally {
+            delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        }
+    });
+    it("Gemini 429: rodzaj limitu z odpowiedzi Google (minutowy, dzienny, zerowy)", () => {
+        const body = (quotaId, message = "Quota exceeded", retry = "37s") => JSON.stringify({
+            error: {
+                message,
+                details: [
+                    { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId }] },
+                    { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: retry }
+                ]
+            }
+        });
+        expect(geminiQuotaRefusal(body("GenerateRequestsPerMinutePerProjectPerModel-FreeTier"))).toEqual({ kind: "MINUTE", retryMs: 37000 });
+        expect(geminiQuotaRefusal(body("GenerateRequestsPerDayPerProjectPerModel-FreeTier")).kind).toBe("DAY");
+        expect(geminiQuotaRefusal(body("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "Quota exceeded for metric ..., limit: 0, model: gemini-2.5-pro")).kind).toBe("ZERO");
+        expect(geminiQuotaRefusal("not json").kind).toBe("OTHER");
+    });
+    it("Gemini: wyczerpany dzienny limit Flash — druga próba na Flash-Lite; obu brak — QUOTA_DAILY / QUOTA_ZERO", async () => {
+        const daily = JSON.stringify({ error: { message: "Quota exceeded", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } });
+        const ok = JSON.stringify({ candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: "https://isap.sejm.gov.pl/y", title: "isap" } }] } }] });
+        let liteWorks = true;
+        const asked = [];
+        const fetchImpl = (async (input) => {
+            const url = String(input);
+            asked.push(/models\/([^:]+):/u.exec(url)?.[1] ?? url);
+            if (url.includes("flash-lite"))
+                return liteWorks ? new Response(ok, { status: 200 }) : new Response(daily.replace("Quota exceeded", "limit: 0"), { status: 429 });
+            return new Response(daily, { status: 429 });
+        });
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+        try {
+            const hits = await new PublicWebSearch({ LEX_GEMINI_SEARCH_MODEL: "" }, fetchImpl).searchEngine("gemini", "kodeks cywilny", 3);
+            expect(asked.at(-1)).toBe("gemini-2.5-flash-lite");
+            expect(hits.map((hit) => hit.url)).toEqual(["https://isap.sejm.gov.pl/y"]);
+            liteWorks = false;
+            await expect(new PublicWebSearch({}, fetchImpl).searchEngine("gemini", "kodeks cywilny", 3)).rejects.toThrow(/^QUOTA_ZERO$/u);
         }
         finally {
             delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;

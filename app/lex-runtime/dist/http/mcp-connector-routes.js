@@ -1,4 +1,4 @@
-import { caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
+import { caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
 import { setupLocalSearxng } from "../searxng-local.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
@@ -577,7 +577,7 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             res.status(500).json({ error: "WEB_SEARCH_SETTINGS_NOT_CONFIGURED" });
             return;
         }
-        const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: req.body?.start !== false });
+        const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: req.body?.start !== false, install: req.body?.install === true });
         if (result.reachable)
             setSearxngUrl(result.url);
         res.json({ local: result, settings: webSearchView() });
@@ -614,6 +614,15 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             entries: repository?.catalog(query, 1000) ?? [],
             server: caseLawSyncStatus()
         });
+    });
+    // The server database's rulings of one source (and one chamber), a page of 50 (database window).
+    app.get("/api/case-law/server/documents", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const source = typeof req.query.source === "string" ? req.query.source.slice(0, 20) : "";
+        const court = typeof req.query.court === "string" && req.query.court ? req.query.court.slice(0, 300) : null;
+        const offset = Math.max(0, Math.min(1_000_000, Number(req.query.offset) || 0));
+        res.json(caseLawServerDocuments(source, court, offset, 50));
     });
     // "Pobierz teraz" in the window: one source's run at once (administrator; server mode).
     app.post("/api/case-law/sync/run", (req, res) => {
