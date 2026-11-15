@@ -1786,7 +1786,7 @@ export default function MatterChatApp({
   const webSearchPrompted = useRef(false);
   const hasModel = modelAvailable(providerConfiguration, providerAccounts, localModelInstalled);
   useEffect(() => {
-    if (webSearchPrompted.current || !hasModel || serverMode || user.appRole !== "ADMIN") return;
+    if (webSearchPrompted.current || !hasModel || user.appRole !== "ADMIN") return;
     const alreadyShown = webSearchPromptShown(user.userId);
     if (alreadyShown) return;
     webSearchPrompted.current = true;

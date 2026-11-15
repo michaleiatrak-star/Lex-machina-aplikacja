@@ -10,7 +10,7 @@ describe("po wybraniu modelu: wyszukiwarki z zaleceniem lokalnego SearXNG", () =
     expect(shouldPromptWebSearch(base)).toBe(true);
     expect(shouldPromptWebSearch({ ...base, alreadyShown: true })).toBe(false);
     expect(shouldPromptWebSearch({ ...base, admin: false })).toBe(false);
-    expect(shouldPromptWebSearch({ ...base, serverMode: true })).toBe(false);
+    expect(shouldPromptWebSearch({ ...base, serverMode: true })).toBe(true);
     expect(shouldPromptWebSearch({ ...base, modelAvailable: false })).toBe(false);
     expect(shouldPromptWebSearch({ ...base, settings: { ...none, searxngUrl: "http://127.0.0.1:8888" } })).toBe(false);
     expect(shouldPromptWebSearch({ ...base, settings: null })).toBe(false);

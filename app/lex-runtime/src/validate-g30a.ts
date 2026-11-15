@@ -191,6 +191,9 @@ const saosTool =
           "bezpodstawne wzbogacenie",
         source:
           "SAOS",
+        // Common courts (no portal search here): SAOS itself; without a court type CBOSA is
+        // asked first (official before SAOS, user 2026-11-15).
+        courtType: "COMMON",
         limit: 1
       }
     }

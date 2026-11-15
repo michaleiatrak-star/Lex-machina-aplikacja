@@ -2,6 +2,7 @@ import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { LOCAL_BROWSER_PORT } from "./browser-render.js";
 /**
  * A SearXNG instance on this computer (Ustawienia > Wyszukiwarka internetowa, user 2026-11-15):
  * public SearXNG servers refuse an application's queries (limiter, bot check, JSON format off),
@@ -14,6 +15,9 @@ export const LOCAL_SEARXNG_URL = `http://127.0.0.1:${LOCAL_SEARXNG_PORT}`;
 // The image of the SearXNG project (Docker Hub); the container keeps the files of `searxng/`.
 const IMAGE = "docker.io/searxng/searxng:latest";
 const CONTAINER = "lex-machina-searxng";
+// chromedp/headless-shell: Chrome's headless shell with the DevTools protocol on 9222 (about 550 MB).
+const BROWSER_IMAGE = "docker.io/chromedp/headless-shell:latest";
+const BROWSER_CONTAINER = "lex-machina-browser";
 const defaultRunner = (command, args, cwd, timeoutMs) => new Promise((resolve) => {
     execFile(command, args, { cwd, timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
         const code = error ? (typeof error.code === "number" ? Number(error.code) : 1) : 0;
@@ -42,6 +46,10 @@ const defaultLauncher = (engine) => {
                 return false;
             spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true }).unref();
             return true;
+        }
+        if (process.platform === "linux") {
+            // A server: the Docker service (needs the right to start it; otherwise the administrator starts it).
+            return spawnSync("systemctl", ["start", "docker"], { timeout: 60_000, stdio: "ignore" }).status === 0;
         }
         if (process.platform === "darwin") {
             // -g: not brought to the foreground, -j: launched hidden (open(1)).
@@ -111,6 +119,15 @@ export function composeFile() {
         // not start ("Address family not supported by protocol", checked 2026-11-15). IPv4 is enough:
         // the port is published on 127.0.0.1 only.
         "      - GRANIAN_HOST=0.0.0.0",
+        // The browser for reading pages built by JavaScript (browser-render.ts): Chromium with the
+        // DevTools protocol, published on 127.0.0.1 only (user 2026-11-15).
+        "  browser:",
+        `    image: ${BROWSER_IMAGE}`,
+        `    container_name: ${BROWSER_CONTAINER}`,
+        "    restart: unless-stopped",
+        '    shm_size: "512m"',
+        "    ports:",
+        `      - "127.0.0.1:${LOCAL_BROWSER_PORT}:9222"`,
         ""
     ].join("\n");
 }
@@ -172,6 +189,8 @@ function readme(engine) {
 }
 /** Whether the last writeLocalSearxng changed settings.yml (a running instance then restarts). */
 let settingsChanged = false;
+/** Whether it changed docker-compose.yml (a new service, the browser: brought up with `up -d`). */
+let composeChanged = false;
 /** Writes the files (an existing secret key is kept); returns the commands to start it by hand. */
 export function writeLocalSearxng(directory, engine = "docker") {
     const config = path.join(directory, "searxng");
@@ -194,7 +213,16 @@ export function writeLocalSearxng(directory, engine = "docker") {
     const next = settingsFile(secret || randomBytes(32).toString("hex"));
     settingsChanged = Boolean(before) && before !== next;
     fs.writeFileSync(settingsPath, next, { encoding: "utf8", mode: 0o600 });
-    fs.writeFileSync(path.join(directory, "docker-compose.yml"), composeFile(), "utf8");
+    const composePath = path.join(directory, "docker-compose.yml");
+    let composeBefore = "";
+    try {
+        composeBefore = fs.readFileSync(composePath, "utf8");
+    }
+    catch {
+        composeBefore = "";
+    }
+    composeChanged = Boolean(composeBefore) && composeBefore !== composeFile();
+    fs.writeFileSync(composePath, composeFile(), "utf8");
     fs.writeFileSync(path.join(directory, "README.txt"), readme(engine), "utf8");
     return [`cd "${directory}"`, `${engine} compose up -d`];
 }
@@ -220,9 +248,12 @@ export async function setupLocalSearxng(args) {
         const commands = writeLocalSearxng(args.directory);
         // New settings (an earlier version's file: fewer engines, no preferred official hosts): the
         // container reads them only on a restart.
-        if (settingsChanged && fs.existsSync(path.join(args.directory, "docker-compose.yml"))) {
+        // A new compose file (the browser added next to SearXNG): `up -d` creates what is missing.
+        if ((settingsChanged || composeChanged) && fs.existsSync(path.join(args.directory, "docker-compose.yml"))) {
             for (const candidate of ["docker", "podman"]) {
-                if ((await run(candidate, ["compose", "restart"], args.directory, 120_000)).code === 0)
+                const restarted = settingsChanged ? (await run(candidate, ["compose", "restart", "searxng"], args.directory, 120_000)).code === 0 : true;
+                const upped = composeChanged ? (await run(candidate, ["compose", "up", "-d"], args.directory, 600_000)).code === 0 : true;
+                if (restarted && upped)
                     break;
             }
         }

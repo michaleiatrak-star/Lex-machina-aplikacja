@@ -806,8 +806,18 @@ restoreDocument) {
         }
     };
 }
-const RECOGNITION_CACHE_MS = 2 * 60_000;
-const RECOGNITION_CACHE_ENTRIES = 6;
+// Per message of the thread (threadSegments): an earlier message is not recognized again in the
+// next turn (live 2026-11-15: 121–133 s of recognition, the whole history every turn).
+const RECOGNITION_CACHE_MS = 60 * 60_000;
+const RECOGNITION_CACHE_ENTRIES = 400;
+/** The thread's messages ("Użytkownik: …", "Asystent: …") with their offsets; one segment without them. */
+export function threadSegments(text) {
+    const starts = [0];
+    const boundary = /\n\n(?=Użytkownik: |Asystent: )/gu;
+    for (let match = boundary.exec(text); match; match = boundary.exec(text))
+        starts.push(match.index);
+    return starts.map((start, index) => ({ offset: start, text: text.slice(start, starts[index + 1] ?? text.length) })).filter((part) => part.text.length > 0);
+}
 export const THREAD_SUMMARY_PROMPT = [
     "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
     "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
@@ -1067,16 +1077,19 @@ export class SafeSessionExecutor {
                 for (const [key, entry] of cache)
                     if (now - entry.at > RECOGNITION_CACHE_MS)
                         cache.delete(key);
-                const key = `${useLocalModel ? 1 : 0}:${createHash("sha256").update(body).digest("hex")}`;
-                const hit = cache.get(key);
-                if (hit)
-                    return hit.spans.then(shift);
-                const spans = recognizer.recognize(body);
-                cache.set(key, { at: now, spans });
-                while (cache.size > RECOGNITION_CACHE_ENTRIES)
-                    cache.delete(cache.keys().next().value);
-                spans.catch(() => cache.delete(key));
-                return spans.then(shift);
+                const recognizePart = (part) => {
+                    const key = `${useLocalModel ? 1 : 0}:${createHash("sha256").update(part).digest("hex")}`;
+                    const hit = cache.get(key);
+                    if (hit)
+                        return hit.spans;
+                    const spans = recognizer.recognize(part);
+                    cache.set(key, { at: now, spans });
+                    while (cache.size > RECOGNITION_CACHE_ENTRIES)
+                        cache.delete(cache.keys().next().value);
+                    spans.catch(() => cache.delete(key));
+                    return spans;
+                };
+                return Promise.all(threadSegments(body).map((part) => recognizePart(part.text).then((found) => found.map((span) => ({ ...span, start: span.start + part.offset, end: span.end + part.offset }))))).then((found) => shift(found.flat()));
             }
         };
     }
@@ -4038,6 +4051,7 @@ export class SafeSessionExecutor {
                 // router's semantic contract (not its text).
                 executedByApp: new Map([
                     ...deferredToCheckpoint,
+                    [`${ROUTER_SKILL}/references/KROK0A-anonimizer.md`, "anonimizację wykonuje aplikacja lokalnie, raz, przed wysłaniem; model dostaje tekst z symbolami, a nie ten plik"],
                     ...(request.modelSelectsSkills ? [] : [[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]])
                 ]),
                 answer: processedDocumentCitations.text,

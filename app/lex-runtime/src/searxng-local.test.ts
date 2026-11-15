@@ -184,9 +184,20 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
     fs.writeFileSync(path.join(dir, "searxng", "settings.yml"), settings.split("engines:")[0]!, "utf8");
     const calls: string[] = [];
     await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
-    expect(calls).toEqual(["docker compose restart"]);
+    expect(calls).toEqual(["docker compose restart searxng"]);
     calls.length = 0;
     await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
     expect(calls).toEqual([]);
+  });
+  it("przeglądarka do czytania stron obok SearXNG; starszy plik compose bez niej: działająca instalacja dostaje ją przez up -d", async () => {
+    const dir = temp();
+    writeLocalSearxng(dir);
+    const compose = fs.readFileSync(path.join(dir, "docker-compose.yml"), "utf8");
+    expect(compose).toContain("  browser:\n    image: docker.io/chromedp/headless-shell:latest");
+    expect(compose).toContain('      - "127.0.0.1:9223:9222"');
+    fs.writeFileSync(path.join(dir, "docker-compose.yml"), compose.split("  browser:")[0]!, "utf8");
+    const calls: string[] = [];
+    await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
+    expect(calls).toEqual(["docker compose up -d"]);
   });
 });

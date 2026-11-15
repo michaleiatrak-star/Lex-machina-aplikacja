@@ -67,6 +67,8 @@ import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
 import { autostartLocalSearxng } from "../searxng-local.js";
+import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
+import { commonCourtsCandidates, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
@@ -259,6 +261,10 @@ export async function startLocalServer(options) {
     configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
     configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
     configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
+    // Pages built by JavaScript or behind a bot check: read through the local browser (Docker, next
+    // to SearXNG) when it runs; LEX_BROWSER_RENDER=0 turns it off.
+    if (process.env.LEX_BROWSER_RENDER !== "0")
+        configurePageRenderer(new CdpPageRenderer(process.env.LEX_BROWSER_URL?.trim() || undefined));
     // Startpage on the user's session: the cookies kept (sealed) across restarts when the user chose it.
     configureLawSourceSessionStore(startpageSessionStore);
     // Courts' wokanda sessions from the user's verification windows survive a restart (sealed).
@@ -381,6 +387,24 @@ export async function startLocalServer(options) {
     configureBrowserSessionsFile(mcpConnectors.browserSessionsFile);
     const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
     const legalFederationTools = new LegalFederationToolRuntime(undefined, undefined, mcpConnectors);
+    // Common courts: their portal (the "sp" connector) is searched before SAOS (case-law-search.ts).
+    configureCommonCourtsSearch(async (query, limit) => {
+        const reply = await legalFederationTools.direct({ source: "sp", tool: "sp_szukaj", arguments: { fraza: query } });
+        if (!reply.ok)
+            return null;
+        const raw = typeof reply.result === "string" ? reply.result : JSON.stringify(reply.result);
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+            const text = parsed.content?.[0]?.text;
+            if (text)
+                parsed = JSON.parse(text);
+        }
+        catch {
+            return null;
+        }
+        return commonCourtsCandidates(parsed, query, limit);
+    });
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();
     personMorphology.warmUp();

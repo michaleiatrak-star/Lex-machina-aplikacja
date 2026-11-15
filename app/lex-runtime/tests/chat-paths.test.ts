@@ -208,8 +208,11 @@ describe("chat paths over HTTP", () => {
       expect(result.calls.length, model).toBeGreaterThan(0);
       // Before: twice with history (the assistant's example data, the anonymization), three
       // times with a local model (its routing pre-pass too).
-      expect(recognized, model).toHaveLength(1);
-      expect(recognized[0], model).not.toContain("__LEX_SKILLS_V1__");
+      // Per message of the thread (the next turn recognizes only its new messages): each once.
+      expect(recognized, model).toHaveLength(3);
+      expect(new Set(recognized).size, model).toBe(recognized.length);
+      expect(recognized.join(""), model).toContain(question);
+      expect(recognized.join(""), model).not.toContain("__LEX_SKILLS_V1__");
     }
   }, 120_000);
 

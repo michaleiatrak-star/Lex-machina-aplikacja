@@ -39,7 +39,8 @@ export function shouldPromptWebSearch(input: {
   alreadyShown: boolean;
   settings: Pick<WebSearchSettings, "searxngUrl" | "searxngUrlForced" | "providerForced"> | null;
 }): boolean {
-  if (!input.admin || input.serverMode || !input.modelAvailable || input.alreadyShown || !input.settings) return false;
+  // Server mode too (user 2026-11-15): SearXNG and the browser run in the server's Docker the same way.
+  if (!input.admin || !input.modelAvailable || input.alreadyShown || !input.settings) return false;
   return !input.settings.searxngUrl && !input.settings.searxngUrlForced && !input.settings.providerForced;
 }
 

@@ -68,6 +68,8 @@ const CBOSA_SEARCH_GET =
   "https://orzeczenia.nsa.gov.pl/cbo/search";
 
 const REQUEST_TIMEOUT_MS = 60_000;
+// SAOS is the fallback source: it does not hold a turn for a minute (live test 2026-11-15: 60 s).
+const SAOS_TIMEOUT_MS = 20_000;
 const MAX_RESULTS = 10;
 const CBOSA_PAGE_SIZE = 10;
 const MAX_CBOSA_REDIRECTS = 3;
@@ -600,6 +602,14 @@ const LOCAL_SOURCES: Record<CaseLawSearchSource, string[]> = {
   BAZA: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF"]
 };
 
+// SAOS court types → the local bases holding such courts' rulings.
+const SAOS_COURT_BASES: Record<string, string[]> = {
+  COMMON: ["SP"],
+  SUPREME: ["SN"],
+  CONSTITUTIONAL_TRIBUNAL: ["TK"],
+  NATIONAL_APPEAL_CHAMBER: ["KIO"]
+};
+
 /** Hits from the local database of official rulings, or null when it holds none for the query. */
 export function searchLocalDatabase(
   request: CaseLawSearchRequest,
@@ -609,8 +619,11 @@ export function searchLocalDatabase(
 ): CaseLawSearchResult | null {
   if (!database || query.length < 2) return null;
   if (request.sn && Object.values(request.sn).some((value) => value !== undefined && value !== "")) return null;
-  if (request.saos && (request.saos.courtType || request.saos.judgmentType)) return null;
-  const official = LOCAL_SOURCES[request.source];
+  // A SAOS court type narrows the local bases (user 2026-11-15: the local rulings first, SAOS only
+  // when they have nothing); before, any filter skipped the local database and went to SAOS.
+  const courtBases = request.source === "SAOS" && request.saos?.courtType ? SAOS_COURT_BASES[request.saos.courtType] : undefined;
+  if (request.source === "SAOS" && request.saos?.courtType && !courtBases) return null;
+  const official = courtBases ?? LOCAL_SOURCES[request.source];
   const asked = request.source === "BAZA" && request.bases?.length ? official.filter((base) => request.bases!.includes(base)) : official;
   const wanted = new Set(asked);
   const cards = database.search(query, limit * 5).filter((card) => wanted.has(card.source) && card.url).slice(0, limit);
@@ -632,6 +645,34 @@ export function searchLocalDatabase(
     })),
     reason: "LOCAL_DATABASE"
   };
+}
+
+/** Search of the common courts' portal (the "sp" connector), set by the server; none in tests. */
+export type CommonCourtsSearch = (query: string, limit: number) => Promise<CaseLawSearchResult | null>;
+let commonCourtsSearch: CommonCourtsSearch | null = null;
+
+export function configureCommonCourtsSearch(search: CommonCourtsSearch | null): void {
+  commonCourtsSearch = search;
+}
+
+/** The "sp" connector's sp_szukaj reply as search candidates (the decision's own link only). */
+export function commonCourtsCandidates(reply: unknown, query: string, limit: number): CaseLawSearchResult | null {
+  const value = reply as { kandydaci?: unknown; result?: unknown; dokumenty?: unknown };
+  const items = (Array.isArray(value?.kandydaci) ? value.kandydaci : Array.isArray(value?.dokumenty) ? value.dokumenty : value?.result ? [value.result] : []) as Array<Record<string, unknown>>;
+  const candidates = items
+    .filter((item) => typeof item.url_orzeczenia === "string" && typeof item.sygnatura === "string")
+    .slice(0, limit)
+    .map((item) => ({
+      source: "SAOS" as const,
+      id: String(item.docId ?? item.url_orzeczenia),
+      caseNumbers: [String(item.sygnatura)],
+      ...(typeof item.data === "string" ? { judgmentDate: item.data } : {}),
+      ...(typeof item.sad === "string" ? { court: item.sad } : {}),
+      courtType: "COMMON",
+      sourceUrl: String(item.url_orzeczenia),
+      contentScope: "DISCOVERY" as const
+    }));
+  return candidates.length ? { source: "SAOS", status: "FOUND", query, candidates, reason: "COMMON_COURTS_PORTAL" } : null;
 }
 
 export class CaseLawSearchService {
@@ -678,6 +719,30 @@ export class CaseLawSearchService {
         reason:
           "INVALID_SEARCH_QUERY"
       };
+    }
+
+    // SAOS is the fallback (an aggregator, lowest rank; user 2026-11-15: the local database, CBOSA,
+    // only then SAOS). The official search goes first: sn.pl for the Supreme Court, CBOSA otherwise
+    // (common courts have no official search the application can ask; their rulings are in the
+    // local database from the courts' portal). SAOS only when the official one gives nothing or fails.
+    if (request.source === "SAOS" && !request.saos?.judgmentType && query.length >= 2 && query.length <= 500) {
+      const courtType = request.saos?.courtType;
+      const found = (result: CaseLawSearchResult | null) => (result?.status === "FOUND" && result.candidates.length ? result : null);
+      // Common courts: their own portal (the "sp" connector) before SAOS (user 2026-11-15).
+      const portal = courtType === undefined || courtType === "COMMON" ? commonCourtsSearch : null;
+      const [sn, cbosa, common] = await Promise.all([
+        courtType === "SUPREME" ? this.searchSn(query, limit, {}).catch(() => null) : null,
+        courtType === undefined || courtType === "ADMINISTRATIVE" ? this.searchCbosa(query, limit).catch(() => null) : null,
+        portal ? portal(query, limit).catch(() => null) : null
+      ]);
+      const official = [found(common), found(sn), found(cbosa)].filter((result): result is CaseLawSearchResult => Boolean(result));
+      if (official.length) {
+        return {
+          ...official[0]!,
+          candidates: official.flatMap((result) => result.candidates).slice(0, limit),
+          reason: "OFFICIAL_BEFORE_SAOS"
+        };
+      }
     }
 
     return request.source === "SAOS"
@@ -788,7 +853,7 @@ export class CaseLawSearchService {
             redirect: "error",
             signal:
               AbortSignal.timeout(
-                REQUEST_TIMEOUT_MS
+                SAOS_TIMEOUT_MS
               ),
             headers: {
               Accept:

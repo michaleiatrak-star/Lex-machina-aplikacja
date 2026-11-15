@@ -97,7 +97,10 @@ describe(
             source: "SAOS",
             query:
               "bezpodstawne wzbogacenie",
-            limit: 5
+            limit: 5,
+            // Common courts with no portal search configured: straight to SAOS (without a court
+            // type CBOSA is asked first, user 2026-11-15).
+            saos: { courtType: "COMMON" }
           });
 
         expect(

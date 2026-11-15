@@ -178,11 +178,13 @@ export function preloadForTurn(model, facts) {
 }
 function readEvidence(facts, resource) {
     const target = canonicalPath(resource);
-    if (facts.contextResources.has(target))
-        return { by: "APLIKACJA", detail: "wczytany przez aplikację do kontekstu modelu" };
+    // What the application itself performs is said first (KROK 0A: the local pseudonymization, its
+    // file is not given to the model; user 2026-11-15 asked whether anonymization ran twice).
     const executed = facts.executedByApp?.get(target);
     if (executed)
         return { by: "APLIKACJA", detail: executed };
+    if (facts.contextResources.has(target))
+        return { by: "APLIKACJA", detail: "wczytany przez aplikację do kontekstu modelu" };
     for (const event of facts.events) {
         if ((event.type !== "resource_read" && event.type !== "skill_read") || event.status !== "OK")
             continue;

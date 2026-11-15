@@ -1,3 +1,4 @@
+import { pageRenderer } from "./browser-render.js";
 import { clearLawSourceSession, LAW_SOURCE_VERIFICATION_REQUIRED, lawSourceSessionHeaders, registerPageCheck } from "./eli/law-source-sessions.js";
 // A bot check's own page answered with 200 (Cloudflare "Just a moment…", DataDome): small and with
 // the check's markers. A page with a contact form's reCAPTCHA is not one.
@@ -455,6 +456,11 @@ async function pdfText(body, maxChars) {
         return "";
     }
 }
+// Read through the browser when the HTML gives less text than this (a JavaScript application's frame).
+const RENDER_BELOW_CHARS = 600;
+const RENDERED_MIN_CHARS = 200;
+// What the browser shows instead of the page: a bot check, not the source's text.
+const RENDERED_CHECK_PAGE = /nietypowy ruch|przepisać kod z obrazka|captcha|Just a moment|Verifying (?:you are human|your request)|Attention Required|access denied|dostęp zablokowany/iu;
 export class SafeAuxiliarySourceFetcher {
     resolver;
     transport;
@@ -495,7 +501,55 @@ export class SafeAuxiliarySourceFetcher {
             }
         }
     }
+    /**
+     * The page as the server sends it; a page built by JavaScript (its HTML only a frame), an empty
+     * one or one behind a bot check is read again through the browser on this computer (Chromium in
+     * Docker next to the local SearXNG, browser-render.ts) when it runs. Public hosts only.
+     */
     async fetch(rawUrl) {
+        try {
+            const direct = await this.fetchDirect(rawUrl);
+            if (/html/iu.test(direct.contentType) && direct.text.length < RENDER_BELOW_CHARS) {
+                const rendered = await this.viaBrowser(direct.finalUrl, direct.redirectCount).catch(() => null);
+                if (rendered && rendered.text.length > direct.text.length)
+                    return rendered;
+            }
+            return direct;
+        }
+        catch (error) {
+            if (error instanceof AuxiliarySourceFetchError && (error.code === "AUX_SOURCE_BROWSER_CHECK" || error.code === "AUX_SOURCE_EMPTY")) {
+                const rendered = await this.viaBrowser(parseAuxiliarySourceUrl(rawUrl).toString(), 0).catch(() => null);
+                if (rendered)
+                    return rendered;
+            }
+            throw error;
+        }
+    }
+    async viaBrowser(url, redirectCount) {
+        const renderer = pageRenderer();
+        if (!renderer)
+            return null;
+        // The same rule as a direct read: only a public host, before and after the browser's redirects.
+        await resolveAuxiliarySourceTarget(url, this.resolver);
+        const page = await renderer.render(url);
+        if (!page || page.text.length < RENDERED_MIN_CHARS || RENDERED_CHECK_PAGE.test(page.text.slice(0, 3000)))
+            return null;
+        const finalUrl = parseAuxiliarySourceUrl(page.finalUrl).toString();
+        await resolveAuxiliarySourceTarget(finalUrl, this.resolver);
+        const text = page.text.slice(0, this.limits.maxTextChars);
+        const body = Buffer.from(text, "utf8");
+        return {
+            requestedUrl: url,
+            finalUrl,
+            contentType: "text/html",
+            bytes: body.byteLength,
+            sha256: createHash("sha256").update(body).digest("hex"),
+            fetchedAt: this.now(),
+            text,
+            redirectCount
+        };
+    }
+    async fetchDirect(rawUrl) {
         const requested = parseAuxiliarySourceUrl(rawUrl)
             .toString();
         let current = requested;
