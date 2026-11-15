@@ -14,7 +14,7 @@ import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMar
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
-import { compactActAbbreviations, provisionsForDetection } from "./legal-act-abbreviations.js";
+import { compactActAbbreviations, expandProfessionActAbbreviations, provisionsForDetection } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { registryEnrichmentFor } from "./privacy/registry-enrichment.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
@@ -72,7 +72,7 @@ import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
-import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
+import { addVerifiedJournalAddresses, ambiguousBareArticles, collapseRepeatedVerMarkers, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -2730,6 +2730,22 @@ export class SafeSessionExecutor {
                 if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
                     snVerificationRequired = true;
                 }
+                // sn.pl refused (captcha, 403) a disciplinary judgment of SN on the bar (SDI, DSI): the bar's
+                // ruling register publishes them with theses; its text is a lead (🟨, to confirm on sn.pl).
+                for (const result of federationResults) {
+                    if (!failedSourceResult(result.content))
+                        continue;
+                    const signatures = [...new Set([...result.content.matchAll(/\b(SDI|DSI)\s+(\d{1,5}\/\d{2,4})\b/gu)].map((match) => `${match[1]} ${match[2]}`))].slice(0, 3);
+                    for (const signature of signatures) {
+                        const found = await findWsdRuling(signature).catch(() => null);
+                        if (found?.status !== "FOUND")
+                            continue;
+                        step("VERIFY", `rejestr WSD zamiast sn.pl: ${signature}`);
+                        result.content += `\n\nZASTĘPCZO (sn.pl niedostępny): ${signature} w rejestrze orzecznictwa WSD Adwokatury (${found.url}). Status: 🟨 [KOTWICA-URZĘDOWA: rejestr WSD, do potwierdzenia na sn.pl]. Tekst ze strony (cytuj tylko z niego):\n${found.text.slice(0, 12_000)}`;
+                        leadCaseLawTexts.push(found.text);
+                        audit.record("gate", "SN_VIA_WSD_REGISTER", "OK", { signature, url: found.url });
+                    }
+                }
                 for (const result of federationResults) {
                     const host = /LAW_SOURCE_VERIFICATION_REQUIRED:([a-z0-9.-]+)/u.exec(result.content)?.[1];
                     // A connector's source (R2A) behind a bot check is not on the fixed list: its host becomes
@@ -3023,7 +3039,9 @@ export class SafeSessionExecutor {
             }
             pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
         }
-        let modelOutput = execution.output;
+        // Professions' statutes under the model's own abbreviations ("art. 91 PrAdw"): named, so the
+        // article is matched to its act by the gates (RD 121/26).
+        let modelOutput = legalTurn ? expandProfessionActAbbreviations(execution.output) : execution.output;
         const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
         const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== activeJurisdictionPack());
@@ -3494,7 +3512,7 @@ export class SafeSessionExecutor {
             });
         }
         // The Dz.U. address of the text each act was read from, once per act, from the ledger.
-        const journalAddresses = addVerifiedJournalAddresses(actCompletion.text, ledger);
+        const journalAddresses = addVerifiedJournalAddresses(collapseRepeatedVerMarkers(actCompletion.text), ledger);
         if (journalAddresses.added.length > 0) {
             audit.record("gate", "VERIFIED_JOURNAL_ADDRESSES", "OK", { added: journalAddresses.added });
         }

@@ -199,4 +199,30 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         await setupLocalSearxng({ directory: dir, start: true, run: async (command, args) => (calls.push(`${command} ${args.join(" ")}`), { code: 0, output: "" }), fetcher: answering });
         expect(calls).toEqual(["docker compose up -d"]);
     });
+    it("sama przeglądarka (inna wyszukiwarka niż SearXNG): uruchamiana tylko usługa browser, gotowa po odpowiedzi DevTools; działająca nie jest ruszana; bez Dockera polecenie i zgoda na instalację", async () => {
+        const calls = [];
+        let up = false;
+        const browserFetcher = async (url) => {
+            if (url.includes(":9223/json/version") && up)
+                return { ok: true, json: async () => ({}) };
+            throw new Error("ECONNREFUSED");
+        };
+        const run = async (command, args) => {
+            calls.push(`${command} ${args.join(" ")}`);
+            if (args.join(" ") === "compose up -d browser")
+                up = true;
+            return { code: 0, output: "" };
+        };
+        const result = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", run, fetcher: browserFetcher, pollMs: 1 });
+        expect(result).toMatchObject({ reachable: true, started: true, url: "http://127.0.0.1:9223" });
+        expect(calls).toContain("docker compose up -d browser");
+        expect(calls).not.toContain("docker compose up -d");
+        const again = [];
+        const ready = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", run: async (c, a) => (again.push(`${c} ${a.join(" ")}`), { code: 0, output: "" }), fetcher: browserFetcher });
+        expect(ready.reachable).toBe(true);
+        expect(again).toEqual([]);
+        const none = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", run: async () => ({ code: 127, output: "" }), fetcher: silent });
+        expect(none.error).toBe("CONTAINER_ENGINE_MISSING");
+        expect(none.commands.at(-1)).toBe("docker compose up -d browser");
+    });
 });

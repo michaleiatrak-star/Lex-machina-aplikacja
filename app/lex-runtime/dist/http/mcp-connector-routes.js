@@ -1,5 +1,5 @@
 import { caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
-import { setupLocalSearxng } from "../searxng-local.js";
+import { localBrowserAnswers, setupLocalSearxng } from "../searxng-local.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
@@ -203,7 +203,24 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             return;
         const reply = await search.direct({ source: "sn", tool: "sn_captcha_auto", arguments: { headless: true } });
         const result = (reply.result ?? {});
-        const ready = reply.ok && result.status === "OK";
+        let ready = reply.ok && result.status === "OK";
+        const noPlaywright = reply.ok && Array.isArray(result.steps) && result.steps.some((step) => /Brak playwright/u.test(String(step)));
+        // No Playwright with the connectors: the browser for reading pages (Chromium in Docker,
+        // Ustawienia > Wyszukiwarka internetowa) tries sn.pl's check; the session is probed first.
+        if (!ready && noPlaywright) {
+            const attempt = await passCheckInServerBrowser("https://www.sn.pl/orzecznictwo/SitePages/Baza_orzeczen.aspx", connectors.serversDirectory, async (cookie, userAgent) => {
+                const probe = await connectors.probeSnSession(cookie, userAgent);
+                if (probe.ready)
+                    connectors.setSnSession(cookie, userAgent);
+                return probe;
+            }).catch(() => ({ ready: false, reason: "SERVER_REJECTED" }));
+            if (attempt.ready)
+                ready = true;
+            else if (attempt.reason !== "SERVER_BROWSER_MISSING") {
+                res.json({ ready: false, reason: "SN_SERVER_REJECTED" });
+                return;
+            }
+        }
         res.json({
             ready,
             ...(ready
@@ -594,6 +611,24 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         if (result.reachable)
             setSearxngUrl(result.url);
         res.json({ local: result, settings: webSearchView() });
+    });
+    // The browser for reading pages built by JavaScript (Chromium in Docker, 127.0.0.1 only): its
+    // state, and installing it for a user of any search engine, not only of the local SearXNG.
+    app.get("/api/settings/web-search/browser", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json({ ready: await localBrowserAnswers() });
+    });
+    app.post("/api/settings/web-search/browser", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const directory = webSearchDataDirectory();
+        if (!directory) {
+            res.status(500).json({ error: "WEB_SEARCH_SETTINGS_NOT_CONFIGURED" });
+            return;
+        }
+        const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: true, install: req.body?.install === true, target: "browser" });
+        res.json({ local: result, ready: result.reachable });
     });
     app.post("/api/settings/web-search/test", async (req, res) => {
         if (!requireAdmin(req, res, authService))

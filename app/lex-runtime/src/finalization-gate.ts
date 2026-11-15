@@ -1420,6 +1420,23 @@ export function softenRemainingBlockers(
  * One "brak potwierdzenia w tekście orzeczenia" per line, standing at the quote it concerns
  * („…” ⚠️ sygn. … ✅), not after the signature's ✅, which reads as if the quote were confirmed.
  */
+/**
+ * One VER marker per provision where two stand next to each other ("✅ [VER: art. 460 KPK,
+ * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", RD 121/26): the fuller one.
+ */
+export function collapseRepeatedVerMarkers(text: string): string {
+  const pair = /✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\][ \t]*✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\]/gu;
+  let previous = "";
+  let current = text;
+  while (previous !== current) {
+    previous = current;
+    current = current.replace(pair, (match, first: string, firstRest: string, second: string, secondRest: string) =>
+      first.trim() === second.trim() ? `✅ [VER: ${first}${secondRest.length >= firstRest.length ? secondRest : firstRest}]` : match
+    );
+  }
+  return current;
+}
+
 export function tidyEvidenceMarkers(text: string): string {
   const marker = UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT;
   const proposition = UNSUPPORTED_CASE_PROPOSITION_MARKER_TEXT;

@@ -937,6 +937,10 @@ function accountEnvironment(provider: ProviderId): NodeJS.ProcessEnv {
     delete env.CLAUDECODE;
     env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS = "0";
     env.MCP_CONNECTION_NONBLOCKING = "true";
+    // The application's tools (independent_review, SAOS, SUDOP) run longer than Claude Code's
+    // default 60 s per MCP call (RD 121/26: the review cut off at 60 s, 164 s lost); 900 s as for
+    // Codex (tool_timeout_sec) and Gemini (timeout).
+    env.MCP_TOOL_TIMEOUT = "900000";
     const token =
       currentAnthropicOAuthToken();
     if (token) {

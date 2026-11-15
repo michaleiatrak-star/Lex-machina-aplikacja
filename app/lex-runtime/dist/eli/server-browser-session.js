@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { cdpBrowserAvailable, cdpChromium } from "./cdp-browser-adapter.js";
 import { isChallengePage, lawSourceWithCheck, probeLawSourceSession } from "./law-source-sessions.js";
 async function loadPlaywright(serversDirectory) {
     try {
@@ -8,7 +9,9 @@ async function loadPlaywright(serversDirectory) {
         return (await import(pathToFileURL(require.resolve("playwright")).href));
     }
     catch {
-        return null;
+        // No Playwright on the server: the browser for reading pages (Chromium in Docker, installed in
+        // Ustawienia > Wyszukiwarka internetowa) when it answers.
+        return (await cdpBrowserAvailable()) ? { chromium: cdpChromium() } : null;
     }
 }
 /**

@@ -344,7 +344,9 @@ type Anchor = { label: string; key: string; locate: (text: string) => { start: n
 const MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"];
 const MONEY = /(?<![\p{L}\d,.])\d{1,3}(?:[ .  ]\d{3})*(?:,\d{1,2})?\s*(?:zł|złotych|PLN)(?![\p{L}])/gu;
 // A signature or a ruling's name right before a date: the ruling's date ("SDI 9/12 z", "wyrokiem z dnia").
-const RULING_BEFORE_DATE = /(?:\b[A-Z][A-Za-z]{0,4}\s+\d{1,5}\/\d{2,4}|\b(?:wyrok\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*|uchwał\p{L}*|decyzj\p{L}*))\s*(?:\([^)]{0,40}\)\s*)?(?:z\s+dnia|z|dnia|of)?\s*$/u;
+// Also an act's number ("uchwały Prezydium NRA nr 174/2026 z 23 czerwca 2026 r.", RD 121/26: the
+// date was linked to the rzecznik's decision that quotes the same resolution).
+const RULING_BEFORE_DATE = /(?:\b[A-Z][A-Za-z]{0,4}\s+\d{1,5}\/\d{2,4}|\bnr\.?\s*[\dIVXLC]{1,6}(?:\/[\dIVXLC]{1,6}){1,2}|\b(?:wyrok\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*|uchwał\p{L}*|decyzj\p{L}*|obwieszczeni\p{L}*|ustaw\p{L}*|rozporządzeni\p{L}*))\s*(?:\([^)]{0,40}\)\s*)?(?:z\s+dnia|z|dnia|of)?\s*$/u;
 const DATE = new RegExp(`(?<![\\d.])(\\d{1,2})(?:\\.(\\d{1,2})\\.|\\s+(${MONTHS.join("|")})\\s+)(\\d{4})(?!\\d)`, "giu");
 
 function moneyKey(text: string): string {
@@ -505,6 +507,7 @@ export function documentCitationSystemPrompt(
     "[[LEXDOC:<documentId>:<chunkIndex>]]",
     "Use only documentId and chunkIndex values present in LOCAL_DOCUMENT_CONTEXT.",
     "Never invent a document id, page, chunk, quote, or marker.",
+    "A document only mentioned in the attached files (an annex listed in a letter, a pleading named by its date) but not itself attached: never state what it says or decides. Write that it is mentioned in the document that names it and that its content is not in the case file (RD 121/26: an opponent's letter not in the file was described as refusing payment).",
     "For a verbatim quotation, place the marker immediately after the closing quotation mark so the application can validate and highlight the exact passage.",
     "Quote a pleading, a letter or any case document word for word; mark omissions with [...]. A quotation not found in the document is shown to the user as not matching it.",
     "Markers are machine-readable metadata and will be replaced by clickable in-chat citations before presentation."
@@ -524,6 +527,21 @@ function documentName(attachment: SessionDocumentAttachment): string {
   return name;
 }
 
+// One label per document across the answer ("pismo 2", not "Dokument 17" for the 17th link to
+// the same file, RD 121/26): its kind, numbered when several documents share it. No file name
+// (it may carry personal data).
+const documentLabels = new WeakMap<SessionDocumentAttachment, string>();
+let labelAttachments: SessionDocumentAttachment[] = [];
+function documentLabel(attachment: SessionDocumentAttachment): string {
+  const known = documentLabels.get(attachment);
+  if (known) return known;
+  const name = documentName(attachment);
+  const same = labelAttachments.filter((other) => documentName(other) === name);
+  const label = same.length > 1 ? `${name} ${same.indexOf(attachment) + 1}` : name;
+  documentLabels.set(attachment, label);
+  return label;
+}
+
 export function processDocumentCitationMarkers(
   modelText: string,
   attachments: SessionDocumentAttachment[],
@@ -533,6 +551,7 @@ export function processDocumentCitationMarkers(
     otherTexts?: string[];
   } = {}
 ): ProcessedDocumentCitations {
+  labelAttachments = attachments;
   const chunks = new Map<string, ChunkEntry>();
   for (const attachment of attachments) {
     for (const chunk of attachment.chunks) {
@@ -610,7 +629,7 @@ export function processDocumentCitationMarkers(
         ? `${documentName(resolved.attachment)}, pkt ${unit}, ${pageLabel}`
         : anchor
           ? `${documentName(resolved.attachment)}, ${anchor.label}, ${pageLabel}`
-          : `Dokument ${citations.length + 1}, ${pageLabel}`,
+          : `${documentLabel(resolved.attachment)}, ${pageLabel}`,
       ...(resolved.attachment.caseId
         ? { caseId: resolved.attachment.caseId }
         : {}),

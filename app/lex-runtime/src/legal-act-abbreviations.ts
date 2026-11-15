@@ -54,8 +54,38 @@ export function caretSuperscripts(text: string): string {
   return text.replace(/(\d)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/gu, (_match, digit: string, sup: string) => `${digit}^${[...sup].map((char) => SUPERSCRIPT_DIGITS[char]).join("")}`);
 }
 
+// Abbreviations of the professions' statutes a model writes after an article ("art. 91 ust. 2
+// PrAdw", "art. 64 u.r.p."): the act is not recognised under them, the article counts as bare
+// and is marked unverified (RD 121/26: art. 91 and 95n PrAdw ⚠️ next to art. 80 Prawa o
+// adwokaturze ✅, and a 206 s round asking the model to name the act). After an article only:
+// "(dalej: PrAdw)" stays as written.
+const PROFESSION_ACTS: Array<[string, string]> = [
+  ["PrAdw|Pr\\.\\s?adw\\.|p\\.\\s?o\\.\\s?a\\.|u\\.\\s?p\\.\\s?a\\.", "Prawa o adwokaturze"],
+  ["URP|u\\.\\s?r\\.\\s?p\\.|u\\.\\s?o\\.\\s?r\\.\\s?p\\.", "ustawy o radcach prawnych"],
+  ["PrNot|Pr\\.\\s?not\\.|p\\.\\s?o\\.\\s?n\\.", "Prawa o notariacie"],
+  ["PrUSP|u\\.\\s?s\\.\\s?p\\.|p\\.\\s?u\\.\\s?s\\.\\s?p\\.", "Prawa o ustroju sądów powszechnych"],
+  ["u\\.\\s?s\\.\\s?n\\.", "ustawy o Sądzie Najwyższym"],
+  ["u\\.\\s?k\\.\\s?s\\.", "ustawy o komornikach sądowych"]
+];
+const ARTICLE_UNITS = "\\b(?:art\\.?|artykuł\\p{L}*)\\s*\\d+[a-z]*(?:\\^\\d+)?(?:\\s*(?:§|ust\\.?|pkt|lit\\.?|zd\\.?|zdanie)\\s*\\d*[a-z]*(?:\\^\\d+)?\\.?)*";
+const PROFESSION_ACT_PATTERNS: Array<[RegExp, string]> = PROFESSION_ACTS.map(([abbreviations, title]) => [
+  new RegExp(`(${ARTICLE_UNITS}\\s+(?:(?:✅|⚠️|🟨)\\s*\\[[^\\]\\n]{0,160}\\]\\s*)?)(?:${abbreviations})(?![\\p{L}])`, "giu"),
+  title
+]);
+
+/** "art. 91 ust. 2 PrAdw" -> "art. 91 ust. 2 Prawa o adwokaturze"; other text unchanged. */
+export function expandProfessionActAbbreviations(text: string): string {
+  const expanded = PROFESSION_ACT_PATTERNS.reduce((value, [pattern, title]) => value.replace(pattern, (_match, head: string) => `${head}${title}`), text);
+  // The name followed by its own abbreviation ("Prawa o adwokaturze (Dz.U. 2024 poz. 1564) PrAdw",
+  // from a round that named the act before an abbreviation it did not remove): the name once.
+  return PROFESSION_DOUBLED.reduce((value, pattern) => value.replace(pattern, "$1"), expanded);
+}
+const PROFESSION_DOUBLED: RegExp[] = PROFESSION_ACTS.map(
+  ([abbreviations, title]) => new RegExp(`(${title}(?:\\s*\\(Dz\\.\\s?U\\.[^)\\n]{0,40}\\))?)\\s+(?:${abbreviations})(?![\\p{L}])`, "gu")
+);
+
 export function compactActAbbreviations(text: string): string {
-  const dotted = DOTTED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), caretSuperscripts(text));
+  const dotted = DOTTED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), expandProfessionActAbbreviations(caretSuperscripts(text)));
   return SPELLED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), dotted);
 }
 

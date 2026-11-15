@@ -2,7 +2,7 @@ import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { LOCAL_BROWSER_PORT } from "./browser-render.js";
+import { LOCAL_BROWSER_PORT, LOCAL_BROWSER_URL } from "./browser-render.js";
 /**
  * A SearXNG instance on this computer (Ustawienia > Wyszukiwarka internetowa, user 2026-11-15):
  * public SearXNG servers refuse an application's queries (limiter, bot check, JSON format off),
@@ -239,12 +239,28 @@ export async function localSearxngAnswers(fetcher = fetch, url = LOCAL_SEARXNG_U
         return false;
     }
 }
+/** The browser for reading pages (chromedp/headless-shell) answers on its DevTools port. */
+export async function localBrowserAnswers(fetcher = fetch, url = LOCAL_BROWSER_URL) {
+    try {
+        const response = await fetcher(`${url}/json/version`, { signal: AbortSignal.timeout(3000) });
+        return response.ok;
+    }
+    catch {
+        return false;
+    }
+}
 export async function setupLocalSearxng(args) {
     const run = args.run ?? defaultRunner;
     const launch = args.launch ?? defaultLauncher;
     const fetcher = args.fetcher ?? fetch;
+    const browserOnly = args.target === "browser";
+    const ready = () => (browserOnly ? localBrowserAnswers(fetcher) : localSearxngAnswers(fetcher));
+    const resultUrl = browserOnly ? LOCAL_BROWSER_URL : LOCAL_SEARXNG_URL;
+    if (browserOnly && (await localBrowserAnswers(fetcher))) {
+        return { directory: args.directory, url: resultUrl, engine: null, started: false, reachable: true, commands: [] };
+    }
     // An instance already answering on the port (started before, or by the user): only the address.
-    if (await localSearxngAnswers(fetcher)) {
+    if (!browserOnly && (await localSearxngAnswers(fetcher))) {
         const commands = writeLocalSearxng(args.directory);
         // New settings (an earlier version's file: fewer engines, no preferred official hosts): the
         // container reads them only on a restart.
@@ -278,7 +294,7 @@ export async function setupLocalSearxng(args) {
     if (!engine && !stopped && args.start && args.install) {
         writeLocalSearxng(args.directory);
         const done = await installDockerDesktop(run, cwd);
-        const base0 = { directory: args.directory, url: LOCAL_SEARXNG_URL, engine: null, started: false, reachable: false, commands: [`cd "${args.directory}"`, "docker compose up -d"] };
+        const base0 = { directory: args.directory, url: resultUrl, engine: null, started: false, reachable: false, commands: [`cd "${args.directory}"`, browserOnly ? "docker compose up -d browser" : "docker compose up -d"] };
         if (!done.ok)
             return { ...base0, error: done.error ?? "INSTALL_FAILED" };
         dockerCommand = dockerAfterInstall();
@@ -286,8 +302,9 @@ export async function setupLocalSearxng(args) {
             return { ...base0, error: "INSTALLED_RESTART_NEEDED" };
         stopped = "docker";
     }
-    const commands = writeLocalSearxng(args.directory, engine ?? stopped ?? "docker");
-    const base = { directory: args.directory, url: LOCAL_SEARXNG_URL, engine: engine ?? stopped, started: false, reachable: false, commands };
+    const written = writeLocalSearxng(args.directory, engine ?? stopped ?? "docker");
+    const commands = browserOnly ? [written[0], `${written[1]} browser`] : written;
+    const base = { directory: args.directory, url: resultUrl, engine: engine ?? stopped, started: false, reachable: false, commands };
     if (!engine && !stopped)
         return { ...base, error: "CONTAINER_ENGINE_MISSING" };
     if (!args.start)
@@ -306,12 +323,12 @@ export async function setupLocalSearxng(args) {
         engine = stopped;
     }
     // The first start downloads the image (a few hundred MB): up to 10 minutes.
-    const up = await run(engine === "docker" ? dockerCommand : engine, ["compose", "up", "-d"], args.directory, 600_000);
+    const up = await run(engine === "docker" ? dockerCommand : engine, ["compose", "up", "-d", ...(browserOnly ? ["browser"] : [])], args.directory, 600_000);
     if (up.code !== 0)
         return { ...base, error: `START_FAILED: ${up.output.trim().split("\n").slice(-3).join(" ").slice(0, 300)}` };
     const deadline = Date.now() + (args.waitMs ?? 90_000);
     while (Date.now() < deadline) {
-        if (await localSearxngAnswers(fetcher))
+        if (await ready())
             return { ...base, started: true, reachable: true };
         await new Promise((resolve) => setTimeout(resolve, args.pollMs ?? 2000));
     }

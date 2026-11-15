@@ -6,6 +6,8 @@
 // page …/rejestry/show/{slug}, read and accepted only when its text names the signature.
 import { plainText } from "../eli/readers.js";
 import { CASE_TEXT_BUDGET, caseTextExcerpt, holdCaseLawText } from "../case-law-texts.js";
+import { currentPortalSearch } from "../official-portal-search.js";
+import { pageRenderer } from "../browser-render.js";
 
 export const WSD_PORTAL = "https://wsd.adwokatura.pl";
 const REGISTER = 19;
@@ -22,6 +24,16 @@ export function wsdNumber(signature: string): string | null {
   return /^\s*WSD\s+(\d{1,5}\/\d{2,4})\s*$/u.exec(signature.normalize("NFKC"))?.[1] ?? null;
 }
 
+/**
+ * Signatures the portal's register holds: WSD rulings and the Supreme Court's judgments on the
+ * bar's disciplinary cassations (SDI, DSI), published there with theses ("Sygnatura: SDI 9/12").
+ * RD 121/26: sn.pl asked for its captcha and SAOS failed, while the register had SDI 9/12.
+ */
+export function wsdRegisterSignature(signature: string): { prefix: "WSD" | "SDI" | "DSI"; number: string } | null {
+  const match = /^\s*(WSD|SDI|DSI)\s+(\d{1,5}\/\d{2,4})\s*$/u.exec(signature.normalize("NFKC").replace(/\s+/gu, " "));
+  return match ? { prefix: match[1] as "WSD" | "SDI" | "DSI", number: match[2]! } : null;
+}
+
 /** The ruling pages a result list of the portal's register search links to. */
 export function wsdResultLinks(html: string): string[] {
   const links = new Set<string>();
@@ -33,14 +45,63 @@ export function wsdResultLinks(html: string): string[] {
 }
 
 /** The page names the signature ("WSD 113/22", "sygn. akt WSD 113/22", "113/22" after "WSD"). */
-export function wsdPageNames(text: string, number: string): boolean {
+export function wsdPageNames(text: string, number: string, prefix = "WSD"): boolean {
   const escaped = number.replace(/[/]/gu, "\\s*\\/\\s*");
-  return new RegExp(`WSD\\s*${escaped}(?![\\d])`, "u").test(text.normalize("NFKC"));
+  return new RegExp(`${prefix}\\s*${escaped}(?![\\d])`, "u").test(text.normalize("NFKC"));
+}
+
+/** Reads ruling pages and returns the first that names the signature. */
+async function firstNaming(urls: string[], prefix: string, number: string, fetchImpl: WsdFetch): Promise<WsdLookup | null> {
+  for (const url of urls) {
+    try {
+      const page = await fetchImpl(url, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(30_000) }).catch(() => null);
+      const html = page?.ok ? await page.text() : "";
+      const main = /<article\b[\s\S]*?<\/article>/u.exec(html)?.[0] ?? html;
+      let text = plainText(main);
+      let title = plainText(/<h1\b[^>]*>([\s\S]*?)<\/h1>/u.exec(html)?.[1] ?? /<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "");
+      // Refused or a bot check instead of the ruling: the browser on this computer or server
+      // (Chromium in Docker, Ustawienia > Wyszukiwarka internetowa) reads the page, when it runs.
+      if (!wsdPageNames(text, number, prefix)) {
+        const rendered = await pageRenderer()?.render(url).catch(() => null);
+        if (!rendered || !wsdPageNames(rendered.text, number, prefix)) continue;
+        text = rendered.text;
+        title = rendered.title;
+      }
+      return { status: "FOUND", signature: `${prefix} ${number}`, url, title, text: text.slice(0, 60_000) };
+    } catch {
+      // Another hit may still be the ruling.
+    }
+  }
+  return null;
+}
+
+/**
+ * The portal's register search failing (HTTP 5xx, timeout): the configured web search with the
+ * portal's address and the signature; only the portal's own ruling pages are read.
+ */
+async function viaWebSearch(prefix: string, number: string, fetchImpl: WsdFetch): Promise<WsdLookup | null> {
+  const search = currentPortalSearch();
+  if (!search) return null;
+  try {
+    const hits = await search(`site:wsd.adwokatura.pl "${prefix} ${number}"`, 8);
+    const urls = hits.map((hit) => hit.url).filter((url) => /^https:\/\/wsd\.adwokatura\.pl\/rejestry\/show\//u.test(url));
+    return await firstNaming(urls.slice(0, 6), prefix, number, fetchImpl);
+  } catch {
+    return null;
+  }
 }
 
 export async function findWsdRuling(signature: string, fetchImpl: WsdFetch = fetch as unknown as WsdFetch): Promise<WsdLookup> {
-  const number = wsdNumber(signature);
-  if (!number) return { status: "UNAVAILABLE", signature, detail: "WSD_SIGNATURE_INVALID" };
+  const register = await findWsdRulingInRegister(signature, fetchImpl);
+  if (register.status !== "UNAVAILABLE" || register.detail === "WSD_SIGNATURE_INVALID") return register;
+  const parsed = wsdRegisterSignature(signature)!;
+  return (await viaWebSearch(parsed.prefix, parsed.number, fetchImpl)) ?? register;
+}
+
+async function findWsdRulingInRegister(signature: string, fetchImpl: WsdFetch): Promise<WsdLookup> {
+  const parsed = wsdRegisterSignature(signature);
+  if (!parsed) return { status: "UNAVAILABLE", signature, detail: "WSD_SIGNATURE_INVALID" };
+  const { prefix, number } = parsed;
   const search = `${WSD_PORTAL}/ajax.php?m=aktyPrawne&o=listAkty&pp=1&idm=${REGISTER}`;
   const body = new URLSearchParams({ nazwaAK: "", sygAK: number, id_catAK: "", id_organAK: "", odAK: "", doAK: "", sortAK: "" }).toString();
   let list: string;
@@ -56,21 +117,9 @@ export async function findWsdRuling(signature: string, fetchImpl: WsdFetch = fet
   } catch (error) {
     return { status: "UNAVAILABLE", signature, detail: error instanceof Error ? error.message.slice(0, 120) : "WSD_SEARCH_FAILED" };
   }
-  for (const url of wsdResultLinks(list).slice(0, 6)) {
-    try {
-      const page = await fetchImpl(url, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(30_000) });
-      if (!page.ok) continue;
-      const html = await page.text();
-      const main = /<article\b[\s\S]*?<\/article>/u.exec(html)?.[0] ?? html;
-      const text = plainText(main);
-      if (!wsdPageNames(text, number)) continue;
-      const title = plainText(/<h1\b[^>]*>([\s\S]*?)<\/h1>/u.exec(html)?.[1] ?? /<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "");
-      return { status: "FOUND", signature: `WSD ${number}`, url, title, text: text.slice(0, 60_000) };
-    } catch {
-      // Another hit may still be the ruling.
-    }
-  }
-  return { status: "NOT_FOUND", signature: `WSD ${number}`, searched: `${WSD_PORTAL}/rejestry/showMain/orzecznictwo-${REGISTER} (wyszukiwarka portalu, sygnatura ${number})` };
+  const found = await firstNaming(wsdResultLinks(list).slice(0, prefix === "WSD" ? 6 : 12), prefix, number, fetchImpl);
+  if (found) return found;
+  return { status: "NOT_FOUND", signature: `${prefix} ${number}`, searched: `${WSD_PORTAL}/rejestry/showMain/orzecznictwo-${REGISTER} (wyszukiwarka portalu, sygnatura ${number})` };
 }
 
 /** For the model: what the application found for each WSD signature of the case file. */

@@ -284,7 +284,26 @@ export function registerMcpConnectorRoutes(
       if (!requireUser(req, res, authService)) return;
       const reply = await search.direct({ source: "sn", tool: "sn_captcha_auto", arguments: { headless: true } });
       const result = (reply.result ?? {}) as { status?: unknown; steps?: unknown; challenge?: { strona?: unknown; kind?: unknown } };
-      const ready = reply.ok && result.status === "OK";
+      let ready = reply.ok && result.status === "OK";
+      const noPlaywright = reply.ok && Array.isArray(result.steps) && result.steps.some((step) => /Brak playwright/u.test(String(step)));
+      // No Playwright with the connectors: the browser for reading pages (Chromium in Docker,
+      // Ustawienia > Wyszukiwarka internetowa) tries sn.pl's check; the session is probed first.
+      if (!ready && noPlaywright) {
+        const attempt = await passCheckInServerBrowser(
+          "https://www.sn.pl/orzecznictwo/SitePages/Baza_orzeczen.aspx",
+          connectors.serversDirectory,
+          async (cookie, userAgent) => {
+            const probe = await connectors.probeSnSession(cookie, userAgent);
+            if (probe.ready) connectors.setSnSession(cookie, userAgent);
+            return probe;
+          }
+        ).catch(() => ({ ready: false as const, reason: "SERVER_REJECTED" as const }));
+        if (attempt.ready) ready = true;
+        else if (attempt.reason !== "SERVER_BROWSER_MISSING") {
+          res.json({ ready: false, reason: "SN_SERVER_REJECTED" });
+          return;
+        }
+      }
       res.json({
         ready,
         ...(ready
