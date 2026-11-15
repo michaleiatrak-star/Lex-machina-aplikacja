@@ -3184,160 +3184,6 @@ export class SafeSessionExecutor {
                 modelOutput = text;
             }
         }
-        if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
-            const topic = judgedQuestion(protectedQuery);
-            const correctionPrompt = [
-                ...(placeholderKey ? [placeholderKey] : []),
-                identityPrompt,
-                ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-                ...pathSections
-            ].join("\n\n");
-            const correct = async (instruction) => {
-                try {
-                    const corrected = await this.providers.stream(request.provider, {
-                        model: request.model,
-                        ...correctingRound(modelOutput, instruction, correctionPrompt),
-                        accountContinuity: "none",
-                        reasoning: "none"
-                    });
-                    return corrected.fullText.trim();
-                }
-                catch {
-                    return "";
-                }
-            };
-            const judge = async (answer) => {
-                const documents = citedDocuments(answer, caseSourceTexts);
-                // A local model judges too (2026-11-09: without it Bielik's claims passed on the lexical check only).
-                if (!documents.length)
-                    return null;
-                try {
-                    const verdict = await this.providers.stream(request.provider, {
-                        model: request.model,
-                        systemPrompt: JUDGE_SYSTEM,
-                        messages: [{ role: "user", content: semanticJudgePrompt(topic, documents, { roles: true }) }],
-                        accountContinuity: "none",
-                        reasoning: "none"
-                    });
-                    return parseSemanticVerdicts(verdict.fullText, documents);
-                }
-                catch {
-                    return null;
-                }
-            };
-            // The semantic verdict decides where there is one; the lexical check covers the documents
-            // without a valid verdict (local model, judge failure, a quote not in the document). Lexically
-            // a correct paraphrase can look like a missing word, so it does not override a verdict.
-            const review = async (answer) => {
-                const check = await judge(answer);
-                const judged = new Set((check?.verdicts ?? []).map((item) => item.signature.replace(/\s+/g, " ")));
-                return {
-                    check,
-                    semantic: check ? semanticProblems(check) : [],
-                    lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature)),
-                    courts: courtAttributionFindings(answer)
-                };
-            };
-            const size = (state) => state.semantic.length + state.lexical.flatMap((item) => item.missing).length + state.courts.length;
-            const first = await review(modelOutput);
-            let final = first;
-            if (size(first)) {
-                step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic, ...first.lexical, ...first.courts].map((item) => item.signature).join(", ")}`);
-                const text = await correct([
-                    ...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []),
-                    ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : []),
-                    ...(first.courts.length ? [courtCorrectionPrompt(first.courts)] : [])
-                ].join("\n\n"));
-                if (text) {
-                    const second = await review(text);
-                    if (size(second) < size(first)) {
-                        corrections.push(answerCorrection("CASE_GROUNDING", [
-                            ...first.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
-                            ...first.lexical.map((item) => `${item.signature}: brak w tekście dokumentu: ${item.missing.join(", ")}`),
-                            ...first.courts.map((item) => `${item.signature}: sąd ${item.named}, w źródle ${item.actual}`)
-                        ], modelOutput, text));
-                        modelOutput = text;
-                        final = second;
-                    }
-                }
-            }
-            if (first.check) {
-                audit.record("gate", "CASE_SEMANTIC_CHECK", final.semantic.length ? "DEGRADED" : "OK", {
-                    verdicts: first.check.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
-                    ...(first.check.rejected.length ? { rejectedQuotes: first.check.rejected } : {}),
-                    corrected: first.semantic.map((item) => item.signature),
-                    remaining: final.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
-                });
-            }
-            if (first.lexical.length) {
-                audit.record("gate", "CASE_CONTENT_GROUNDING", final.lexical.length ? "DEGRADED" : "OK", {
-                    findings: first.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
-                    remaining: final.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
-                });
-            }
-            if (first.courts.length) {
-                audit.record("gate", "CASE_COURT_ATTRIBUTION", final.courts.length ? "DEGRADED" : "OK", {
-                    findings: first.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`),
-                    remaining: final.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`)
-                });
-            }
-            const lexical = final.lexical;
-            const semantic = final.semantic;
-            const warnings = [
-                ...(lexical.length ? [caseContentWarning(lexical)] : []),
-                ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : []),
-                ...(final.courts.length ? [courtWarning(final.courts)] : [])
-            ].filter(Boolean);
-            if (warnings.length) {
-                // Before the model's closing disclaimer, which stays the last element.
-                const parts = splitTrailingDisclaimer(modelOutput);
-                modelOutput = parts.disclaimer
-                    ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
-                    : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
-            }
-        }
-        // Every quote against its source, in every kind of work and for every country: a quoted
-        // provision against the wording verified in this turn (ELI for Poland, the national readers
-        // for the others), a quote attributed to a case document against the documents. A mismatch
-        // goes to the correction round with the source's words; the correction stays only when it
-        // leaves fewer mismatches (user, 2026-11-08).
-        if (legalTurn && !waitsForUser(modelOutput) && /[„“]/u.test(modelOutput)) {
-            const statutes = [
-                ...ledger.all().filter((record) => (record.kind === "statute" || record.kind === "journal") && record.evidence).map((record) => ({ claim: record.claim, evidence: record.evidence })),
-                ...(this.legalFederationTools?.nationalReadings?.() ?? [])
-            ];
-            const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)];
-            const check = (answer) => [
-                ...statuteQuoteFindings(answer, statutes),
-                ...(citationSources.length ? documentQuoteFindings(processDocumentCitationMarkers(answer, citationSources, { otherTexts }).text) : [])
-            ];
-            const found = check(modelOutput);
-            if (found.length) {
-                step("MODEL", `kontrola cytatów ze źródłem: ${found.length} do korekty`);
-                let text = "";
-                try {
-                    const corrected = await this.providers.stream(request.provider, {
-                        model: request.model,
-                        ...correctingRound(modelOutput, quoteCorrectionPrompt(found), [identityPrompt, ...pathSections].join("\n\n")),
-                        accountContinuity: "none",
-                        reasoning: "none"
-                    });
-                    text = corrected.fullText.trim();
-                }
-                catch {
-                    text = "";
-                }
-                const remaining = text ? check(text) : found;
-                if (text && remaining.length < found.length) {
-                    corrections.push(answerCorrection("QUOTE_SOURCE", found.map((item) => `${item.kind === "STATUTE" ? item.claim : "dokument sprawy"}: „${item.quote.slice(0, 120)}”`), modelOutput, text));
-                    modelOutput = text;
-                }
-                audit.record("gate", "QUOTE_SOURCE_CHECK", remaining.length && !(text && remaining.length < found.length) ? "DEGRADED" : remaining.length ? "DEGRADED" : "OK", {
-                    findings: found.map((item) => `${item.kind}:${item.claim ?? ""}:${item.quote.slice(0, 80)}`),
-                    remaining: (text && remaining.length < found.length ? remaining : found).length
-                });
-            }
-        }
         // The model's own ⚠️ at a statute does not stop the application from
         // verifying it: status comes from the registry only.
         // Asked for a widget, a model without show_widget (local) or one that did not call it
@@ -3385,17 +3231,67 @@ export class SafeSessionExecutor {
             }
         };
         await verifyDraft();
-        // Kontrola treści przepisów: the application verified a provision (ELI/RAG) — does its wording
-        // say what the answer claims? The same model judges (a local one too); every verdict quotes the
-        // wording and the quote is checked. A claim the provision does not carry: one correcting round
-        // (the corrected text is verified anew); still wrong: the mark says so instead of ✅.
+        // The three checks of the answer against its sources — what a cited ruling or interpretation
+        // says (CASE), quotes against the verified wording (QUOTE), what a verified provision says
+        // (STATUTE) — judge side by side, then ONE correcting round with all their findings and ONE
+        // re-check side by side (live test 2026-11-15: three rounds one after another took 13 of 23
+        // minutes of a turn on a Claude account). The correction stays when it leaves fewer findings.
         const statuteWarnings = new Map();
-        if (legalTurn && !request.documentAstOutput && !astLines && verificationTools && !waitsForUser(modelOutput)) {
+        const checksOn = legalTurn && !waitsForUser(modelOutput);
+        const caseCheckOn = checksOn && caseSourceTexts.length > 0;
+        const quoteCheckOn = checksOn && /[„“]/u.test(modelOutput);
+        const statuteCheckOn = checksOn && !request.documentAstOutput && !astLines && Boolean(verificationTools);
+        if (caseCheckOn || quoteCheckOn || statuteCheckOn) {
+            const topic = judgedQuestion(protectedQuery);
+            const judgeCase = async (answer) => {
+                const documents = citedDocuments(answer, caseSourceTexts);
+                // A local model judges too (2026-11-09: without it Bielik's claims passed on the lexical check only).
+                if (!documents.length)
+                    return null;
+                try {
+                    const verdict = await this.providers.stream(request.provider, {
+                        model: request.model,
+                        systemPrompt: JUDGE_SYSTEM,
+                        messages: [{ role: "user", content: semanticJudgePrompt(topic, documents, { roles: true }) }],
+                        accountContinuity: "none",
+                        reasoning: "none"
+                    });
+                    return parseSemanticVerdicts(verdict.fullText, documents);
+                }
+                catch {
+                    return null;
+                }
+            };
+            // The semantic verdict decides where there is one; the lexical check covers the documents
+            // without a valid verdict (local model, judge failure, a quote not in the document).
+            const reviewCase = async (answer) => {
+                const check = caseCheckOn ? await judgeCase(answer) : null;
+                const judged = new Set((check?.verdicts ?? []).map((item) => item.signature.replace(/\s+/g, " ")));
+                return {
+                    check,
+                    semantic: check ? semanticProblems(check) : [],
+                    lexical: caseCheckOn ? caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature)) : [],
+                    courts: caseCheckOn ? courtAttributionFindings(answer) : []
+                };
+            };
+            const statutesRead = [
+                ...ledger.all().filter((record) => (record.kind === "statute" || record.kind === "journal") && record.evidence).map((record) => ({ claim: record.claim, evidence: record.evidence })),
+                ...(this.legalFederationTools?.nationalReadings?.() ?? [])
+            ];
+            const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)];
+            const checkQuotes = (answer) => quoteCheckOn
+                ? [
+                    ...statuteQuoteFindings(answer, statutesRead),
+                    ...(citationSources.length ? documentQuoteFindings(processDocumentCitationMarkers(answer, citationSources, { otherTexts }).text) : [])
+                ]
+                : [];
             const alreadyJudged = claimsWithWording(caseSourceTexts);
             // A local model takes its provisions in one call (one request at a time anyway); a cloud
             // model's batches run side by side.
             const statuteBatch = request.model.startsWith("local/") ? STATUTE_JUDGE_BATCH_LOCAL : STATUTE_JUDGE_BATCH;
             const judgeStatutes = async (answer) => {
+                if (!statuteCheckOn)
+                    return { items: [], problems: [] };
                 const items = statuteItems(answer, ledger.all(), alreadyJudged);
                 const batches = [];
                 for (let start = 0; start < items.length; start += statuteBatch)
@@ -3419,16 +3315,42 @@ export class SafeSessionExecutor {
                 }));
                 return { items, problems: judged.flat() };
             };
-            const first = await judgeStatutes(releasedDraft.text);
-            let remaining = first;
-            if (first.problems.length) {
-                step("MODEL", `kontrola treści przepisów: ${first.problems.map((item) => item.signature).join(", ")}`);
-                const before = modelOutput;
+            // All three on one text, side by side; the statutes after the draft's automatic verification.
+            const detect = async () => {
+                const [caseReview, statutes] = await Promise.all([reviewCase(modelOutput), judgeStatutes(releasedDraft.text)]);
+                const quotes = checkQuotes(modelOutput);
+                const size = caseReview.semantic.length + caseReview.lexical.flatMap((item) => item.missing).length + caseReview.courts.length + quotes.length + statutes.problems.length;
+                return { caseReview, quotes, statutes, size };
+            };
+            const first = await detect();
+            let final = first;
+            // A document AST is checked as its text lines; the model's rewrite would not be in that form.
+            if (first.size && !astLines) {
+                step("MODEL", `kontrola odpowiedzi ze źródłami: ${[
+                    first.caseReview.semantic.length + first.caseReview.lexical.length + first.caseReview.courts.length ? `orzeczenia ${first.caseReview.semantic.length + first.caseReview.lexical.length + first.caseReview.courts.length}` : "",
+                    first.quotes.length ? `cytaty ${first.quotes.length}` : "",
+                    first.statutes.problems.length ? `przepisy ${first.statutes.problems.length}` : ""
+                ]
+                    .filter(Boolean)
+                    .join(", ")}`);
+                const instruction = [
+                    ...(first.caseReview.semantic.length ? [semanticCorrectionPrompt(first.caseReview.semantic)] : []),
+                    ...(first.caseReview.lexical.length ? [caseContentCorrectionPrompt(first.caseReview.lexical)] : []),
+                    ...(first.caseReview.courts.length ? [courtCorrectionPrompt(first.caseReview.courts)] : []),
+                    ...(first.quotes.length ? [quoteCorrectionPrompt(first.quotes)] : []),
+                    ...(first.statutes.problems.length ? [statuteCorrectionPrompt(first.statutes.problems)] : [])
+                ].join("\n\n");
+                const correctionPrompt = [
+                    ...(placeholderKey ? [placeholderKey] : []),
+                    identityPrompt,
+                    ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                    ...pathSections
+                ].join("\n\n");
                 let corrected = "";
                 try {
                     corrected = (await this.providers.stream(request.provider, {
                         model: request.model,
-                        ...correctingRound(modelOutput, statuteCorrectionPrompt(first.problems)),
+                        ...correctingRound(modelOutput, instruction, correctionPrompt),
                         accountContinuity: "none",
                         reasoning: "none"
                     })).fullText.trim();
@@ -3437,13 +3359,23 @@ export class SafeSessionExecutor {
                     corrected = "";
                 }
                 if (corrected && !emptyDeferral(corrected)) {
-                    const correctedParts = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected));
-                    modelOutput = correctedParts.body;
+                    const before = modelOutput;
+                    modelOutput = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected)).body;
                     await verifyDraft();
-                    const second = await judgeStatutes(releasedDraft.text);
-                    if (second.problems.length < first.problems.length) {
-                        corrections.push(answerCorrection("STATUTE_CONTENT", first.problems.map((item) => `${item.signature}: ${item.claim} — ${item.reason}`), before, modelOutput));
-                        remaining = second;
+                    const second = await detect();
+                    if (second.size < first.size) {
+                        if (first.caseReview.semantic.length + first.caseReview.lexical.length + first.caseReview.courts.length) {
+                            corrections.push(answerCorrection("CASE_GROUNDING", [
+                                ...first.caseReview.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+                                ...first.caseReview.lexical.map((item) => `${item.signature}: brak w tekście dokumentu: ${item.missing.join(", ")}`),
+                                ...first.caseReview.courts.map((item) => `${item.signature}: sąd ${item.named}, w źródle ${item.actual}`)
+                            ], before, modelOutput));
+                        }
+                        if (first.quotes.length)
+                            corrections.push(answerCorrection("QUOTE_SOURCE", first.quotes.map((item) => `${item.kind === "STATUTE" ? item.claim : "dokument sprawy"}: „${item.quote.slice(0, 120)}”`), before, modelOutput));
+                        if (first.statutes.problems.length)
+                            corrections.push(answerCorrection("STATUTE_CONTENT", first.statutes.problems.map((item) => `${item.signature}: ${item.claim} — ${item.reason}`), before, modelOutput));
+                        final = second;
                     }
                     else {
                         modelOutput = before;
@@ -3451,17 +3383,57 @@ export class SafeSessionExecutor {
                     }
                 }
             }
-            for (const problem of remaining.problems) {
-                const item = remaining.items.find((candidate) => candidate.document.signature === problem.signature);
-                if (item)
-                    statuteWarnings.set(item.record.claim, statuteContentWarning(problem));
+            if (first.caseReview.check) {
+                audit.record("gate", "CASE_SEMANTIC_CHECK", final.caseReview.semantic.length ? "DEGRADED" : "OK", {
+                    verdicts: first.caseReview.check.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+                    ...(first.caseReview.check.rejected.length ? { rejectedQuotes: first.caseReview.check.rejected } : {}),
+                    corrected: first.caseReview.semantic.map((item) => item.signature),
+                    remaining: final.caseReview.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
+                });
             }
-            audit.record("gate", "STATUTE_CONTENT_CHECK", remaining.problems.length ? "DEGRADED" : "OK", {
-                judged: first.items.length,
-                problems: first.problems.map((item) => `${item.signature}:${item.claim}`),
-                corrected: remaining !== first,
-                remaining: remaining.problems.map((item) => `${item.signature}:${item.claim}`)
-            });
+            if (first.caseReview.lexical.length) {
+                audit.record("gate", "CASE_CONTENT_GROUNDING", final.caseReview.lexical.length ? "DEGRADED" : "OK", {
+                    findings: first.caseReview.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+                    remaining: final.caseReview.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
+                });
+            }
+            if (first.caseReview.courts.length) {
+                audit.record("gate", "CASE_COURT_ATTRIBUTION", final.caseReview.courts.length ? "DEGRADED" : "OK", {
+                    findings: first.caseReview.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`),
+                    remaining: final.caseReview.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`)
+                });
+            }
+            if (first.quotes.length) {
+                audit.record("gate", "QUOTE_SOURCE_CHECK", final.quotes.length ? "DEGRADED" : "OK", {
+                    findings: first.quotes.map((item) => `${item.kind}:${item.claim ?? ""}:${item.quote.slice(0, 80)}`),
+                    remaining: final.quotes.length
+                });
+            }
+            if (statuteCheckOn) {
+                for (const problem of final.statutes.problems) {
+                    const item = final.statutes.items.find((candidate) => candidate.document.signature === problem.signature);
+                    if (item)
+                        statuteWarnings.set(item.record.claim, statuteContentWarning(problem));
+                }
+                audit.record("gate", "STATUTE_CONTENT_CHECK", final.statutes.problems.length ? "DEGRADED" : "OK", {
+                    judged: first.statutes.items.length,
+                    problems: first.statutes.problems.map((item) => `${item.signature}:${item.claim}`),
+                    corrected: final !== first,
+                    remaining: final.statutes.problems.map((item) => `${item.signature}:${item.claim}`)
+                });
+            }
+            // What a ruling still does not carry: shown next to the answer.
+            const lexical = final.caseReview.lexical;
+            const semantic = final.caseReview.semantic;
+            const warnings = [
+                ...(lexical.length ? [caseContentWarning(lexical)] : []),
+                ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : []),
+                ...(final.caseReview.courts.length ? [courtWarning(final.caseReview.courts)] : [])
+            ].filter(Boolean);
+            if (warnings.length) {
+                modelOutput = `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
+                releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+            }
         }
         // Model-written ✅ markers are claims, not verification: only the ledger
         // marker is shown, so a rewritten link or date cannot block the answer.
