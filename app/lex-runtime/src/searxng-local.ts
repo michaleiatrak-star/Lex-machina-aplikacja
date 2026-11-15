@@ -127,6 +127,10 @@ export function composeFile(): string {
     "      - ./searxng:/etc/searxng:rw",
     "    environment:",
     `      - SEARXNG_BASE_URL=${LOCAL_SEARXNG_URL}/`,
+    // The image listens on IPv6 ("::") by default; with no IPv6 in the container engine it does
+    // not start ("Address family not supported by protocol", checked 2026-11-15). IPv4 is enough:
+    // the port is published on 127.0.0.1 only.
+    "      - GRANIAN_HOST=0.0.0.0",
     ""
   ].join("\n");
 }

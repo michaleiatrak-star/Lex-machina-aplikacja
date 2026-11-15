@@ -26,6 +26,7 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
     expect(settings).toContain("    - json");
     expect(settings).toContain("limiter: false");
     expect(fs.readFileSync(path.join(dir, "docker-compose.yml"), "utf8")).toContain('"127.0.0.1:8888:8080"');
+    expect(fs.readFileSync(path.join(dir, "docker-compose.yml"), "utf8")).toContain("GRANIAN_HOST=0.0.0.0");
     const secret = /secret_key: "([0-9a-f]{64})"/.exec(settings)?.[1];
     expect(secret).toBeTruthy();
     writeLocalSearxng(dir);
