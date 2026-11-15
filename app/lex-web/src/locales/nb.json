@@ -2898,7 +2898,6 @@
  "Najdłuższe ostatnie tury i ich kroki": "Lengste nylige runder og trinnene deres",
  "{at} · {path}: {total} s": "{at} · {path}: {total} s",
  "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "bekreftelse kreves i Startpage-vinduet (knappen over eller i chatten)",
- "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage på din økt (første søkemotor)",
  "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Søk går gjennom startpage.com (Google-resultater) med økten fra programmets vindu, som ved sn.pl. Ved første søk, og når Startpage igjen ber om verifisering, vises en knapp i chatten som åpner Startpage-vinduet: du består verifiseringen, vinduet lukker seg selv, og spørsmålet gjentas med resultater. Inntil da gir neste søkemotor resultatene. Fungerer i programmet på denne datamaskinen, ikke i servermodus. Startpages vilkår kan forby automatiserte søk: du slår dette på på eget ansvar.",
  "Sesja Startpage aktywna.": "Startpage-økt aktiv.",
  "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Ingen Startpage-økt: bekreft i Startpage-vinduet før søkemotoren brukes.",
@@ -2908,5 +2907,11 @@
  "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "lagres ved neste bekreftelse i Startpage-vinduet",
  "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Uten dette valget varer Startpage-økten opptil 6 timer og avsluttes når programmet lukkes. Med det lagres informasjonskapslene fra Startpage-vinduet kryptert på denne datamaskinen (høyst 30 dager), og vinduet vises ikke ved hver oppstart. Når Startpage igjen ber om verifisering, slettes den lagrede økten og vinduet kommer tilbake. Å slå av valget sletter den lagrede økten.",
  "Sesja wygasła albo aplikacja została zablokowana. Zaloguj się ponownie; stan kopii przepisów odświeży się sam.": "Økten er utløpt, eller programmet ble låst. Logg inn igjen; statusen for lovkopien oppdateres av seg selv.",
- "Tę czynność może wykonać tylko administrator.": "Bare en administrator kan gjøre dette."
+ "Tę czynność może wykonać tylko administrator.": "Bare en administrator kan gjøre dette.",
+ "Startpage na Twojej sesji": "Startpage på din økt",
+ "Google odrzucił zapytania z powodu limitu, nie podając jego rodzaju; sprawdź limity projektu w Google AI Studio": "Google avviste søkene på grunn av en grense uten å oppgi hvilken; sjekk prosjektgrensene i Google AI Studio",
+ "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "minuttgrensen for Gemini-nøkkelen er fortsatt brukt opp etter ventetiden; prøv igjen om noen minutter",
+ "zalecane: lokalny SearXNG": "anbefalt: lokal SearXNG",
+ "Zalecane:": "Anbefalt:",
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "opprett SearXNG på denne datamaskinen. Den kom best ut i søkemotortesten (flest offisielle kilder, raskest), kjører lokalt uten nøkkel og uten nettlesersjekk, og starter sammen med programmet. Kjør deretter testen: den beste søkemotoren spørres først i chatten."
 }

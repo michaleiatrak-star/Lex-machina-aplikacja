@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LOCAL_SEARXNG_URL, installDockerDesktop, setupLocalSearxng, writeLocalSearxng } from "./searxng-local.js";
+import { LOCAL_SEARXNG_URL, autostartLocalSearxng, installDockerDesktop, setupLocalSearxng, writeLocalSearxng } from "./searxng-local.js";
 const dirs = [];
 afterEach(() => {
     for (const dir of dirs.splice(0))
@@ -132,5 +132,42 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         });
         expect(result.error).toBe("CONTAINER_ENGINE_MISSING");
         expect(calls.some((call) => call.startsWith("winget") || call.startsWith("brew"))).toBe(false);
+    });
+    it("autostart z aplikacją: tylko SearXNG utworzony przez aplikację pod lokalnym adresem; zamknięty Docker Desktop jest uruchamiany", async () => {
+        const dir = temp();
+        const never = async () => ({ code: 0, output: "" });
+        expect(await autostartLocalSearxng({ directory: dir, searxngUrl: LOCAL_SEARXNG_URL, run: never, fetcher: silent })).toBeNull();
+        writeLocalSearxng(dir);
+        expect(await autostartLocalSearxng({ directory: dir, searxngUrl: "https://searx.example.org", run: never, fetcher: silent })).toBeNull();
+        const calls = [];
+        let engineUp = false;
+        let launched = 0;
+        let up = false;
+        const run = async (command, args) => {
+            calls.push(`${command} ${args.join(" ")}`);
+            if (args[0] === "info")
+                return { code: engineUp ? 0 : 1, output: "" };
+            if (args[0] === "compose" && args[1] === "up")
+                up = true;
+            return { code: command === "docker" ? 0 : 127, output: "" };
+        };
+        const result = await autostartLocalSearxng({
+            directory: dir,
+            searxngUrl: `${LOCAL_SEARXNG_URL}/`,
+            run,
+            fetcher: async () => (up ? answering() : silent()),
+            launch: () => {
+                launched += 1;
+                engineUp = true;
+                return true;
+            },
+            engineWaitMs: 50,
+            waitMs: 50,
+            pollMs: 1
+        });
+        expect(launched).toBe(1);
+        expect(calls).toContain("docker compose up -d");
+        expect(calls.some((call) => /winget|brew/u.test(call))).toBe(false);
+        expect(result).toMatchObject({ reachable: true, started: true });
     });
 });

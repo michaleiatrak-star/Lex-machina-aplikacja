@@ -63,7 +63,8 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
-import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { autostartLocalSearxng } from "../searxng-local.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
@@ -784,6 +785,16 @@ if (process.argv[1] &&
     installRuntimeCrashGuards();
     const server = await startLocalServer();
     process.stdout.write(`Lex Machina runtime listening on http://${server.host}:${server.port}\n`);
+    // Local SearXNG created in Settings starts with the application (Docker Desktop opened if closed).
+    const searchDirectory = webSearchDataDirectory();
+    if (searchDirectory && process.env.LEX_SEARXNG_AUTOSTART !== "0") {
+        void autostartLocalSearxng({ directory: path.join(searchDirectory, "searxng"), searxngUrl: webSearchSettings().searxngUrl })
+            .then((result) => {
+            if (result)
+                process.stderr.write(`LEX_SEARXNG_AUTOSTART:${result.reachable ? "OK" : result.error ?? "NOT_ANSWERING"}\n`);
+        })
+            .catch((error) => process.stderr.write(`LEX_SEARXNG_AUTOSTART:${error instanceof Error ? error.message : String(error)}\n`));
+    }
     // Desktop: the runtime ends with the application that started it. On macOS an app
     // that crashed or was force-quit left node and its Python workers running (a new
     // set at every launch); the parent changing means it is gone.

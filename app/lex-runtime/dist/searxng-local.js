@@ -234,3 +234,16 @@ export async function setupLocalSearxng(args) {
     }
     return { ...base, started: true, error: "NOT_ANSWERING" };
 }
+/**
+ * SearXNG created by the application starts with it (user, 2026-11-15): when the address is the
+ * local one and the files are here but the instance does not answer, the container engine is
+ * started (Docker Desktop opened when closed) and the container brought up. Never installs anything.
+ */
+export async function autostartLocalSearxng(args) {
+    if (args.searxngUrl.replace(/\/+$/u, "") !== LOCAL_SEARXNG_URL)
+        return null;
+    if (!fs.existsSync(path.join(args.directory, "docker-compose.yml")))
+        return null;
+    const { searxngUrl: _url, ...rest } = args;
+    return setupLocalSearxng({ ...rest, start: true, install: false });
+}

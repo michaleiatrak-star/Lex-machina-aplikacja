@@ -471,6 +471,15 @@ li.anomaly-error > strong {
   margin: 6px 0;
 }
 
+.web-search-recommendation {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid rgb(var(--lm-o2-rgb));
+  background: rgb(var(--lm-o2-rgb) / 0.08);
+  border-radius: 4px;
+}
+
 .web-search-local small {
   flex: 1 1 100%;
   word-break: break-word;

@@ -68,8 +68,10 @@ describe("Startpage na sesji użytkownika", () => {
         expect(second.verificationRequired).toBe(`LAW_SOURCE_VERIFICATION_REQUIRED:${HOST}`);
         expect(lawSourceSessionHeaders(HOST)).toBeNull();
     });
-    it("kolejność: Startpage pierwszy tylko po włączeniu przez użytkownika", () => {
+    it("kolejność: wynik testu; bez testu Startpage za SearXNG; wyłączony Startpage nie jest pytany", () => {
         expect(effectiveSearchOrder(settings(true)())[0]).toBe("startpage");
+        expect(effectiveSearchOrder({ ...settings(true)(), searxngUrl: "http://127.0.0.1:8888" }).slice(0, 3)).toEqual(["searxng", "startpage", "duckduckgo"]);
+        expect(effectiveSearchOrder({ ...settings(true)(), searxngUrl: "http://127.0.0.1:8888", order: ["startpage", "searxng"] }).slice(0, 2)).toEqual(["startpage", "searxng"]);
         expect(effectiveSearchOrder(settings(false)())).not.toContain("startpage");
     });
 });

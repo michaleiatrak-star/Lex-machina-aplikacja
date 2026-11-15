@@ -89,6 +89,7 @@ import {
   generateLegalDocument,
   getHealth,
   getLocalModels,
+  getWebSearchSettings,
   getModels,
   getProviderAccountStatus,
   getProviderStatus,
@@ -146,7 +147,8 @@ import {
   type ContractAnalysisMode
 } from "./api.js";
 import { conversationTitle } from "./conversation-title.js";
-import { noModelAvailable } from "./model-availability.js";
+import { modelAvailable, noModelAvailable } from "./model-availability.js";
+import { requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptKey } from "./web-search-setup-prompt.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
@@ -1779,6 +1781,36 @@ export default function MatterChatApp({
     setSettingsSection("models");
     setProviderAccountMessage(t("Nie ma jeszcze połączonego modelu. Wybierz dostawcę i połącz konto, wklej klucz API albo zainstaluj model lokalny, a potem wróć do rozmowy."));
   }, [serverMode, providerConfiguration, providerAccounts, localModelInstalled]);
+  // First model connected (or the first start with a model): the web search settings once, with the
+  // local SearXNG recommended (best in the comparison test, user 2026-11-15). Administrator only.
+  const webSearchPrompted = useRef(false);
+  const hasModel = modelAvailable(providerConfiguration, providerAccounts, localModelInstalled);
+  useEffect(() => {
+    if (webSearchPrompted.current || !hasModel || serverMode || user.appRole !== "ADMIN") return;
+    let alreadyShown = false;
+    try {
+      alreadyShown = window.localStorage.getItem(webSearchPromptKey(user.userId)) === "1";
+    } catch {
+      alreadyShown = false;
+    }
+    if (alreadyShown) return;
+    webSearchPrompted.current = true;
+    void getWebSearchSettings()
+      .then(async (settings) => {
+        if (!shouldPromptWebSearch({ admin: true, serverMode, modelAvailable: true, alreadyShown, settings })) return;
+        try {
+          window.localStorage.setItem(webSearchPromptKey(user.userId), "1");
+        } catch {
+          // Shown again at the next start: harmless.
+        }
+        // The "connected" notice of the model step stays readable for a moment first.
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        setActiveTab("settings");
+        setSettingsSection("maintenance");
+        requestWebSearchSetup();
+      })
+      .catch(() => undefined);
+  }, [hasModel, serverMode, user.appRole, user.userId]);
 
   const [localStartBusy, setLocalStartBusy] =
     useState(false);

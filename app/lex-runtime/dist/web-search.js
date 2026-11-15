@@ -417,7 +417,8 @@ export class PublicWebSearch {
                 const second = geminiQuotaRefusal(await readLimitedText(response).catch(() => ""));
                 throw new Error(second.kind === "ZERO" || refusal.kind === "ZERO" ? "QUOTA_ZERO" : "QUOTA_DAILY");
             }
-            throw new Error(refusal.kind === "DAY" ? "QUOTA_DAILY" : refusal.kind === "ZERO" ? "QUOTA_ZERO" : "RATE_LIMITED");
+            // The kind of limit is shown in the test (Settings): a minute limit still there after the wait is not "a limit".
+            throw new Error(refusal.kind === "DAY" ? "QUOTA_DAILY" : refusal.kind === "ZERO" ? "QUOTA_ZERO" : refusal.kind === "MINUTE" ? "QUOTA_MINUTE" : "RATE_LIMITED");
         }
         if (response.status === 429)
             throw new Error("RATE_LIMITED");

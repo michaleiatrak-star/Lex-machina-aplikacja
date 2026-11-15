@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-// Untested order: SearXNG (with an address) and DuckDuckGo first; paid-beyond-a-limit engines last:
+// Untested order (a test sets its own): SearXNG (with an address), Startpage (on the user's session),
+// DuckDuckGo; paid-beyond-a-limit engines last:
 // Firecrawl (monthly credits), Gemini with Google Search (free quota, then billed on the user's key).
-export const SEARCH_ENGINES = ["startpage", "searxng", "duckduckgo", "firecrawl", "gemini"];
+export const SEARCH_ENGINES = ["searxng", "startpage", "duckduckgo", "firecrawl", "gemini"];
 // The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
 let geminiKeySource = null;
 export function configureGeminiSearchKey(source) {
@@ -279,10 +280,6 @@ export function effectiveSearchOrder(settings = webSearchSettings()) {
             : engine === "startpage"
                 ? settings.startpageSession
                 : true;
-    // Startpage on the user's session goes first once the user turned it on (their choice, not the test's).
-    if (settings.startpageSession) {
-        return ["startpage", ...effectiveSearchOrder({ ...settings, startpageSession: false })];
-    }
     const tested = settings.order.filter(usable);
     const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
     return [...tested, ...rest];

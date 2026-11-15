@@ -13,6 +13,7 @@ import {
   type SearchEngineName,
   type WebSearchSettings
 } from "./api.js";
+import { localSearxngRecommended, onWebSearchSetupRequest, takeWebSearchSetupRequest } from "./web-search-setup-prompt.js";
 import { InfoTip } from "./InfoTip";
 import { InlineEdit } from "./InlineEdit";
 import { PencilIcon } from "./CaseAccessAdminPanel";
@@ -68,7 +69,11 @@ function errorText(code: string | undefined, engine?: SearchEngineName): string 
     case "NOT_CONFIGURED":
       return engine === "searxng" ? t("brak adresu") : t("brak klucza");
     case "RATE_LIMITED":
-      return t("serwer odrzucił zapytania (limit)");
+      return engine === "gemini"
+        ? t("Google odrzucił zapytania z powodu limitu, nie podając jego rodzaju; sprawdź limity projektu w Google AI Studio")
+        : t("serwer odrzucił zapytania (limit)");
+    case "QUOTA_MINUTE":
+      return t("wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut");
     case "BOT_CHECK":
       return t("serwer wymaga weryfikacji przeglądarki");
     case "JSON_FORMAT_DISABLED":
@@ -113,6 +118,12 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // Sent here after the first model was chosen: the settings open with the recommendation.
+  useEffect(() => {
+    if (takeWebSearchSetupRequest()) setOpen(true);
+    return onWebSearchSetupRequest(() => setOpen(true));
+  }, []);
 
   useEffect(() => {
     void getWebSearchSettings()
@@ -194,6 +205,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const order = settings.effectiveOrder.map((engine) => ENGINE_LABELS[engine]).join(" → ");
   const summary = settings.providerForced ? t("ustawione w konfiguracji serwera: {value}", { value: settings.providerForced }) : order;
   const best = settings.lastTest?.scores[0];
+  const recommendLocal = localSearxngRecommended(admin, settings);
   return (
     <section className="core-law-updates">
       <div className="chat-card matter-compact-row">
@@ -207,6 +219,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           <span className="matter-compact-count has-entries">
             {summary}
             {best ? ` · ${t("najlepsza w teście: {name} {score}/10", { name: ENGINE_LABELS[best.engine], score: number(best.score) })}` : ""}
+            {recommendLocal ? ` · ${t("zalecane: lokalny SearXNG")}` : ""}
           </span>
         </span>
         <span className="matter-compact-actions">
@@ -246,7 +259,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           disabled={!admin || Boolean(busy)}
           onChange={(event) => void saveStartpage(() => setStartpageSession(event.target.checked))}
         />
-        <span>{t("Startpage na Twojej sesji (pierwsza wyszukiwarka)")}</span>
+        <span>{t("Startpage na Twojej sesji")}</span>
         <InfoTip>
           {t("Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.")}
         </InfoTip>
@@ -333,7 +346,13 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
       </div>
       {admin && !settings.searxngUrlForced ? (
         <div className="web-search-local">
-          <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void createLocalSearxng()}>
+          {recommendLocal ? (
+            <p className="web-search-recommendation" role="note">
+              <strong>{t("Zalecane:")}</strong>{" "}
+              {t("utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.")}
+            </p>
+          ) : null}
+          <button type="button" className={recommendLocal ? "chat-primary-action" : "chat-secondary-action"} disabled={Boolean(busy)} onClick={() => void createLocalSearxng()}>
             {busy === "searxng" ? t("Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)") : t("Utwórz lokalny SearXNG na tym komputerze")}
           </button>
           <InfoTip>

@@ -15,3 +15,14 @@ export function noModelAvailable(
   if (keys.some(Boolean) || localInstalled) return false;
   return !Object.values(accounts).some((account) => account?.authenticated === true);
 }
+
+/** A model the chat can use, known for certain (every source answered, at least one has a model). */
+export function modelAvailable(
+  configuration: Record<string, boolean | undefined>,
+  accounts: Partial<Record<ProviderId, ProviderAccountSessionStatus | undefined>>,
+  localInstalled: boolean | undefined
+): boolean {
+  if (Object.values(accounts).some((account) => account?.authenticated === true)) return true;
+  if (localInstalled === true || Object.values(configuration).some((value) => value === true)) return true;
+  return false;
+}

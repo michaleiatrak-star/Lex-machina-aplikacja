@@ -204,6 +204,22 @@ describe("Gemini + Google i Firecrawl", () => {
     }
   });
 
+  it("Gemini: limit minutowy po odczekaniu nadal wyczerpany — QUOTA_MINUTE (nie ogólne RATE_LIMITED)", async () => {
+    const minute = JSON.stringify({ error: { message: "Quota exceeded", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "1s" }] } });
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return new Response(minute, { status: 429 });
+    }) as unknown as typeof fetch;
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    try {
+      await expect(new PublicWebSearch({}, fetchImpl).searchEngine("gemini", "kodeks cywilny", 3)).rejects.toThrow(/^QUOTA_MINUTE$/u);
+      expect(calls).toBe(2);
+    } finally {
+      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    }
+  });
+
   it("Firecrawl z limitem API: wyniki ze strony wyników DuckDuckGo (scrapowanie), nie błąd", async () => {
     const asked: string[] = [];
     const fetchImpl = (async (input: string | URL) => {

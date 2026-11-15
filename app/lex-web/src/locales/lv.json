@@ -2898,7 +2898,6 @@
  "Najdłuższe ostatnie tury i ich kroki": "Garākie nesenie gājieni un to soļi",
  "{at} · {path}: {total} s": "{at} · {path}: {total} s",
  "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "nepieciešams apstiprinājums Startpage logā (poga augstāk vai tērzēšanā)",
- "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage tavā sesijā (pirmā meklētājprogramma)",
  "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Meklēšana notiek caur startpage.com (Google rezultāti) ar lietotnes loga sesiju, kā sn.pl gadījumā. Pirmajā meklēšanā un ikreiz, kad Startpage atkal prasa pārbaudi, tērzēšanā parādās poga, kas atver Startpage logu: tu izej pārbaudi, logs aizveras pats un jautājums tiek atkārtots ar rezultātiem. Līdz tam rezultātus dod nākamā meklētājprogramma. Darbojas lietotnē šajā datorā, ne servera režīmā. Startpage noteikumi var aizliegt automatizētus vaicājumus: tu to ieslēdz uz savu atbildību.",
  "Sesja Startpage aktywna.": "Startpage sesija aktīva.",
  "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Nav Startpage sesijas: apstiprini Startpage logā, pirms tiek izmantota meklētājprogramma.",
@@ -2908,5 +2907,11 @@
  "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "tiks saglabāta nākamajā apstiprināšanā Startpage logā",
  "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Bez šīs opcijas Startpage sesija ilgst līdz 6 stundām un beidzas, aizverot lietotni. Ar to Startpage loga sīkdatnes tiek saglabātas šifrētas šajā datorā (ne ilgāk par 30 dienām) un logs neparādās katrā palaišanā. Kad Startpage atkal prasa pārbaudi, saglabātā sesija tiek dzēsta un logs atgriežas. Opcijas izslēgšana dzēš saglabāto sesiju.",
  "Sesja wygasła albo aplikacja została zablokowana. Zaloguj się ponownie; stan kopii przepisów odświeży się sam.": "Sesija ir beigusies vai lietotne ir bloķēta. Pierakstieties vēlreiz; tiesību aktu kopijas statuss atjaunosies pats.",
- "Tę czynność może wykonać tylko administrator.": "To var izdarīt tikai administrators."
+ "Tę czynność może wykonać tylko administrator.": "To var izdarīt tikai administrators.",
+ "Startpage na Twojej sesji": "Startpage tavā sesijā",
+ "Google odrzucił zapytania z powodu limitu, nie podając jego rodzaju; sprawdź limity projektu w Google AI Studio": "Google noraidīja vaicājumus limita dēļ, nenorādot tā veidu; pārbaudiet projekta limitus Google AI Studio",
+ "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini atslēgas minūtes limits joprojām ir izsmelts pēc gaidīšanas; mēģiniet vēlreiz pēc dažām minūtēm",
+ "zalecane: lokalny SearXNG": "ieteicams: lokāls SearXNG",
+ "Zalecane:": "Ieteicams:",
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "izveidojiet SearXNG šajā datorā. Meklētājprogrammu testā tas uzrādīja labāko rezultātu (visvairāk oficiālu avotu, ātrākais), darbojas lokāli bez atslēgas un bez pārlūka pārbaudes un startē kopā ar lietotni. Pēc tam palaidiet testu: labākā meklētājprogramma tērzēšanā tiek vaicāta pirmā."
 }

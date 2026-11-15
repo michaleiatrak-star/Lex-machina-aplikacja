@@ -2898,7 +2898,6 @@
  "Najdłuższe ostatnie tury i ich kroki": "Viimeisimmät pisimmät kierrokset ja niiden vaiheet",
  "{at} · {path}: {total} s": "{at} · {path}: {total} s",
  "potrzebne potwierdzenie w oknie Startpage (przycisk wyżej albo w czacie)": "vahvistus tarvitaan Startpage-ikkunassa (yllä oleva painike tai chatissa)",
- "Startpage na Twojej sesji (pierwsza wyszukiwarka)": "Startpage istunnossasi (ensimmäinen hakukone)",
  "Wyszukiwanie idzie przez startpage.com (wyniki Google) z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Startpage znów poprosi o weryfikację, w czacie pojawi się przycisk otwierający okno Startpage: weryfikację przechodzisz Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Działa w aplikacji na tym komputerze, nie w trybie serwerowym. Regulamin Startpage może zakazywać zapytań automatycznych: włączasz to na własną odpowiedzialność.": "Haut kulkevat startpage.comin kautta (Googlen tulokset) sovelluksen ikkunan istunnolla, kuten sn.pl:ssä. Ensimmäisessä haussa ja aina kun Startpage pyytää uudelleen vahvistusta, chattiin tulee painike, joka avaa Startpage-ikkunan: läpäiset vahvistuksen, ikkuna sulkeutuu itsestään ja kysymys toistetaan tulosten kanssa. Siihen asti tulokset antaa seuraava hakukone. Toimii tämän tietokoneen sovelluksessa, ei palvelintilassa. Startpagen ehdot voivat kieltää automaattiset haut: otat tämän käyttöön omalla vastuullasi.",
  "Sesja Startpage aktywna.": "Startpage-istunto aktiivinen.",
  "Brak sesji Startpage: potwierdź w oknie Startpage, zanim wyszukiwarka zostanie użyta.": "Ei Startpage-istuntoa: vahvista Startpage-ikkunassa ennen hakukoneen käyttöä.",
@@ -2908,5 +2907,11 @@
  "zapisze się po najbliższym potwierdzeniu w oknie Startpage": "tallennetaan seuraavan Startpage-ikkunan vahvistuksen yhteydessä",
  "Bez tej opcji sesja Startpage trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Startpage są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Startpage znów poprosi o weryfikację, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.": "Ilman tätä valintaa Startpage-istunto kestää enintään 6 tuntia ja päättyy, kun sovellus suljetaan. Sen kanssa Startpage-ikkunan evästeet tallennetaan salattuina tälle tietokoneelle (enintään 30 päivää), eikä ikkuna tule esiin jokaisella käynnistyksellä. Kun Startpage pyytää uudelleen vahvistusta, tallennettu istunto poistetaan ja ikkuna palaa. Valinnan poistaminen poistaa tallennetun istunnon.",
  "Sesja wygasła albo aplikacja została zablokowana. Zaloguj się ponownie; stan kopii przepisów odświeży się sam.": "Istunto on vanhentunut tai sovellus on lukittu. Kirjaudu uudelleen; lakikopion tila päivittyy itsestään.",
- "Tę czynność może wykonać tylko administrator.": "Vain järjestelmänvalvoja voi tehdä tämän."
+ "Tę czynność może wykonać tylko administrator.": "Vain järjestelmänvalvoja voi tehdä tämän.",
+ "Startpage na Twojej sesji": "Startpage istunnossasi",
+ "Google odrzucił zapytania z powodu limitu, nie podając jego rodzaju; sprawdź limity projektu w Google AI Studio": "Google hylkäsi haut rajan vuoksi kertomatta sen tyyppiä; tarkista projektin rajat Google AI Studiossa",
+ "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini-avaimen minuuttiraja on yhä käytetty odottamisesta huolimatta; yritä uudelleen muutaman minuutin kuluttua",
+ "zalecane: lokalny SearXNG": "suositus: paikallinen SearXNG",
+ "Zalecane:": "Suositus:",
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "luo SearXNG tälle tietokoneelle. Se pärjäsi hakukonetestissä parhaiten (eniten virallisia lähteitä, nopein), toimii paikallisesti ilman avainta ja selaintarkistusta ja käynnistyy sovelluksen mukana. Aja sen jälkeen testi: paras hakukone kysytään keskustelussa ensimmäisenä."
 }

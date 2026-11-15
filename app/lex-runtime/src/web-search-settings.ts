@@ -16,9 +16,10 @@ import type { LawSourceSession, LawSourceSessionStore } from "./eli/law-source-s
 // its results pages answer without JavaScript. Off by default.
 export type SearchEngineName = "startpage" | "searxng" | "duckduckgo" | "firecrawl" | "gemini";
 
-// Untested order: SearXNG (with an address) and DuckDuckGo first; paid-beyond-a-limit engines last:
+// Untested order (a test sets its own): SearXNG (with an address), Startpage (on the user's session),
+// DuckDuckGo; paid-beyond-a-limit engines last:
 // Firecrawl (monthly credits), Gemini with Google Search (free quota, then billed on the user's key).
-export const SEARCH_ENGINES: SearchEngineName[] = ["startpage", "searxng", "duckduckgo", "firecrawl", "gemini"];
+export const SEARCH_ENGINES: SearchEngineName[] = ["searxng", "startpage", "duckduckgo", "firecrawl", "gemini"];
 
 // The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
 let geminiKeySource: (() => Promise<string | null>) | null = null;
@@ -340,10 +341,6 @@ export function effectiveSearchOrder(settings: WebSearchSettings = webSearchSett
         : engine === "startpage"
           ? settings.startpageSession
           : true;
-  // Startpage on the user's session goes first once the user turned it on (their choice, not the test's).
-  if (settings.startpageSession) {
-    return ["startpage", ...effectiveSearchOrder({ ...settings, startpageSession: false })];
-  }
   const tested = settings.order.filter(usable);
   const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
   return [...tested, ...rest];
