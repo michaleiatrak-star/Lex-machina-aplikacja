@@ -582,9 +582,15 @@ const pass =
   nearVerification.records === 0 &&
 
   fakeHttp.status === 200 &&
-  // HARD GATE: a fabricated or altered case-law claim is never shown.
-  fake.status === "BLOCKED" &&
-  fake.answer === undefined &&
+  // A fabricated marker is never shown (0.1.83: answers are no longer blocked, they are
+  // corrected): the model's made-up address is gone and the only ✅ is the registry's, from the
+  // application's own check of the signature in sn.pl.
+  typeof fake.answer === "string" &&
+  !String(fake.answer).includes("https://sn.pl/fake") &&
+  String(fake.answer).includes("III CZP 25/11") &&
+  (String(fake.answer).match(/✅\s*\[VER:[^\]]*\]/gu) ?? []).every((marker) =>
+    marker.includes("https://sn.pl/pl/wyszukiwarka-orzeczen")
+  ) &&
   typeof fakeVerification.records ===
     "number" &&
   fakeVerification.records >= 1 &&
@@ -637,7 +643,9 @@ process.stdout.write(
       verification:
         fakeVerification,
       answerReleased:
-        "answer" in fake
+        "answer" in fake,
+      answer:
+        typeof fake.answer === "string" ? String(fake.answer).slice(0, 600) : null
     },
     liveOfficialNetworkCallExecuted:
       false,

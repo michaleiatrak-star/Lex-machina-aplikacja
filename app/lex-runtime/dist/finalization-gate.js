@@ -1102,6 +1102,7 @@ ledgerMarkers = new Set(report.findings.flatMap((finding) => (finding.record?.st
 }
 export const UNCONFIRMED_CASE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: sygnatury nie potwierdzono w bazach orzeczeń]";
 export const UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: brak potwierdzenia w tekście orzeczenia]";
+export const UNSUPPORTED_CASE_PROPOSITION_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: teza nie wynika z tekstu orzeczenia]";
 const BLOCKING_FINDINGS = new Set([
     "MISSING_LEDGER_RECORD",
     "MISSING_VERIFICATION_MARKER",
@@ -1119,12 +1120,12 @@ export function softenRemainingBlockers(text, report) {
     const lines = text.split(/\r?\n/u);
     const marked = new Set();
     const evidence = [
-        ...report.caseQuoteFindings.filter((item) => item.status !== "VERIFIED").map((item) => ({ line: item.line, token: new RegExp(`✅\\s*\\[CASE-QUOTE:${item.evidenceHash}\\]`, "gu"), record: item.record })),
-        ...report.caseSupportFindings.filter((item) => item.status !== "SUPPORTED").map((item) => ({ line: item.line, token: new RegExp(`🔗\\s*\\[CASE-SUPPORT:${item.evidenceHash}\\]`, "gu"), record: item.record }))
+        ...report.caseQuoteFindings.filter((item) => item.status !== "VERIFIED").map((item) => ({ line: item.line, token: new RegExp(`✅\\s*\\[CASE-QUOTE:${item.evidenceHash}\\]`, "gu"), record: item.record, marker: UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT })),
+        ...report.caseSupportFindings.filter((item) => item.status !== "SUPPORTED").map((item) => ({ line: item.line, token: new RegExp(`🔗\\s*\\[CASE-SUPPORT:${item.evidenceHash}\\]`, "gu"), record: item.record, marker: UNSUPPORTED_CASE_PROPOSITION_MARKER_TEXT }))
     ];
     for (const item of evidence) {
         const current = lines[item.line - 1] ?? "";
-        const next = current.replace(item.token, UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT);
+        const next = current.replace(item.token, item.marker);
         if (next !== current) {
             lines[item.line - 1] = next;
             marked.add(item.record?.caseSignature ?? item.record?.claim ?? "cytat z orzeczenia");
@@ -1156,5 +1157,28 @@ export function softenRemainingBlockers(text, report) {
         ]);
         marked.add(finding.reference.claim);
     }
-    return { text: insertMarkersAfterClaims(lines.join("\n"), byLine), marked: [...marked] };
+    return { text: tidyEvidenceMarkers(insertMarkersAfterClaims(lines.join("\n"), byLine)), marked: [...marked] };
+}
+/**
+ * One "brak potwierdzenia w tekście orzeczenia" per line, standing at the quote it concerns
+ * („…” ⚠️ sygn. … ✅), not after the signature's ✅, which reads as if the quote were confirmed.
+ */
+export function tidyEvidenceMarkers(text) {
+    const marker = UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT;
+    const proposition = UNSUPPORTED_CASE_PROPOSITION_MARKER_TEXT;
+    return text
+        .split("\n")
+        .map((line) => {
+        // The proposition's marker once, at the end of the line.
+        if (line.includes(proposition))
+            line = `${line.split(proposition).map((part) => part.replace(/[ \t]+$/u, "")).join("").trimEnd()} ${proposition}`;
+        if (!line.includes(marker))
+            return line;
+        const bare = line.split(marker).map((part, index, parts) => (index < parts.length - 1 ? part.replace(/[ \t]+$/u, "") : part)).join("");
+        const close = bare.indexOf("”");
+        if (close >= 0)
+            return `${bare.slice(0, close + 1)} ${marker}${bare.slice(close + 1)}`;
+        return `${bare.trimEnd()} ${marker}`;
+    })
+        .join("\n");
 }

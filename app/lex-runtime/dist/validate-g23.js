@@ -237,6 +237,16 @@ const altered = alteredHttp.body;
 const verifiedSummary = verification(verified);
 const fakeSummary = verification(fake);
 const alteredSummary = verification(altered);
+// 0.1.83 (user 2026-11-15: no blocked answers, warnings instead): an unconfirmed case quote or
+// proposition is shown, marked ⚠️ with its reason; a made-up address and an unbacked
+// CASE-QUOTE / CASE-SUPPORT marker never stand in the answer.
+function shownMarked(body, reason) {
+    const answer = typeof body.answer === "string" ? String(body.answer) : "";
+    return (answer.length > 0 &&
+        reason.test(answer) &&
+        !answer.includes("https://sn.pl/fake") &&
+        !/\[CASE-QUOTE:a{20}\]|\[CASE-SUPPORT:a{20}\]/u.test(answer));
+}
 const pass = issues.length === 0 &&
     verifiedHttp.status === 200 &&
     verified.status ===
@@ -255,9 +265,8 @@ const pass = issues.length === 0 &&
     verifiedSummary.supported === 0 &&
     verifiedSummary.unverified === 0 &&
     fakeHttp.status === 200 &&
-    // HARD GATE: a fabricated or altered case-law claim is never shown.
-    fake.status === "BLOCKED" &&
-    fake.answer === undefined &&
+    // A fabricated or altered case-law claim is never shown as confirmed: marked ⚠️ with its reason.
+    shownMarked(fake, /brak potwierdzenia w tekście orzeczenia/u) &&
     typeof fakeSummary.records ===
         "number" &&
     fakeSummary.records >= 1 &&
@@ -266,9 +275,8 @@ const pass = issues.length === 0 &&
     fakeSummary.supported === 0 &&
     fakeSummary.unverified === 0 &&
     alteredHttp.status === 200 &&
-    // HARD GATE: a fabricated or altered case-law claim is never shown.
-    altered.status === "BLOCKED" &&
-    altered.answer === undefined &&
+    // A fabricated or altered case-law claim is never shown as confirmed: marked ⚠️ with its reason.
+    shownMarked(altered, /brak potwierdzenia w tekście orzeczenia/u) &&
     typeof alteredSummary.records ===
         "number" &&
     alteredSummary.records >= 2 &&
@@ -296,13 +304,13 @@ process.stdout.write(JSON.stringify({
         http: fakeHttp.status,
         status: fake.status,
         verification: fakeSummary,
-        answerReleased: "answer" in fake
+        answerReleased: "answer" in fake, answerText: typeof fake.answer === "string" ? String(fake.answer).split("\n---")[0] : null
     },
     alteredAfterVerificationPath: {
         http: alteredHttp.status,
         status: altered.status,
         verification: alteredSummary,
-        answerReleased: "answer" in altered
+        answerReleased: "answer" in altered, answerText: typeof altered.answer === "string" ? String(altered.answer).split("\n---")[0] : null
     },
     liveOfficialNetworkCallExecuted: false,
     modelProviderCallExecuted: false
