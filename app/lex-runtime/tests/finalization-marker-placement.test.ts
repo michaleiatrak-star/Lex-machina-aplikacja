@@ -15,3 +15,18 @@ describe("marker placement for an unverified provision", () => {
     expect(marked).not.toMatch(/dotyczy art\. 278 ⚠️/u);
   });
 });
+
+describe("a lead's signature is not from the case's materials", () => {
+  it("a signature found only by a web search gets plain ⚠️, the user's own one 'z materiałów sprawy'", async () => {
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const ledger = new VerificationLedger();
+    ledger.addLeadCase("SDI 7/12");
+    ledger.addMaterialCase("I C 900/26");
+    const text = "Tego dnia SN wydał też SDI 7/12. Sprawa użytkownika: I C 900/26.";
+    const report = new FinalizationGate().evaluate(text, ledger);
+    const marked = markUnverifiedReferences(text, report, new Set(ledger.caseReferences()), new Set(), new Set(ledger.leadCases()));
+    expect(marked).toContain("SDI 7/12 ⚠️ [NIEWERYFIKOWANE]");
+    expect(marked).not.toContain("SDI 7/12 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]");
+    expect(marked).toContain("I C 900/26 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]");
+  });
+});

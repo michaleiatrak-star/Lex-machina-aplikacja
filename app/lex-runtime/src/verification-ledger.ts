@@ -235,6 +235,34 @@ export class VerificationLedger {
     return [...this.caseReferenceKeys];
   }
 
+  // Signatures found only as leads (SAOS, a web search, a legal portal): shown ⚠️ [NIEWERYFIKOWANE],
+  // never "z materiałów sprawy", which names what the user or the case's files gave (live test
+  // 2026-11-15: "SDI 7/12 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]" from a web search hit).
+  private readonly leadCaseKeys = new Set<string>();
+
+  addLeadCase(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) {
+      this.leadCaseKeys.add(key);
+      this.caseReferenceKeys.add(key);
+    }
+  }
+
+  leadCases(): string[] {
+    return [...this.leadCaseKeys].filter((key) => !this.materialKeys.has(key));
+  }
+
+  // Signatures the user's words or the case's files name (registered with addMaterialCase).
+  private readonly materialKeys = new Set<string>();
+
+  addMaterialCase(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) {
+      this.materialKeys.add(key);
+      this.caseReferenceKeys.add(key);
+    }
+  }
+
   // Signatures an official database returned in this turn (search hits, fetched documents).
   private readonly retrievedCaseKeys = new Set<string>();
 

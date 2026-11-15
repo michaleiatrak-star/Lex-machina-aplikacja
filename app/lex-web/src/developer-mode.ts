@@ -234,9 +234,19 @@ function withoutControlSections(lines: string[]): string[] {
   return kept;
 }
 
+// The model's own work trace (live test 2026-11-15): "Wykonane: V-SYG-0 …, verify_case_reference →
+// OUT_OF_SCOPE …", "Status wg prawny-router-v3/references/HARD-GATES-ORZECZNICTWO.md", "Aplikacja
+// skierowała tę sprawę do `orzeczenia-sadowe-v2` … dociągnąłem `dr-04-…/SKILL.md`": skill files and
+// tool names are developer information, not part of the answer.
+const SKILL_FILE = /\b[a-z0-9]+(?:-[a-z0-9]+)*-v\d+\/[\w./-]*\.md\b|\bdr-\d{2}-[a-z-]+(?:\/[\w./-]+)?\b|\b(?:shared|references|modules)\/[\w./-]+\.md\b/u;
+const TOOL_NAME = /\b(?:verify_[a-z_]+|search_[a-z_]+|fetch_[a-z_]+|web_search|read_[a-z_]+|lookup_[a-z_]+)\b/gu;
+export function isWorkTraceLine(line: string): boolean {
+  return SKILL_FILE.test(line) || (line.match(TOOL_NAME)?.length ?? 0) >= 2;
+}
+
 export function withoutQualityGateLines(content: string): string {
   const lines = content.split("\n");
-  const kept = withoutControlSections(lines).filter((line) => !QUALITY_GATE_LINE.test(line));
+  const kept = withoutControlSections(lines).filter((line) => !QUALITY_GATE_LINE.test(line) && !isWorkTraceLine(line));
   if (kept.length === lines.length) return content;
   return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;
 }

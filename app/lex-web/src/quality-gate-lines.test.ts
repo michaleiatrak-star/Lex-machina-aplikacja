@@ -124,3 +124,22 @@ describe("ślad w zwiniętym bloku „Dane techniczne” (C12-008 na żywo)", ()
     expect(plain).toContain("Pełny tekst umowy");
   });
 });
+
+describe("the model's work trace is not part of the answer (live test 2026-11-15)", () => {
+  it("drops lines naming skill files or several tool names, keeps the answer", async () => {
+    const { withoutQualityGateLines, isWorkTraceLine } = await import("./developer-mode");
+    const text = [
+      "Nie mogę potwierdzić treści tego orzeczenia.",
+      "",
+      "Wykonane: V-SYG-0, verify_case_reference → OUT_OF_SCOPE (captcha sn.pl), search_case_law (SAOS, SN, BAZA) → brak trafienia, web_search → trop R2B.",
+      "Status wg prawny-router-v3/references/HARD-GATES-ORZECZNICTWO.md: ⚠️ NIEPOTWIERDZONE.",
+      "Aplikacja skierowała tę sprawę do `orzeczenia-sadowe-v2`; dociągnąłem `dr-04-prawo-pracy-zus-swiadczenia/SKILL.md`.",
+      "Art. 484 § 2 KC pozwala zmniejszyć karę umowną."
+    ].join("\n");
+    const out = withoutQualityGateLines(text);
+    expect(out).toContain("Nie mogę potwierdzić");
+    expect(out).toContain("Art. 484 § 2 KC");
+    expect(out).not.toMatch(/verify_case_reference|HARD-GATES|dr-04-prawo/u);
+    expect(isWorkTraceLine("Sąd pracy (art. 476 § 1 KPC) jest właściwy; DR-04 to dziedzina.")).toBe(false);
+  });
+});

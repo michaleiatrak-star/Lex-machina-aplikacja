@@ -214,6 +214,14 @@ export type CitedDocument = {
  * signature but holds no text of the ruling: judging the answer against it produced "SDI 9/12 nie
  * dotyczy pytania … Tekst dokumentu: notatka systemowa" (live test 2026-11-15).
  */
+/** The signature's own lookup failed: a status code stands next to it ("OUT_OF_SCOPE … SDI 9/12 SN_WERYFIKACJA_WYMAGANA"). */
+export function failedLookupOf(text: string, signature: string): boolean {
+  const at = text.indexOf(signature);
+  if (at < 0) return false;
+  const around = text.slice(Math.max(0, at - 200), at + signature.length + 200);
+  return /\b(?:OUT_OF_SCOPE|NOT_FOUND|[A-Z]+_HTTP_\d{3}|[A-Z]+_WERYFIKACJA_WYMAGANA)\b/u.test(around);
+}
+
 export function carriesDocumentText(text: string): boolean {
   // Only a text with the application's status codes can be a bare note.
   if (!/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/u.test(text)) return true;
@@ -236,7 +244,7 @@ export function citedDocuments(answer: string, sources: string[]): CitedDocument
     for (const item of found) {
       if (cited.has(item.key)) continue;
       const text = item.kind === "interpretation" ? interpretationTextFor(item.key, sources) : sourceTextFor(item.key, sources);
-      if (text && carriesDocumentText(text)) cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
+      if (text && carriesDocumentText(text) && !failedLookupOf(text, item.signature)) cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
     }
   });
   // Provisions: what the answer says about a verified article against its wording.

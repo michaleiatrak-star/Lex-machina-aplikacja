@@ -83,6 +83,9 @@ describe("a tool's status note is not a document (live test 2026-11-15)", () => 
     const note = "OUT_OF_SCOPE SN_SEARCH_HTTP_403 SDI 9/12 SN_WERYFIKACJA_WYMAGANA";
     expect(carriesDocumentText(note)).toBe(false);
     expect(citedDocuments("Nie mogę potwierdzić treści wyroku SDI 9/12.", [note])).toEqual([]);
+    // The note with a hit list of other signatures beside it (second live run): still no document.
+    const mixed = `${note}\nWyniki: SDI 8/12 postanowienie SN w sprawie adwokata z 10 maja 2012 r., SDI 10/12 notariusz, kasacja oddalona.`;
+    expect(citedDocuments("Nie mogę potwierdzić treści wyroku SDI 9/12.", [mixed])).toEqual([]);
     expect(carriesDocumentText("Sąd Najwyższy po rozpoznaniu kasacji obwinionego adwokata od orzeczenia Wyższego Sądu Dyscyplinarnego oddalił kasację, uznając, że naruszenie zasad etyki polegało na")).toBe(true);
   });
 });

@@ -1290,7 +1290,7 @@ export class SafeSessionExecutor {
         const memory = request.threadEvidence;
         // Signatures of the case's materials named in earlier turns: still from the case, here too.
         for (const signature of memory?.caseReferences ?? [])
-            ledger.addCaseReference(signature);
+            ledger.addMaterialCase(signature);
         if (memory &&
             // A conversational turn reads no provisions: no ELI round trip for them.
             !request.conversationalOnly &&
@@ -1414,7 +1414,7 @@ export class SafeSessionExecutor {
             threadUserText(request.query),
             ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
         ])) {
-            ledger.addCaseReference(signature);
+            ledger.addMaterialCase(signature);
         }
         for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
             ledger.addFactAmount(key);
@@ -2852,7 +2852,7 @@ export class SafeSessionExecutor {
             for (const signature of ownCaseFileNumbers(readCaseTexts, ""))
                 ledger.addCaseFileNumber(signature);
             for (const signature of mentionedCaseNumbers(readCaseTexts))
-                ledger.addCaseReference(signature);
+                ledger.addMaterialCase(signature);
             for (const key of amountKeysIn(readCaseTexts.join("\n")))
                 ledger.addFactAmount(key);
         }
@@ -3492,10 +3492,10 @@ export class SafeSessionExecutor {
         // Found only in SAOS, a web search or a legal portal (LEX, Legalis, a law firm, a blog): a
         // lead, shown ⚠️ until verified in the court's own database.
         for (const { signature } of signaturesIn(leadCaseLawTexts.join("\n")))
-            ledger.addCaseReference(signature);
+            ledger.addLeadCase(signature);
         for (const reference of detectLegalReferences(leadCaseLawTexts.join("\n")))
             if (reference.kind === "case")
-                ledger.addCaseReference(reference.claim);
+                ledger.addLeadCase(reference.claim);
         // A signature the answer names that the case's own files hold (a judgment or a proceeding of
         // the case's documents, not read again in this turn: a file written from the conversation) is
         // "z materiałów sprawy", not a judgment to verify (RD 121/26 blocked VIII W 633/25 so).
@@ -3506,7 +3506,7 @@ export class SafeSessionExecutor {
                 ...citedAnswer,
                 // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
                 // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
-                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), preFinalization, verifiedLedgerMarkers(ledger))
+                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()), new Set(ledger.leadCases())), preFinalization, verifiedLedgerMarkers(ledger))
             }
             : citedAnswer;
         // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
