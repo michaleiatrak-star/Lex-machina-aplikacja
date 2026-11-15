@@ -13,7 +13,7 @@ describe("weryfikacja sn.pl w trybie serwerowym (przeglądarka)", () => {
 
   it("powód odmowy po stronie serwera wprost, z drogą zastępczą (SAOS)", () => {
     expect(SN_SERVER_REASONS.SN_SERVER_REJECTED).toContain("SAOS");
-    expect(SN_SERVER_REASONS.SN_SERVER_BROWSER_MISSING).toContain("Playwright");
+    expect(SN_SERVER_REASONS.SN_SERVER_BROWSER_MISSING).toContain("Zainstaluj przeglądarkę");
   });
 
   it("okno sn.pl przez serwer: zamyka się po złapaniu sesji, jak okno aplikacji na komputerze", async () => {

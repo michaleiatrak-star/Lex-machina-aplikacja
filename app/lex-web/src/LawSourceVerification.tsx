@@ -123,7 +123,7 @@ export function LawSourceVerification({
 }
 
 const SERVER_REASONS: Record<string, string> = {
-  SERVER_BROWSER_MISSING: t("Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację."),
+  SERVER_BROWSER_MISSING: t("Na serwerze nie ma przeglądarki do weryfikacji. Administrator instaluje ją w Ustawienia > Wyszukiwarka internetowa > „Zainstaluj przeglądarkę”; do tego czasu wklej sesję z przeglądarki."),
   SERVER_REJECTED: t("Serwer nie przeszedł weryfikacji tego źródła (np. captcha). Otwórz źródło w przeglądarce w sieci serwera, przejdź weryfikację i wklej sesję.")
 };
 

@@ -1,6 +1,6 @@
 import { caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
 import type { Express, Request, Response } from "express";
-import { setupLocalSearxng } from "../searxng-local.js";
+import { localBrowserAnswers, setupLocalSearxng } from "../searxng-local.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
@@ -691,6 +691,22 @@ export function registerMcpConnectorRoutes(
     const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: req.body?.start !== false, install: req.body?.install === true });
     if (result.reachable) setSearxngUrl(result.url);
     res.json({ local: result, settings: webSearchView() });
+  });
+  // The browser for reading pages built by JavaScript (Chromium in Docker, 127.0.0.1 only): its
+  // state, and installing it for a user of any search engine, not only of the local SearXNG.
+  app.get("/api/settings/web-search/browser", async (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json({ ready: await localBrowserAnswers() });
+  });
+  app.post("/api/settings/web-search/browser", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const directory = webSearchDataDirectory();
+    if (!directory) {
+      res.status(500).json({ error: "WEB_SEARCH_SETTINGS_NOT_CONFIGURED" });
+      return;
+    }
+    const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: true, install: req.body?.install === true, target: "browser" });
+    res.json({ local: result, ready: result.reachable });
   });
   app.post("/api/settings/web-search/test", async (req, res) => {
     if (!requireAdmin(req, res, authService)) return;

@@ -2,12 +2,14 @@ import { currentLocale, t } from "./i18n";
 import { useEffect, useId, useState } from "react";
 import {
   ApiError,
+  getLocalBrowser,
   getWebSearchSettings,
   runWebSearchTest,
   setFirecrawlApiKey,
   setSearxngUrl,
   setStartpageSession,
   setStartpageSessionKeep,
+  setupLocalBrowser,
   setupLocalSearxng,
   type LocalSearxngResult,
   type SearchEngineName,
@@ -59,6 +61,15 @@ function localSearxngText(result: LocalSearxngResult): string {
     directory: result.directory,
     command: result.commands.join(" && ")
   });
+}
+
+function localBrowserText(result: LocalSearxngResult): string {
+  if (result.reachable) return t("Przeglądarka działa na tym komputerze ({url}).", { url: result.url });
+  if (result.error === "CONTAINER_ENGINE_MISSING") return t("Na tym komputerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Desktop i przeglądarkę” albo zainstaluj Dockera samodzielnie i uruchom: {command}", { command: result.commands.join(" && ") });
+  if (result.error === "CONTAINER_ENGINE_NOT_RUNNING") return t("Docker jest zainstalowany, ale nie działa. Uruchom Docker Desktop, poczekaj, aż będzie gotowy, i kliknij ponownie „Zainstaluj przeglądarkę”.");
+  if (result.error === "INSTALLED_RESTART_NEEDED") return t("Docker Desktop został zainstalowany. Uruchom ponownie komputer, a potem kliknij „Zainstaluj przeglądarkę”.");
+  if (result.error === "NOT_ANSWERING") return t("Przeglądarka uruchomiona, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera ok. 550 MB).");
+  return t("Nie udało się uruchomić przeglądarki ({error}). Uruchom ręcznie: {command}", { error: result.error ?? "", command: result.commands.join(" && ") });
 }
 
 const SOURCE_ENGINE_NAMES: Record<string, string> = { google: "Google", bing: "Bing", brave: "Brave", qwant: "Qwant", mojeek: "Mojeek", duckduckgo: "DuckDuckGo", startpage: "Startpage", wikipedia: "Wikipedia" };
@@ -124,7 +135,10 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [settings, setSettings] = useState<WebSearchSettings | null>(null);
   const [editing, setEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
-  const [busy, setBusy] = useState<"" | "test" | "save" | "searxng" | "docker">("");
+  const [busy, setBusy] = useState<"" | "test" | "save" | "searxng" | "docker" | "browser" | "browser-docker">("");
+  const [browserReady, setBrowserReady] = useState<boolean | null>(null);
+  const [browserMessage, setBrowserMessage] = useState("");
+  const [browserEngineMissing, setBrowserEngineMissing] = useState(false);
   const [error, setError] = useState("");
   const [localMessage, setLocalMessage] = useState("");
   const [engineMissing, setEngineMissing] = useState(false);
@@ -204,6 +218,29 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
       setEngineMissing(reply.local.error === "CONTAINER_ENGINE_MISSING");
       setSettings(reply.settings);
       setLocalMessage(localSearxngText(reply.local));
+      if (reply.local.reachable) void getLocalBrowser().then((state) => setBrowserReady(state.ready)).catch(() => undefined);
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.code : String(failure));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  useEffect(() => {
+    void getLocalBrowser()
+      .then((state) => setBrowserReady(state.ready))
+      .catch(() => setBrowserReady(null));
+  }, []);
+
+  async function installBrowser(install = false): Promise<void> {
+    setBusy(install ? "browser-docker" : "browser");
+    setBrowserMessage("");
+    try {
+      const reply = await setupLocalBrowser(install);
+      setBrowserReady(reply.ready);
+      setBrowserEngineMissing(reply.local.error === "CONTAINER_ENGINE_MISSING");
+      setBrowserMessage(localBrowserText(reply.local));
       setError("");
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.code : String(failure));
@@ -392,6 +429,25 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           ) : null}
         </div>
       ) : null}
+
+      <div className="web-search-url web-search-browser">
+        <span>{t("Przeglądarka do czytania stron:")}</span>
+        <code>{browserReady === null ? t("nie sprawdzono") : browserReady ? t("działa") : t("brak")}</code>
+        {admin && browserReady === false && !browserEngineMissing ? (
+          <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void installBrowser()}>
+            {busy === "browser" ? t("Instalowanie przeglądarki… (pierwsze uruchomienie do kilku minut)") : t("Zainstaluj przeglądarkę")}
+          </button>
+        ) : null}
+        {admin && browserEngineMissing ? (
+          <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void installBrowser(true)}>
+            {busy === "browser-docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i przeglądarkę")}
+          </button>
+        ) : null}
+        <InfoTip>
+          {t("Chromium działający w Dockerze na tym komputerze (tylko adres 127.0.0.1, ok. 550 MB). Aplikacja czyta nim strony budowane skryptami i strony z prostą weryfikacją przeglądarki (portale sądów, Eureka), niezależnie od wybranej wyszukiwarki. Lokalny SearXNG instaluje ją sam; tutaj można ją doinstalować bez SearXNG. Bez Dockera aplikacja może go zainstalować.")}
+        </InfoTip>
+        {browserMessage ? <small>{browserMessage}</small> : null}
+      </div>
 
       <div className="web-search-url">
         <span>{t("Klucz Firecrawl:")}</span>

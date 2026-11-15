@@ -4289,6 +4289,15 @@ export function setupLocalSearxng(install = false): Promise<{ local: LocalSearxn
   return json("/api/settings/web-search/searxng-local", { method: "POST", body: JSON.stringify({ start: true, install }) });
 }
 
+/** The browser for reading pages (Chromium in Docker on this computer): whether it answers. */
+export function getLocalBrowser(): Promise<{ ready: boolean }> {
+  return json("/api/settings/web-search/browser");
+}
+
+export function setupLocalBrowser(install = false): Promise<{ local: LocalSearxngResult; ready: boolean }> {
+  return json("/api/settings/web-search/browser", { method: "POST", body: JSON.stringify({ install }) });
+}
+
 export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
 }

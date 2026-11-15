@@ -184,7 +184,7 @@ export const SN_SERVER_REASONS: Record<string, string> = {
   SN_SERVER_REJECTED:
     t("sn.pl odrzuca zapytania z adresu serwera (ochrona Imperva; z adresów centrów danych często bez captchy do rozwiązania). Orzeczenia SN do ok. 2016 r. aplikacja sprawdza zastępczo w SAOS; nowsze — wklej sesję z przeglądarki w tej samej sieci co serwer albo użyj aplikacji na komputerze."),
   SN_SERVER_BROWSER_MISSING:
-    t("Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację."),
+    t("Na serwerze nie ma przeglądarki do weryfikacji. Administrator instaluje ją w Ustawienia > Wyszukiwarka internetowa > „Zainstaluj przeglądarkę”; do tego czasu wklej sesję z przeglądarki."),
   SN_CONNECTOR_UNAVAILABLE: t("Konektor SN nie odpowiada na serwerze.")
 };
 
