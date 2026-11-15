@@ -601,7 +601,8 @@ export function mandatoryPathInstructions(model, profile, preloaded) {
     const lines = [
         `# ŚCIEŻKA OBOWIĄZKOWA — PROFIL ${profile === "PELNY" ? "PEŁNY" : "LEKKI"} (ustalony przez aplikację)`,
         `Źródło: ${model.source} i ${ROUTER_FILE}. Aplikacja wczytała do kontekstu: ${preloaded.map(basename).join(", ") || "rdzeń"}; nie otwieraj ich ponownie.`,
-        "Rejestr kroków (ST-INIT) prowadzi aplikacja na podstawie audytu; nie opisuj kroków, których nie wykonałeś, i nie opisuj odpytywania źródeł bez wywołania narzędzia."
+        "Rejestr kroków (ST-INIT) prowadzi aplikacja na podstawie audytu; nie opisuj kroków, których nie wykonałeś, i nie opisuj odpytywania źródeł bez wywołania narzędzia.",
+        "Użytkownik nie widzi skilli, modułów ani narzędzi: nie pisz, do którego skilla aplikacja skierowała sprawę, które pliki lub moduły wczytałeś, ani nazw narzędzi. Zacznij od odpowiedzi na pytanie."
     ];
     if (profile === "PELNY") {
         const gates = model.full.filter((item) => item.block && item.block !== "ST");

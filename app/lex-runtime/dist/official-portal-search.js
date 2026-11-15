@@ -1,24 +1,79 @@
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { signaturesIn } from "./court-of-signature.js";
 import { assertPublicWebSearchQuery, classifyWebSearchHits, hostOf } from "./web-search.js";
-const CASE_LAW = /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecze\p{L}*|orzeczeń|wyrok\p{L}*|uchwał\p{L}*\s+(?:SN|NSA|składu|siedmiu|pełnego)|postanowieni\p{L}*\s+(?:SN|NSA|sądu)|sygnatur\p{L}*|lini\p{L}*\s+orzecznicz\p{L}*|precedens\p{L}*|jak\s+(?:orzekaj\p{L}*|rozstrzygaj\p{L}*|interpretuj\p{L}*)\s+sądy)(?![\p{L}])/iu;
-const INTERPRETATION = /(?<![\p{L}])(?:interpretacj\p{L}*|objaśnieni\p{L}*\s+podatkow\p{L}*|KIS|Krajow\p{L}*\s+Informacj\p{L}*\s+Skarbow\p{L}*|stanowisk\p{L}*\s+(?:organu|ministra|MF|ZUS)|wiążąc\p{L}*\s+informacj\p{L}*\s+stawkow\p{L}*|WIS)(?![\p{L}])/u;
-const AUTHORITY = /(?<![\p{L}])(?:decyzj\p{L}*\s+(?:Prezesa\s+)?(?:UODO|UOKiK|URE|UKE|KNF)|UODO|UOKiK|KIO|Krajow\p{L}*\s+Izb\p{L}*\s+Odwoławcz\p{L}*|Trybunał\p{L}*\s+Konstytucyjn\p{L}*|TK)(?![\p{L}])/u;
-export const PORTALS = {
+const TOPIC_SIGNALS = {
+    CASE_LAW: /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecze\p{L}*|orzeczeń|wyrok\p{L}*|uchwał\p{L}*\s+(?:SN|NSA|składu|siedmiu|pełnego)|postanowieni\p{L}*\s+(?:SN|NSA|sądu)|sygnatur\p{L}*|lini\p{L}*\s+orzecznicz\p{L}*|precedens\p{L}*|jak\s+(?:orzekaj\p{L}*|rozstrzygaj\p{L}*|interpretuj\p{L}*)\s+sądy)(?![\p{L}])/iu,
+    CONSTITUTIONAL: /(?<![\p{L}])(?:TK|Trybunał\p{L}*\s+Konstytucyjn\p{L}*|[Nn]iekonstytucyjn\p{L}*|[Nn]iezgodn\p{L}*\s+z\s+Konstytucj\p{L}*|[Ss]karg\p{L}*\s+konstytucyjn\p{L}*)(?![\p{L}])/u,
+    DISCIPLINARY: /(?<![\p{L}])(?:dyscyplinarn\p{L}*|odpowiedzialnoś\p{L}*\s+zawodow\p{L}*|etyk\p{L}*\s+(?:zawod|adwokack|radc|lekarsk)\p{L}*|sąd\p{L}*\s+lekarsk\p{L}*|rzeczni\p{L}*\s+(?:dyscyplinarn|odpowiedzialności)\p{L}*|WSD|OSD)(?![\p{L}])/iu,
+    INTERPRETATION: /(?<![\p{L}])(?:[Ii]nterpretacj\p{L}*|[Oo]bjaśnieni\p{L}*|KIS|Krajow\p{L}*\s+Informacj\p{L}*\s+Skarbow\p{L}*|[Ss]tanowisk\p{L}*\s+(?:organu|ministra|MF|ZUS|PIP|UZP|GUNB)|[Oo]pini\p{L}*\s+prawn\p{L}*\s+(?:UZP|Prezesa)|[Ww]iążąc\p{L}*\s+informacj\p{L}*|WIS|WIA|WIT)(?![\p{L}])/u,
+    AUTHORITY: /(?<![\p{L}])(?:[Dd]ecyzj\p{L}*|[Kk]ar\p{L}*\s+(?:nałożon|administracyjn|pieniężn)\p{L}*|UODO|UOKiK|URE|UKE|KNF|KRRiT|KIO|RIO|RPO|UTK|GIF|PIP|Rzeczni\p{L}*\s+(?:Finansow|Praw\s+Obywatelskich)\p{L}*|Krajow\p{L}*\s+Izb\p{L}*\s+Odwoławcz\p{L}*|[Rr]ozstrzygnięci\p{L}*\s+nadzorcz\p{L}*)(?![\p{L}])/u
+};
+export const PORTALS = [
+    { topic: "CASE_LAW", site: "orzeczenia.ms.gov.pl" },
+    { topic: "CASE_LAW", site: "sn.pl" },
+    { topic: "CASE_LAW", site: "orzeczenia.nsa.gov.pl" },
+    { topic: "CONSTITUTIONAL", site: "ipo.trybunal.gov.pl" },
+    { topic: "CONSTITUTIONAL", site: "trybunal.gov.pl" },
+    // Disciplinary courts of the professions: their own registers (DR-12, odpowiedzialność dyscyplinarna zawodów).
+    { topic: "DISCIPLINARY", site: "wsd.adwokatura.pl", when: /adwokat|WSD/iu },
+    { topic: "DISCIPLINARY", site: "kirp.pl", when: /radc|OSD|OIRP|KIRP/iu },
+    { topic: "DISCIPLINARY", site: "sn.pl", when: /sędzi|prokurator|kasacj|SN|Sąd\p{L}*\s+Najwyższ/iu },
+    { topic: "DISCIPLINARY", site: "nil.org.pl", when: /lekar|lekarsk/iu },
+    { topic: "DISCIPLINARY", site: "komornik.pl", when: /komorni/iu },
+    { topic: "DISCIPLINARY", site: "krn.org.pl", when: /notariu/iu },
+    { topic: "DISCIPLINARY", site: "pibr.org.pl", when: /biegł\p{L}*\s+rewident/iu },
+    { topic: "DISCIPLINARY", site: "piib.org.pl", when: /inżynier|budownictw/iu },
+    { topic: "DISCIPLINARY", site: "izbaarchitektow.pl", when: /architekt/iu },
+    { topic: "DISCIPLINARY", site: "kidp.pl", when: /doradc\p{L}*\s+podatkow/iu },
+    { topic: "DISCIPLINARY", site: "nipip.pl", when: /pielęgniar|położn/iu },
+    { topic: "DISCIPLINARY", site: "nia.gov.pl", when: /aptekar|farmaceut/iu },
+    { topic: "DISCIPLINARY", site: "vetpol.org.pl", when: /weteryn/iu },
+    // Interpretations, explanations and opinions of the authorities.
+    { topic: "INTERPRETATION", site: "eureka.mf.gov.pl", when: /podat|VAT|PIT|CIT|KIS|akcyz|ordynacj/iu },
+    { topic: "INTERPRETATION", site: "gov.pl/web/finanse", when: /podat|VAT|PIT|CIT|objaśnieni|interpretacj\p{L}*\s+ogóln/iu },
+    { topic: "INTERPRETATION", site: "podatki.gov.pl", when: /podat|VAT|PIT|CIT/iu },
+    { topic: "INTERPRETATION", site: "zus.pl", when: /ZUS|składk|emerytur|rent|zasiłk|ubezpieczeni\p{L}*\s+społeczn/iu },
+    { topic: "INTERPRETATION", site: "puesc.gov.pl", when: /cł|celn|WIS|WIA|WIT|taryf/iu },
+    { topic: "INTERPRETATION", site: "pip.gov.pl", when: /PIP|prac(?:y|ownik|odawc)|BHP|czas\p{L}*\s+pracy/iu },
+    { topic: "INTERPRETATION", site: "gov.pl/web/uzp", when: /UZP|zamówie|PZP|przetarg/iu },
+    { topic: "INTERPRETATION", site: "gov.pl/web/gunb", when: /budowlan|GUNB|pozwoleni\p{L}*\s+na\s+budow/iu },
+    { topic: "INTERPRETATION", site: "uodo.gov.pl", when: /RODO|danych\s+osobow|UODO/iu },
+    { topic: "INTERPRETATION", site: "knf.gov.pl", when: /KNF|bank|ubezpiecz|kredyt|inwestycyjn/iu },
+    { topic: "INTERPRETATION", site: "ure.gov.pl", when: /URE|energ|ciepł|gaz|paliw/iu },
+    { topic: "INTERPRETATION", site: "uke.gov.pl", when: /UKE|telekomunik|poczt/iu },
+    { topic: "INTERPRETATION", site: "rf.gov.pl", when: /Rzeczni\p{L}*\s+Finansow|reklamacj/iu },
+    // Decisions of the authorities and appeal bodies.
+    { topic: "AUTHORITY", site: "uodo.gov.pl", when: /UODO|RODO|danych\s+osobow/iu },
+    { topic: "AUTHORITY", site: "decyzje.uokik.gov.pl", when: /UOKiK|konsument|konkurencj|klauzul/iu },
+    { topic: "AUTHORITY", site: "uokik.gov.pl", when: /UOKiK|konsument|konkurencj/iu },
+    { topic: "AUTHORITY", site: "orzeczenia.uzp.gov.pl", when: /KIO|Izb\p{L}*\s+Odwoławcz|zamówie|PZP|przetarg/iu },
+    { topic: "AUTHORITY", site: "ure.gov.pl", when: /URE|energ|ciepł|gaz|paliw|taryf/iu },
+    { topic: "AUTHORITY", site: "bip.uke.gov.pl", when: /UKE|telekomunik|poczt/iu },
+    { topic: "AUTHORITY", site: "knf.gov.pl", when: /KNF|bank|ubezpiecz|inwestycyjn/iu },
+    { topic: "AUTHORITY", site: "krrit.gov.pl", when: /KRRiT|nadawc|radi|telewizj/iu },
+    { topic: "AUTHORITY", site: "rio.gov.pl", when: /RIO|Regionaln\p{L}*\s+Izb\p{L}*\s+Obrachunkow|rozstrzygnięci\p{L}*\s+nadzorcz|uchwał\p{L}*\s+(?:rady|budżetow)/iu },
+    { topic: "AUTHORITY", site: "bip.brpo.gov.pl", when: /RPO|Rzeczni\p{L}*\s+Praw\s+Obywatelskich/iu },
+    { topic: "AUTHORITY", site: "rf.gov.pl", when: /Rzeczni\p{L}*\s+Finansow/iu },
+    { topic: "AUTHORITY", site: "utk.gov.pl", when: /UTK|kolej|transport\p{L}*\s+kolejow/iu },
+    { topic: "AUTHORITY", site: "gif.gov.pl", when: /GIF|lek(?:i|ów|u)|farmaceut|apte/iu },
+    { topic: "AUTHORITY", site: "pip.gov.pl", when: /PIP|inspekc\p{L}*\s+prac/iu }
+];
+// A topic's own portals when the question names none of its fields.
+const DEFAULT_SITES = {
     CASE_LAW: ["orzeczenia.ms.gov.pl", "sn.pl", "orzeczenia.nsa.gov.pl"],
-    INTERPRETATION: ["eureka.mf.gov.pl", "zus.pl", "podatki.gov.pl"],
-    AUTHORITY: ["uodo.gov.pl", "uokik.gov.pl", "orzeczenia.uzp.gov.pl", "ipo.trybunal.gov.pl"]
+    CONSTITUTIONAL: ["ipo.trybunal.gov.pl", "trybunal.gov.pl"],
+    DISCIPLINARY: ["sn.pl", "wsd.adwokatura.pl", "kirp.pl"],
+    INTERPRETATION: ["eureka.mf.gov.pl", "gov.pl/web/finanse", "zus.pl"],
+    AUTHORITY: ["uodo.gov.pl", "decyzje.uokik.gov.pl", "orzeczenia.uzp.gov.pl"]
 };
 /** Which kinds of documents the question asks about (none: no search). */
 export function portalTopics(question) {
-    const topics = [];
-    if (CASE_LAW.test(question))
-        topics.push("CASE_LAW");
-    if (INTERPRETATION.test(question))
-        topics.push("INTERPRETATION");
-    if (AUTHORITY.test(question))
-        topics.push("AUTHORITY");
-    return topics;
+    return Object.keys(TOPIC_SIGNALS).filter((topic) => TOPIC_SIGNALS[topic].test(question));
+}
+/** Up to three portals of a topic: those whose field the question names first, then the topic's own. */
+export function portalSites(topic, question) {
+    const named = PORTALS.filter((portal) => portal.topic === topic && portal.when?.test(question)).map((portal) => portal.site);
+    return [...new Set([...named, ...DEFAULT_SITES[topic]])].slice(0, 3);
 }
 // Words that carry no legal topic; the query keeps the legal phrase of the question.
 const FILLER = new Set("a albo ale aby bo by być co czy dla do gdy i ich iż jak jaki jakie jakiego jakim je jego jej jest już ktoś która które którego który lub ma mam mi mnie mogę może można moja moje mój na nad nam nas nie o od oraz po pod proszę przez przy się są ta tak także tam te tego tej ten to tu tym w we wszystko z za ze że żeby podaj znajdź wyszukaj poszukaj wskaż przytocz sprawdź orzecznictwo orzeczenia orzeczeń wyroki wyrok wyroku interpretacje interpretacja interpretacji temat dotyczące dotyczący dotycząca sprawie sprawy"
@@ -35,19 +90,21 @@ export function portalPhrase(question) {
     return words.slice(0, 10).join(" ");
 }
 /** 2–3 portal queries per topic (the topic's portals, at most 3 in all per topic) and one open query. */
-export function portalQueries(question, limit = 6) {
+export function portalQueries(question, limit = 8) {
     const topics = portalTopics(question);
     const phrase = portalPhrase(question);
     if (!topics.length || phrase.split(" ").length < 2)
         return [];
     const queries = [];
     for (const topic of topics)
-        for (const site of PORTALS[topic].slice(0, 3))
+        for (const site of portalSites(topic, question))
             queries.push({ topic, site, query: `${phrase} site:${site}` });
-    // Commentary, law firms and portals name signatures the registries then confirm (user 2026-11-15).
-    queries.push({ topic: topics[0], site: null, query: phrase });
-    return queries
-        .filter((item) => {
+    // The same portal once (sn.pl for case law and for a disciplinary question); the topics the
+    // question names first take the places; one open query always: commentary, law firms and portals
+    // name signatures the registries then confirm (user 2026-11-15).
+    const seenSites = new Set();
+    const sites = queries.filter((item) => !seenSites.has(item.site) && Boolean(seenSites.add(item.site))).slice(0, limit - 1);
+    return [...sites, { topic: topics[0], site: null, query: phrase }].filter((item) => {
         try {
             assertPublicWebSearchQuery(item.query);
             return true;
@@ -55,10 +112,9 @@ export function portalQueries(question, limit = 6) {
         catch {
             return false;
         }
-    })
-        .slice(0, limit);
+    });
 }
-const OFFICIAL_HOSTS = new Set(Object.values(PORTALS).flat());
+const OFFICIAL_HOSTS = new Set(PORTALS.map((portal) => portal.site.split("/")[0]));
 export function officialHost(url) {
     const host = hostOf(url);
     return [...OFFICIAL_HOSTS].some((official) => host === official || host.endsWith(`.${official}`)) || /\.gov\.pl$/u.test(host);

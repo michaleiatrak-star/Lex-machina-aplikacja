@@ -35,4 +35,23 @@ describe("searching the official portals before the answer (user 2026-11-15)", (
         const slow = await searchOfficialPortals("Podaj orzecznictwo NSA o podatku od nieruchomości", () => new Promise(() => { }), 10);
         expect(slow.hits).toEqual([]);
     });
+    it("disciplinary case law, the TK, more interpretations and the authorities' decisions (user 2026-11-15)", () => {
+        const sites = (question) => portalQueries(question).map((item) => item.site);
+        expect(portalTopics("Orzeczenia sądu dyscyplinarnego adwokatury o tajemnicy adwokackiej")).toContain("DISCIPLINARY");
+        expect(sites("Orzeczenia sądu dyscyplinarnego adwokatury o tajemnicy adwokackiej")).toContain("wsd.adwokatura.pl");
+        expect(sites("Odpowiedzialność zawodowa lekarza przed sądem lekarskim — orzecznictwo")).toContain("nil.org.pl");
+        expect(sites("Postępowanie dyscyplinarne komornika — orzeczenia")).toContain("komornik.pl");
+        expect(sites("Wyrok TK o niezgodności z Konstytucją przepisu o opłacie")).toEqual(expect.arrayContaining(["ipo.trybunal.gov.pl", "trybunal.gov.pl"]));
+        expect(sites("Interpretacja ZUS o składkach od umowy zlecenia")).toContain("zus.pl");
+        expect(sites("Wiążąca informacja taryfowa WIT — interpretacja celna")).toContain("puesc.gov.pl");
+        expect(sites("Opinia prawna UZP i interpretacja przepisów zamówień publicznych")).toContain("gov.pl/web/uzp");
+        expect(sites("Decyzje Prezesa URE o karach dla przedsiębiorstw energetycznych")).toContain("ure.gov.pl");
+        expect(sites("Decyzje UOKiK o klauzulach niedozwolonych")).toContain("decyzje.uokik.gov.pl");
+        expect(sites("Rozstrzygnięcia nadzorcze RIO o uchwałach budżetowych")).toContain("rio.gov.pl");
+        // At most 8 queries, the open one always last.
+        const many = portalQueries("Orzecznictwo SN, wyroki TK, interpretacje KIS i decyzje UODO o RODO w sprawach dyscyplinarnych adwokatów");
+        expect(many.length).toBeLessThanOrEqual(8);
+        expect(many.at(-1).site).toBeNull();
+        expect(new Set(many.map((item) => item.site)).size).toBe(many.length);
+    });
 });

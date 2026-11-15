@@ -47,3 +47,22 @@ describe("a single developer line in the answer", () => {
     expect(withoutModelRoutingTrace(text)).toBe(text);
   });
 });
+
+describe("the model's account of the routing is not part of the answer (live test 2026-11-15)", () => {
+  it("drops lines naming skills, skill files or modules; keeps the legal text", async () => {
+    const { withoutModelRoutingTrace, isSkillNarration } = await import("../src/routing-trace-leak.js");
+    const text = [
+      "Aplikacja skierowała tę sprawę do `orzeczenia-sadowe-v2` (wyszukiwanie orzecznictwa). Dociągnąłem `dr-04-prawo-pracy-zus-swiadczenia/SKILL.md` jako PRIMARY.",
+      "",
+      "W DR-04 nie ma dedykowanego modułu (sprawdzony: `mod-KP-naduzycia-pracodawcy-limity-kary-degradacja.md`).",
+      "",
+      "## Odpowiedź wprost",
+      "Sąd pracy może zmiarkować karę umowną (art. 484 § 2 KC w zw. z art. 300 KP)."
+    ].join("\n");
+    const out = withoutModelRoutingTrace(text);
+    expect(out).not.toMatch(/orzeczenia-sadowe-v2|SKILL\.md|mod-KP/u);
+    expect(out).toContain("## Odpowiedź wprost");
+    expect(out).toContain("art. 484 § 2 KC");
+    expect(isSkillNarration("Covid-19 i art. 15zzs ust. 1 ustawy COVID-19.")).toBe(false);
+  });
+});

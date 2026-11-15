@@ -14,6 +14,21 @@ const ROUTER_FIELD = /^\s*(?:[-*•]\s*)?(?:\*\*)?(?:PRIMARY|WERSJA ROUTERA)(?:\
 const DEVELOPER_LINE =
   /^\s*(?:[-*•]\s*)?(?:\*\*)?(?:WERSJA ROUTERA|RESOLVER|ROUTER-WCZYTANY|ŚLAD ROUTINGU)(?:\s+(?:i|oraz)\s+(?:\*\*)?(?:RESOLVER|WERSJA ROUTERA)\b)?[^:\n]{0,40}(?:\*\*)?\s*:|ROUTER-WCZYTANY\s*:/u;
 
+// The model telling the user how the application routed the question ("Aplikacja skierowała tę
+// sprawę do `orzeczenia-sadowe-v2` … dociągnąłem `dr-04-prawo-pracy-zus-swiadczenia/SKILL.md`",
+// "W DR-04 nie ma dedykowanego modułu (sprawdzony: `mod-KP-….md`)", live test 2026-11-15): skill
+// ids, skill files and modules are the application's internals, never part of the answer.
+// A skill's file or module is always internal; a bare skill id only in a sentence about the routing
+// ("skierowała … do", "dociągnąłem", "PRIMARY") — a proposal to switch ("Proponuję pisma-proste-v2
+// (Test B). Czy przełączyć?") names the skill on purpose and stays.
+const SKILL_FILE_REF = /\bdr-\d{2}-[a-z]+(?:-[a-z]+)*\/|\bmod-[\w-]+\.md\b|\bSKILL\.md\b|\b(?:shared|references|modules)\/[\w./-]+\.md\b|\b(?:[a-z]+-){1,5}v\d+\/[\w./-]+/u;
+const SKILL_ID = /`?\b(?:[a-z]+-){1,5}v\d+\b`?|\bdr-\d{2}-[a-z]+(?:-[a-z]+)*\b/u;
+const ROUTING_WORDS = /skierował\p{L}*|skierowan\p{L}*|dociągn\p{L}*|wczytał\p{L}*|wczytan\p{L}*|\bPRIMARY\b|\bSECONDARY\b|routing\p{L}*|posłużył\p{L}*|dedykowan\p{L}*\s+modu\p{L}*/iu;
+
+export function isSkillNarration(line: string): boolean {
+  return SKILL_FILE_REF.test(line) || (SKILL_ID.test(line) && ROUTING_WORDS.test(line));
+}
+
 export function withoutModelRoutingTrace(text: string): string {
   const lines = text.split("\n");
   const drop = new Set<number>();
@@ -37,7 +52,7 @@ export function withoutModelRoutingTrace(text: string): string {
     index = end;
   }
   lines.forEach((line, at) => {
-    if (DEVELOPER_LINE.test(line)) drop.add(at);
+    if (DEVELOPER_LINE.test(line) || isSkillNarration(line)) drop.add(at);
   });
   if (drop.size === 0) return text;
   return lines
