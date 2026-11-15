@@ -148,7 +148,7 @@ import {
 } from "./api.js";
 import { conversationTitle } from "./conversation-title.js";
 import { modelAvailable, noModelAvailable } from "./model-availability.js";
-import { requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptKey } from "./web-search-setup-prompt.js";
+import { markWebSearchPromptShown, requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptShown } from "./web-search-setup-prompt.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
@@ -1787,22 +1787,13 @@ export default function MatterChatApp({
   const hasModel = modelAvailable(providerConfiguration, providerAccounts, localModelInstalled);
   useEffect(() => {
     if (webSearchPrompted.current || !hasModel || serverMode || user.appRole !== "ADMIN") return;
-    let alreadyShown = false;
-    try {
-      alreadyShown = window.localStorage.getItem(webSearchPromptKey(user.userId)) === "1";
-    } catch {
-      alreadyShown = false;
-    }
+    const alreadyShown = webSearchPromptShown(user.userId);
     if (alreadyShown) return;
     webSearchPrompted.current = true;
     void getWebSearchSettings()
       .then(async (settings) => {
         if (!shouldPromptWebSearch({ admin: true, serverMode, modelAvailable: true, alreadyShown, settings })) return;
-        try {
-          window.localStorage.setItem(webSearchPromptKey(user.userId), "1");
-        } catch {
-          // Shown again at the next start: harmless.
-        }
+        markWebSearchPromptShown(user.userId);
         // The "connected" notice of the model step stays readable for a moment first.
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
         setActiveTab("settings");

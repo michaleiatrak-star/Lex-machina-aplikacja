@@ -4582,8 +4582,18 @@ export class SafeSessionExecutor implements SessionExecutor {
       };
       const first = await detect();
       let final = first;
+      // A rewrite of the whole answer takes minutes on an account model: only for real errors (a
+      // provision saying something else, a quote not in the source, a ruling off the question, a
+      // wrong court). "Partly carried" alone stays a mark next to the provision (live test
+      // 2026-11-15: such verdicts were mostly a fair paraphrase across two provisions).
+      const needsRewrite =
+        first.quotes.length > 0 ||
+        first.caseReview.lexical.length > 0 ||
+        first.caseReview.courts.length > 0 ||
+        first.caseReview.semantic.some((item) => item.claim === "UNSUPPORTED" || item.topic === "NO_MATCH") ||
+        first.statutes.problems.some((item) => item.claim === "UNSUPPORTED");
       // A document AST is checked as its text lines; the model's rewrite would not be in that form.
-      if (first.size && !astLines) {
+      if (first.size && needsRewrite && !astLines) {
         step(
           "MODEL",
           `kontrola odpowiedzi ze źródłami: ${[

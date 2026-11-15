@@ -47,3 +47,20 @@ export function shouldPromptWebSearch(input: {
 export function localSearxngRecommended(admin: boolean, settings: Pick<WebSearchSettings, "searxngUrl" | "searxngUrlForced" | "providerForced">): boolean {
   return admin && !settings.searxngUrl && !settings.searxngUrlForced && !settings.providerForced;
 }
+
+/** Whether the web search settings were already shown once to this user (a per-user UI flag, no secret). */
+export function webSearchPromptShown(userId: string): boolean {
+  try {
+    return window.localStorage.getItem(webSearchPromptKey(userId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markWebSearchPromptShown(userId: string): void {
+  try {
+    window.localStorage.setItem(webSearchPromptKey(userId), "1");
+  } catch {
+    // Shown again at the next start: harmless.
+  }
+}
