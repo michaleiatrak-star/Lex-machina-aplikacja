@@ -199,4 +199,24 @@ describe("the model's work trace is not part of the answer (live test 2026-11-15
     expect(plain).toContain("Albo wklej lub wgraj tekst orzeczenia.");
     expect(plain).toContain("⚖️ **Zastrzeżenie:**");
   });
+  it("goła etykieta „CN-GATE” z pustym wierszem przed listą: lista znika (art. 245 KK, 2026-11-15)", () => {
+    const answer = [
+      "Chroniona osoba może być m.in. świadkiem.",
+      "CN-GATE",
+      "",
+      "* czasowy: TAK — wskazane brzmienie obowiązuje;",
+      "* podmiotowy: TAK — przepis obejmuje uczestników;",
+      "",
+      "WYJ-GATE",
+      "",
+      "* S1 sąsiedztwo przepisu: nie wskazano dodatkowych jednostek;",
+      "* S4 przepisy przejściowe: nie dotyczą.",
+      "",
+      "To ogólne wyjaśnienie przepisu."
+    ].join("\n");
+    const plain = withoutQualityGateLines(answer);
+    expect(plain).not.toMatch(/czasowy: TAK|podmiotowy|S1 sąsiedztwo|S4 przepisy|CN-GATE|WYJ-GATE/u);
+    expect(plain).toContain("Chroniona osoba może być m.in. świadkiem.");
+    expect(plain).toContain("To ogólne wyjaśnienie przepisu.");
+  });
 });

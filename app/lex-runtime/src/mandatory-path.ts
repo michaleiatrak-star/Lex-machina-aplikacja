@@ -2,7 +2,7 @@ import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import type { VerificationRecord } from "./verification-ledger.js";
-import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack, familyModuleActive, isDomainSkill } from "./jurisdiction.js";
 
 /**
  * Model of the mandatory path of a legal turn, read from the corpus
@@ -261,6 +261,10 @@ function preTrigger(name: string, facts: PreFacts): boolean | null {
       return facts.criminal;
     case "DOSTEP-MASZYNOWY-API.md":
       return false; // The application has no code channel (bash/curl).
+    case "RODZINA-PRAWA-COMMON-LAW.md":
+    case "RODZINA-PRAWA-NORDYCKIE.md":
+      // Only in their own jurisdictions or for a question about such a state's law.
+      return familyModuleActive(name, facts.query);
     default:
       return null;
   }

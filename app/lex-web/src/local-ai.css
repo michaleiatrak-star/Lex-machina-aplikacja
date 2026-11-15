@@ -131,6 +131,19 @@
   opacity: 0.82;
 }
 
+/* Chat time: a disclosure, the lines open on demand. */
+.local-ai-disclosure > summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+/* The lines of an open disclosure, one per row (its content is not a grid item in every browser). */
+.local-ai-disclosure > small,
+.local-ai-disclosure > details {
+  display: block;
+  margin-top: 5px;
+}
+
 .local-ai-warning {
   padding: 10px 12px;
   border-radius: 10px;

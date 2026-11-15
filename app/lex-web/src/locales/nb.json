@@ -2923,5 +2923,6 @@
  "LUKA": "MANGEL",
  "słabe": "svak",
  "częściowe": "delvis",
- "pełne": "full"
+ "pełne": "full",
+ "{count} tur czatu": "{count} chatterunder"
 }

@@ -326,3 +326,20 @@ export function isDomainSkill(name: string | null | undefined, root: string | nu
 export function domainSkillSource(root: string | null = corpusRoot): string {
   return `${domainSkillPrefix(root)}-\\d{2}`;
 }
+
+// Question about another state's law of a family (UP-5), while another jurisdiction is active.
+const COMMON_LAW_MENTION = /\bcommon law\b|praw\p{L}*\s+(?:angielsk|brytyjsk|amerykańsk|irlandzk|kanadyjsk|australijsk|indyjsk|nowozelandzk|singapursk)|\b(?:Angli|Wielk\p{L}*\s+Brytani|Stan\p{L}*\s+Zjednoczon|USA|Irlandi|Kanad|Australi|Nowej?\s+Zelandi|Singapur|Hongkong)\p{L}*/iu;
+const NORDIC_MENTION = /praw\p{L}*\s+(?:duńsk|szwedzk|norwesk|fińsk|islandzk|nordyck)|\b(?:Dani|Szwecj|Norwegi|Finlandi|Islandi|Wysp\p{L}*\s+Owczych)\p{L}*/iu;
+
+/**
+ * The legal-family method modules (shared/RODZINA-PRAWA-COMMON-LAW.md, -NORDYCKIE.md) are active only
+ * in their own jurisdictions, or for a question about such a state's law (user 2026-11-15): elsewhere
+ * they are neither loaded nor read.
+ */
+export function familyModuleActive(resource: string, query = "", country = activeCountry()): boolean {
+  const name = resource.split("/").at(-1) ?? resource;
+  const family = eliCountry(country)?.family;
+  if (name === "RODZINA-PRAWA-COMMON-LAW.md") return family === "common-law" || family === "mieszane" || COMMON_LAW_MENTION.test(query);
+  if (name === "RODZINA-PRAWA-NORDYCKIE.md") return family === "nordyckie" || NORDIC_MENTION.test(query);
+  return true;
+}

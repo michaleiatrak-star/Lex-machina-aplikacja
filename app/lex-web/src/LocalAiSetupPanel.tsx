@@ -793,20 +793,26 @@ function ChatTurnsSection() {
     request<ChatTurnsSummary>("/api/diagnostics/chat-turns").then(setData, () => setData(null));
   }, [developer]);
   if (!developer || !data) return null;
+  // A disclosure (user 2026-11-15): the per-path lines and the slowest turns open on demand.
   return (
-    <div className="local-ai-facts">
-      <strong>
-        {t("Czas czatu na tym komputerze")}
-        <InfoTip>{t("Ostatnie")} {data.turns} {t("tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik:")} {data.file}</InfoTip>
-      </strong>
+    <details className="local-ai-facts local-ai-disclosure">
+      <summary>
+        <strong>{t("Czas czatu na tym komputerze")}</strong>{" "}
+        <small>{t("{count} tur czatu", { count: data.turns })}</small>
+      </summary>
+      <small>
+        {t("Ostatnie")} {data.turns} {t("tur czatu według ścieżki i etapu. Bez treści wiadomości. Plik:")} {data.file}
+      </small>
       {data.paths.length === 0 ? <small>{t("Brak zapisanych tur.")}</small> : data.paths.slice(0, 12).map((row) => <small key={`${row.modelKind}:${row.path}`}>{chatPathLine(row)}</small>)}
       {data.slow?.length ? (
-        <>
-          <strong>{t("Najdłuższe ostatnie tury i ich kroki")}</strong>
+        <details className="local-ai-disclosure">
+          <summary>
+            <strong>{t("Najdłuższe ostatnie tury i ich kroki")}</strong> <small>({data.slow.length})</small>
+          </summary>
           {data.slow.map((turn) => <small key={turn.at}>{slowTurnLine(turn)}</small>)}
-        </>
+        </details>
       ) : null}
-    </div>
+    </details>
   );
 }
 

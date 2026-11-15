@@ -167,6 +167,8 @@ const QUALITY_GATE_LINE =
 // zwykłego akapitu, nagłówka albo zastrzeżenia.
 const CONTROL_SECTION =
   /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:Ślad routingu\b|Bloki techniczne\b|Bramki (?:routera|kontrolne|jakości)\b|Kontrol[ae](?: wykonane)? przy tej odpowiedzi|Kontrol[ae] techniczn|Ścieżka:(?:\*\*)?\s*tryb\b|[^*\n]{0,80}\b(?:CN|OŚ|WYJ|REM)-GATE\b)/iu;
+// "CN-GATE" alone on its line, its list after a blank line (live 2026-11-15, art. 245 KK): a heading.
+const BARE_GATE_LABEL = /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:CN|OŚ|WYJ|REM)-GATE\s*(?:\*\*)?\s*[:.]?\s*(?:\*\*)?\s*$/u;
 const HEADING_ONLY = /^\s*(?:#{1,6}\s+.+|(?:[-*]\s*)?\*\*[^*\n]+\*\*\s*:?)\s*$/u;
 const SECTION_BODY = /^\s*(?:$|[-*•]\s|\d{1,2}[.)]\s)|^\s{2,}\S/u;
 
@@ -270,7 +272,7 @@ function withoutControlSections(lines: string[]): string[] {
       // After a blank line only another control label continues; a list there is the answer's.
       // A bare heading ("**Kontrole przy tej odpowiedzi**") keeps its list after a blank line;
       // a label with its text on the line ("**WYJ-GATE.** Brak wyjątków.") is the whole block.
-      if (!line.trim() && !(next === index + 1 && HEADING_ONLY.test(lines[index]!))) {
+      if (!line.trim() && !(next === index + 1 && (HEADING_ONLY.test(lines[index]!) || BARE_GATE_LABEL.test(lines[index]!)))) {
         const following = lines.slice(next + 1).find((other) => other.trim());
         if (!following || !CONTROL_SECTION.test(following)) break;
       }

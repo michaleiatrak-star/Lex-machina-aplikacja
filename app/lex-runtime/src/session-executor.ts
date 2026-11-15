@@ -305,7 +305,7 @@ import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
 import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
-import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
+import { activeJurisdictionPack, domainSkillPrefix, familyModuleActive } from "./jurisdiction.js";
 import {
   buildEvidenceInventory,
   EVIDENCE_MAP_INSTRUCTION,
@@ -2316,7 +2316,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       this.registry,
       {
         modelSelectsSkills:
-          request.modelSelectsSkills === true
+          request.modelSelectsSkills === true,
+        resourceAllowed: (relativePath) => familyModuleActive(relativePath, latestUserTurn(request.query))
       }
     );
     const reportTools = new ReportBlueprintToolRuntime();

@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -51,6 +51,11 @@ const defaultRunner: Runner = (command, args, cwd, timeoutMs) =>
 const defaultLauncher: Launcher = (engine) => {
   try {
     if (engine !== "docker") return false;
+    // In the background, no window (user 2026-11-15: the user does not use Docker Desktop's
+    // window): `docker desktop start` starts the engine without the application window
+    // (Docker Desktop CLI); an older Docker Desktop without it is opened hidden.
+    const cli = spawnSync("docker", ["desktop", "start", "--detach"], { windowsHide: true, timeout: 30_000, stdio: "ignore" });
+    if (cli.status === 0) return true;
     if (process.platform === "win32") {
       const roots = [process.env.ProgramFiles, process.env.ProgramW6432, "C:\\Program Files"].filter(Boolean) as string[];
       const exe = roots.map((root) => path.join(root, "Docker", "Docker", "Docker Desktop.exe")).find((file) => fs.existsSync(file));
@@ -59,7 +64,8 @@ const defaultLauncher: Launcher = (engine) => {
       return true;
     }
     if (process.platform === "darwin") {
-      spawn("open", ["-a", "Docker"], { detached: true, stdio: "ignore" }).unref();
+      // -g: not brought to the foreground, -j: launched hidden (open(1)).
+      spawn("open", ["-g", "-j", "-a", "Docker"], { detached: true, stdio: "ignore" }).unref();
       return true;
     }
   } catch {

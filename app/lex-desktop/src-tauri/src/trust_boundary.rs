@@ -176,6 +176,16 @@ impl RuntimeBridge {
             );
         }
 
+        // Windows: the sidecar is a console program; without this flag it opened a console
+        // window ("the server window") the user has no use for. Its node child inherits the
+        // hidden console, so the runtime and its workers open no window either.
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
         let mut child = command
             .spawn()
             .map_err(|error| format!("DESKTOP_RUNTIME_SPAWN_FAILED:{error}"))?;

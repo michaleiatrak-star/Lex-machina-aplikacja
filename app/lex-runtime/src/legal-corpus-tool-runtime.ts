@@ -443,6 +443,8 @@ export class LegalCorpusToolRuntime {
     // still enforces router-v3 first and the criminal qualifier.
     private readonly options: {
       modelSelectsSkills?: boolean;
+      // A corpus file the turn does not allow (a legal family's method outside its jurisdiction).
+      resourceAllowed?: (relativePath: string) => boolean;
     } = {}
   ) {}
 
@@ -855,6 +857,12 @@ export class LegalCorpusToolRuntime {
       if (skillName !== requestedSkill || resolvedFrom) {
         resolvedFrom = `${requestedSkill}/${semanticPath}`;
       }
+      if (this.options.resourceAllowed && !this.options.resourceAllowed(`${skillName}/${semanticPath}`)) {
+        return this.notFound(call, "LEGAL_RESOURCE_OUTSIDE_JURISDICTION", {
+          skill: skillName,
+          instruction: "Ten moduł dotyczy innej rodziny prawa niż jurysdykcja tej sprawy; nie jest potrzebny."
+        });
+      }
       if (
         !fs.statSync(
           resolved
@@ -1153,7 +1161,7 @@ export class LegalCorpusToolRuntime {
   private notFound(
     call: NormalizedToolCall,
     error: string,
-    hints: { skill?: string; candidates?: string[]; skillCandidates?: string[] }
+    hints: { skill?: string; candidates?: string[]; skillCandidates?: string[]; instruction?: string }
   ): string {
     this.events.push({
       tool: call.name,
@@ -1165,9 +1173,9 @@ export class LegalCorpusToolRuntime {
       status: "NOT_FOUND",
       error,
       ...hints,
-      instruction: hints.candidates?.length || hints.skillCandidates?.length
+      instruction: hints.instruction ?? (hints.candidates?.length || hints.skillCandidates?.length
         ? "Read the right one from these candidates in your next call (closest first, at most 12; if none fits, list_legal_resources); do not guess other names."
-        : "No similar file. Use list_legal_resources for this skill instead of guessing names."
+        : "No similar file. Use list_legal_resources for this skill instead of guessing names.")
     });
   }
 

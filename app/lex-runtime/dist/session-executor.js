@@ -112,7 +112,7 @@ import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
 import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
-import { activeJurisdictionPack, domainSkillPrefix } from "./jurisdiction.js";
+import { activeJurisdictionPack, domainSkillPrefix, familyModuleActive } from "./jurisdiction.js";
 import { buildEvidenceInventory, EVIDENCE_MAP_INSTRUCTION, evidenceInventoryPrompt, HOSTED_PORTION_CHARS, inventoryBudget, inventoryView, LOCAL_PORTION_CHARS, needsEvidenceInventory } from "./evidence-inventory.js";
 // analizator-umow-v1 1.52: the whole-document check of a delivered contract-like document.
 const CONTRACT_WHOLE_DOCUMENT_RESOURCE = "analizator-umow-v1/SKILL.md";
@@ -1343,7 +1343,8 @@ export class SafeSessionExecutor {
             }
         }
         const corpusTools = new LegalCorpusToolRuntime(this.registry, {
-            modelSelectsSkills: request.modelSelectsSkills === true
+            modelSelectsSkills: request.modelSelectsSkills === true,
+            resourceAllowed: (relativePath) => familyModuleActive(relativePath, latestUserTurn(request.query))
         });
         const reportTools = new ReportBlueprintToolRuntime();
         // Modele lokalne: bez widgetów (minimalny zestaw narzędzi i promptu).

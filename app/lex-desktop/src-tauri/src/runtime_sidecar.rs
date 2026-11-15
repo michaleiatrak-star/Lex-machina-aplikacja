@@ -258,6 +258,13 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    // Windows: no console window for node, whatever console the sidecar has.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
 
     // macOS/Linux: node replaces this process, so it is the desktop app's own child
     // and ends with it. A spawned node outlived the app there (only this sidecar was

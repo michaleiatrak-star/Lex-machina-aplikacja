@@ -1,6 +1,6 @@
 import { detectLegalReferences } from "./finalization-gate.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
-import { activeJurisdictionPack, isDomainSkill } from "./jurisdiction.js";
+import { activeJurisdictionPack, familyModuleActive, isDomainSkill } from "./jurisdiction.js";
 export const ROUTER_SKILL = "prawny-router-v3";
 const PROFILE = "references/PROFIL-LEKKI.md";
 const ROUTER_FILE = `${ROUTER_SKILL}/SKILL.md`;
@@ -157,6 +157,10 @@ function preTrigger(name, facts) {
             return facts.criminal;
         case "DOSTEP-MASZYNOWY-API.md":
             return false; // The application has no code channel (bash/curl).
+        case "RODZINA-PRAWA-COMMON-LAW.md":
+        case "RODZINA-PRAWA-NORDYCKIE.md":
+            // Only in their own jurisdictions or for a question about such a state's law.
+            return familyModuleActive(name, facts.query);
         default:
             return null;
     }

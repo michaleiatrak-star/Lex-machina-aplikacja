@@ -2923,5 +2923,6 @@
  "LUKA": "PUUTE",
  "słabe": "heikko",
  "częściowe": "osittainen",
- "pełne": "täysi"
+ "pełne": "täysi",
+ "{count} tur czatu": "{count} keskustelukierrosta"
 }

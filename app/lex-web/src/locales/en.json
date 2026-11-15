@@ -2929,5 +2929,6 @@
  "LUKA": "GAP",
  "słabe": "weak",
  "częściowe": "partial",
- "pełne": "full"
+ "pełne": "full",
+ "{count} tur czatu": "{count} chat turns"
 }
