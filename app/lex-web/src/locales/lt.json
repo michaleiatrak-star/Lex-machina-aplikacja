@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini rakto minutės limitas vis dar išnaudotas po laukimo; bandykite dar kartą po kelių minučių",
  "zalecane: lokalny SearXNG": "rekomenduojama: vietinis SearXNG",
  "Zalecane:": "Rekomenduojama:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "sukurkite SearXNG šiame kompiuteryje. Paieškos sistemų teste jis pasirodė geriausiai (daugiausia oficialių šaltinių, greičiausias), veikia vietoje be rakto ir be naršyklės patikros ir paleidžiamas kartu su programa. Po to paleiskite testą: geriausia paieškos sistema pokalbyje klausiama pirmoji."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "sukurkite SearXNG šiame kompiuteryje. Paieškos sistemų teste jis pasirodė geriausiai (daugiausia oficialių šaltinių, greičiausias), veikia vietoje be rakto ir be naršyklės patikros ir paleidžiamas kartu su programa. Po to paleiskite testą: geriausia paieškos sistema pokalbyje klausiama pirmoji.",
+ "Braki i pokrycie źródłami": "Spragos ir šaltinių aprėptis",
+ "Sprawdzone źródła": "Patikrinti šaltiniai",
+ "Oddalone roszczenia i zarzuty": "Atmesti reikalavimai ir prieštaravimai",
+ "Braki": "Spragos",
+ "Akty niewiążące": "Neprivalomi dokumentai",
+ "Pokrycie źródłami": "Šaltinių aprėptis",
+ "LUKA": "SPRAGA",
+ "słabe": "silpna",
+ "częściowe": "dalinė",
+ "pełne": "visa"
 }

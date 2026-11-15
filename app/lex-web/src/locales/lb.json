@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "d’Minuttelimitt vum Gemini-Schlëssel ass trotz Waarden ausgeschöpft; probéiert et an e puer Minutten nach eng Kéier",
  "zalecane: lokalny SearXNG": "recommandéiert: lokale SearXNG",
  "Zalecane:": "Recommandéiert:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "riicht SearXNG op dësem Computer an. Am Sichmaschinnentest huet en am beschte ofgeschnidden (déi meescht offiziell Quellen, am séiersten), leeft lokal, ouni Schlëssel an ouni Browserkontroll, a start zesumme mat der Applikatioun. Lancéiert duerno den Test: déi bescht Sichmaschinn gëtt am Chat als éischt gefrot."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "riicht SearXNG op dësem Computer an. Am Sichmaschinnentest huet en am beschte ofgeschnidden (déi meescht offiziell Quellen, am séiersten), leeft lokal, ouni Schlëssel an ouni Browserkontroll, a start zesumme mat der Applikatioun. Lancéiert duerno den Test: déi bescht Sichmaschinn gëtt am Chat als éischt gefrot.",
+ "Braki i pokrycie źródłami": "Lücken an Ofdeckung duerch Quellen",
+ "Sprawdzone źródła": "Iwwerpréift Quellen",
+ "Oddalone roszczenia i zarzuty": "Ofgewisen Uspréch an Aweiser",
+ "Braki": "Lücken",
+ "Akty niewiążące": "Net bindend Instrumenter",
+ "Pokrycie źródłami": "Ofdeckung duerch Quellen",
+ "LUKA": "LÉCK",
+ "słabe": "schwaach",
+ "częściowe": "deelweis",
+ "pełne": "komplett"
 }

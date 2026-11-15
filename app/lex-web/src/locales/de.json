@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "das Minutenlimit des Gemini-Schlüssels ist trotz Wartezeit erschöpft; versuchen Sie es in einigen Minuten erneut",
  "zalecane: lokalny SearXNG": "empfohlen: lokales SearXNG",
  "Zalecane:": "Empfohlen:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "richten Sie SearXNG auf diesem Computer ein. Im Suchmaschinentest schnitt es am besten ab (die meisten amtlichen Quellen, am schnellsten), läuft lokal, ohne Schlüssel und ohne Browserprüfung, und startet zusammen mit der Anwendung. Führen Sie danach den Test aus: Die beste Suchmaschine wird im Chat zuerst gefragt."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "richten Sie SearXNG auf diesem Computer ein. Im Suchmaschinentest schnitt es am besten ab (die meisten amtlichen Quellen, am schnellsten), läuft lokal, ohne Schlüssel und ohne Browserprüfung, und startet zusammen mit der Anwendung. Führen Sie danach den Test aus: Die beste Suchmaschine wird im Chat zuerst gefragt.",
+ "Braki i pokrycie źródłami": "Lücken und Quellenabdeckung",
+ "Sprawdzone źródła": "Geprüfte Quellen",
+ "Oddalone roszczenia i zarzuty": "Abgewiesene Ansprüche und Einwände",
+ "Braki": "Lücken",
+ "Akty niewiążące": "Unverbindliche Instrumente",
+ "Pokrycie źródłami": "Quellenabdeckung",
+ "LUKA": "LÜCKE",
+ "słabe": "schwach",
+ "częściowe": "teilweise",
+ "pełne": "vollständig"
 }

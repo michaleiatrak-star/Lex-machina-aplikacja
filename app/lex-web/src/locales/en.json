@@ -2919,5 +2919,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "the Gemini key's per-minute limit is still used up after waiting; try again in a few minutes",
  "zalecane: lokalny SearXNG": "recommended: local SearXNG",
  "Zalecane:": "Recommended:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "create SearXNG on this computer. It came out best in the search engine test (most official sources, fastest), runs locally, needs no key and no browser check, and starts together with the application. After creating it, run the test: the best search engine is asked first in the chat."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "create SearXNG on this computer. It came out best in the search engine test (most official sources, fastest), runs locally, needs no key and no browser check, and starts together with the application. After creating it, run the test: the best search engine is asked first in the chat.",
+ "Braki i pokrycie źródłami": "Gaps and source coverage",
+ "Sprawdzone źródła": "Sources checked",
+ "Oddalone roszczenia i zarzuty": "Dismissed claims and objections",
+ "Braki": "Gaps",
+ "Akty niewiążące": "Non-binding instruments",
+ "Pokrycie źródłami": "Source coverage",
+ "LUKA": "GAP",
+ "słabe": "weak",
+ "częściowe": "partial",
+ "pełne": "full"
 }

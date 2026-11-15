@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini atslēgas minūtes limits joprojām ir izsmelts pēc gaidīšanas; mēģiniet vēlreiz pēc dažām minūtēm",
  "zalecane: lokalny SearXNG": "ieteicams: lokāls SearXNG",
  "Zalecane:": "Ieteicams:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "izveidojiet SearXNG šajā datorā. Meklētājprogrammu testā tas uzrādīja labāko rezultātu (visvairāk oficiālu avotu, ātrākais), darbojas lokāli bez atslēgas un bez pārlūka pārbaudes un startē kopā ar lietotni. Pēc tam palaidiet testu: labākā meklētājprogramma tērzēšanā tiek vaicāta pirmā."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "izveidojiet SearXNG šajā datorā. Meklētājprogrammu testā tas uzrādīja labāko rezultātu (visvairāk oficiālu avotu, ātrākais), darbojas lokāli bez atslēgas un bez pārlūka pārbaudes un startē kopā ar lietotni. Pēc tam palaidiet testu: labākā meklētājprogramma tērzēšanā tiek vaicāta pirmā.",
+ "Braki i pokrycie źródłami": "Nepilnības un avotu pārklājums",
+ "Sprawdzone źródła": "Pārbaudītie avoti",
+ "Oddalone roszczenia i zarzuty": "Noraidītie prasījumi un iebildumi",
+ "Braki": "Nepilnības",
+ "Akty niewiążące": "Nesaistoši instrumenti",
+ "Pokrycie źródłami": "Avotu pārklājums",
+ "LUKA": "NEPILNĪBA",
+ "słabe": "vājš",
+ "częściowe": "daļējs",
+ "pełne": "pilns"
 }

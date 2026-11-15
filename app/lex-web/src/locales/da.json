@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini-nøglens minutgrænse er stadig opbrugt efter ventetiden; prøv igen om et par minutter",
  "zalecane: lokalny SearXNG": "anbefalet: lokal SearXNG",
  "Zalecane:": "Anbefalet:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "opret SearXNG på denne computer. Den klarede sig bedst i søgemaskinetesten (flest officielle kilder, hurtigst), kører lokalt uden nøgle og uden browsertjek og starter sammen med programmet. Kør derefter testen: den bedste søgemaskine spørges først i chatten."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "opret SearXNG på denne computer. Den klarede sig bedst i søgemaskinetesten (flest officielle kilder, hurtigst), kører lokalt uden nøgle og uden browsertjek og starter sammen med programmet. Kør derefter testen: den bedste søgemaskine spørges først i chatten.",
+ "Braki i pokrycie źródłami": "Mangler og kildedækning",
+ "Sprawdzone źródła": "Kontrollerede kilder",
+ "Oddalone roszczenia i zarzuty": "Afviste krav og indsigelser",
+ "Braki": "Mangler",
+ "Akty niewiążące": "Ikke-bindende instrumenter",
+ "Pokrycie źródłami": "Kildedækning",
+ "LUKA": "MANGEL",
+ "słabe": "svag",
+ "częściowe": "delvis",
+ "pełne": "fuld"
 }

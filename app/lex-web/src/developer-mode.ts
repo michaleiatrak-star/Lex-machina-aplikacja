@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { t } from "./i18n";
 
 /**
  * Developer mode: whether the app shows what matters only to a programmer (the
@@ -193,6 +194,53 @@ function technicalDetailsEnd(lines: string[], start: number): number {
   return lines.findIndex((line, at) => at >= start && /<\/details>/iu.test(line));
 }
 
+// REM-GATE says what is missing and how far the sources carry the answer: the user reads it,
+// under plain labels (user 2026-11-15). "⬛ BLOKADA" there is a gap only a document closes, not a
+// blocked answer, so it reads "LUKA". REM-1/REM-3 that do not apply are left out.
+const REM_LABEL = /^(\s*(?:[-*•]\s*)?(?:\*\*)?\s*)REM-([0-4])\b(?:\s+[\p{L} ]{0,30}?)?\s*(?:\*\*)?\s*[:.]\s*(?:\*\*)?/u;
+const REM_HEADING = /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*REM-GATE\s*(?:\*\*)?\s*[:.]?\s*(?:\*\*)?\s*$/u;
+const remNames = () => [t("Sprawdzone źródła"), t("Oddalone roszczenia i zarzuty"), t("Braki"), t("Akty niewiążące"), t("Pokrycie źródłami")];
+const REM_NOT_APPLICABLE = /nie\s+dotyczy|brak\s+obszar|\b0\s+oddalon/iu;
+
+function plainRemLine(line: string): string | null {
+  const label = REM_LABEL.exec(line);
+  if (!label) return line;
+  const index = Number(label[2]);
+  const rest = line.slice(label[0].length).trim();
+  if ((index === 1 || index === 3) && REM_NOT_APPLICABLE.test(rest)) return null;
+  return `${label[1]}**${remNames()[index]!}:** ${rest}`.trimEnd();
+}
+
+function plainRemBlockLine(line: string): string {
+  return line
+    .replace(/⬛\s*BLOKADA\b/gu, `⬛ ${t("LUKA")}`)
+    .replace(/:\s*CIENKA\b/gu, `: ${t("słabe")}`)
+    .replace(/:\s*CZĘŚCIOWA\b/gu, `: ${t("częściowe")}`)
+    .replace(/:\s*PEŁNA\b/gu, `: ${t("pełne")}`);
+}
+
+export function plainRemGate(lines: string[]): string[] {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const line of lines) {
+    if (REM_HEADING.test(line)) {
+      inBlock = true;
+      out.push(`**${t("Braki i pokrycie źródłami")}**`);
+      continue;
+    }
+    const isRem = REM_LABEL.test(line);
+    if (inBlock && !isRem && (!line.trim() || !/^\s{2,}\S|^\s*[-*•→]/u.test(line))) inBlock = false;
+    if (isRem) inBlock = true;
+    if (!inBlock) {
+      out.push(line);
+      continue;
+    }
+    const plain = plainRemLine(line);
+    if (plain !== null) out.push(plainRemBlockLine(plain));
+  }
+  return out;
+}
+
 function withoutControlSections(lines: string[]): string[] {
   const kept: string[] = [];
   for (let index = 0; index < lines.length; index += 1) {
@@ -276,7 +324,7 @@ export function withoutToolNames(line: string): string {
 
 export function withoutQualityGateLines(content: string): string {
   const lines = content.split("\n");
-  const kept = withoutControlSections(lines).filter((line) => !QUALITY_GATE_LINE.test(line) && !isWorkTraceLine(line));
+  const kept = withoutControlSections(plainRemGate(lines)).filter((line) => !QUALITY_GATE_LINE.test(line) && !isWorkTraceLine(line));
   const plain = kept.map(withoutToolNames);
   if (kept.length === lines.length) return plain.join("\n");
   return `${plain.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;

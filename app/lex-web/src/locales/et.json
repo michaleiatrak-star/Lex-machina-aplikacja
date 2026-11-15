@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini võtme minutilimiit on ka pärast ootamist ammendatud; proovi mõne minuti pärast uuesti",
  "zalecane: lokalny SearXNG": "soovitatav: kohalik SearXNG",
  "Zalecane:": "Soovitatav:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "loo SearXNG selles arvutis. Otsingumootorite testis oli see parim (kõige rohkem ametlikke allikaid, kiireim), töötab kohapeal ilma võtme ja brauserikontrollita ning käivitub koos rakendusega. Seejärel käivita test: parimat otsingumootorit küsitakse vestluses esimesena."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "loo SearXNG selles arvutis. Otsingumootorite testis oli see parim (kõige rohkem ametlikke allikaid, kiireim), töötab kohapeal ilma võtme ja brauserikontrollita ning käivitub koos rakendusega. Seejärel käivita test: parimat otsingumootorit küsitakse vestluses esimesena.",
+ "Braki i pokrycie źródłami": "Lüngad ja allikatega kaetus",
+ "Sprawdzone źródła": "Kontrollitud allikad",
+ "Oddalone roszczenia i zarzuty": "Tagasi lükatud nõuded ja vastuväited",
+ "Braki": "Lüngad",
+ "Akty niewiążące": "Mittesiduvad dokumendid",
+ "Pokrycie źródłami": "Allikatega kaetus",
+ "LUKA": "LÜNK",
+ "słabe": "nõrk",
+ "częściowe": "osaline",
+ "pełne": "täielik"
 }

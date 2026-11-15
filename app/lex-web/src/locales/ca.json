@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "el límit per minut de la clau Gemini continua exhaurit després d’esperar; torneu-ho a provar d’aquí a uns minuts",
  "zalecane: lokalny SearXNG": "recomanat: SearXNG local",
  "Zalecane:": "Recomanat:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "creeu SearXNG en aquest ordinador. Va obtenir el millor resultat a la prova de cercadors (més fonts oficials, el més ràpid), funciona en local, sense clau ni verificació del navegador, i s’inicia juntament amb l’aplicació. Després, executeu la prova: el millor cercador es consulta primer al xat."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "creeu SearXNG en aquest ordinador. Va obtenir el millor resultat a la prova de cercadors (més fonts oficials, el més ràpid), funciona en local, sense clau ni verificació del navegador, i s’inicia juntament amb l’aplicació. Després, executeu la prova: el millor cercador es consulta primer al xat.",
+ "Braki i pokrycie źródłami": "Llacunes i cobertura de fonts",
+ "Sprawdzone źródła": "Fonts comprovades",
+ "Oddalone roszczenia i zarzuty": "Pretensions i objeccions desestimades",
+ "Braki": "Llacunes",
+ "Akty niewiążące": "Instruments no vinculants",
+ "Pokrycie źródłami": "Cobertura de fonts",
+ "LUKA": "LLACUNA",
+ "słabe": "feble",
+ "częściowe": "parcial",
+ "pełne": "completa"
 }

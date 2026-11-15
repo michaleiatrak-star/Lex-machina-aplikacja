@@ -23,6 +23,7 @@ describe("quality gate lines in the lawyer's view", () => {
     expect(plain).toContain("**Krótko:** termin minął");
     expect(plain).toContain("Krok 1: złóż wniosek.");
     expect(plain).not.toMatch(/CN-1|S1 \(|S2 –|S3 akty|WYJ-GATE|REM-0|WYNIK:|ZDEGRADOWANY/u);
+    expect(plain).toContain("**Sprawdzone źródła:** 1 powołanie");
     expect(plain).toContain("Kontrola jakości odpowiedzi");
   });
 
@@ -165,7 +166,7 @@ describe("the model's work trace is not part of the answer (live test 2026-11-15
     expect(plain).not.toMatch(/verify_|search_|orzeczenia-sadowe-v2|Faza 1|Oś sporu|CN-GATE|PRIMARY/u);
     expect(plain).toContain("Nie mogę teraz powiedzieć");
   });
-  it("REM-GATE z wierszami REM-0…REM-4 i ich wciętymi listami: znika cały blok (SDI 8/12, 2026-11-15)", () => {
+  it("REM-GATE: braki i pokrycie widoczne pod polskimi etykietami, „⬛ BLOKADA” to luka (SDI 8/12, 2026-11-15)", () => {
     const answer = [
       "Albo wklej lub wgraj tekst orzeczenia.",
       "",
@@ -173,16 +174,28 @@ describe("the model's work trace is not part of the answer (live test 2026-11-15
       "REM-0 próby: 1 powołanie ⚠️. Odzyskano 0.",
       "  - sn.pl (`verify_case_reference`, konektor `sn`): HTTP 403",
       "  → ⚠️ [NIEWERYFIKOWANE], status OUT_OF_SCOPE",
+      "REM-1 oddalenia: 0 oddalonych roszczeń, więc parowanie alternatyw nie dotyczy.",
       "REM-2 braki: 1 pozycja ⬛ (treść orzeczenia).",
       "  → ⬛ BLOKADA. Dokument zamykający lukę to tekst urzędowy z sn.pl.",
+      "REM-3 soft law: brak obszarów opartych na instrumentach miękkich.",
       "REM-4 pokrycie:",
+      "  - identyfikacja repertorium: CIENKA. Wynika z routingu.",
       "  - ślad prób i ścieżki odblokowania: PEŁNA",
       "",
       "---",
       "⚖️ **Zastrzeżenie:** Niniejsza analiza ma charakter informacyjny."
     ].join("\n");
     const plain = withoutQualityGateLines(answer);
-    expect(plain).not.toMatch(/REM-|BLOKADA|PEŁNA|sn\.pl \(/u);
+    expect(plain).not.toMatch(/REM-|BLOKADA|CIENKA|PEŁNA|verify_/u);
+    expect(plain).toContain("**Braki i pokrycie źródłami**");
+    expect(plain).toContain("**Sprawdzone źródła:** 1 powołanie ⚠️. Odzyskano 0.");
+    expect(plain).toContain("  - sn.pl (sprawdzenie sygnatury, konektor `sn`): HTTP 403");
+    expect(plain).toContain("**Braki:** 1 pozycja ⬛ (treść orzeczenia).");
+    expect(plain).toContain("  → ⬛ LUKA. Dokument zamykający lukę to tekst urzędowy z sn.pl.");
+    expect(plain).toContain("**Pokrycie źródłami:**");
+    expect(plain).toContain("  - identyfikacja repertorium: słabe. Wynika z routingu.");
+    expect(plain).toContain("  - ślad prób i ścieżki odblokowania: pełne");
+    expect(plain).not.toMatch(/Oddalone|Akty niewiążące/u);
     expect(plain).toContain("Albo wklej lub wgraj tekst orzeczenia.");
     expect(plain).toContain("⚖️ **Zastrzeżenie:**");
   });

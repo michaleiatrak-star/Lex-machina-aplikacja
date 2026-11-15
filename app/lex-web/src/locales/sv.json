@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini-nyckelns minutgräns är fortfarande förbrukad efter väntan; försök igen om några minuter",
  "zalecane: lokalny SearXNG": "rekommenderas: lokal SearXNG",
  "Zalecane:": "Rekommenderas:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "skapa SearXNG på den här datorn. Den klarade sig bäst i sökmotortestet (flest officiella källor, snabbast), körs lokalt utan nyckel och utan webbläsarkontroll och startar tillsammans med programmet. Kör sedan testet: den bästa sökmotorn tillfrågas först i chatten."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "skapa SearXNG på den här datorn. Den klarade sig bäst i sökmotortestet (flest officiella källor, snabbast), körs lokalt utan nyckel och utan webbläsarkontroll och startar tillsammans med programmet. Kör sedan testet: den bästa sökmotorn tillfrågas först i chatten.",
+ "Braki i pokrycie źródłami": "Luckor och källtäckning",
+ "Sprawdzone źródła": "Kontrollerade källor",
+ "Oddalone roszczenia i zarzuty": "Avvisade yrkanden och invändningar",
+ "Braki": "Luckor",
+ "Akty niewiążące": "Icke-bindande instrument",
+ "Pokrycie źródłami": "Källtäckning",
+ "LUKA": "LUCKA",
+ "słabe": "svag",
+ "częściowe": "delvis",
+ "pełne": "full"
 }

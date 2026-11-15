@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "Gemini-avaimen minuuttiraja on yhä käytetty odottamisesta huolimatta; yritä uudelleen muutaman minuutin kuluttua",
  "zalecane: lokalny SearXNG": "suositus: paikallinen SearXNG",
  "Zalecane:": "Suositus:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "luo SearXNG tälle tietokoneelle. Se pärjäsi hakukonetestissä parhaiten (eniten virallisia lähteitä, nopein), toimii paikallisesti ilman avainta ja selaintarkistusta ja käynnistyy sovelluksen mukana. Aja sen jälkeen testi: paras hakukone kysytään keskustelussa ensimmäisenä."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "luo SearXNG tälle tietokoneelle. Se pärjäsi hakukonetestissä parhaiten (eniten virallisia lähteitä, nopein), toimii paikallisesti ilman avainta ja selaintarkistusta ja käynnistyy sovelluksen mukana. Aja sen jälkeen testi: paras hakukone kysytään keskustelussa ensimmäisenä.",
+ "Braki i pokrycie źródłami": "Puutteet ja lähdekattavuus",
+ "Sprawdzone źródła": "Tarkistetut lähteet",
+ "Oddalone roszczenia i zarzuty": "Hylätyt vaatimukset ja väitteet",
+ "Braki": "Puutteet",
+ "Akty niewiążące": "Ei-sitovat välineet",
+ "Pokrycie źródłami": "Lähdekattavuus",
+ "LUKA": "PUUTE",
+ "słabe": "heikko",
+ "częściowe": "osittainen",
+ "pełne": "täysi"
 }

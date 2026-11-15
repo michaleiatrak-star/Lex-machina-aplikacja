@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "la limite par minute de la clé Gemini est épuisée malgré l’attente ; réessayez dans quelques minutes",
  "zalecane: lokalny SearXNG": "recommandé : SearXNG local",
  "Zalecane:": "Recommandé :",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "créez SearXNG sur cet ordinateur. Il est arrivé en tête du test des moteurs de recherche (le plus de sources officielles, le plus rapide), fonctionne en local, sans clé ni vérification du navigateur, et démarre avec l’application. Ensuite, lancez le test : le meilleur moteur est interrogé en premier dans le chat."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "créez SearXNG sur cet ordinateur. Il est arrivé en tête du test des moteurs de recherche (le plus de sources officielles, le plus rapide), fonctionne en local, sans clé ni vérification du navigateur, et démarre avec l’application. Ensuite, lancez le test : le meilleur moteur est interrogé en premier dans le chat.",
+ "Braki i pokrycie źródłami": "Lacunes et couverture par les sources",
+ "Sprawdzone źródła": "Sources vérifiées",
+ "Oddalone roszczenia i zarzuty": "Demandes et moyens rejetés",
+ "Braki": "Lacunes",
+ "Akty niewiążące": "Instruments non contraignants",
+ "Pokrycie źródłami": "Couverture par les sources",
+ "LUKA": "LACUNE",
+ "słabe": "faible",
+ "częściowe": "partielle",
+ "pełne": "complète"
 }

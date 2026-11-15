@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "mínútutakmark Gemini-lykilsins er enn uppurið eftir biðina; reyndu aftur eftir nokkrar mínútur",
  "zalecane: lokalny SearXNG": "mælt með: staðbundið SearXNG",
  "Zalecane:": "Mælt með:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "settu upp SearXNG á þessari tölvu. Það kom best út í leitarvélaprófinu (flestar opinberar heimildir, hraðast), keyrir staðbundið án lykils og án vafraathugunar og ræsist með forritinu. Keyrðu síðan prófið: besta leitarvélin er spurð fyrst í spjallinu."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "settu upp SearXNG á þessari tölvu. Það kom best út í leitarvélaprófinu (flestar opinberar heimildir, hraðast), keyrir staðbundið án lykils og án vafraathugunar og ræsist með forritinu. Keyrðu síðan prófið: besta leitarvélin er spurð fyrst í spjallinu.",
+ "Braki i pokrycie źródłami": "Eyður og heimildaþekja",
+ "Sprawdzone źródła": "Athugaðar heimildir",
+ "Oddalone roszczenia i zarzuty": "Hafnaðar kröfur og andmæli",
+ "Braki": "Eyður",
+ "Akty niewiążące": "Óbindandi gerningar",
+ "Pokrycie źródłami": "Heimildaþekja",
+ "LUKA": "EYÐA",
+ "słabe": "veik",
+ "częściowe": "að hluta",
+ "pełne": "full"
 }

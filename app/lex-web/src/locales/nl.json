@@ -2913,5 +2913,15 @@
  "wyczerpany minutowy limit klucza Gemini mimo odczekania; spróbuj ponownie za kilka minut": "de minuutlimiet van de Gemini-sleutel is ondanks het wachten op; probeer het over enkele minuten opnieuw",
  "zalecane: lokalny SearXNG": "aanbevolen: lokale SearXNG",
  "Zalecane:": "Aanbevolen:",
- "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "maak SearXNG aan op deze computer. Het kwam als beste uit de zoekmachinetest (meeste officiële bronnen, snelst), draait lokaal, zonder sleutel en zonder browsercontrole, en start samen met de applicatie. Voer daarna de test uit: de beste zoekmachine wordt in de chat als eerste gevraagd."
+ "utwórz SearXNG na tym komputerze. W teście wyszukiwarek wypadł najlepiej (najwięcej źródeł urzędowych, najszybszy), działa lokalnie, bez klucza i bez weryfikacji przeglądarki, i uruchamia się razem z aplikacją. Po utworzeniu uruchom test: najlepsza wyszukiwarka jest pytana w czacie jako pierwsza.": "maak SearXNG aan op deze computer. Het kwam als beste uit de zoekmachinetest (meeste officiële bronnen, snelst), draait lokaal, zonder sleutel en zonder browsercontrole, en start samen met de applicatie. Voer daarna de test uit: de beste zoekmachine wordt in de chat als eerste gevraagd.",
+ "Braki i pokrycie źródłami": "Lacunes en dekking door bronnen",
+ "Sprawdzone źródła": "Gecontroleerde bronnen",
+ "Oddalone roszczenia i zarzuty": "Afgewezen vorderingen en verweren",
+ "Braki": "Lacunes",
+ "Akty niewiążące": "Niet-bindende instrumenten",
+ "Pokrycie źródłami": "Dekking door bronnen",
+ "LUKA": "LACUNE",
+ "słabe": "zwak",
+ "częściowe": "gedeeltelijk",
+ "pełne": "volledig"
 }
