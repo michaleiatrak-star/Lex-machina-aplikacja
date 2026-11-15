@@ -1569,6 +1569,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         // Wyszukiwarka internetowa: adres SearXNG i test porównawczy (zmiana tylko administrator — runtime).
         "/api/settings/web-search" => matches!(method, "GET" | "PUT"),
         "/api/settings/web-search/test" => method == "POST",
+        // Lokalna instancja SearXNG (pliki, uruchomienie w Docker/Podman; tylko administrator — runtime).
+        "/api/settings/web-search/searxng-local" => method == "POST",
         // Jurysdykcja (pakiet prawa krajowego; odczyt dla użytkownika, zmiana tylko administrator — runtime).
         "/api/settings/jurisdiction" => matches!(method, "GET" | "PUT"),
         "/api/settings/legal-sources/legi" => method == "GET",

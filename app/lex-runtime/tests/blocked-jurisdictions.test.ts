@@ -27,12 +27,12 @@ describe("technical block: Russian Federation is outside the system", () => {
 describe("technical block in search results", () => {
   it("drops hits on blocked hosts before they reach the model", async () => {
     const { PublicWebSearch } = await import("../src/web-search.js");
-    const payload = JSON.stringify({ web: { results: [
+    const payload = JSON.stringify({ success: true, data: { web: [
       { title: "ГК РФ", url: "https://www.consultant.ru/document/cons_doc_LAW_5142/", description: "x" },
       { title: "KC", url: "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19640160093", description: "y" }
     ] } });
     const fetchImpl = (async () => new Response(payload, { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-    const search = new PublicWebSearch({ LEX_WEB_SEARCH_PROVIDER: "brave", BRAVE_SEARCH_API_KEY: "k" } as NodeJS.ProcessEnv, fetchImpl);
+    const search = new PublicWebSearch({ LEX_WEB_SEARCH_PROVIDER: "firecrawl", FIRECRAWL_API_KEY: "fc-test1234567890" } as NodeJS.ProcessEnv, fetchImpl);
     const answer = await search.search("kodeks cywilny", 5);
     expect(answer.hits.map((hit) => hit.url)).toEqual(["https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19640160093"]);
   });

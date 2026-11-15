@@ -2861,5 +2861,12 @@
  "Otwórz folder NIL": "NIL-Dossier opmaachen",
  "Otwórz BIP RPO": "BIP vum RPO opmaachen",
  "Otwórz stronę RF": "Websäit vum Finanzombudsmann opmaachen",
- "Pobierz teraz": "Elo eroflueden"
+ "Pobierz teraz": "Elo eroflueden",
+ "Lokalny SearXNG działa: {url}. Adres jest ustawiony.": "Lokale SearXNG leeft: {url}. D’Adress ass gesat.",
+ "Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}": "D’SearXNG-Fichieren sinn an {directory} prett. Op dësem Computer gëtt et weder Docker nach Podman: installéiert eent dovun a lancéiert: {command}",
+ "SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).": "SearXNG ass gestart, äntwert awer nach net. Probéiert et gläich nach eng Kéier (den éischte Start lued d’Image erof).",
+ "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG konnt net gestart ginn ({error}). D’Fichiere sinn an {directory}; manuell starten: {command}",
+ "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Lokale SearXNG gëtt erstallt… (den éischte Start kann e puer Minutten daueren)",
+ "Utwórz lokalny SearXNG na tym komputerze": "Lokale SearXNG op dësem Computer erstellen",
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "D’Applikatioun späichert eng SearXNG-Konfiguratioun (JSON-Format un, nëmmen Adress 127.0.0.1) a start se an Docker oder Podman, wann déi installéiert sinn. Soubal d’Sichmaschinn äntwert, gëtt d’Adress automatesch gesat. Ouni Docker a Podman kritt Dir déi fäerdeg Fichieren an de Startbefehl."
 }

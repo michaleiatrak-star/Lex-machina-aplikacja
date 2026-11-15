@@ -1,6 +1,6 @@
 import { caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
 import type { Express, Request, Response } from "express";
-import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
+import { setupLocalSearxng } from "../searxng-local.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
@@ -13,13 +13,10 @@ import {
   effectiveSearchOrder,
   saveWebSearchTest,
   firecrawlKeyForced,
-  braveKeyForced,
-  setBraveApiKey,
   searxngUrlForced,
   setFirecrawlApiKey,
-  setGoogleSession,
-  setGoogleSessionKeep,
   setSearxngUrl,
+  webSearchDataDirectory,
   webSearchSettings
 } from "../web-search-settings.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice, type DomainFallbackChoice } from "../domain-fallback.js";
@@ -647,10 +644,7 @@ export function registerMcpConnectorRoutes(
       engines: SEARCH_ENGINES,
       searxngUrlForced: searxngUrlForced(),
       firecrawlKeyForced: firecrawlKeyForced(),
-      braveKeyForced: braveKeyForced(),
-      providerForced: provider !== "auto" ? provider : null,
-      // A Google session from the window is held now (Settings show it and offer the window).
-      googleSessionActive: lawSourceSessionHeaders("www.google.com") !== null
+      providerForced: provider !== "auto" ? provider : null
     };
   };
   app.get("/api/settings/web-search", (req, res) => {
@@ -662,19 +656,28 @@ export function registerMcpConnectorRoutes(
     try {
       if (req.body && "searxngUrl" in req.body) setSearxngUrl(req.body.searxngUrl ?? "");
       if (req.body && "firecrawlApiKey" in req.body) setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
-      if (req.body && "braveApiKey" in req.body) setBraveApiKey(req.body.braveApiKey ?? "");
-      if (req.body && "googleSession" in req.body) setGoogleSession(req.body.googleSession);
-      if (req.body && "googleSessionKeep" in req.body) {
-        setGoogleSessionKeep(req.body.googleSessionKeep);
-        if (req.body.googleSessionKeep === true) keepLawSourceSession("www.google.com");
-      }
-      // Google turned off: its session is dropped now, not after its time runs out.
-      if (req.body?.googleSession === false) clearLawSourceSession("www.google.com");
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WEB_SEARCH_SETTINGS_INVALID" });
       return;
     }
     res.json(webSearchView());
+  });
+  // SearXNG on this computer (Docker or Podman): the configuration with the JSON format on, started
+  // when a container engine is here, and the address set once it answers.
+  app.post("/api/settings/web-search/searxng-local", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    if (searxngUrlForced()) {
+      res.status(409).json({ error: "WEB_SEARCH_SEARXNG_URL_FORCED" });
+      return;
+    }
+    const directory = webSearchDataDirectory();
+    if (!directory) {
+      res.status(500).json({ error: "WEB_SEARCH_SETTINGS_NOT_CONFIGURED" });
+      return;
+    }
+    const result = await setupLocalSearxng({ directory: legiPath.join(directory, "searxng"), start: req.body?.start !== false });
+    if (result.reachable) setSearxngUrl(result.url);
+    res.json({ local: result, settings: webSearchView() });
   });
   app.post("/api/settings/web-search/test", async (req, res) => {
     if (!requireAdmin(req, res, authService)) return;

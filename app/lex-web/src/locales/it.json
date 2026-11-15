@@ -2861,5 +2861,12 @@
  "Otwórz folder NIL": "Apri la cartella NIL",
  "Otwórz BIP RPO": "Apri il BIP del RPO",
  "Otwórz stronę RF": "Apri il sito del Difensore finanziario",
- "Pobierz teraz": "Scarica ora"
+ "Pobierz teraz": "Scarica ora",
+ "Lokalny SearXNG działa: {url}. Adres jest ustawiony.": "SearXNG locale è attivo: {url}. L’indirizzo è impostato.",
+ "Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}": "I file di SearXNG sono pronti in {directory}. Su questo computer non c’è né Docker né Podman: installane uno ed esegui: {command}",
+ "SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).": "SearXNG è avviato ma non risponde ancora. Riprova tra poco (il primo avvio scarica l’immagine).",
+ "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Impossibile avviare SearXNG ({error}). I file sono in {directory}; avvialo manualmente: {command}",
+ "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Creazione di SearXNG locale… (il primo avvio può richiedere alcuni minuti)",
+ "Utwórz lokalny SearXNG na tym komputerze": "Crea SearXNG locale su questo computer",
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "L’applicazione salva una configurazione di SearXNG (formato JSON attivo, solo indirizzo 127.0.0.1) e la avvia in Docker o Podman, se installati. Quando il motore risponde, l’indirizzo viene impostato automaticamente. Senza Docker né Podman ricevi i file pronti e il comando di avvio."
 }

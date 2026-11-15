@@ -1,8 +1,8 @@
 import { isBlockedUrl } from "./blocked-jurisdictions.js";
-import { LAW_SOURCE_VERIFICATION_REQUIRED, clearLawSourceSession, isChallengePage, lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
+import { LAW_SOURCE_VERIFICATION_REQUIRED } from "./eli/law-source-sessions.js";
 import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import { classifyKnownLegalSourceUrl } from "./legal-source-policy.js";
-import { effectiveSearchOrder, braveApiKey, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
+import { effectiveSearchOrder, firecrawlApiKey, geminiSearchKey, webSearchSettings } from "./web-search-settings.js";
 export class WebSearchError extends Error {
     code;
     constructor(code, detail) {
@@ -102,39 +102,6 @@ export function parseDuckDuckGoHtml(html, maxResults) {
     }
     return hits.slice(0, maxResults);
 }
-/** Organic results of a Google results page: a link with a heading (h3) inside; Google's own pages skipped. */
-export function parseGoogleHtml(html, maxResults) {
-    const hits = [];
-    const seen = new Set();
-    const anchor = /<a\b[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/giu;
-    let match;
-    while ((match = anchor.exec(html)) !== null && hits.length < maxResults) {
-        const heading = /<h3\b[^>]*>([\s\S]*?)<\/h3>/iu.exec(match[2] ?? "");
-        if (!heading)
-            continue;
-        let href = decodeEntities(match[1] ?? "");
-        if (href.startsWith("/url?")) {
-            href = new URLSearchParams(href.slice(5)).get("q") ?? new URLSearchParams(href.slice(5)).get("url") ?? "";
-        }
-        if (!/^https?:\/\//iu.test(href))
-            continue;
-        let host = "";
-        try {
-            host = new URL(href).hostname;
-        }
-        catch {
-            continue;
-        }
-        if (/(^|\.)google\.[a-z.]+$/iu.test(host) || seen.has(href))
-            continue;
-        seen.add(href);
-        // The snippet: the first text block after the link (Google's markup changes; best effort).
-        const after = html.slice(anchor.lastIndex, anchor.lastIndex + 4_000);
-        const snippet = /<(?:div|span)\b[^>]*(?:VwiC3b|data-sncf)[^>]*>([\s\S]*?)<\/(?:div|span)>/iu.exec(after)?.[1] ?? "";
-        hits.push({ title: decodeEntities(heading[1] ?? ""), url: href, snippet: decodeEntities(snippet).slice(0, 400) });
-    }
-    return hits;
-}
 /** Sources of a grounded Gemini answer: one hit per source, the passages it supports as snippet. */
 export function parseGeminiGrounding(payload, maxResults) {
     const metadata = payload.candidates?.[0]?.groundingMetadata;
@@ -225,29 +192,23 @@ export class PublicWebSearch {
         const errors = [];
         // Auto: the order measured by the comparison test (Ustawienia > Wyszukiwarka internetowa),
         // then the remaining engines; a named provider runs alone.
-        // A key given to this instance (server configuration, tests) counts as configured Brave.
-        const base = this.settings();
-        const settings = this.env.BRAVE_SEARCH_API_KEY?.trim() ? { ...base, braveConfigured: true } : base;
+        const settings = this.settings();
         const engines = provider === "auto"
             ? effectiveSearchOrder(settings)
             : provider === "searxng"
                 ? ["searxng"]
                 : provider === "firecrawl"
                     ? ["firecrawl"]
-                    : provider === "brave"
-                        ? ["brave"]
-                        : provider === "gemini"
-                            ? ["gemini"]
-                            : provider === "google"
-                                ? ["google"]
-                                : provider === "duckduckgo" || provider === "ddg"
-                                    ? ["duckduckgo"]
-                                    : [];
-        // An engine read through a paid or limited API (Brave, Firecrawl, Gemini, SearXNG) that is
-        // refused for its limit, credits or key falls back to reading results pages: Google on the
-        // user's session and DuckDuckGo's HTML results (user, 2026-11-14).
-        const API_ENGINES = ["brave", "firecrawl", "gemini", "searxng"];
-        const SCRAPED = settings.googleSession ? ["google", "duckduckgo"] : ["duckduckgo"];
+                    : provider === "gemini"
+                        ? ["gemini"]
+                        : provider === "duckduckgo" || provider === "ddg"
+                            ? ["duckduckgo"]
+                            : [];
+        // An engine read through a paid or limited API (Firecrawl, Gemini, SearXNG) that is refused for
+        // its limit, credits or key falls back to reading results pages: DuckDuckGo's HTML results
+        // (user, 2026-11-14).
+        const API_ENGINES = ["firecrawl", "gemini", "searxng"];
+        const SCRAPED = ["duckduckgo"];
         const apiRefused = (message) => /^(?:RATE_LIMITED|CREDITS_EXHAUSTED|KEY_REJECTED|NOT_CONFIGURED|QUOTA|HTTP_(?:4\d\d|5\d\d))/u.test(message);
         let verificationRequired;
         for (let index = 0; index < engines.length; index += 1) {
@@ -279,14 +240,6 @@ export class PublicWebSearch {
                 throw new Error("NOT_CONFIGURED");
             return this.searchSearxng(query, maxResults, settings.searxngUrl);
         }
-        if (engine === "google")
-            return this.searchGoogle(query, maxResults);
-        if (engine === "brave") {
-            const key = this.env.BRAVE_SEARCH_API_KEY?.trim() || braveApiKey();
-            if (!key)
-                throw new Error("NOT_CONFIGURED");
-            return this.searchBrave(query, maxResults, key);
-        }
         if (engine === "gemini") {
             const key = await geminiSearchKey();
             if (!key)
@@ -314,34 +267,6 @@ export class PublicWebSearch {
                 throw error;
             }
         }
-    }
-    /**
-     * Google on the user's session (as sn.pl): the cookies and User-Agent of the window in which the
-     * user passed Google's consent page and captcha. No session, or Google answers with its captcha:
-     * the session is dropped and the window is shown to the user again (LAW_SOURCE_VERIFICATION_REQUIRED).
-     */
-    async searchGoogle(query, maxResults) {
-        const required = `${LAW_SOURCE_VERIFICATION_REQUIRED}:www.google.com`;
-        const session = lawSourceSessionHeaders("www.google.com");
-        if (!session)
-            throw new Error(required);
-        const url = new URL("https://www.google.com/search");
-        url.searchParams.set("q", query);
-        url.searchParams.set("hl", "pl");
-        url.searchParams.set("num", String(Math.min(Math.max(maxResults, 1), 10)));
-        const response = await this.fetchImpl(url, {
-            headers: { Accept: "text/html", "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.6", ...session },
-            redirect: "follow",
-            signal: AbortSignal.timeout(this.timeoutMs)
-        });
-        const html = await readLimitedText(response);
-        if (isChallengePage(response.status, html) || /\/sorry\//u.test(response.url)) {
-            clearLawSourceSession("www.google.com");
-            throw new Error(required);
-        }
-        if (!response.ok)
-            throw new Error(`HTTP_${response.status}`);
-        return parseGoogleHtml(html, maxResults);
     }
     /** Firecrawl search API (v2): 2 credits per 10 results; the free plan has a monthly limit. */
     async searchFirecrawl(query, maxResults, apiKey) {
@@ -460,46 +385,6 @@ export class PublicWebSearch {
             throw new Error("BOT_CHECK");
         }
         return parseSearxngResults(payload, maxResults);
-    }
-    async searchBrave(query, maxResults, apiKey) {
-        const url = new URL("https://api.search.brave.com/res/v1/web/search");
-        url.searchParams.set("q", query);
-        url.searchParams.set("count", String(maxResults));
-        url.searchParams.set("search_lang", "pl");
-        url.searchParams.set("country", "PL");
-        const response = await this.fetchImpl(url, {
-            headers: {
-                Accept: "application/json",
-                "X-Subscription-Token": apiKey,
-                "User-Agent": USER_AGENT
-            },
-            signal: AbortSignal.timeout(this.timeoutMs)
-        });
-        if (response.status === 401 || response.status === 403)
-            throw new Error("KEY_REJECTED");
-        if (response.status === 402)
-            throw new Error("CREDITS_EXHAUSTED");
-        if (response.status === 429)
-            throw new Error("RATE_LIMITED");
-        if (!response.ok) {
-            throw new Error(`HTTP_${response.status}`);
-        }
-        const payload = JSON.parse(await readLimitedText(response));
-        return (payload.web?.results ?? [])
-            .map((item) => ({
-            title: typeof item.title === "string"
-                ? decodeEntities(item.title)
-                : "",
-            url: typeof item.url === "string"
-                ? item.url.trim()
-                : "",
-            snippet: typeof item.description === "string"
-                ? decodeEntities(item.description)
-                : ""
-        }))
-            .filter((item) => item.title &&
-            /^https?:\/\//i.test(item.url))
-            .slice(0, maxResults);
     }
     async searchDuckDuckGo(query, maxResults) {
         const url = new URL("https://html.duckduckgo.com/html/");

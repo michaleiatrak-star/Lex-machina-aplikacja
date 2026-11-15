@@ -4,33 +4,44 @@ import {
   ApiError,
   getWebSearchSettings,
   runWebSearchTest,
-  setBraveApiKey,
   setFirecrawlApiKey,
-  setGoogleSession,
-  setGoogleSessionKeep,
   setSearxngUrl,
+  setupLocalSearxng,
+  type LocalSearxngResult,
   type SearchEngineName,
   type WebSearchSettings
 } from "./api.js";
 import { InfoTip } from "./InfoTip";
 import { InlineEdit } from "./InlineEdit";
 import { PencilIcon } from "./CaseAccessAdminPanel";
-import { LawSourceVerification } from "./LawSourceVerification.js";
 
 const SEARXNG_EXAMPLE = "http://localhost:8888";
-// The Google window as the chat opens it (eli/law-source-sessions.ts): the user confirms in it.
-const GOOGLE_VERIFICATION = { url: "https://www.google.com/search?q=kodeks+karny&hl=pl", host: "www.google.com", label: "Google" };
 const FIRECRAWL_EXAMPLE = "fc-…";
-const BRAVE_EXAMPLE = "BSA…";
 
 const ENGINE_LABELS: Record<SearchEngineName, string> = {
-  google: "Google",
   gemini: "Gemini + Google",
   searxng: "SearXNG",
   duckduckgo: "DuckDuckGo",
-  brave: "Brave",
   firecrawl: "Firecrawl"
 };
+
+function localSearxngText(result: LocalSearxngResult): string {
+  if (result.reachable) return t("Lokalny SearXNG działa: {url}. Adres jest ustawiony.", { url: result.url });
+  if (result.error === "CONTAINER_ENGINE_MISSING") {
+    return t("Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}", {
+      directory: result.directory,
+      command: result.commands.join(" && ")
+    });
+  }
+  if (result.error === "NOT_ANSWERING") {
+    return t("SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).");
+  }
+  return t("Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}", {
+    error: result.error ?? "",
+    directory: result.directory,
+    command: result.commands.join(" && ")
+  });
+}
 
 function number(value: number): string {
   return value.toLocaleString(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -50,8 +61,6 @@ function errorText(code: string | undefined, engine?: SearchEngineName): string 
       return t("wyczerpany miesięczny limit planu darmowego");
     case "KEY_REJECTED":
       return t("klucz odrzucony");
-    case "LAW_SOURCE_VERIFICATION_REQUIRED:www.google.com":
-      return t("potrzebne potwierdzenie w oknie Google (przycisk wyżej albo w czacie)");
     default:
       return code ?? "";
   }
@@ -65,11 +74,9 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [settings, setSettings] = useState<WebSearchSettings | null>(null);
   const [editing, setEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
-  const [editingBrave, setEditingBrave] = useState(false);
-  const [busy, setBusy] = useState<"" | "test" | "save">("");
+  const [busy, setBusy] = useState<"" | "test" | "save" | "searxng">("");
   const [error, setError] = useState("");
-  const [googleWindow, setGoogleWindow] = useState(false);
-  const [googleMessage, setGoogleMessage] = useState("");
+  const [localMessage, setLocalMessage] = useState("");
   const [open, setOpen] = useState(false);
   const titleId = useId();
 
@@ -118,37 +125,13 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     }
   }
 
-  async function saveBrave(next: string): Promise<boolean> {
-    setBusy("save");
+  async function createLocalSearxng(): Promise<void> {
+    setBusy("searxng");
+    setLocalMessage("");
     try {
-      setSettings(await setBraveApiKey(next));
-      setEditingBrave(false);
-      setError("");
-      return true;
-    } catch (failure) {
-      setError(failure instanceof ApiError ? failure.code : String(failure));
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function toggleGoogle(next: boolean): Promise<void> {
-    setBusy("save");
-    try {
-      setSettings(await setGoogleSession(next));
-      setError("");
-    } catch (failure) {
-      setError(failure instanceof ApiError ? failure.code : String(failure));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function toggleGoogleKeep(next: boolean): Promise<void> {
-    setBusy("save");
-    try {
-      setSettings(await setGoogleSessionKeep(next));
+      const reply = await setupLocalSearxng();
+      setSettings(reply.settings);
+      setLocalMessage(localSearxngText(reply.local));
       setError("");
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.code : String(failure));
@@ -216,60 +199,6 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
                 {t("Zamknij")}
               </button>
             </div>
-      <label className="core-law-auto">
-        <input
-          type="checkbox"
-          checked={settings.googleSession}
-          disabled={!admin || Boolean(busy)}
-          onChange={(event) => void toggleGoogle(event.target.checked)}
-        />
-        <span>{t("Google na Twojej sesji (pierwsza wyszukiwarka)")}</span>
-        <InfoTip>
-          {t("Wyszukiwanie idzie przez google.com z sesji okna aplikacji, jak przy sn.pl. Przy pierwszym wyszukiwaniu i gdy Google pokaże zgodę albo captcha, w czacie pojawi się przycisk otwierający okno Google: potwierdzasz w nim Ty, okno zamyka się samo, a pytanie ponawia się z wynikami. Do tego czasu wyniki daje następna wyszukiwarka. Zapytania wybiera model, więc Google może je uznać za automatyczne i częściej pokazywać captcha.")}
-        </InfoTip>
-      </label>
-      {settings.googleSession ? (
-        <div className="web-search-google-window">
-          <span>
-            {settings.googleSessionActive ? t("Sesja Google aktywna.") : t("Brak sesji Google: potwierdź w oknie Google, zanim wyszukiwarka zostanie użyta.")}
-          </span>
-          {googleWindow ? (
-            <LawSourceVerification
-              verification={GOOGLE_VERIFICATION}
-              autoStart={false}
-              onVerified={() => {
-                setGoogleWindow(false);
-                setGoogleMessage(t("Potwierdzone w oknie Google — sesja aktywna."));
-                void getWebSearchSettings().then(setSettings).catch(() => undefined);
-              }}
-            />
-          ) : (
-            <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => { setGoogleMessage(""); setGoogleWindow(true); }}>
-              {settings.googleSessionActive ? t("Odnów sesję w oknie Google") : t("Potwierdź w oknie Google")}
-            </button>
-          )}
-          {googleMessage ? <small>{googleMessage}</small> : null}
-        </div>
-      ) : null}
-      {settings.googleSession ? (
-        <label className="core-law-auto web-search-keep">
-          <input
-            type="checkbox"
-            checked={settings.googleSessionKeep}
-            disabled={!admin || Boolean(busy)}
-            onChange={(event) => void toggleGoogleKeep(event.target.checked)}
-          />
-          <span>
-            {t("Pamiętaj sesję po ponownym uruchomieniu")}
-            {settings.googleSessionKeep ? (
-              <small> · {settings.googleSessionSaved ? t("sesja zapisana") : t("zapisze się po najbliższym potwierdzeniu w oknie Google")}</small>
-            ) : null}
-          </span>
-          <InfoTip>
-            {t("Bez tej opcji sesja Google trwa do 6 godzin i znika przy zamknięciu aplikacji. Z nią ciasteczka okna Google są zapisane zaszyfrowane na tym komputerze (najwyżej 30 dni) i okno nie pojawia się po każdym uruchomieniu. Gdy Google pokaże captcha, zapis jest usuwany, a okno wraca. Wyłączenie opcji usuwa zapisaną sesję.")}
-          </InfoTip>
-        </label>
-      ) : null}
       <small>{t("Gemini + Google: wyszukiwanie Google przez Twój klucz Google z ustawień modeli; ponad darmowy limit płatne według cennika Google.")}</small>
 
       <div className="web-search-url">
@@ -309,37 +238,17 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           {t("Publiczne serwery SearXNG zwykle odrzucają zapytania aplikacji (limit, weryfikacja przeglądarki). Pewnie działa własny SearXNG na tym komputerze lub w kancelarii, z włączonym formatem JSON (search.formats: json w settings.yml).")}
         </InfoTip>
       </div>
-
-      <div className="web-search-url">
-        <span>{t("Klucz Brave:")}</span>
-        {editingBrave ? (
-          <InlineEdit value="" label={t("Klucz Brave")} placeholder={BRAVE_EXAMPLE} maxLength={130} onCancel={() => setEditingBrave(false)} onSave={saveBrave} />
-        ) : (
-          <>
-            <code>{settings.braveConfigured ? t("zapisany (zaszyfrowany)") : t("nie ustawiono")}</code>
-            {admin && !settings.braveKeyForced ? (
-              <button
-                type="button"
-                className="matter-title-pencil"
-                title={t("Zmień klucz Brave")}
-                aria-label={t("Zmień klucz Brave")}
-                disabled={Boolean(busy)}
-                onClick={() => setEditingBrave(true)}
-              >
-                <PencilIcon />
-              </button>
-            ) : null}
-            {admin && settings.braveConfigured && !settings.braveKeyForced ? (
-              <button type="button" disabled={Boolean(busy)} onClick={() => void saveBrave("")}>
-                {t("Usuń klucz")}
-              </button>
-            ) : null}
-          </>
-        )}
-        <InfoTip>
-          {t("Brave Search API to oficjalne API własnego indeksu Brave (cały internet). Usługa płatna według cennika Brave, z miesięcznym kredytem w planie; klucz zakładasz na api-dashboard.search.brave.com. Aplikacja przechowuje go zaszyfrowany i wysyła tylko ogólne frazy, nigdy dane sprawy.")}
-        </InfoTip>
-      </div>
+      {admin && !settings.searxngUrlForced ? (
+        <div className="web-search-local">
+          <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void createLocalSearxng()}>
+            {busy === "searxng" ? t("Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)") : t("Utwórz lokalny SearXNG na tym komputerze")}
+          </button>
+          <InfoTip>
+            {t("Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.")}
+          </InfoTip>
+          {localMessage ? <small>{localMessage}</small> : null}
+        </div>
+      ) : null}
 
       <div className="web-search-url">
         <span>{t("Klucz Firecrawl:")}</span>

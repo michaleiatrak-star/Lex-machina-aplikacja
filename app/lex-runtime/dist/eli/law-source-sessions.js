@@ -14,11 +14,9 @@ export const LAW_SOURCES_WITH_CHECK = [
     // check; the user passes it in the application's window, the server reads on that session.
     // Rzecznik Finansowy: positions behind Imperva's check, read on the user's session (source RF).
     { host: "rf.gov.pl", code: "RF", url: "https://rf.gov.pl/publikacje/stanowiska-rzecznika-finansowego/", label: "Rzecznik Finansowy — stanowiska (na Twojej sesji)" },
-    { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" },
-    // Not a law source: Google search on the user's own session (Ustawienia > Wyszukiwarka
-    // internetowa, off by default). The user passes Google's consent page and captcha; results
-    // are leads only, verified at the official source.
-    { host: "www.google.com", code: "SEARCH", url: "https://www.google.com/search?q=kodeks+karny&hl=pl", label: "Google (wyszukiwanie na Twojej sesji)" }
+    { host: "bip.brpo.gov.pl", code: "RPO", url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779", label: "RPO — wystąpienia generalne (na Twojej sesji)" }
+    // Google search on the user's session was removed (2026-11-15): google.com answers a request
+    // without JavaScript with its "enable JavaScript" page, so it gave no results.
 ];
 export const LAW_SOURCE_VERIFICATION_REQUIRED = "LAW_SOURCE_VERIFICATION_REQUIRED";
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;

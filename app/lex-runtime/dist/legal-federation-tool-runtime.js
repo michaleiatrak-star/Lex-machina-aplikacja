@@ -419,7 +419,7 @@ const WEB_SEARCH_SCHEMA = {
     type: "function",
     function: {
         name: WEB_SEARCH_TOOL,
-        description: "General internet search (DuckDuckGo, or Brave when BRAVE_SEARCH_API_KEY is set). " +
+        description: "General internet search (the engines in Settings: DuckDuckGo, SearXNG, Firecrawl, Gemini with Google Search). " +
             "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3, with leads extracted from them (case signatures with the tool that verifies them, Dz.U. references with ELI, dates of entry into force). Snippets are never evidence, but every result is worth a look: " +
             "for case law, search with an abstract legal phrase (also site:sn.pl, site:orzeczenia.nsa.gov.pl, site:orzeczenia.ms.gov.pl) to find signatures of recent rulings (not in SAOS); results from LEX, Legalis, law portals and news sites are leads to signatures, amendments and dates of entry into force; " +
             "verify every lead at its official source (gradation of sources: R1 > R2A > R2B > R3) before citing; read R2B/R3 pages with fetch_auxiliary_legal_source when needed.",

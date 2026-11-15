@@ -462,6 +462,20 @@ li.anomaly-error > strong {
   min-width: 0;
 }
 
+/* Local SearXNG: one button, its outcome below it. */
+.web-search-local {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.web-search-local small {
+  flex: 1 1 100%;
+  word-break: break-word;
+}
+
 .web-search-scores ol {
   list-style: none;
   margin: 4px 0 8px;

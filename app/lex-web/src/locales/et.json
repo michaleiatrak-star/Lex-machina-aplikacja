@@ -2861,5 +2861,12 @@
  "Otwórz folder NIL": "Ava NIL-i kaust",
  "Otwórz BIP RPO": "Ava RPO BIP",
  "Otwórz stronę RF": "Ava finantsombudsmani veebileht",
- "Pobierz teraz": "Laadi kohe alla"
+ "Pobierz teraz": "Laadi kohe alla",
+ "Lokalny SearXNG działa: {url}. Adres jest ustawiony.": "Kohalik SearXNG töötab: {url}. Aadress on määratud.",
+ "Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}": "SearXNG failid on valmis kaustas {directory}. Selles arvutis pole Dockerit ega Podmani: paigaldage üks neist ja käivitage: {command}",
+ "SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).": "SearXNG käivitati, kuid see ei vasta veel. Proovige hetke pärast uuesti (esimene käivitus laadib tõmmise alla).",
+ "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG käivitamine ebaõnnestus ({error}). Failid on kaustas {directory}; käivitage käsitsi: {command}",
+ "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Kohaliku SearXNG loomine… (esimene käivitus võib võtta mõne minuti)",
+ "Utwórz lokalny SearXNG na tym komputerze": "Loo selles arvutis kohalik SearXNG",
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Rakendus salvestab SearXNG seadistuse (JSON-vorming sees, ainult aadress 127.0.0.1) ja käivitab selle Dockeris või Podmanis, kui need on paigaldatud. Kui otsingumootor vastab, määratakse aadress automaatselt. Ilma Dockeri ja Podmanita saate valmis failid ja käivituskäsu."
 }

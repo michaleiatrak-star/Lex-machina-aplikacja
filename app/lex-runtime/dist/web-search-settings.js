@@ -1,10 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-// Untested order: Brave (only with a key the administrator entered: an official API of a whole-web
-// index) before DuckDuckGo, as before; paid-beyond-a-limit engines last: Firecrawl (monthly
-// credits), Gemini with Google Search (free quota, then billed per query on the user's Google key).
-export const SEARCH_ENGINES = ["google", "searxng", "brave", "duckduckgo", "firecrawl", "gemini"];
+// Untested order: SearXNG (with an address) and DuckDuckGo first; paid-beyond-a-limit engines last:
+// Firecrawl (monthly credits), Gemini with Google Search (free quota, then billed on the user's key).
+export const SEARCH_ENGINES = ["searxng", "duckduckgo", "firecrawl", "gemini"];
 // The Google (Gemini) API key from the provider credentials (Settings > models), set at start.
 let geminiKeySource = null;
 export function configureGeminiSearchKey(source) {
@@ -20,6 +19,10 @@ export async function geminiSearchKey() {
 }
 let settingsFile = null;
 let keyFile = null;
+/** Directory of the search settings (the local SearXNG files go beside them). */
+export function webSearchDataDirectory() {
+    return settingsFile ? path.dirname(settingsFile) : null;
+}
 export function configureWebSearchSettings(dir) {
     settingsFile = dir ? path.join(dir, "web-search.json") : null;
     keyFile = dir ? path.join(dir, "web-search.key") : null;
@@ -41,8 +44,6 @@ function rootKey(create) {
     return key;
 }
 const KEY_AAD = Buffer.from("lex-web-search:firecrawl", "utf8");
-const GOOGLE_AAD = Buffer.from("lex-web-search:google-session", "utf8");
-const BRAVE_AAD = Buffer.from("lex-web-search:brave", "utf8");
 function seal(secret, aad = KEY_AAD) {
     const key = rootKey(true);
     if (!key)
@@ -70,13 +71,6 @@ function unseal(sealed, aad = KEY_AAD) {
 /** The Firecrawl key: env FIRECRAWL_API_KEY (server configuration) or the sealed one from Settings. */
 export function firecrawlApiKey() {
     return process.env.FIRECRAWL_API_KEY?.trim() || unseal(stored().firecrawl);
-}
-/** The Brave Search API key: env BRAVE_SEARCH_API_KEY (server configuration) or the sealed one from Settings. */
-export function braveApiKey() {
-    return process.env.BRAVE_SEARCH_API_KEY?.trim() || unseal(stored().brave, BRAVE_AAD);
-}
-export function braveKeyForced() {
-    return Boolean(process.env.BRAVE_SEARCH_API_KEY?.trim());
 }
 export function firecrawlKeyForced() {
     return Boolean(process.env.FIRECRAWL_API_KEY?.trim());
@@ -124,13 +118,11 @@ export function webSearchSettings() {
     return {
         searxngUrl,
         order: [...new Set(order)],
-        lastTest: file.lastTest && Array.isArray(file.lastTest.scores) ? file.lastTest : null,
-        firecrawlConfigured: Boolean(firecrawlApiKey()),
-        braveConfigured: Boolean(braveApiKey()),
-        // On by default (user, 2026-11-10: attached and selected); off only when turned off in Settings.
-        googleSession: file.googleSession !== false,
-        googleSessionKeep: file.googleSession !== false && file.googleSessionKeep === true,
-        googleSessionSaved: file.googleSession !== false && file.googleSessionKeep === true && Boolean(file.googleCookies)
+        // A test saved before an engine was removed: its rows of removed engines are not shown.
+        lastTest: file.lastTest && Array.isArray(file.lastTest.scores)
+            ? { ...file.lastTest, scores: file.lastTest.scores.filter((score) => SEARCH_ENGINES.includes(score.engine)) }
+            : null,
+        firecrawlConfigured: Boolean(firecrawlApiKey())
     };
 }
 export function searxngUrlForced() {
@@ -144,10 +136,9 @@ function write(next) {
     const merged = { ...stored(), ...next };
     if (!merged.firecrawl)
         delete merged.firecrawl;
-    if (!merged.brave)
-        delete merged.brave;
-    if (!merged.googleCookies)
-        delete merged.googleCookies;
+    // Fields of the removed engines (Brave key, Google session cookies) go at the next write.
+    for (const legacy of ["brave", "googleSession", "googleSessionKeep", "googleCookies"])
+        delete merged[legacy];
     const temporary = `${settingsFile}.${process.pid}.tmp`;
     fs.writeFileSync(temporary, JSON.stringify(merged), { encoding: "utf8", mode: 0o600 });
     fs.renameSync(temporary, settingsFile);
@@ -163,55 +154,6 @@ export function setSearxngUrl(raw) {
     write({ searxngUrl, order, lastTest: file.lastTest ?? null });
     return webSearchSettings();
 }
-export function setGoogleSession(enabled) {
-    if (typeof enabled !== "boolean")
-        throw new Error("WEB_SEARCH_GOOGLE_SESSION_INVALID");
-    // Turned off: the kept session goes too.
-    write(enabled ? { googleSession: true } : { googleSession: false, googleCookies: undefined });
-    return webSearchSettings();
-}
-/** Keep (or stop keeping, which removes the saved cookies) the Google session across restarts. */
-export function setGoogleSessionKeep(enabled) {
-    if (typeof enabled !== "boolean")
-        throw new Error("WEB_SEARCH_GOOGLE_SESSION_KEEP_INVALID");
-    write(enabled ? { googleSessionKeep: true } : { googleSessionKeep: false, googleCookies: undefined });
-    return webSearchSettings();
-}
-const GOOGLE_HOST = "www.google.com";
-/**
- * The law-source session store (eli/law-source-sessions.ts) for Google: the window's cookies and
- * User-Agent sealed (AES-256-GCM, own AAD) in web-search.json, only while the user keeps them.
- */
-export const googleSessionStore = {
-    keeps: (host) => host === GOOGLE_HOST && Boolean(settingsFile) && webSearchSettings().googleSessionKeep,
-    load(host) {
-        if (host !== GOOGLE_HOST)
-            return null;
-        const text = unseal(stored().googleCookies, GOOGLE_AAD);
-        if (!text)
-            return null;
-        try {
-            const value = JSON.parse(text);
-            return typeof value.cookie === "string" && typeof value.userAgent === "string" && typeof value.at === "number"
-                ? { cookie: value.cookie, userAgent: value.userAgent, at: value.at }
-                : null;
-        }
-        catch {
-            return null;
-        }
-    },
-    save(host, session) {
-        if (host !== GOOGLE_HOST || !settingsFile)
-            return;
-        if (!session) {
-            if (stored().googleCookies)
-                write({ googleCookies: undefined });
-            return;
-        }
-        if (webSearchSettings().googleSessionKeep)
-            write({ googleCookies: seal(JSON.stringify(session), GOOGLE_AAD) });
-    }
-};
 const WOKANDA_AAD = Buffer.from("lex-wokanda:sessions", "utf8");
 /**
  * Sessions of the courts' wokanda windows (courts/wokanda.ts), sealed (AES-256-GCM, own AAD) next to
@@ -261,17 +203,6 @@ export function setFirecrawlApiKey(raw) {
     write({ order: current.order.filter((item) => item !== "firecrawl"), firecrawl: key ? seal(key) : undefined });
     return webSearchSettings();
 }
-/** Saves (or with "" removes) the Brave Search API key; a new key drops Brave's measured place. */
-export function setBraveApiKey(raw) {
-    if (braveKeyForced())
-        throw new Error("WEB_SEARCH_BRAVE_KEY_FORCED");
-    const key = typeof raw === "string" ? raw.trim() : "";
-    if (key && !/^[A-Za-z0-9_-]{16,120}$/u.test(key))
-        throw new Error("WEB_SEARCH_BRAVE_KEY_INVALID");
-    const current = webSearchSettings();
-    write({ order: current.order.filter((item) => item !== "brave"), brave: key ? seal(key, BRAVE_AAD) : undefined });
-    return webSearchSettings();
-}
 /** Saves the test result; the order is every engine that scored above zero, best first. */
 export function saveWebSearchTest(result) {
     const order = [...result.scores]
@@ -286,20 +217,7 @@ export function saveWebSearchTest(result) {
  * engine that can run (SearXNG only with an address).
  */
 export function effectiveSearchOrder(settings = webSearchSettings()) {
-    const usable = (engine) => engine === "searxng"
-        ? Boolean(settings.searxngUrl)
-        : engine === "firecrawl"
-            ? settings.firecrawlConfigured
-            : engine === "brave"
-                ? settings.braveConfigured
-                : engine === "google"
-                    ? settings.googleSession
-                    : true;
-    // Google on the user's session goes first once the user turned it on (their choice, not the test's).
-    if (settings.googleSession) {
-        const rest = effectiveSearchOrder({ ...settings, googleSession: false });
-        return ["google", ...rest];
-    }
+    const usable = (engine) => engine === "searxng" ? Boolean(settings.searxngUrl) : engine === "firecrawl" ? settings.firecrawlConfigured : true;
     const tested = settings.order.filter(usable);
     const rest = SEARCH_ENGINES.filter((engine) => usable(engine) && !tested.includes(engine));
     return [...tested, ...rest];

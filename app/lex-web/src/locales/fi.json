@@ -2861,5 +2861,12 @@
  "Otwórz folder NIL": "Avaa NIL-kansio",
  "Otwórz BIP RPO": "Avaa RPO:n BIP",
  "Otwórz stronę RF": "Avaa rahoitusalan oikeusasiamiehen sivusto",
- "Pobierz teraz": "Lataa nyt"
+ "Pobierz teraz": "Lataa nyt",
+ "Lokalny SearXNG działa: {url}. Adres jest ustawiony.": "Paikallinen SearXNG on käynnissä: {url}. Osoite on asetettu.",
+ "Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}": "SearXNG-tiedostot ovat valmiina kansiossa {directory}. Tällä tietokoneella ei ole Dockeria eikä Podmania: asenna toinen niistä ja suorita: {command}",
+ "SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).": "SearXNG käynnistettiin, mutta se ei vielä vastaa. Yritä hetken kuluttua uudelleen (ensimmäinen käynnistys lataa levykuvan).",
+ "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "SearXNG:n käynnistys epäonnistui ({error}). Tiedostot ovat kansiossa {directory}; käynnistä käsin: {command}",
+ "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Luodaan paikallista SearXNG:tä… (ensimmäinen käynnistys voi kestää muutaman minuutin)",
+ "Utwórz lokalny SearXNG na tym komputerze": "Luo paikallinen SearXNG tälle tietokoneelle",
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Sovellus tallentaa SearXNG-määrityksen (JSON-muoto käytössä, vain osoite 127.0.0.1) ja käynnistää sen Dockerissa tai Podmanissa, jos ne on asennettu. Kun hakukone vastaa, osoite asetetaan automaattisesti. Ilman Dockeria ja Podmania saat valmiit tiedostot ja käynnistyskomennon."
 }

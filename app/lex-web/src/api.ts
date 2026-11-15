@@ -4211,7 +4211,7 @@ export function setLocalOffline(enabled: boolean): Promise<{ enabled: boolean }>
   return json("/api/settings/local-offline", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
-export type SearchEngineName = "google" | "searxng" | "duckduckgo" | "brave" | "firecrawl" | "gemini";
+export type SearchEngineName = "searxng" | "duckduckgo" | "firecrawl" | "gemini";
 
 export type SearchEngineScore = {
   engine: SearchEngineName;
@@ -4235,13 +4235,6 @@ export type WebSearchSettings = {
   searxngUrlForced: boolean;
   firecrawlConfigured: boolean;
   firecrawlKeyForced: boolean;
-  braveConfigured?: boolean;
-  braveKeyForced?: boolean;
-  googleSession: boolean;
-  /** Keep the Google session after a restart (cookies sealed on this computer). */
-  googleSessionKeep: boolean;
-  googleSessionSaved: boolean;
-  googleSessionActive?: boolean;
   providerForced: string | null;
 };
 
@@ -4249,24 +4242,26 @@ export function getWebSearchSettings(): Promise<WebSearchSettings> {
   return json("/api/settings/web-search");
 }
 
+export type LocalSearxngResult = {
+  directory: string;
+  url: string;
+  engine: "docker" | "podman" | null;
+  started: boolean;
+  reachable: boolean;
+  commands: string[];
+  error?: string;
+};
+
+export function setupLocalSearxng(): Promise<{ local: LocalSearxngResult; settings: WebSearchSettings }> {
+  return json("/api/settings/web-search/searxng-local", { method: "POST", body: JSON.stringify({ start: true }) });
+}
+
 export function setSearxngUrl(searxngUrl: string): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ searxngUrl }) });
 }
 
-export function setBraveApiKey(braveApiKey: string): Promise<WebSearchSettings> {
-  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ braveApiKey }) });
-}
-
 export function setFirecrawlApiKey(firecrawlApiKey: string): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ firecrawlApiKey }) });
-}
-
-export function setGoogleSession(googleSession: boolean): Promise<WebSearchSettings> {
-  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSession }) });
-}
-
-export function setGoogleSessionKeep(googleSessionKeep: boolean): Promise<WebSearchSettings> {
-  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ googleSessionKeep }) });
 }
 
 export function runWebSearchTest(): Promise<WebSearchSettings> {

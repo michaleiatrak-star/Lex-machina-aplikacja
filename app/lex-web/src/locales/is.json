@@ -2861,5 +2861,12 @@
  "Otwórz folder NIL": "Opna NIL-möppuna",
  "Otwórz BIP RPO": "Opna BIP RPO",
  "Otwórz stronę RF": "Opna vef umboðsmanns fjármála",
- "Pobierz teraz": "Sækja núna"
+ "Pobierz teraz": "Sækja núna",
+ "Lokalny SearXNG działa: {url}. Adres jest ustawiony.": "Staðbundið SearXNG er í gangi: {url}. Vistfangið er stillt.",
+ "Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana: zainstaluj jeden z nich i uruchom: {command}": "SearXNG-skrárnar eru tilbúnar í {directory}. Á þessari tölvu er hvorki Docker né Podman: settu annað þeirra upp og keyrðu: {command}",
+ "SearXNG uruchomiony, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera obraz).": "SearXNG var ræst en svarar ekki enn. Reyndu aftur eftir smástund (fyrsta ræsing sækir myndina).",
+ "Nie udało się uruchomić SearXNG ({error}). Pliki są w {directory}; uruchom ręcznie: {command}": "Ekki tókst að ræsa SearXNG ({error}). Skrárnar eru í {directory}; ræstu handvirkt: {command}",
+ "Tworzenie lokalnego SearXNG… (pierwsze uruchomienie do kilku minut)": "Býr til staðbundið SearXNG… (fyrsta ræsing getur tekið nokkrar mínútur)",
+ "Utwórz lokalny SearXNG na tym komputerze": "Búa til staðbundið SearXNG á þessari tölvu",
+ "Aplikacja zapisuje konfigurację SearXNG (format JSON włączony, tylko adres 127.0.0.1) i uruchamia ją w Dockerze albo Podmanie, jeśli są zainstalowane. Gdy wyszukiwarka odpowie, adres ustawia się sam. Bez Dockera i Podmana dostajesz gotowe pliki i polecenie do uruchomienia.": "Forritið vistar SearXNG-stillingar (JSON-snið virkt, aðeins vistfang 127.0.0.1) og ræsir þær í Docker eða Podman ef þau eru uppsett. Þegar leitarvélin svarar er vistfangið stillt sjálfkrafa. Án Docker og Podman færðu tilbúnar skrár og skipunina til að ræsa."
 }

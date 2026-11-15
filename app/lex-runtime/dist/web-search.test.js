@@ -37,25 +37,6 @@ describe("web_search", () => {
         expect(() => assertPublicWebSearchQuery("x".repeat(301))).toThrow("WEB_SEARCH_QUERY_INVALID");
         expect(assertPublicWebSearchQuery("  termin  apelacji  ")).toBe("termin apelacji");
     });
-    it("uses Brave when a key is configured and falls back to DuckDuckGo", async () => {
-        const requested = [];
-        const fetchImpl = (async (input) => {
-            const url = String(input);
-            requested.push(new URL(url).hostname);
-            if (url.includes("brave.com")) {
-                return new Response("", { status: 500 });
-            }
-            return new Response(DDG_HTML, { status: 200 });
-        });
-        const search = new PublicWebSearch({ BRAVE_SEARCH_API_KEY: "key" }, fetchImpl);
-        const response = await search.search("kodeks cywilny", 1);
-        expect(requested).toEqual([
-            "api.search.brave.com",
-            "html.duckduckgo.com"
-        ]);
-        expect(response.provider).toBe("duckduckgo");
-        expect(response.hits).toHaveLength(1);
-    });
     it("can be disabled by configuration", async () => {
         await expect(new PublicWebSearch({ LEX_WEB_SEARCH_PROVIDER: "off" }).search("x", 1)).rejects.toThrow("WEB_SEARCH_DISABLED");
     });
@@ -87,7 +68,7 @@ describe("web_search", () => {
         expect(JSON.parse(blocked.content).status).toBe("POLICY_BLOCKED");
     });
 });
-describe("Gemini + Google i Brave", () => {
+describe("Gemini + Google i Firecrawl", () => {
     it("wybiera aktualny model Flash z listy modeli klucza", () => {
         expect(pickGeminiSearchModel([
             { name: "models/gemini-2.0-flash", supportedGenerationMethods: ["generateContent"] },
@@ -124,24 +105,17 @@ describe("Gemini + Google i Brave", () => {
             delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
         }
     });
-    it("Brave: odrzucony klucz, wyczerpany kredyt i limit jako czytelne kody", async () => {
-        for (const [status, code] of [[401, "KEY_REJECTED"], [402, "CREDITS_EXHAUSTED"], [429, "RATE_LIMITED"]]) {
-            const fetchImpl = (async () => new Response("", { status }));
-            await expect(new PublicWebSearch({ BRAVE_SEARCH_API_KEY: "BSAtestkey1234567890" }, fetchImpl).searchEngine("brave", "x", 3)).rejects.toThrow(code);
-        }
-        await expect(new PublicWebSearch({}, (async () => new Response(""))).searchEngine("brave", "x", 3)).rejects.toThrow("NOT_CONFIGURED");
-    });
-    it("Brave z limitem API: wyniki ze strony wyników DuckDuckGo (scrapowanie), nie błąd", async () => {
+    it("Firecrawl z limitem API: wyniki ze strony wyników DuckDuckGo (scrapowanie), nie błąd", async () => {
         const asked = [];
         const fetchImpl = (async (input) => {
             const url = String(input);
             asked.push(new URL(url).host);
-            if (url.includes("api.search.brave.com"))
+            if (url.includes("api.firecrawl.dev"))
                 return new Response("", { status: 429 });
             return new Response('<div class="result"><a class="result__a" href="https://isap.sejm.gov.pl/isap.nsf/x">Kodeks cywilny</a><a class="result__snippet">art. 415</a></div>', { headers: { "content-type": "text/html" } });
         });
-        const result = await new PublicWebSearch({ BRAVE_SEARCH_API_KEY: "BSAtestkey1234567890", WEB_SEARCH_PROVIDER: "brave" }, fetchImpl).search("kodeks cywilny art. 415", 3);
+        const result = await new PublicWebSearch({ FIRECRAWL_API_KEY: "fc-test1234567890", LEX_WEB_SEARCH_PROVIDER: "firecrawl" }, fetchImpl).search("kodeks cywilny art. 415", 3);
         expect(result.provider).toBe("duckduckgo");
-        expect(asked).toEqual(["api.search.brave.com", "html.duckduckgo.com"]);
+        expect(asked).toEqual(["api.firecrawl.dev", "html.duckduckgo.com"]);
     });
 });
