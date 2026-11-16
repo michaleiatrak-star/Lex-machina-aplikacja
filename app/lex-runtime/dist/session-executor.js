@@ -1818,7 +1818,8 @@ export class SafeSessionExecutor {
         const ethicsResults = await ethicsFound;
         // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
         if (legalTurn && contextFocus) {
-            const passages = issuePassages(attachments, contextFocus);
+            const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category]));
+            const passages = issuePassages(attachments, contextFocus, 12, kinds);
             strengthPassages = passages;
             const prompt = issuePassagesPrompt(passages);
             if (prompt) {

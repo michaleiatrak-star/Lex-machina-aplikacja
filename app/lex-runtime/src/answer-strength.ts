@@ -34,7 +34,7 @@ const signatureIn = (answer: string, signature: string) => new RegExp(signature.
  * legend: a verdict, a discontinuance, a notice of an offence about that person (RD 121/26: the
  * acquittal in VIII W 633/25 and the attorney's earlier notice of 6.10.2025 went unused).
  */
-const DECISIVE = /\b(?:uniewinni\p{L}*|umarz\p{L}*|umorz\p{L}*|skazuj\p{L}*|skazan\p{L}*|oddal\p{L}*|uwzględni\p{L}*|zawiadom\p{L}*|zawiadomieni\p{L}*|oskarż\p{L}*|wszczęt\p{L}*|wniosek\s+o\s+ukaranie|będzie\s+(?:traktowan|zgłaszan)\p{L}*)/iu;
+const DECISIVE = /\b(?:uniewinni\p{L}*|umarz\p{L}*|umorz\p{L}*|skazuj\p{L}*|skazan\p{L}*|oddal\p{L}*|uwzględni\p{L}*|zawiadom\p{L}*|zawiadomieni\p{L}*|oskarż\p{L}*|wszczęt\p{L}*|wniosek\s+o\s+ukaranie)/iu;
 
 export function personKeyFacts(
   attachments: ReadonlyArray<{ documentId: string; chunks: ReadonlyArray<{ index: number; pageStart?: number; text: string }> }>,
@@ -105,7 +105,7 @@ export function strengthCorrection(gaps: readonly StrengthGap[]): string {
   for (const gap of gaps) {
     if (gap.kind === "REQUIRED") {
       parts.push(
-        "0) KLUCZOWE FRAGMENTY AKT — są w dokumentach sprawy (tekst w kontekście, dosłownie poniżej). Nie pisz, że czegoś w aktach nie ma. Każdy wykorzystaj w piśmie z cytatem i znacznikiem dokumentu, w tym rozstrzygnięcia i zawiadomienia dotyczące osoby z pytania (te same osoby pod różnymi symbolami wskazuje legenda tożsamości):",
+        "0) FRAGMENTY AKT NAJŚCIŚLEJ ZWIĄZANE Z ZAGADNIENIEM I FAKTY O OSOBIE Z PYTANIA (wybrane przez aplikację z akt tej sprawy, dosłownie poniżej). Są w dokumentach — nie pisz, że czegoś w aktach nie ma. Oceń każdy sam: jeśli wspiera albo osłabia stanowisko strony, wykorzystaj go z cytatem i znacznikiem dokumentu; jeśli nie ma znaczenia, napisz w uwagach poza pismem jednym zdaniem dlaczego:",
         gap.detail
       );
     }
@@ -117,13 +117,13 @@ export function strengthCorrection(gaps: readonly StrengthGap[]): string {
     }
     if (gap.kind === "CASE_LAW") {
       parts.push(
-        "2) Orzecznictwo odczytane przez aplikację, a niewykorzystane. Zbuduj linię orzeczniczą: powołaj co najmniej trzy orzeczenia, najbliższe stanowi faktycznemu sprawy (podobna groźba, podobne pismo), każde z sygnaturą, datą i cytatem wyłącznie z tekstu w kontekście. Orzeczeń, których tekstu nie masz, nie powołuj.",
+        "2) Orzecznictwo odczytane przez aplikację, a niewykorzystane. Zbuduj linię orzeczniczą: powołaj co najmniej trzy orzeczenia najbliższe stanowi faktycznemu tej sprawy (porównaj fakty orzeczenia z faktami z akt), każde z sygnaturą, datą i cytatem wyłącznie z tekstu w kontekście. Orzeczeń, których tekstu nie masz, nie powołuj.",
         gap.detail
       );
     }
     if (gap.kind === "CONCEDED") {
       parts.push(
-        "3) Tezy zaskarżonego rozstrzygnięcia oddane bez odpowiedzi. Zanim oddasz tezę, sprawdź kontrargument z prawa materialnego i z akt (np. czy pojęcie użyte w piśmie w ogóle pasuje do adresata — dane osobowe dotyczą tylko osób fizycznych, spółka ich nie ma). Oddaj tezę tylko wtedy, gdy kontrargumentu naprawdę nie ma, i napisz dlaczego:",
+        "3) Tezy zaskarżonego rozstrzygnięcia oddane bez odpowiedzi. Zanim oddasz tezę, sprawdź kontrargument z prawa materialnego i z akt (czy przesłanki pojęcia, na które powołuje się rozstrzygnięcie albo pismo, są w ogóle spełnione wobec tych podmiotów i tych faktów). Oddaj tezę tylko wtedy, gdy kontrargumentu naprawdę nie ma, i napisz dlaczego:",
         gap.detail
       );
     }

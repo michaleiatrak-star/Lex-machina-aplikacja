@@ -26,7 +26,7 @@ describe("strength of a pleading after it is written (RD 121/26)", () => {
     expect(gaps[1]!.label).toBe("orzecznictwo: powołane 2 z 5 odczytanych");
     const instruction = strengthCorrection(gaps);
     expect(instruction).toContain("co najmniej trzy orzeczenia");
-    expect(instruction).toContain("spółka ich nie ma");
+    expect(instruction).toContain("przesłanki pojęcia");
   });
 
   it("a strong draft passes: passages quoted or marked, three rulings, nothing conceded", () => {
@@ -76,7 +76,7 @@ describe("key facts on the user and required passages (RD 121/26, 0.1.94 test 2)
     const gaps = strengthGaps(draft, [], [], required);
     expect(gaps[0]).toMatchObject({ kind: "REQUIRED" });
     expect(gaps[0]!.label).toContain("projekt twierdzi, że czegoś w aktach brak");
-    expect(strengthCorrection(gaps)).toContain("Nie pisz, że czegoś w aktach nie ma");
+    expect(strengthCorrection(gaps)).toContain("nie pisz, że czegoś w aktach nie ma");
     const note = requiredPassagesNote(draft, required);
     expect(note).toContain("uniewinnia obwinionego");
     expect(note).toContain("będzie zgłaszana do odpowiednich organów");

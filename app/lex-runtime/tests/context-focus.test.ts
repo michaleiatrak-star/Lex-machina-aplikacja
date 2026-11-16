@@ -28,10 +28,10 @@ describe("long case files: the parts on the issue reach the model (RD 121/26, pr
   const question = "przygotuj podważenie postanowienia zastępcy rzecznika dyscyplinarnego";
   const focus = caseFocus([{ code: "KEA", paragraph: "16", text: KEA_16 }], `${DECISION}\n${LAST}`, question);
 
-  it("the issue's vocabulary names the statement's words", () => {
+  it("the vocabulary is the law's concept of the rule (the same in every case), not words picked from this record", () => {
     expect(focus).toContain("grozić ściganiem karnym lub dyscyplinarnym");
-    expect(focus).toContain("zgłaszana");
-    expect(focus).toContain("nękanie");
+    expect(focus).toContain("zgłaszać organy prokuratura policja");
+    expect(focus).not.toContain("190a");
   });
 
   it("over budget: the last page with the statement is sent whole; without the issue it was not", () => {
