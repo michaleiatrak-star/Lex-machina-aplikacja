@@ -48,3 +48,11 @@ describe("strength of a pleading after it is written (RD 121/26)", () => {
     expect(kinds).toContain("PASSAGE");
   });
 });
+
+describe("a deferral with empty control blocks is still a deferral (RD 121/26, 0.1.94 run 3)", async () => {
+  const { emptyDeferral } = await import("../src/answer-corrections.js");
+  it("is caught", () => {
+    const answer = "Czekam na wynik niezależnej recenzji projektu, zanim oddam gotowe pismo.\n\nCN-GATE\nOś sporu 1: … norma centralna: ⬛ niewskazana.\n" + "  CN-1 czasowy: ⬛ brak normy do oceny.\n".repeat(60) + "\nREM-GATE\nREM-0 próby: 0";
+    expect(emptyDeferral(answer)).toBe(true);
+  });
+});
