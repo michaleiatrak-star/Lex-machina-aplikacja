@@ -52,6 +52,12 @@ function fold(text) {
             folded = "'";
         else if (ch === "…")
             folded = "...";
+        else if (/[,.;:!?]/u.test(ch) && out.endsWith(" ")) {
+            // "skarżyli się , że" in a hearing record is "skarżyli się, że" in a quote (XI P 27/26).
+            out = out.slice(0, -1);
+            map.pop();
+            folded = ch;
+        }
         else {
             const lower = ch.toLowerCase();
             folded = lower.length === 1 ? lower : ch;
@@ -97,6 +103,8 @@ function locateAdaptedQuote(contextText, quote) {
 function locateQuote(contextText, quote) {
     if (!quote)
         return undefined;
+    // An editor's "[sic]" / "[sic!]" marks the source's own error: not part of the quoted words.
+    quote = quote.replace(/\s*\[sic!?\]/giu, "");
     if (/\[\p{L}{1,6}\]/u.test(quote)) {
         const adapted = locateAdaptedQuote(contextText, quote);
         if (adapted)

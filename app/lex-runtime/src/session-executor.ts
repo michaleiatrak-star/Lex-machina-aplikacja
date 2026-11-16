@@ -214,6 +214,7 @@ import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal
 import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
 import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePassage } from "./case-issue.js";
+import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
 import { credibilityGoals, statementPairs, statementPairsPrompt, witnessStatements, type WitnessStatement } from "./witness-statements.js";
@@ -3102,7 +3103,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             if (passages[0]) strengthKeyFacts.push(passages[0]);
             sections.push(`CEL ${index + 1}: ${goal}${passages.length ? `\n${passages.map((passage) => `  - waga ${(passage.weight ?? 0).toFixed(2).replace(".", ",")} · [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`).join("\n")}` : "\n  - (brak fragmentów akt dla tego celu: wskaż, jakiego dowodu brakuje)"}`);
           });
-          pathSections.push(["# CELE DO WYKAZANIA I FRAGMENTY AKT DLA KAŻDEGO (ustalone przez aplikację)", "Najpierw cele, które pismo ma wykazać; pod każdym informacje z akt według wagi. Każdy cel albo wykaż z cytatem, albo napisz w uwagach poza pismem, dlaczego go nie wykazujesz.", ...sections].join("\n"));
+          pathSections.push(["# CELE DO WYKAZANIA I FRAGMENTY AKT DLA KAŻDEGO (ustalone przez aplikację)", "Najpierw cele, które pismo ma wykazać; pod każdym informacje z akt według wagi. Zanim napiszesz pismo, ustal zależności: który fakt wykazuje który cel, które fakty się wzmacniają, a które sobie przeczą (w uwagach poza pismem: tabela cel → fakty → zależność). Każdy cel albo wykaż z cytatem, albo napisz, dlaczego go nie wykazujesz.", ...sections].join("\n"));
           audit.record("gate", "GOALS_FIRST", "OK", { goals: goals.length });
         }
         if (strengthKeyFacts.length) {
@@ -3610,7 +3611,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         // Shared files every executive skill names for this case: the runtime adapter
         // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
         // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
-        const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
+        // A pleading to a court asked for, whatever skill leads (XI P 27/26: the witness skill led).
+        const courtPleading = isCourtPleading(latestUserTurn(request.query));
+        const draftsLetter = courtPleading || [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
         // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
         if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(longDocumentRule(request.model.startsWith("local/")));
         const sharedForSkill = [
@@ -3633,6 +3636,23 @@ export class SafeSessionExecutor implements SessionExecutor {
           contextResources.add(resource);
           audit.record("resource_read", resource, "OK", { detail: "runtime-preload;task-decision" });
           pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
+        }
+        // The pleading's construction standard of pisma-procesowe-v3 (facts → dependencies → text,
+        // each argument in seven elements), when another skill leads the matter.
+        const standardResource = `pisma-procesowe-v3/${PLEADING_STANDARD_RESOURCE}`;
+        if (courtPleading && skill !== "pisma-procesowe-v3" && !contextResources.has(standardResource)) {
+          const file = this.registry.resolveResource("pisma-procesowe-v3", PLEADING_STANDARD_RESOURCE);
+          let content = "";
+          try {
+            content = file ? fs.readFileSync(file, "utf8") : "";
+          } catch {
+            content = "";
+          }
+          if (content) {
+            contextResources.add(standardResource);
+            audit.record("resource_read", standardResource, "OK", { detail: "runtime-preload;court-pleading-standard" });
+            pathSections.push(pleadingStandardPrompt(forModel(standardResource, content)));
+          }
         }
         // Conditional modules of the skill's module map that this case triggers.
         const modules = loadModules(
@@ -4694,16 +4714,18 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Strength of a pleading (RD 121/26, 2026-11-16): the record's passages on the issue and the
     // rulings read before the answer must be used or consciously set aside, and a thesis of the
     // decision is not conceded before the substantive law is checked. One correcting round.
-    if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length)) {
+    const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query));
+    if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length || pleadingAsked)) {
       const required = requiredPassages(strengthPassages, strengthKeyFacts);
       const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required);
-      if (gaps.length) {
-        step("MODEL", `siła pisma: ${gaps.length} braków, runda poprawcza`);
+      const schema = pleadingAsked ? argumentSchemaGaps(modelOutput) : [];
+      if (gaps.length || schema.length) {
+        step("MODEL", `siła pisma: ${gaps.length + schema.length} braków, runda poprawcza`);
         let text = "";
         try {
           const corrected = await this.providers.stream(request.provider, {
             model: request.model,
-            ...correctingRound(modelOutput, strengthCorrection(gaps)),
+            ...correctingRound(modelOutput, [gaps.length ? strengthCorrection(gaps) : "KONTROLA APLIKACJI — siła pisma. Popraw projekt i oddaj go w całości:", ...(schema.length ? [schemaCorrection(schema)] : [])].join("\n\n")),
             accountContinuity: "none",
             reasoning: "none"
           });
@@ -4714,10 +4736,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         // Accepted when it fixes something and loses no required passage the first draft had.
         const after = strengthGaps(text, strengthPassages, [...new Set(strengthRulings)], required);
         const lost = required.some((passage) => passageUsed(modelOutput, passage) && !passageUsed(text, passage));
-        const accepted = text.length > modelOutput.length * 0.6 && !lost && after.length <= gaps.length && JSON.stringify(after) !== JSON.stringify(gaps);
-        audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: gaps.map((gap) => gap.kind), corrected: accepted });
+        const schemaAfter = pleadingAsked ? argumentSchemaGaps(text) : [];
+        const accepted = text.length > modelOutput.length * 0.6 && !lost && after.length <= gaps.length && schemaAfter.length <= schema.length && (JSON.stringify(after) !== JSON.stringify(gaps) || schemaAfter.length < schema.length);
+        audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: [...gaps.map((gap) => gap.kind), ...schema.map((gap) => gap.element)], corrected: accepted });
         if (accepted) {
-          corrections.push(answerCorrection("STRENGTH", gaps.map((gap) => gap.label), modelOutput, text));
+          corrections.push(answerCorrection("STRENGTH", [...gaps.map((gap) => gap.label), ...schema.map((gap) => `schemat argumentu: ${gap.element}`)], modelOutput, text));
           modelOutput = text;
         }
       }
