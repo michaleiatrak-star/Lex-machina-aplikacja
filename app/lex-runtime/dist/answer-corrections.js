@@ -93,7 +93,10 @@ const DEFERRAL = new RegExp([
     String.raw `\bpotrzebuję\s+(?:jeszcze\s+|najpierw\s+)?(?:potwierdzenia|weryfikacji|sprawdzenia|zweryfikowania|analizy)`,
     // "Następnie przedstawię gotowy projekt", "Przygotuję odpowiedź, ale…"
     String.raw `\b(?:następnie|potem|wówczas|później)\s+(?:przedstawię|przygotuję|sporządzę|podam|prześlę)`,
-    String.raw `\bprzygotuję\s+(?:odpowiedź|pismo|projekt)\p{L}*\s*,\s*ale`
+    String.raw `\bprzygotuję\s+(?:odpowiedź|pismo|projekt)\p{L}*\s*,\s*ale`,
+    // "Czekam na wynik niezależnej recenzji projektu, zanim oddam gotowe pismo." (RD 121/26, 0.1.94)
+    String.raw `\bczekam\s+na\s+(?:wynik|wyniki|recenzj\p{L}*|odpowiedź|weryfikacj\p{L}*|potwierdzeni\p{L}*)`,
+    String.raw `\bzanim\s+(?:oddam|przekażę|przedstawię|przygotuję|podam)`
 ].join("|"), "iu");
 // Markdown emphasis and headings the chat renders ("**Do:**", "### Tytuł"): not the text.
 export function withoutMarkdown(text) {
@@ -105,7 +108,11 @@ export function withoutMarkdown(text) {
 /** The body of an answer without the disclaimer the application appends. */
 function answerBody(text) {
     const cut = text.search(/⚖️|\bWażna informacja:/u);
-    return (cut >= 0 ? text.slice(0, cut) : text).trim();
+    const body = (cut >= 0 ? text.slice(0, cut) : text).trim();
+    // The control blocks the application asks for (CN-GATE, REM-GATE…) are no substance: a deferral
+    // followed by them is still a deferral (RD 121/26: 2.9 thousand characters of empty gates).
+    const gates = body.search(/^\s*(?:\*\*)?(?:CN|WYJ|REM|OŚ|PP|ODW|SN|WER)-GATE\b/mu);
+    return (gates > 0 ? body.slice(0, gates) : body).trim();
 }
 /** True for an answer that defers without substance and without a question or a list of what is missing. */
 export function emptyDeferral(text) {

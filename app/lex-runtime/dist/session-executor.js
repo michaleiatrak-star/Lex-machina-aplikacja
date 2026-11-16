@@ -72,6 +72,8 @@ import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal
 import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
 import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case-issue.js";
+import { strengthCorrection, strengthGaps } from "./answer-strength.js";
+import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
@@ -1809,10 +1811,14 @@ export class SafeSessionExecutor {
                 results: found.map((result) => `${result.signature}: ${result.status}${result.status === "FOUND" ? ` ${result.url}` : result.status === "UNAVAILABLE" ? ` ${result.detail}` : ""}`)
             });
         }
+        // For the strength check after the answer (answer-strength.ts).
+        let strengthPassages = [];
+        const strengthRulings = [];
         const ethicsResults = await ethicsFound;
         // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
         if (legalTurn && contextFocus) {
             const passages = issuePassages(attachments, contextFocus);
+            strengthPassages = passages;
             const prompt = issuePassagesPrompt(passages);
             if (prompt) {
                 pathSections.push(prompt);
@@ -1856,6 +1862,9 @@ export class SafeSessionExecutor {
             audit.record("gate", "OFFICIAL_PORTAL_SEARCH", "DEGRADED", { queries: portalResult.queries.map((item) => item.query), hits: 0 });
         }
         const commonIssue = await commonIssueFound;
+        for (const ruling of commonIssue)
+            if (ruling.signature)
+                strengthRulings.push(ruling.signature);
         if (commonIssue.length) {
             pathSections.push(commonCourtIssuePrompt(commonIssue));
             for (const ruling of commonIssue) {
@@ -1890,6 +1899,8 @@ export class SafeSessionExecutor {
             const prompt = wsdTopicPrompt(fresh);
             if (prompt)
                 pathSections.push(prompt);
+            for (const ruling of wsdIssue.rulings)
+                strengthRulings.push(ruling.signature);
             for (const ruling of fresh.rulings) {
                 officialCaseLawTexts.push(`${ruling.signature}\n${ruling.title}\n${ruling.text}`);
                 ledger.add({
@@ -1943,6 +1954,33 @@ export class SafeSessionExecutor {
                 documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
             });
             pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+            // The same person under the symbols of different documents and of the question, compared
+            // locally (names never leave the computer): RD 121/26 "the acquittal concerns another person".
+            {
+                const tokenText = [protectedQuery, ...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text))];
+                const restoreToken = (token) => {
+                    const match = /^\[(?:LMPII:D(\d{2})|PII):([A-Z_]+):(\d{4})\]$/u.exec(token);
+                    if (!match)
+                        return null;
+                    const raw = `[PII:${match[2]}:${match[3]}]`;
+                    const documentNumber = match[1] ? Number(match[1]) : 0;
+                    try {
+                        if (documentNumber === 0)
+                            return chatPrivacyVault.hasToken(raw) ? chatPrivacyVault.restore(raw, null).text : null;
+                        const documentId = aliasRegistry.documentIds()[documentNumber - 1];
+                        return documentId && request.restoreDocumentToken ? request.restoreDocumentToken(documentId, raw) : null;
+                    }
+                    catch {
+                        return null;
+                    }
+                };
+                const groups = samePersonGroups(personTokens(tokenText).slice(0, 400), restoreToken);
+                const legend = identityLegendPrompt(groups, new Set(personTokens([protectedQuery])));
+                if (legend) {
+                    pathSections.push(legend);
+                    audit.record("gate", "SAME_PERSON_LEGEND", "OK", { groups: groups.length });
+                }
+            }
             // A challenge of a decision in the files: the decision's theses, every ground tied to one.
             const challengeQuestion = latestUserTurn(request.query);
             if (isChallenge(challengeQuestion)) {
@@ -3335,6 +3373,34 @@ export class SafeSessionExecutor {
             if (fixed) {
                 corrections.push(answerCorrection("NO_ANSWER", ["odpowiedź odroczona bez treści i bez pytania do użytkownika"], modelOutput, text));
                 modelOutput = text;
+            }
+        }
+        // Strength of a pleading (RD 121/26, 2026-11-16): the record's passages on the issue and the
+        // rulings read before the answer must be used or consciously set aside, and a thesis of the
+        // decision is not conceded before the substantive law is checked. One correcting round.
+        if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length)) {
+            const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)]);
+            if (gaps.length) {
+                step("MODEL", `siła pisma: ${gaps.length} braków, runda poprawcza`);
+                let text = "";
+                try {
+                    const corrected = await this.providers.stream(request.provider, {
+                        model: request.model,
+                        ...correctingRound(modelOutput, strengthCorrection(gaps)),
+                        accountContinuity: "none",
+                        reasoning: "none"
+                    });
+                    text = corrected.fullText.trim();
+                }
+                catch {
+                    text = "";
+                }
+                const accepted = text.length > modelOutput.length * 0.6 && strengthGaps(text, strengthPassages, [...new Set(strengthRulings)]).length < gaps.length;
+                audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: gaps.map((gap) => gap.kind), corrected: accepted });
+                if (accepted) {
+                    corrections.push(answerCorrection("STRENGTH", gaps.map((gap) => gap.label), modelOutput, text));
+                    modelOutput = text;
+                }
             }
         }
         // The model's own ⚠️ at a statute does not stop the application from

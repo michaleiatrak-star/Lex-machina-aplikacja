@@ -111,7 +111,15 @@ export function issuePassages(attachments, focus, limit = 10) {
     const scored = sentences
         .map((sentence) => {
         const hits = terms.filter((term) => sentence.folded.includes(term));
-        return { sentence, hits: hits.length, score: hits.reduce((sum, term) => sum + 1 / Math.max(1, frequency.get(term)), 0) };
+        let score = hits.reduce((sum, term) => sum + 1 / Math.max(1, frequency.get(term)), 0);
+        // A statement announcing an act ("będzie zgłaszana do organów", "zostanie zawiadomiona
+        // prokuratura") weighs more; a list of authorities (a power of attorney's boilerplate:
+        // "przed sądami, prokuraturą, policją i organami") weighs less.
+        if (/\b(?:bedzie|beda|zostanie|zostana|zostal\p{L}*|podejm\p{L}*|skieruj\p{L}*|zglos\p{L}*|zawiadom\p{L}*)\b[\s\S]{0,80}\b(?:organ\p{L}*|prokurat\p{L}*|polic\p{L}*|nekan\p{L}*|krok\p{L}*|zawiadom\p{L}*|zglasz\p{L}*)/u.test(sentence.folded))
+            score *= 2;
+        if ((sentence.folded.match(/,/gu) ?? []).length >= 4 && /\b(?:sadami|organami|komornikami|prokuratura|policja)\b/u.test(sentence.folded))
+            score *= 0.3;
+        return { sentence, hits: hits.length, score };
     })
         .filter((item) => item.hits >= 2)
         // Three different words of the issue first (a statement on it), two only to fill the list.

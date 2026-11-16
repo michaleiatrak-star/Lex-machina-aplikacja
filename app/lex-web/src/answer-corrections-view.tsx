@@ -7,7 +7,8 @@ const ROUND: Record<AnswerCorrection["round"], string> = {
   MANDATORY_PATH: t("ścieżka obowiązkowa i nadzór treści"),
   ACT_NAME: t("nazwa aktu przy powołaniu przepisu"),
   QUOTE_SOURCE: t("cytat zgodny ze źródłem (przepis, dokument)"),
-  STATUTE_CONTENT: t("teza zgodna z brzmieniem powołanego przepisu")
+  STATUTE_CONTENT: t("teza zgodna z brzmieniem powołanego przepisu"),
+  STRENGTH: t("siła pisma: fragmenty akt, orzecznictwo i tezy oddane bez sprawdzenia")
 };
 
 /** What the application's correcting round changed in the answer: the findings and the removed sentences. */
