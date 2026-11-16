@@ -90,7 +90,10 @@ export function wsdRulingPage(html: string, url: string): Omit<WsdTopicRuling, "
   if (!signature) return null;
   const title = plainText(/<h1\b[^>]*>([\s\S]*?)<\/h1>/u.exec(html)?.[1] ?? /<title>([\s\S]*?)<\/title>/u.exec(html)?.[1] ?? "").replace(/\s+/gu, " ").trim();
   const tags = wsdTags(html).map((tag) => tag.name);
-  return { url, title, signature, tags, text: text.slice(0, 40_000) };
+  // The page's navigation ("Strona główna / Orzecznictwo / ..") and the title before the ruling's text.
+  const at = title ? text.indexOf(title) : -1;
+  const body = (at >= 0 ? text.slice(at + title.length) : text.replace(/^[\s\S]*?\/\s*\.\.\s*/u, "")).trim();
+  return { url, title, signature, tags, text: body.slice(0, 40_000) };
 }
 
 async function page(url: string, fetchImpl: WsdFetch, timeoutMs: number): Promise<string> {
@@ -142,4 +145,43 @@ export function wsdTopicPrompt(result: { tags: string[]; rulings: readonly WsdTo
     "Powołuj orzeczenie (sąd, data, sygnatura) tylko wtedy, gdy jego tekst poniżej wspiera tezę pisma; cytuj wyłącznie z tego tekstu. Linia orzecznicza (kilka orzeczeń w tym samym kierunku) jest mocniejsza niż jedno orzeczenie — wskaż ją, gdy występuje.",
     ...result.rulings.map((ruling) => `## ${ruling.signature} — ${ruling.title} (${ruling.url})${ruling.tags.length ? `\nTagi: ${ruling.tags.join(", ")}` : ""}\n${ruling.text.slice(0, perRuling)}`)
   ].join("\n\n");
+}
+
+/** Signatures of the bar's disciplinary rulings a ruling's text cites (WSD 128/17, SDI 9/12, DSI 3/20). */
+export function citedDisciplinarySignatures(text: string): string[] {
+  return [...new Set([...text.normalize("NFKC").matchAll(/\b(WSD|SDI|DSI)\s+(\d{1,5}\/\d{2,4})\b/gu)].map((match) => `${match[1]} ${match[2]}`))];
+}
+
+/**
+ * The second round, as a lawyer reads on (RD 121/26): the rulings the first ones cite, looked up in
+ * the register, and, when the first round found little, the register's own wording of the issue
+ * (its tags) asked of the portal search.
+ */
+export async function wsdSecondRound(
+  first: { tags: string[]; rulings: readonly WsdTopicRuling[] },
+  options: {
+    find: (signature: string) => Promise<{ status: string; signature?: string; url?: string; title?: string; text?: string }>;
+    search?: ((query: string, max: number) => Promise<Array<{ url: string }>>) | null;
+    fetchImpl?: WsdFetch;
+    limit?: number;
+  }
+): Promise<WsdTopicRuling[]> {
+  const known = new Set(first.rulings.map((ruling) => ruling.signature));
+  const cited = first.rulings.flatMap((ruling) => citedDisciplinarySignatures(ruling.text).map((signature) => ({ signature, by: ruling.signature }))).filter((item) => !known.has(item.signature));
+  const unique = [...new Map(cited.map((item) => [item.signature, item])).values()].slice(0, options.limit ?? 4);
+  const found = await Promise.all(
+    unique.map(async (item): Promise<WsdTopicRuling | null> => {
+      const result = await options.find(item.signature).catch(() => null);
+      return result?.status === "FOUND" && result.url && result.text
+        ? { url: result.url, title: result.title ?? "", signature: item.signature, tags: [], text: result.text, viaTag: `powołane w ${item.by}` }
+        : null;
+    })
+  );
+  const chained = found.filter((item): item is WsdTopicRuling => Boolean(item));
+  if (first.rulings.length + chained.length >= 3 || !options.search || !first.tags.length) return chained;
+  const hits = (await Promise.all(first.tags.slice(0, 2).map((tag) => options.search!(`"${tag}" site:wsd.adwokatura.pl`, 8).catch(() => [])))).flat();
+  const urls = [...new Set(hits.map((hit) => hit.url).filter((url) => /^https:\/\/wsd\.adwokatura\.pl\/rejestry\/show\//u.test(url)))];
+  const more = await wsdRulingsByIssue("", { extraUrls: urls.slice(0, 4), limit: 4, ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) }).catch(() => ({ tags: [], rulings: [] }));
+  const seen = new Set([...known, ...chained.map((ruling) => ruling.signature)]);
+  return [...chained, ...more.rulings.filter((ruling) => !seen.has(ruling.signature))];
 }

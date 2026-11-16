@@ -355,6 +355,16 @@ let commonCourtsSearch = null;
 export function configureCommonCourtsSearch(search) {
     commonCourtsSearch = search;
 }
+export function currentCommonCourtsSearch() {
+    return commonCourtsSearch;
+}
+let commonCourtsReader = null;
+export function configureCommonCourtsReader(reader) {
+    commonCourtsReader = reader;
+}
+export function currentCommonCourtsReader() {
+    return commonCourtsReader;
+}
 /** The "sp" connector's sp_szukaj reply as search candidates (the decision's own link only). */
 export function commonCourtsCandidates(reply, query, limit) {
     const value = reply;

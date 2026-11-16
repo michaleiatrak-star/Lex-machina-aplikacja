@@ -68,7 +68,7 @@ import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
 import { autostartLocalSearxng } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
-import { commonCourtsCandidates, configureCommonCourtsSearch } from "../case-law-search.js";
+import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
@@ -404,6 +404,32 @@ export async function startLocalServer(options) {
             return null;
         }
         return commonCourtsCandidates(parsed, query, limit);
+    });
+    // The ruling's text from the same portal (sp_pobierz): read before the model answers (case-issue).
+    configureCommonCourtsReader(async (urlOrId) => {
+        const reply = await legalFederationTools.direct({ source: "sp", tool: "sp_pobierz", arguments: { url_lub_id: urlOrId } });
+        if (!reply.ok)
+            return null;
+        const raw = typeof reply.result === "string" ? reply.result : JSON.stringify(reply.result);
+        try {
+            let parsed = JSON.parse(raw);
+            const inner = parsed.content?.[0]?.text;
+            if (inner)
+                parsed = JSON.parse(inner);
+            const result = (parsed.result ?? parsed);
+            const text = typeof result.tresc === "string" ? result.tresc : "";
+            if (text.length < 200)
+                return null;
+            return {
+                text,
+                ...(typeof result.sygnatura === "string" ? { signature: result.sygnatura } : {}),
+                ...(typeof result.sad === "string" ? { court: result.sad } : {}),
+                ...(typeof result.data === "string" ? { date: result.data } : {})
+            };
+        }
+        catch {
+            return null;
+        }
     });
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();

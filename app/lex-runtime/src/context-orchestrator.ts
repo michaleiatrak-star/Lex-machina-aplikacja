@@ -162,8 +162,22 @@ function queryTerms(
             term
           )
       )
+      // A stem, so that inflected forms match ("zgłaszana", "zgłaszać"; "nękanie", "nękania").
+      .map((term) => (term.length >= 6 ? term.slice(0, Math.max(5, term.length - 3)) : term))
     )
-  ].slice(0, 32);
+  ].slice(0, 48);
+}
+
+/**
+ * How much a chunk speaks of the case's issue and the question: the distinct terms it holds,
+ * a rare term (in few chunks) weighing more than a common one.
+ */
+function relevanceScores(texts: readonly string[], query: string): number[] {
+  const terms = queryTerms(query);
+  if (!terms.length) return texts.map(() => 0);
+  const normalized = texts.map((text) => normalizedText(text));
+  const frequency = terms.map((term) => normalized.filter((text) => text.includes(term)).length);
+  return normalized.map((text) => terms.reduce((sum, term, index) => sum + (text.includes(term) ? 1 / Math.max(1, frequency[index]!) : 0), 0));
 }
 
 function extractiveDigest(
@@ -396,6 +410,13 @@ function sourcePriority(
 export function orchestrateDocumentContext(args: {
   attachments: readonly SessionDocumentAttachment[];
   query: string;
+  /**
+   * The case's issue in words (case-issue.ts: the clause of the rule in dispute, the kind of
+   * decision challenged, their usual vocabulary). When the files exceed the budget, the chunks
+   * that speak of it are kept whole first and digests keep its sentences (RD 121/26: the end of a
+   * long hearing record, "każda taka sytuacja będzie zgłaszana do odpowiednich organów", was cut).
+   */
+  focus?: string;
   systemPrompt?: string;
   modelContextTokens?: number;
   tokenCharsPerToken?: number;
@@ -690,121 +711,62 @@ export function orchestrateDocumentContext(args: {
     }
   }
 
-  // Retrieved knowledge fills only the remaining budget and is cut at
-  // deterministic chunk boundaries.
-  for (const attachment of knowledge) {
-    const chunks:
-      SessionDocumentAttachment["chunks"] =
-        [];
-    for (const chunk of attachment.chunks) {
-      const cost =
-        chunkTokens(
-          attachment,
-          chunk,
-          charsPerTokenEstimate
-        );
-      if (
-        used + cost <=
-          documentBudget
-      ) {
-        used += cost;
-        chunks.push({
-          ...chunk,
-          representation:
-            "FULL"
-        });
+  // Retrieved knowledge fills only the remaining budget. When it all fits, every chunk goes whole
+  // in the file's order. When it does not, the chunks that speak most of the issue and the
+  // question are taken whole first, the rest as digests of their most relevant sentences, the
+  // remainder omitted (the model reads them with the case-file tools); the order of the file is
+  // kept in what is sent.
+  const digestQuery = args.focus ? `${args.focus}\n${args.query}` : args.query;
+  const entries = knowledge.flatMap((attachment, documentIndex) =>
+    attachment.chunks.map((chunk, chunkIndex) => ({ attachment, chunk, documentIndex, chunkIndex, cost: chunkTokens(attachment, chunk, charsPerTokenEstimate) }))
+  );
+  const knowledgeCost = entries.reduce((sum, entry) => sum + entry.cost, 0);
+  const ranked =
+    used + knowledgeCost <= documentBudget
+      ? entries
+      : (() => {
+          const scores = relevanceScores(entries.map((entry) => entry.chunk.text), digestQuery);
+          // Ties keep the file's order (sources by priority, then pages).
+          return entries.map((entry, index) => ({ entry, score: scores[index]! })).sort((a, b) => b.score - a.score || a.entry.documentIndex - b.entry.documentIndex || a.entry.chunkIndex - b.entry.chunkIndex).map((item) => item.entry);
+        })();
+  const decided = new Map<SessionDocumentAttachment["chunks"][number], SessionDocumentAttachment["chunks"][number]>();
+  for (const { attachment, chunk, cost } of ranked) {
+    if (used + cost <= documentBudget) {
+      used += cost;
+      decided.set(chunk, { ...chunk, representation: "FULL" });
+      selectedChunks += 1;
+      selectedChunkKeys.add(`${attachment.documentId}:${chunk.index}`);
+      continue;
+    }
+    const remaining = documentBudget - used;
+    const digestBudget = Math.min(
+      DIGEST_MAX_TOKENS,
+      Math.max(0, remaining - metadataTokens(attachment, { ...chunk, text: "", representation: "EXTRACTIVE_DIGEST", originalChars: chunk.text.length }, charsPerTokenEstimate))
+    );
+    const digestText = extractiveDigest(chunk.text, digestQuery, digestBudget, charsPerTokenEstimate);
+    if (digestText) {
+      const digestChunk = { ...chunk, text: digestText, representation: "EXTRACTIVE_DIGEST" as const, originalChars: chunk.text.length };
+      const digestCost = chunkTokens(attachment, digestChunk, charsPerTokenEstimate);
+      if (used + digestCost <= documentBudget) {
+        used += digestCost;
+        decided.set(chunk, digestChunk);
         selectedChunks += 1;
-        selectedChunkKeys.add(
-          `${attachment.documentId}:${chunk.index}`
-        );
+        compressedChunks += 1;
+        backlinkedChunks += 1;
+        compressionSavedTokens += Math.max(0, cost - digestCost);
+        selectedChunkKeys.add(`${attachment.documentId}:${chunk.index}`);
         continue;
       }
-
-      const remaining =
-        documentBudget -
-        used;
-      const digestBudget =
-        Math.min(
-          DIGEST_MAX_TOKENS,
-          Math.max(
-            0,
-            remaining -
-              metadataTokens(
-                attachment,
-                {
-                  ...chunk,
-                  text: "",
-                  representation:
-                    "EXTRACTIVE_DIGEST",
-                  originalChars:
-                    chunk.text.length
-                },
-                charsPerTokenEstimate
-              )
-          )
-        );
-      const digestText =
-        extractiveDigest(
-          chunk.text,
-          args.query,
-          digestBudget,
-          charsPerTokenEstimate
-        );
-      if (digestText) {
-        const digestChunk = {
-          ...chunk,
-          text:
-            digestText,
-          representation:
-            "EXTRACTIVE_DIGEST" as const,
-          originalChars:
-            chunk.text.length
-        };
-        const digestCost =
-          chunkTokens(
-            attachment,
-            digestChunk,
-            charsPerTokenEstimate
-          );
-        if (
-          used +
-            digestCost <=
-          documentBudget
-        ) {
-          used +=
-            digestCost;
-          chunks.push(
-            digestChunk
-          );
-          selectedChunks += 1;
-          compressedChunks += 1;
-          backlinkedChunks += 1;
-          compressionSavedTokens +=
-            Math.max(
-              0,
-              cost -
-                digestCost
-            );
-          selectedChunkKeys.add(
-            `${attachment.documentId}:${chunk.index}`
-          );
-          continue;
-        }
-      }
-
-      omittedChunks += 1;
-      omittedDocumentIds.add(
-        attachment.documentId
-      );
     }
-    if (chunks.length > 0) {
-      selected.push(
-        cloneWithChunks(
-          attachment,
-          chunks
-        )
-      );
-    }
+    omittedChunks += 1;
+    omittedDocumentIds.add(attachment.documentId);
+  }
+  for (const attachment of knowledge) {
+    const chunks = attachment.chunks.flatMap((chunk) => {
+      const sent = decided.get(chunk);
+      return sent ? [sent] : [];
+    });
+    if (chunks.length > 0) selected.push(cloneWithChunks(attachment, chunks));
   }
 
   const allChunks =

@@ -655,6 +655,22 @@ export function configureCommonCourtsSearch(search: CommonCourtsSearch | null): 
   commonCourtsSearch = search;
 }
 
+export function currentCommonCourtsSearch(): CommonCourtsSearch | null {
+  return commonCourtsSearch;
+}
+
+/** The text of a common court's ruling from its portal ("sp" connector, sp_pobierz); none in tests. */
+export type CommonCourtsReader = (urlOrId: string) => Promise<{ text: string; signature?: string; court?: string; date?: string } | null>;
+let commonCourtsReader: CommonCourtsReader | null = null;
+
+export function configureCommonCourtsReader(reader: CommonCourtsReader | null): void {
+  commonCourtsReader = reader;
+}
+
+export function currentCommonCourtsReader(): CommonCourtsReader | null {
+  return commonCourtsReader;
+}
+
 /** The "sp" connector's sp_szukaj reply as search candidates (the decision's own link only). */
 export function commonCourtsCandidates(reply: unknown, query: string, limit: number): CaseLawSearchResult | null {
   const value = reply as { kandydaci?: unknown; result?: unknown; dokumenty?: unknown };

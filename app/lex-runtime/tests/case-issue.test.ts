@@ -70,3 +70,25 @@ describe("WSD register by the issue (tags)", () => {
     expect(prompt).toContain("cytuj wyłącznie z tego tekstu");
   });
 });
+
+describe("WSD second round: the rulings the first ones cite", async () => {
+  const { wsdSecondRound, citedDisciplinarySignatures } = await import("../src/courts/wsd-topics.js");
+  it("looks up WSD 90/06 cited in SDI 9/12, not the ones already found", async () => {
+    expect(citedDisciplinarySignatures("Kasacja od orzeczenia WSD 90/06; zob. SDI 23/07 i SDI 9/12.")).toEqual(["WSD 90/06", "SDI 23/07", "SDI 9/12"]);
+    const asked: string[] = [];
+    const first = {
+      tags: ["groźba spowodowania postępowania karnego lub dyscyplinarnego"],
+      rulings: [
+        { url: "u1", title: "Wyrok SN z 10 maja 2012 r.", signature: "SDI 9/12", tags: [], viaTag: "t", text: "Kasacja od orzeczenia WSD 90/06; por. SDI 23/07." },
+        { url: "u2", title: "Postanowienie SN", signature: "SDI 23/07", tags: [], viaTag: "t", text: "" },
+        { url: "u3", title: "Orzeczenie WSD", signature: "WSD 127/12", tags: [], viaTag: "t", text: "" }
+      ]
+    };
+    const second = await wsdSecondRound(first, {
+      find: async (signature) => (asked.push(signature), { status: "FOUND", url: "https://wsd.adwokatura.pl/rejestry/show/x-1", title: "Orzeczenie WSD z 2006 r.", text: "Teza." }),
+      search: null
+    });
+    expect(asked).toEqual(["WSD 90/06"]);
+    expect(second).toEqual([expect.objectContaining({ signature: "WSD 90/06", viaTag: "powołane w SDI 9/12" })]);
+  });
+});

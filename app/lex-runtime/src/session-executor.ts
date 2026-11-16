@@ -211,8 +211,10 @@ import {
 } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
-import { wsdRulingsByIssue, wsdTopicPrompt } from "./courts/wsd-topics.js";
-import { caseIssue } from "./case-issue.js";
+import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
+import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
+import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case-issue.js";
+import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
@@ -2437,11 +2439,31 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     );
 
+    // The case's issue chooses which parts of long files the model gets whole (a hearing record's
+    // last pages are not cut because they come last): the cited ethics rule's clause, the kind of
+    // decision challenged and their usual words. Read from the local copy of the code (a few ms).
+    const rawFiles = (request.documentAttachments ?? []).flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n");
+    const focusQuestion = latestUserTurn(request.query);
+    const focusCited = rawFiles && activeCountry() === "PL" && !request.conversationalOnly ? citedEthicsParagraphs(`${rawFiles}\n${focusQuestion}`) : [];
+    const focusReadings = focusCited.length
+      ? await Promise.race([
+          Promise.all(focusCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs).catch(() => null))),
+          new Promise<null[]>((resolve) => setTimeout(() => resolve([]), 8_000))
+        ])
+      : [];
+    const contextFocus = rawFiles
+      ? caseFocus(
+          focusReadings.flatMap((reading) => (reading?.status === "FOUND" ? reading.paragraphs.filter((item) => item.text).map((item) => ({ code: reading.code.key, paragraph: item.paragraph, text: item.text! })) : [])),
+          rawFiles,
+          focusQuestion
+        )
+      : "";
     const contextSelection =
       orchestrateDocumentContext({
         attachments:
           request.documentAttachments ?? [],
         query: request.query,
+        ...(contextFocus ? { focus: contextFocus } : {}),
         ...(request.modelContextTokens
           ? {
               modelContextTokens:
@@ -2836,6 +2858,13 @@ export class SafeSessionExecutor implements SessionExecutor {
       issueSearch && portalSearch
         ? issueFound.then((issue) => searchOfficialPortals(latestUserTurn(protectedQuery), portalSearch, 20_000, issue?.queries ?? []))
         : Promise.resolve(null);
+    // The common courts' rulings on the procedural setting (a refusal to open proceedings…): their
+    // portal searched with the setting's phrase, the rulings read, the passages on the issue given.
+    const commonIssueFound = Promise.all([issueFound, portalFound]).then(([issue, portal]) =>
+      issue?.procedural.length
+        ? commonCourtRulingsByIssue(issue.procedural, { portalUrls: (portal?.hits ?? []).filter((hit) => hit.official).map((hit) => hit.url), focus: issue.text, limit: 3 }).catch(() => [])
+        : []
+    );
     // Bar disciplinary cases: the register of wsd.adwokatura.pl by the issue's tags, and the
     // ruling pages the portal search found there, read before the model answers.
     const wsdIssueFound = Promise.all([issueFound, portalFound]).then(([issue, portal]) =>
@@ -2875,6 +2904,16 @@ export class SafeSessionExecutor implements SessionExecutor {
       });
     }
     const ethicsResults = await ethicsFound;
+    // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
+    if (legalTurn && contextFocus) {
+      const passages = issuePassages(attachments, contextFocus);
+      const prompt = issuePassagesPrompt(passages);
+      if (prompt) {
+        pathSections.push(prompt);
+        step("PREPARE", `fragmenty akt dotyczące zagadnienia: ${passages.length}`);
+        audit.record("gate", "ISSUE_PASSAGES", "OK", { passages: passages.map((passage) => `${passage.documentId}:${passage.chunkIndex}`) });
+      }
+    }
     if (ethicsResults.length) {
       pathSections.push(ethicsPrompt(ethicsResults));
       audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
@@ -2907,7 +2946,35 @@ export class SafeSessionExecutor implements SessionExecutor {
     } else if (portalResult) {
       audit.record("gate", "OFFICIAL_PORTAL_SEARCH", "DEGRADED", { queries: portalResult.queries.map((item) => item.query), hits: 0 });
     }
-    const wsdIssue = await wsdIssueFound;
+    const commonIssue = await commonIssueFound;
+    if (commonIssue.length) {
+      pathSections.push(commonCourtIssuePrompt(commonIssue));
+      for (const ruling of commonIssue) {
+        officialCaseLawTexts.push(`${ruling.signature ?? ""}\n${ruling.text}`);
+        if (ruling.signature) {
+          ledger.add({
+            claim: ruling.signature,
+            kind: "case",
+            status: "VERIFIED",
+            sourceUrl: ruling.url,
+            sourceTier: "R2A",
+            fetchedAt: new Date().toISOString(),
+            verificationMethod: "web_fetch",
+            sourceFormat: "TEXT",
+            caseScope: "FULL_TEXT",
+            caseSignature: ruling.signature,
+            evidence: ["Portal Orzeczeń Sądów Powszechnych", ruling.court, ruling.date, ruling.signature].filter(Boolean).join(" · ")
+          });
+        }
+      }
+      step("VERIFY", `sądy powszechne według zagadnienia: ${commonIssue.map((ruling) => ruling.signature ?? ruling.url).join(", ")}`);
+      audit.record("gate", "COMMON_COURTS_ISSUE_SEARCH", "OK", { rulings: commonIssue.map((ruling) => `${ruling.signature ?? "?"} ${ruling.url}`) });
+    }
+    const wsdFirst = await wsdIssueFound;
+    // Second round: the rulings the first ones cite, and the register's wording of the issue.
+    const wsdIssue = wsdFirst?.rulings.length
+      ? { ...wsdFirst, rulings: [...wsdFirst.rulings, ...(await wsdSecondRound(wsdFirst, { find: findWsdRuling, search: portalSearch }).catch(() => []))] }
+      : wsdFirst;
     if (wsdIssue?.rulings.length) {
       const known = new Set(wsdSignatures);
       const fresh = { ...wsdIssue, rulings: wsdIssue.rulings.filter((ruling) => !known.has(ruling.signature)) };
@@ -2964,6 +3031,20 @@ export class SafeSessionExecutor implements SessionExecutor {
         documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
       });
       pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+      // A challenge of a decision in the files: the decision's theses, every ground tied to one.
+      const challengeQuestion = latestUserTurn(request.query);
+      if (isChallenge(challengeQuestion)) {
+        const decisions = recognisedDocuments
+          .filter((document) => document.category === "ORZECZENIE")
+          .map((document) => ({ documentId: document.documentId, label: document.label, text: attachments.find((attachment) => attachment.documentId === document.documentId)!.chunks.map((chunk) => chunk.text).join("\n") }));
+        const decision = challengedDecision(decisions, challengeQuestion);
+        const theses = decision ? decisionTheses(decision.text) : [];
+        const prompt = decision ? challengeMapPrompt(decision, theses) : "";
+        if (prompt) {
+          pathSections.push(prompt);
+          audit.record("gate", "CHALLENGE_MAP", "OK", { decision: decision!.documentId, theses: theses.length });
+        }
+      }
       // A document between the parties is assessed as a whole whatever skill leads (a demand with
       // the agreement it relies on): the contract analyser's CAL-GATE goes in with it (user report
       // 2026-11-06: pkt 10 waiving all claims cancelled the employee's side of pkt 5, unseen).
