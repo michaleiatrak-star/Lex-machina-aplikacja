@@ -4283,6 +4283,8 @@ export type LocalSearxngResult = {
   reachable: boolean;
   commands: string[];
   error?: string;
+  /** The system the application's server runs on ("linux": a server, Docker Engine instead of Docker Desktop). */
+  platform?: string;
 };
 
 export function setupLocalSearxng(install = false): Promise<{ local: LocalSearxngResult; settings: WebSearchSettings }> {

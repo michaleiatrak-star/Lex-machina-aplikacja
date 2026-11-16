@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LOCAL_SEARXNG_URL, autostartLocalSearxng, installDockerDesktop, setupLocalSearxng, writeLocalSearxng } from "./searxng-local.js";
+import { LOCAL_SEARXNG_URL, autostartLocalSearxng, installDockerDesktop, installDockerEngineLinux, setupLocalSearxng, writeLocalSearxng } from "./searxng-local.js";
 const dirs = [];
 afterEach(() => {
     for (const dir of dirs.splice(0))
@@ -32,8 +32,12 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         expect(fs.readFileSync(path.join(dir, "searxng", "settings.yml"), "utf8")).toContain(secret);
     });
     it("no Docker or Podman: files and the commands, not started", async () => {
-        const result = await setupLocalSearxng({ directory: temp(), start: true, run: async () => ({ code: 127, output: "" }), fetcher: silent });
+        const result = await setupLocalSearxng({ directory: temp(), start: true, platform: "win32", run: async () => ({ code: 127, output: "" }), fetcher: silent });
         expect(result).toMatchObject({ engine: null, started: false, reachable: false, error: "CONTAINER_ENGINE_MISSING" });
+        // A Linux server: the result says so (the settings offer the Docker Engine, not Docker Desktop).
+        const linux = await setupLocalSearxng({ directory: temp(), start: true, platform: "linux", target: "browser", run: async () => ({ code: 127, output: "" }), fetcher: silent });
+        expect(linux).toMatchObject({ error: "CONTAINER_ENGINE_MISSING", platform: "linux" });
+        expect(linux.commands.at(-1)).toBe("docker compose up -d browser");
         expect(result.commands.join(" ")).toContain("compose up -d");
     });
     it("starts it with the found engine and reports it reachable once it answers in JSON", async () => {
@@ -118,13 +122,14 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         expect(await installDockerDesktop(ok, ".", "darwin")).toEqual({ ok: true });
         expect(calls.at(-1)).toBe("brew install --cask docker");
         expect(await installDockerDesktop(async () => ({ code: 1, output: "" }), ".", "win32")).toEqual({ ok: false, error: "INSTALLER_MISSING:winget" });
-        expect((await installDockerDesktop(ok, ".", "linux")).error).toBe("INSTALLER_MISSING:linux");
+        expect((await installDockerDesktop(async () => ({ code: 1, output: "" }), ".", "linux")).error).toBe("INSTALLER_MISSING:linux");
     });
     it("no engine and no install request: nothing installed", async () => {
         const calls = [];
         const result = await setupLocalSearxng({
             directory: temp(),
             start: true,
+            platform: "win32",
             run: async (command, args) => {
                 calls.push(`${command} ${args.join(" ")}`);
                 return { code: 127, output: "" };
@@ -134,12 +139,32 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         expect(result.error).toBe("CONTAINER_ENGINE_MISSING");
         expect(calls.some((call) => call.startsWith("winget") || call.startsWith("brew"))).toBe(false);
     });
-    it("autostart z aplikacją: tylko SearXNG utworzony przez aplikację pod lokalnym adresem; zamknięty Docker Desktop jest uruchamiany", async () => {
+    it("autostart z aplikacją: SearXNG utworzony przez aplikację pod lokalnym adresem, przy innym SearXNG sama przeglądarka; zamknięty Docker Desktop jest uruchamiany", async () => {
         const dir = temp();
         const never = async () => ({ code: 0, output: "" });
         expect(await autostartLocalSearxng({ directory: dir, searxngUrl: LOCAL_SEARXNG_URL, run: never, fetcher: silent })).toBeNull();
         writeLocalSearxng(dir);
-        expect(await autostartLocalSearxng({ directory: dir, searxngUrl: "https://searx.example.org", run: never, fetcher: silent })).toBeNull();
+        // Another SearXNG: only the browser for reading pages starts with the application.
+        const browserCalls = [];
+        let browserUp = false;
+        const browser = await autostartLocalSearxng({
+            directory: dir,
+            searxngUrl: "https://searx.example.org",
+            run: async (command, args) => {
+                browserCalls.push(`${command} ${args.join(" ")}`);
+                if (args[0] === "compose" && args[1] === "up")
+                    browserUp = true;
+                return { code: command === "docker" ? 0 : 127, output: "" };
+            },
+            fetcher: async () => (browserUp ? answering() : silent()),
+            launch: () => true,
+            engineWaitMs: 50,
+            waitMs: 50,
+            pollMs: 1
+        });
+        expect(browserCalls).toContain("docker compose up -d browser");
+        expect(browserCalls).not.toContain("docker compose up -d");
+        expect(browser).toMatchObject({ reachable: true });
         const calls = [];
         let engineUp = false;
         let launched = 0;
@@ -221,8 +246,32 @@ describe("local SearXNG (Ustawienia > Wyszukiwarka internetowa)", () => {
         const ready = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", run: async (c, a) => (again.push(`${c} ${a.join(" ")}`), { code: 0, output: "" }), fetcher: browserFetcher });
         expect(ready.reachable).toBe(true);
         expect(again).toEqual([]);
-        const none = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", run: async () => ({ code: 127, output: "" }), fetcher: silent });
+        const none = await setupLocalSearxng({ directory: temp(), start: true, target: "browser", platform: "darwin", run: async () => ({ code: 127, output: "" }), fetcher: silent });
         expect(none.error).toBe("CONTAINER_ENGINE_MISSING");
         expect(none.commands.at(-1)).toBe("docker compose up -d browser");
+    });
+    it("serwer Linux: Docker Engine z pakietów systemu przez sudo bez hasła, bez Docker Desktop", async () => {
+        const calls = [];
+        const run = async (command, args) => {
+            calls.push(`${command} ${args.join(" ")}`);
+            if (command === "dnf")
+                return { code: 127, output: "" };
+            return { code: 0, output: "" };
+        };
+        expect(await installDockerEngineLinux(run, "/tmp", 1000)).toEqual({ ok: true });
+        expect(calls).toContain("sudo -n true");
+        expect(calls).toContain("sudo -n apt-get install -y docker.io docker-compose-v2");
+        expect(calls).toContain("sudo -n systemctl enable --now docker");
+        expect(calls.some((call) => call.startsWith("sudo -n usermod -aG docker "))).toBe(true);
+        // No root and no passwordless sudo: nothing installed, the settings show the commands.
+        const none = [];
+        const refused = await installDockerEngineLinux(async (command, args) => (none.push(`${command} ${args.join(" ")}`), { code: command === "sudo" ? 1 : 0, output: "" }), "/tmp", 1000);
+        expect(refused).toEqual({ ok: false, error: "INSTALLER_MISSING:linux" });
+        expect(none).toEqual(["sudo -n true"]);
+        // Root on Fedora: Podman with podman-compose, no sudo.
+        const fedora = [];
+        expect(await installDockerEngineLinux(async (command, args) => (fedora.push(`${command} ${args.join(" ")}`), { code: command === "apt-get" ? 127 : 0, output: "" }), "/tmp", 0)).toEqual({ ok: true });
+        expect(fedora).toContain("dnf install -y podman podman-compose");
+        expect(fedora.some((call) => call.startsWith("sudo"))).toBe(false);
     });
 });

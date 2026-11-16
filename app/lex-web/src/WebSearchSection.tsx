@@ -38,6 +38,13 @@ const ENGINE_LABELS: Record<SearchEngineName, string> = {
 
 function localSearxngText(result: LocalSearxngResult): string {
   if (result.reachable) return t("Lokalny SearXNG działa: {url}. Adres jest ustawiony.", { url: result.url });
+  if (result.error === "CONTAINER_ENGINE_MISSING" && result.platform === "linux") {
+    return t("Pliki SearXNG są gotowe w {directory}. Na serwerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Engine i uruchom SearXNG” (wymaga uruchomienia serwera Lex Machina z uprawnieniami administratora albo sudo bez hasła) albo zainstaluj Docker Engine samodzielnie i uruchom: {command}", {
+      directory: result.directory,
+      command: result.commands.join(" && ")
+    });
+  }
+  if (result.error === "INSTALLED_RESTART_NEEDED" && result.platform === "linux") return t("Docker Engine został zainstalowany. Uruchom ponownie serwer Lex Machina (usługę), aby jego użytkownik dostał dostęp do Dockera, a potem kliknij ponownie.");
   if (result.error === "CONTAINER_ENGINE_MISSING") {
     return t("Pliki SearXNG są gotowe w {directory}. Na tym komputerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Desktop i uruchom SearXNG” albo zainstaluj Dockera samodzielnie i uruchom: {command}", {
       directory: result.directory,
@@ -65,9 +72,13 @@ function localSearxngText(result: LocalSearxngResult): string {
 
 function localBrowserText(result: LocalSearxngResult): string {
   if (result.reachable) return t("Przeglądarka działa na tym komputerze ({url}).", { url: result.url });
+  if (result.error === "CONTAINER_ENGINE_MISSING" && result.platform === "linux") return t("Na serwerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Engine i przeglądarkę” (wymaga uruchomienia serwera Lex Machina z uprawnieniami administratora albo sudo bez hasła) albo zainstaluj Docker Engine samodzielnie i uruchom: {command}", { command: result.commands.join(" && ") });
+  if (result.error === "INSTALLED_RESTART_NEEDED" && result.platform === "linux") return t("Docker Engine został zainstalowany. Uruchom ponownie serwer Lex Machina (usługę), aby jego użytkownik dostał dostęp do Dockera, a potem kliknij ponownie „Zainstaluj przeglądarkę”.");
   if (result.error === "CONTAINER_ENGINE_MISSING") return t("Na tym komputerze nie ma Dockera ani Podmana. Kliknij „Zainstaluj Docker Desktop i przeglądarkę” albo zainstaluj Dockera samodzielnie i uruchom: {command}", { command: result.commands.join(" && ") });
   if (result.error === "CONTAINER_ENGINE_NOT_RUNNING") return t("Docker jest zainstalowany, ale nie działa. Uruchom Docker Desktop, poczekaj, aż będzie gotowy, i kliknij ponownie „Zainstaluj przeglądarkę”.");
   if (result.error === "INSTALLED_RESTART_NEEDED") return t("Docker Desktop został zainstalowany. Uruchom ponownie komputer, a potem kliknij „Zainstaluj przeglądarkę”.");
+  if (result.error === "INSTALLER_MISSING:linux") return t("Serwer z systemem Linux: serwer Lex Machina nie ma uprawnień administratora ani sudo bez hasła, więc nie zainstaluje Dockera sam. Zainstaluj Docker Engine z wtyczką compose menedżerem pakietów systemu (np. sudo apt install docker.io docker-compose-v2), uruchom usługę (sudo systemctl enable --now docker) i kliknij ponownie „Zainstaluj przeglądarkę”. Polecenie uruchomienia przeglądarki: {command}", { command: result.commands.join(" && ") });
+  if (result.error?.startsWith("INSTALLER_MISSING:")) return t("Nie można zainstalować Dockera automatycznie: brak instalatora pakietów ({tool}). Zainstaluj Docker Desktop ze strony docker.com i kliknij ponownie „Zainstaluj przeglądarkę”.", { tool: result.error.slice("INSTALLER_MISSING:".length) });
   if (result.error === "NOT_ANSWERING") return t("Przeglądarka uruchomiona, ale jeszcze nie odpowiada. Spróbuj ponownie za chwilę (pierwsze uruchomienie pobiera ok. 550 MB).");
   return t("Nie udało się uruchomić przeglądarki ({error}). Uruchom ręcznie: {command}", { error: result.error ?? "", command: result.commands.join(" && ") });
 }
@@ -139,6 +150,8 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
   const [browserReady, setBrowserReady] = useState<boolean | null>(null);
   const [browserMessage, setBrowserMessage] = useState("");
   const [browserEngineMissing, setBrowserEngineMissing] = useState(false);
+  // The server's system: Linux installs the Docker Engine from its packages, not Docker Desktop.
+  const [serverLinux, setServerLinux] = useState(false);
   const [error, setError] = useState("");
   const [localMessage, setLocalMessage] = useState("");
   const [engineMissing, setEngineMissing] = useState(false);
@@ -216,6 +229,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
     try {
       const reply = await setupLocalSearxng(install);
       setEngineMissing(reply.local.error === "CONTAINER_ENGINE_MISSING");
+      setServerLinux(reply.local.platform === "linux");
       setSettings(reply.settings);
       setLocalMessage(localSearxngText(reply.local));
       if (reply.local.reachable) void getLocalBrowser().then((state) => setBrowserReady(state.ready)).catch(() => undefined);
@@ -240,6 +254,7 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
       const reply = await setupLocalBrowser(install);
       setBrowserReady(reply.ready);
       setBrowserEngineMissing(reply.local.error === "CONTAINER_ENGINE_MISSING");
+      setServerLinux(reply.local.platform === "linux");
       setBrowserMessage(localBrowserText(reply.local));
       setError("");
     } catch (failure) {
@@ -422,9 +437,11 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
           {engineMissing ? (
             <>
               <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void createLocalSearxng(true)}>
-                {busy === "docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i uruchom SearXNG")}
+                {serverLinux
+                  ? busy === "docker" ? t("Instalowanie Docker Engine… (do kilkunastu minut)") : t("Zainstaluj Docker Engine i uruchom SearXNG")
+                  : busy === "docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i uruchom SearXNG")}
               </button>
-              <InfoTip>{t("Instalacja: Windows przez winget, macOS przez Homebrew; system poprosi o zgodę administratora, a po instalacji może być potrzebne ponowne uruchomienie komputera. Docker Desktop jest bezpłatny dla małych firm (do 250 pracowników i do 10 mln USD rocznego przychodu); większa kancelaria potrzebuje płatnej subskrypcji Docker.")}</InfoTip>
+              <InfoTip>{serverLinux ? t("Serwer z systemem Linux: Docker Engine z pakietów systemu (apt: docker.io i docker-compose-v2; dnf: Podman z podman-compose). Instalacja wymaga, by serwer Lex Machina działał z uprawnieniami administratora albo miał sudo bez hasła; inaczej dostaniesz polecenia do wykonania.") : t("Instalacja: Windows przez winget, macOS przez Homebrew; system poprosi o zgodę administratora, a po instalacji może być potrzebne ponowne uruchomienie komputera. Docker Desktop jest bezpłatny dla małych firm (do 250 pracowników i do 10 mln USD rocznego przychodu); większa kancelaria potrzebuje płatnej subskrypcji Docker.")}</InfoTip>
             </>
           ) : null}
         </div>
@@ -440,7 +457,9 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
         ) : null}
         {admin && browserEngineMissing ? (
           <button type="button" className="chat-secondary-action" disabled={Boolean(busy)} onClick={() => void installBrowser(true)}>
-            {busy === "browser-docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i przeglądarkę")}
+            {serverLinux
+              ? busy === "browser-docker" ? t("Instalowanie Docker Engine… (do kilkunastu minut)") : t("Zainstaluj Docker Engine i przeglądarkę")
+              : busy === "browser-docker" ? t("Instalowanie Docker Desktop… (do kilkudziesięciu minut; system poprosi o zgodę administratora)") : t("Zainstaluj Docker Desktop i przeglądarkę")}
           </button>
         ) : null}
         <InfoTip>

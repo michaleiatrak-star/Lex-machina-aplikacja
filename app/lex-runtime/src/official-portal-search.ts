@@ -156,8 +156,15 @@ export function officialHost(url: string): boolean {
 export type PortalSearch = (query: string, maxResults: number) => Promise<WebSearchHit[]>;
 
 /** The queries in parallel; hits on official portals first, the same address once. */
-export async function searchOfficialPortals(question: string, search: PortalSearch, timeoutMs = 20_000): Promise<{ queries: PortalQuery[]; hits: PortalHit[] }> {
-  const queries = portalQueries(question);
+export async function searchOfficialPortals(
+  question: string,
+  search: PortalSearch,
+  timeoutMs = 20_000,
+  // Queries made from the case's legal issue (case-issue.ts), asked before the question's own.
+  issueQueries: readonly PortalQuery[] = []
+): Promise<{ queries: PortalQuery[]; hits: PortalHit[] }> {
+  const own = portalQueries(question).filter((item) => !issueQueries.some((issue) => issue.query === item.query));
+  const queries = [...issueQueries, ...own].slice(0, 10);
   if (!queries.length) return { queries, hits: [] };
   const answered = await Promise.all(
     queries.map(async (item) => {
@@ -177,7 +184,7 @@ export async function searchOfficialPortals(question: string, search: PortalSear
     .flat()
     .filter((hit) => !seen.has(hit.url) && Boolean(seen.add(hit.url)))
     .sort((a, b) => Number(b.official) - Number(a.official));
-  return { queries, hits: hits.slice(0, 24) };
+  return { queries, hits: hits.slice(0, 30) };
 }
 
 /** Signatures of rulings and interpretations the hits name (title, snippet, address). */

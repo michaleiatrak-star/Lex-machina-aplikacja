@@ -69,6 +69,8 @@ import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
+import { wsdRulingsByIssue, wsdTopicPrompt } from "./courts/wsd-topics.js";
+import { caseIssue } from "./case-issue.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
@@ -1735,9 +1737,24 @@ export class SafeSessionExecutor {
         // site:orzeczenia.nsa.gov.pl, site:eureka.mf.gov.pl …), in parallel with SAOS and sn.pl. Only
         // the protected (pseudonymised) question's legal words leave the computer.
         const portalSearch = currentPortalSearch();
-        const portalFound = legalTurn && activeCountry() === "PL" && portalSearch && !offline && !request.conversationalOnly
-            ? searchOfficialPortals(latestUserTurn(protectedQuery), portalSearch)
+        // The case's legal issue (the clause of the cited ethics rule the file speaks of, the kind of
+        // decision challenged) gives the first portal queries; the question's own words follow. Only
+        // the rule's public words and fixed procedural phrases leave the computer, never the file.
+        const issueSearch = legalTurn && activeCountry() === "PL" && !offline && !request.conversationalOnly;
+        const issueFound = issueSearch
+            ? ethicsFound.then((readings) => caseIssue(readings.flatMap((reading) => (reading.status === "FOUND" ? reading.paragraphs.filter((item) => item.text).map((item) => ({ code: reading.code.key, paragraph: item.paragraph, text: item.text })) : [])), fileText, latestUserTurn(request.query)))
             : Promise.resolve(null);
+        const portalFound = issueSearch && portalSearch
+            ? issueFound.then((issue) => searchOfficialPortals(latestUserTurn(protectedQuery), portalSearch, 20_000, issue?.queries ?? []))
+            : Promise.resolve(null);
+        // Bar disciplinary cases: the register of wsd.adwokatura.pl by the issue's tags, and the
+        // ruling pages the portal search found there, read before the model answers.
+        const wsdIssueFound = Promise.all([issueFound, portalFound]).then(([issue, portal]) => issue?.barDisciplinary
+            ? wsdRulingsByIssue(issue.text || latestUserTurn(request.query), {
+                limit: 8,
+                extraUrls: (portal?.hits ?? []).map((hit) => hit.url).filter((url) => /^https:\/\/wsd\.adwokatura\.pl\/rejestry\/show\//u.test(url)).slice(0, 4)
+            }).catch(() => null)
+            : null);
         if (ethicsCited.length)
             step("VERIFY", `kodeks etyki: ${ethicsCited.map((item) => `${item.code.key} § ${item.paragraphs.join(", ")}`).join("; ")}`);
         if (saosSignatures.length)
@@ -1804,6 +1821,35 @@ export class SafeSessionExecutor {
         }
         else if (portalResult) {
             audit.record("gate", "OFFICIAL_PORTAL_SEARCH", "DEGRADED", { queries: portalResult.queries.map((item) => item.query), hits: 0 });
+        }
+        const wsdIssue = await wsdIssueFound;
+        if (wsdIssue?.rulings.length) {
+            const known = new Set(wsdSignatures);
+            const fresh = { ...wsdIssue, rulings: wsdIssue.rulings.filter((ruling) => !known.has(ruling.signature)) };
+            const prompt = wsdTopicPrompt(fresh);
+            if (prompt)
+                pathSections.push(prompt);
+            for (const ruling of fresh.rulings) {
+                officialCaseLawTexts.push(`${ruling.signature}\n${ruling.title}\n${ruling.text}`);
+                ledger.add({
+                    claim: ruling.signature,
+                    kind: "case",
+                    status: "VERIFIED",
+                    sourceUrl: ruling.url,
+                    sourceTier: "R2A",
+                    fetchedAt: new Date().toISOString(),
+                    verificationMethod: "web_fetch",
+                    sourceFormat: "TEXT",
+                    caseScope: "FULL_TEXT",
+                    caseSignature: ruling.signature,
+                    evidence: ["Rejestr orzecznictwa WSD Adwokatury", ruling.signature, ruling.title].filter(Boolean).join(" · ")
+                });
+            }
+            step("VERIFY", `rejestr WSD według zagadnienia: ${fresh.rulings.map((ruling) => ruling.signature).join(", ")}`);
+            audit.record("gate", "WSD_ISSUE_SEARCH", "OK", { tags: wsdIssue.tags, rulings: fresh.rulings.map((ruling) => `${ruling.signature} ${ruling.url}`) });
+        }
+        else if (wsdIssue) {
+            audit.record("gate", "WSD_ISSUE_SEARCH", "DEGRADED", { tags: wsdIssue.tags, rulings: [] });
         }
         const saosResults = await saosFound;
         if (saosResults.length) {

@@ -1,6 +1,7 @@
 import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { LOCAL_BROWSER_PORT, LOCAL_BROWSER_URL } from "./browser-render.js";
 
@@ -32,6 +33,8 @@ export type LocalSearxngResult = {
   /** Commands to start it by hand (shown when nothing could be started here). */
   commands: string[];
   error?: string;
+  /** The system the runtime runs on: Linux (a server) installs the Docker Engine, not Docker Desktop. */
+  platform?: NodeJS.Platform;
 };
 
 type Runner = (command: string, args: string[], cwd: string, timeoutMs: number) => Promise<{ code: number; output: string }>;
@@ -106,6 +109,37 @@ export async function installDockerDesktop(run: Runner, cwd: string, platform = 
     if ((await run("brew", ["--version"], cwd, 30_000)).code !== 0) return { ok: false, error: "INSTALLER_MISSING:brew" };
     const done = await run("brew", ["install", "--cask", "docker"], cwd, 45 * 60_000);
     return done.code === 0 ? { ok: true } : { ok: false, error: `INSTALL_FAILED: ${done.output.trim().split("\n").slice(-2).join(" ").slice(0, 300)}` };
+  }
+  if (platform === "linux") return installDockerEngineLinux(run, cwd);
+  return { ok: false, error: "INSTALLER_MISSING:linux" };
+}
+
+/**
+ * A Linux server (2026-11-16): the Docker Engine with its compose plugin from the system's own
+ * packages (no Docker Desktop on a server), on the administrator's click, when the runtime runs
+ * as root or may use sudo without a password; otherwise the settings show the commands to run.
+ */
+export async function installDockerEngineLinux(run: Runner, cwd: string, uid: number | undefined = process.getuid?.()): Promise<{ ok: boolean; error?: string }> {
+  const root = uid === 0;
+  if (!root && (await run("sudo", ["-n", "true"], cwd, 10_000)).code !== 0) return { ok: false, error: "INSTALLER_MISSING:linux" };
+  const admin = (command: string, args: string[], timeoutMs: number) => (root ? run(command, args, cwd, timeoutMs) : run("sudo", ["-n", command, ...args], cwd, timeoutMs));
+  const failed = (output: string) => ({ ok: false, error: `INSTALL_FAILED: ${output.trim().split("\n").slice(-2).join(" ").slice(0, 300)}` });
+  if ((await run("apt-get", ["--version"], cwd, 10_000)).code === 0) {
+    const update = await admin("apt-get", ["update"], 10 * 60_000);
+    if (update.code !== 0) return failed(update.output);
+    // Ubuntu 24.04+: docker-compose-v2; Debian: docker-compose (v2 in Debian 13).
+    let done = await admin("apt-get", ["install", "-y", "docker.io", "docker-compose-v2"], 30 * 60_000);
+    if (done.code !== 0) done = await admin("apt-get", ["install", "-y", "docker.io", "docker-compose"], 30 * 60_000);
+    if (done.code !== 0) return failed(done.output);
+    await admin("systemctl", ["enable", "--now", "docker"], 120_000);
+    // The runtime's own user reaches the engine through the docker group (after its next start).
+    if (!root) await admin("usermod", ["-aG", "docker", os.userInfo().username], 30_000);
+    return { ok: true };
+  }
+  if ((await run("dnf", ["--version"], cwd, 10_000)).code === 0) {
+    // Fedora, RHEL and their kin: Podman with podman-compose (the engine this setup also runs).
+    const done = await admin("dnf", ["install", "-y", "podman", "podman-compose"], 30 * 60_000);
+    return done.code === 0 ? { ok: true } : failed(done.output);
   }
   return { ok: false, error: "INSTALLER_MISSING:linux" };
 }
@@ -290,6 +324,7 @@ export async function setupLocalSearxng(args: {
    * of another search engine (user 2026-11-15: the option belongs in Wyszukiwarki when it is missing).
    */
   target?: "searxng" | "browser";
+  platform?: NodeJS.Platform;
   waitMs?: number;
   engineWaitMs?: number;
   pollMs?: number;
@@ -331,20 +366,29 @@ export async function setupLocalSearxng(args: {
       break;
     }
   }
+  const platform = args.platform ?? process.platform;
   let stopped: "docker" | "podman" | null = !engine && installed.length ? installed[0]! : null;
   let dockerCommand = "docker";
   if (!engine && !stopped && args.start && args.install) {
     writeLocalSearxng(args.directory);
-    const done = await installDockerDesktop(run, cwd);
-    const base0: LocalSearxngResult = { directory: args.directory, url: resultUrl, engine: null, started: false, reachable: false, commands: [`cd "${args.directory}"`, browserOnly ? "docker compose up -d browser" : "docker compose up -d"] };
+    const done = await installDockerDesktop(run, cwd, platform);
+    const base0: LocalSearxngResult = { directory: args.directory, url: resultUrl, engine: null, started: false, reachable: false, commands: [`cd "${args.directory}"`, browserOnly ? "docker compose up -d browser" : "docker compose up -d"], platform };
     if (!done.ok) return { ...base0, error: done.error ?? "INSTALL_FAILED" };
-    dockerCommand = dockerAfterInstall();
-    if ((await run(dockerCommand, ["compose", "version"], cwd, 20_000)).code !== 0) return { ...base0, error: "INSTALLED_RESTART_NEEDED" };
-    stopped = "docker";
+    if (platform === "linux") {
+      // The Docker Engine runs as a system service once installed (Podman needs none); a user not
+      // yet in the docker group reaches it after the runtime is started again.
+      if (await engineRunning(run, "docker", cwd)) engine = "docker";
+      else if ((await run("podman", ["compose", "version"], cwd, 20_000)).code === 0 && (await engineRunning(run, "podman", cwd))) engine = "podman";
+      else return { ...base0, error: "INSTALLED_RESTART_NEEDED" };
+    } else {
+      dockerCommand = dockerAfterInstall();
+      if ((await run(dockerCommand, ["compose", "version"], cwd, 20_000)).code !== 0) return { ...base0, error: "INSTALLED_RESTART_NEEDED" };
+      stopped = "docker";
+    }
   }
   const written = writeLocalSearxng(args.directory, engine ?? stopped ?? "docker");
   const commands = browserOnly ? [written[0]!, `${written[1]} browser`] : written;
-  const base: LocalSearxngResult = { directory: args.directory, url: resultUrl, engine: engine ?? stopped, started: false, reachable: false, commands };
+  const base: LocalSearxngResult = { directory: args.directory, url: resultUrl, engine: engine ?? stopped, started: false, reachable: false, commands, platform };
   if (!engine && !stopped) return { ...base, error: "CONTAINER_ENGINE_MISSING" };
   if (!args.start) return base;
   if (!engine && stopped) {
@@ -384,8 +428,12 @@ export async function autostartLocalSearxng(args: {
   waitMs?: number;
   pollMs?: number;
 }): Promise<LocalSearxngResult | null> {
-  if (args.searxngUrl.replace(/\/+$/u, "") !== LOCAL_SEARXNG_URL) return null;
-  if (!fs.existsSync(path.join(args.directory, "docker-compose.yml"))) return null;
+  const compose = path.join(args.directory, "docker-compose.yml");
+  if (!fs.existsSync(compose)) return null;
   const { searxngUrl: _url, ...rest } = args;
-  return setupLocalSearxng({ ...rest, start: true, install: false });
+  if (args.searxngUrl.replace(/\/+$/u, "") === LOCAL_SEARXNG_URL) return setupLocalSearxng({ ...rest, start: true, install: false });
+  // Another SearXNG (a server's, a public one) with the browser for reading pages installed here:
+  // the browser alone starts with the application or the server (2026-11-16).
+  if (/^\s{2}browser:/mu.test(fs.readFileSync(compose, "utf8"))) return setupLocalSearxng({ ...rest, start: true, install: false, target: "browser" });
+  return null;
 }
