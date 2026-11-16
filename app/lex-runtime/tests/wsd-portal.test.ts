@@ -61,3 +61,13 @@ describe("markers: one per place", () => {
     expect(out).not.toContain(`${OFFICIAL_ANCHOR_MARKER_TEXT} ${OFFICIAL_ANCHOR_MARKER_TEXT}`);
   });
 });
+
+describe("a ruling that cites another is not that other ruling (RD 121/26: WSD 111/22 cites SDI 87/17)", async () => {
+  const { wsdPageNames } = await import("../src/courts/wsd-portal.js");
+  it("the page's own field Sygnatura decides", () => {
+    const page = "Orzeczenie WSD z dnia 21 września 2022 r. Sygn. akt: WSD 111/22 … por. wyrok SN z 2017 r., SDI 87/17 … Sygnatura: WSD 111/22 Tagi";
+    expect(wsdPageNames(page, "111/22", "WSD")).toBe(true);
+    expect(wsdPageNames(page, "87/17", "SDI")).toBe(false);
+    expect(wsdPageNames("Sygn. akt WSD 113/22 Orzeczenie", "113/22", "WSD")).toBe(true);
+  });
+});

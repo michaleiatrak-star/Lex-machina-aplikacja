@@ -3,7 +3,7 @@
 // answer, so "which claims did you remove?" is answered from this record, not reconstructed.
 
 export type AnswerCorrection = {
-  round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE" | "STATUTE_CONTENT";
+  round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME" | "QUOTE_SOURCE" | "STATUTE_CONTENT" | "STRENGTH";
   findings: string[];
   removed: string[];
 };

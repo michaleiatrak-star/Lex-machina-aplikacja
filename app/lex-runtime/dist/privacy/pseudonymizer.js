@@ -981,6 +981,21 @@ export class LocalPolishPseudonymizer {
             ...manualPseudonyms,
             ...autoAllowed
         ]);
+        // A dash or hyphen at a name's edge is punctuation, not part of the name ("adw. Andrzej
+        // Ciecierski- pełnomocnictwo" in a hearing record): it came back as "Ciecierskiego-" in answers.
+        for (let index = 0; index < findings.length; index += 1) {
+            const finding = findings[index];
+            if (finding.kind !== "PERSON" || finding.source === "USER")
+                continue;
+            const tail = /[\s\-\u2010-\u2015]+$/u.exec(finding.value)?.[0] ?? "";
+            const head = /^[\s\-\u2010-\u2015]+/u.exec(finding.value)?.[0] ?? "";
+            if (!tail && !head)
+                continue;
+            const value = finding.value.slice(head.length, finding.value.length - tail.length);
+            if (value.length < 2)
+                continue;
+            findings[index] = { ...finding, value, start: finding.start + head.length, end: finding.end - tail.length };
+        }
         let output = text;
         const publicFindings = [];
         // Canonical identity and paradigm of every person mention. Without the

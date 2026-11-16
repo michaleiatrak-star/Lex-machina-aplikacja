@@ -44,10 +44,18 @@ export function wsdResultLinks(html: string): string[] {
   return [...links];
 }
 
-/** The page names the signature ("WSD 113/22", "sygn. akt WSD 113/22", "113/22" after "WSD"). */
+/**
+ * The page is the ruling with this signature: its own field "Sygnatura: …" when it has one (a
+ * ruling cites others: WSD 111/22 cites SDI 87/17 and is not SDI 87/17, RD 121/26), otherwise
+ * the signature named on it ("WSD 113/22", "sygn. akt WSD 113/22").
+ */
 export function wsdPageNames(text: string, number: string, prefix = "WSD"): boolean {
+  const normalized = text.normalize("NFKC").replace(/\s+/gu, " ");
+  const own = /Sygnatura:?\s*((?:WSD|SDI|DSI|WKD|SD)\s*\d{1,5}\s*\/\s*\d{2,4})/u.exec(normalized)?.[1];
+  const wanted = `${prefix} ${number}`.replace(/\s+/gu, "");
+  if (own) return own.replace(/\s+/gu, "") === wanted;
   const escaped = number.replace(/[/]/gu, "\\s*\\/\\s*");
-  return new RegExp(`${prefix}\\s*${escaped}(?![\\d])`, "u").test(text.normalize("NFKC"));
+  return new RegExp(`${prefix}\\s*${escaped}(?![\\d])`, "u").test(normalized);
 }
 
 /** Reads ruling pages and returns the first that names the signature. */

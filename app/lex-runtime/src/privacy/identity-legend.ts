@@ -1,0 +1,66 @@
+// The same person under different placeholders (RD 121/26, 2026-11-16): every document of a case
+// has its own key, so the user (in the question) and the person acquitted in a verdict, or an
+// attorney named in full in one document and by surname in another, were different symbols to
+// the model; it wrote that the acquittal "concerned another person". The application restores
+// the placeholders locally, compares the names and tells the model only which symbols are one
+// person, never the name.
+
+const PERSON_TOKEN = /\[(?:LMPII:D\d{2}|PII):PERSON:\d{4}\]/gu;
+
+const fold = (text: string) =>
+  text
+    .replace(/ł/gu, "l")
+    .replace(/Ł/gu, "L")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("pl")
+    .replace(/[^\p{L}\s-]/gu, " ")
+    .split(/[\s-]+/u)
+    .filter((word) => word.length >= 2);
+
+// A case form to its stem: "Wiatraka", "Wiatrakowi" -> "wiatrak"; "Michała" -> "michal";
+// "Ciecierskiego" -> "ciecierski".
+function stem(word: string): string {
+  for (const ending of ["skiego", "skiemu", "skim", "ckiego", "ckiemu", "ckim", "dzkiego"]) {
+    if (word.endsWith(ending)) return word.slice(0, word.length - ending.length + 3);
+  }
+  for (const ending of ["owi", "iem", "em", "ie", "a", "u", "y", "ej", "ą", "e"]) {
+    if (word.length - ending.length >= 4 && word.endsWith(ending)) return word.slice(0, -ending.length);
+  }
+  return word;
+}
+
+/** The placeholders of persons in the texts (each once, in order). */
+export function personTokens(texts: readonly string[]): string[] {
+  return [...new Set(texts.flatMap((text) => text.match(PERSON_TOKEN) ?? []))];
+}
+
+/**
+ * Groups of placeholders that stand for one person: the same name (case forms aside), and a
+ * surname alone joined to the one full name with that surname (none when two persons share it).
+ */
+export function samePersonGroups(tokens: readonly string[], restore: (token: string) => string | null): string[][] {
+  const named = tokens
+    .map((token) => ({ token, words: fold(restore(token) ?? "").map(stem) }))
+    .filter((item) => item.words.length > 0);
+  const full = new Map<string, string[]>();
+  for (const item of named.filter((entry) => entry.words.length >= 2)) {
+    const key = [...item.words].sort().join(" ");
+    full.set(key, [...(full.get(key) ?? []), item.token]);
+  }
+  // A surname alone: the full names ending with it.
+  for (const item of named.filter((entry) => entry.words.length === 1)) {
+    const matches = [...full.keys()].filter((key) => key.split(" ").includes(item.words[0]!));
+    if (matches.length === 1) full.get(matches[0]!)!.push(item.token);
+  }
+  return [...full.values()].filter((group) => group.length >= 2).map((group) => [...new Set(group)]).filter((group) => group.length >= 2);
+}
+
+export function identityLegendPrompt(groups: readonly string[][], questionTokens: ReadonlySet<string> = new Set()): string {
+  if (!groups.length) return "";
+  return [
+    "# TE SAME OSOBY POD RÓŻNYMI SYMBOLAMI (ustalone lokalnie przez aplikację)",
+    "Każdy dokument ma własne symbole osób. Symbole w jednym wierszu to ta sama osoba (aplikacja porównała nazwiska na tym komputerze, odmiana i samo nazwisko uwzględnione). Traktuj je jako jedną osobę we wszystkich dokumentach; nie pisz, że dokument dotyczy „innej osoby”, gdy jej symbol jest w tym samym wierszu.",
+    ...groups.map((group) => `- ${group.join(" = ")}${group.some((token) => questionTokens.has(token)) ? " (osoba wymieniona w pytaniu użytkownika)" : ""}`)
+  ].join("\n");
+}
