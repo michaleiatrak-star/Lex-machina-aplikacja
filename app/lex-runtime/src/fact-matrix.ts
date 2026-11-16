@@ -74,16 +74,26 @@ export function factRows(facts: readonly DescribedFact[]): FactRow[] {
     else row.cells.push({ record: fact.record, facts: [fact] });
     rows.set(key(fact), row);
   }
+  // Values worded differently but saying the same ("kontakt zakazany przez kierownika" / "kierownik
+  // zakazał kontaktu") are not a
+  // difference: cells differ when their words (5-letter stems, digits) overlap less than half.
+  const words = (cell: FactRow["cells"][number]) =>
+    new Set(cell.facts.flatMap((fact) => fold(fact.value).split(" ")).filter((word) => word.length >= 3 || /\d/u.test(word)).map((word) => word.slice(0, 5)));
+  const overlap = (a: Set<string>, b: Set<string>) => {
+    const union = new Set([...a, ...b]);
+    return union.size ? [...a].filter((word) => b.has(word)).length / union.size : 1;
+  };
   for (const row of rows.values()) {
-    const values = row.cells.map((cell) => cell.facts.map((fact) => fold(fact.value)).sort().join("|"));
-    row.differs = row.cells.length >= 2 && new Set(values).size > 1;
+    const sets = row.cells.map(words);
+    row.differs = sets.some((set, index) => sets.slice(index + 1).some((other) => overlap(set, other) < 0.5));
   }
   const weight = (row: FactRow) => (row.cells.length >= 2 ? 10 : 0) + (row.differs ? 10 : 0);
   return [...rows.values()].sort((a, b) => weight(b) - weight(a) || a.topic.localeCompare(b.topic, "pl"));
 }
 
-export function factMatrixPrompt(witness: string, rows: readonly FactRow[], dropped: number): string {
+export function factMatrixPrompt(witness: string, rows: readonly FactRow[], dropped: number, scope: "witness" | "documents" = "witness"): string {
   if (!rows.length) return "";
+  if (scope === "documents") return documentMatrixPrompt(rows, dropped);
   const cited = rows.filter((row) => /dokument\s+powołany/iu.test(row.attribute));
   const byTopic = new Map<string, FactRow[]>();
   for (const row of rows) byTopic.set(row.topic, [...(byTopic.get(row.topic) ?? []), row]);
@@ -106,9 +116,16 @@ export function factMatrixPrompt(witness: string, rows: readonly FactRow[], drop
 }
 
 /** One goal per topic with a difference between records. */
-export function factMatrixGoals(witness: string, rows: readonly FactRow[], limit = 6): string[] {
+export function factMatrixGoals(witness: string, rows: readonly FactRow[], limit = 6, scope: "witness" | "documents" = "witness"): string[] {
   const topics = [...new Set(rows.filter((row) => row.differs).map((row) => row.topic))];
-  return topics.slice(0, limit).map((topic) => `Wykazać sprzeczność lub zmianę wersji zeznań świadka ${witness}: ${topic} (${rows.filter((row) => row.topic === topic && row.differs).map((row) => row.attribute).join(", ")})`);
+  const attributes = (topic: string) => rows.filter((row) => row.topic === topic && row.differs).map((row) => row.attribute).join(", ");
+  return topics
+    .slice(0, limit)
+    .map((topic) =>
+      scope === "documents"
+        ? `Rozstrzygnąć rozbieżność dokumentów na korzyść strony albo ją wyjaśnić: ${topic} (${attributes(topic)})`
+        : `Wykazać sprzeczność lub zmianę wersji zeznań świadka ${witness}: ${topic} (${attributes(topic)})`
+    );
 }
 
 /** The first fact of each record in each differing row: the pleading must use them or set them aside. */
@@ -117,4 +134,188 @@ export function factMatrixRequired(rows: readonly FactRow[], limitRows = 6): Arr
     .filter((row) => row.differs)
     .slice(0, limitRows)
     .flatMap((row) => row.cells.map((cell) => ({ documentId: cell.facts[0]!.documentId, chunkIndex: cell.facts[0]!.chunkIndex, page: 1, text: cell.facts[0]!.quote })));
+}
+
+// The same matrix for any pleading built from several documents (user 2026-11-16: "the same
+// mechanism for any pleading from many documents"): the documents are cut into paragraphs (the
+// passages on the issue when the documents are too long), the model describes the facts each
+// document states, the application checks every quote in that document, and the matrix shows
+// where documents state the same thing differently (a decision's finding against a ruling, a
+// party's claim against a record) and where they agree.
+
+type DocumentText = { documentId: string; label: string; chunks: ReadonlyArray<{ index: number; text: string }> };
+
+/** Paragraph units of each document, labelled "<documentId> — <kind>"; null when too long. */
+export function documentUnits(documents: readonly DocumentText[], maxChars = 60_000): WitnessStatement[] | null {
+  const total = documents.reduce((sum, document) => sum + document.chunks.reduce((inner, chunk) => inner + chunk.text.length, 0), 0);
+  if (total > maxChars) return null;
+  return documents.flatMap((document) => {
+    const heading = `${document.documentId} — ${document.label}`;
+    return document.chunks.flatMap((chunk) => {
+      const units: string[] = [];
+      for (const paragraph of chunk.text.split(/\n\s*\n/u).map((item) => item.replace(/\s+/gu, " ").trim()).filter((item) => item.length >= 3)) {
+        // Short lines (headings, signatures, list items) joined to the next up to a paragraph's length.
+        if (units.length && units[units.length - 1]!.length < 200) units[units.length - 1] += ` ${paragraph}`;
+        else units.push(paragraph);
+      }
+      return units.map((text) => ({ documentId: document.documentId, chunkIndex: chunk.index, heading, text }));
+    });
+  });
+}
+
+/** Units from the weighted passages on the issue, when the documents are too long to send whole. */
+export function passageUnits(passages: ReadonlyArray<{ documentId: string; chunkIndex: number; text: string }>, labels: ReadonlyMap<string, string>): WitnessStatement[] {
+  return passages.map((passage) => ({ documentId: passage.documentId, chunkIndex: passage.chunkIndex, heading: `${passage.documentId} — ${labels.get(passage.documentId) ?? "dokument"}`, text: passage.text }));
+}
+
+function documentMatrixPrompt(rows: readonly FactRow[], dropped: number): string {
+  const byTopic = new Map<string, FactRow[]>();
+  // The topics stated by two documents first; a topic stated by one document only when it is short.
+  const shown = rows.filter((row) => row.cells.length >= 2 || rows.length <= 40).slice(0, 80);
+  for (const row of shown) byTopic.set(row.topic, [...(byTopic.get(row.topic) ?? []), row]);
+  const cited = rows.filter((row) => /dokument\s+powołany|dowód\s+wskazany/iu.test(row.attribute));
+  return [
+    `# MACIERZ FAKTÓW Z DOKUMENTÓW SPRAWY — TEMAT × CECHA × DOKUMENT (fakty opisane przez model, każdy cytat sprawdzony przez aplikację w dokumencie${dropped ? `; odrzucono ${dropped} bez pokrycia w dokumencie` : ""})`,
+    "RÓŻNE = dokumenty stwierdzają tę samą cechę tematu inaczej (np. ustalenie organu wobec wyroku, twierdzenie strony wobec protokołu): kandydat na zarzut błędnych ustaleń, sprzeczność albo pominięty dowód. Zgodne = fakt potwierdzony przez kilka dokumentów (mocniejszy dowód). Fakty do pisma bierz z macierzy; każdą RÓŻNICĘ wykorzystaj z cytatami obu dokumentów albo wyjaśnij, dlaczego nie ma znaczenia.",
+    "Dowody wynikające z macierzy (reguły ogólne): dokument urzędowy (wyrok, protokół, postanowienie) powołuj jako dowód tego, co w nim urzędowo zaświadczono; dokument albo dowód powołany w aktach, którego nie ma w materiałach, a który ma strona przeciwna lub organ — wniosek o jego przedstawienie albo dołączenie akt; ustalenie bez wskazanego dowodu — zarzut dowolności oceny; wartość zależną od faktu jeszcze nieustalonego przedstaw w wariantach.",
+    ...[...byTopic].map(([topic, list]) =>
+      [
+        `## ${topic}`,
+        ...list.map(
+          (row) =>
+            `- ${row.attribute}${row.differs ? " · RÓŻNE" : row.cells.length >= 2 ? " · zgodne" : " · tylko w jednym dokumencie"}: ` +
+            row.cells.map((cell) => `[${cell.record}] ${cell.facts.map((fact) => `${fact.value} („${fact.quote}” [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]])`).join("; ")}`).join(" ‖ ")
+        )
+      ].join("\n")
+    ),
+    ...(cited.length ? [`Dokumenty i dowody powołane w aktach (sprawdź, czy są w materiałach; jeśli nie — wniosek o przedstawienie): ${[...new Set(cited.flatMap((row) => row.cells.flatMap((cell) => cell.facts.map((fact) => `${fact.value} [${cell.record}]`))))].slice(0, 20).join("; ")}`] : [])
+  ].join("\n");
+}
+
+// The matrix built in stages (user 2026-11-16: "the matrix built by the model in stages, the
+// answers taken in a stream"): one long call describing every document timed out and left
+// nothing (RD 121/26, 0 facts after 180 s). Stage 1: one short call names the topics (events,
+// facts, information) with their attributes and the documents that speak of them, so every
+// document is described against the same names. Stage 2: one call per document, in parallel,
+// facts as JSON lines; every line is taken as it streams in, so a call cut by the time limit
+// still gives what it described.
+
+export type MatrixScope = "witness" | "documents";
+export type MatrixTopic = { topic: string; attributes: string[]; records: string[] };
+/** A model call: the text received so far when it ends or the time is up, and why it stopped early. */
+export type ModelCall = (system: string, user: string, timeoutMs: number) => Promise<{ text: string; failure: string }>;
+
+/** Every JSON object of the text: one per line, or the items of an array. */
+export function jsonObjects(text: string): Array<Record<string, unknown>> {
+  const objects: Array<Record<string, unknown>> = [];
+  for (const line of text.split(/\n/u)) {
+    const candidate = line.trim().replace(/^[-*]\s*/u, "").replace(/,$/u, "");
+    if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+    try {
+      const value = JSON.parse(candidate) as unknown;
+      if (value && typeof value === "object" && !Array.isArray(value)) objects.push(value as Record<string, unknown>);
+    } catch {
+      // a line cut by the time limit or not JSON
+    }
+  }
+  if (objects.length) return objects;
+  const array = /\[[\s\S]*\]/u.exec(text)?.[0];
+  if (!array) return [];
+  try {
+    const value = JSON.parse(array) as unknown;
+    return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+  } catch {
+    return [];
+  }
+}
+
+const unitList = (units: readonly WitnessStatement[], record: string) =>
+  units
+    .filter((item) => (item.heading || item.documentId) === record)
+    .map((item) => `- ${item.text}`)
+    .join("\n");
+
+export function topicRequest(units: readonly WitnessStatement[], focus: string, scope: MatrixScope, limit = 20): { system: string; user: string } {
+  const records = [...new Set(units.map((item) => item.heading || item.documentId))];
+  const source = scope === "witness" ? "zeznaniach świadka w kilku protokołach" : "dokumentach sprawy";
+  const system = [
+    `Jesteś asystentem prawnika. Etap 1 budowy macierzy faktów: wskaż tematy, o których mowa w ${source}, zanim fakty zostaną opisane.`,
+    `Temat to ZDARZENIE, FAKT albo INFORMACJA (np. „wiadomości do pokrzywdzonej”, „pismo z 4 maja”, „zakaz kontaktu”, „dane osobowe w piśmie”), NIGDY nazwa, rodzaj ani sygnatura dokumentu. Najpierw tematy, o których mówią co najmniej dwa ${scope === "witness" ? "protokoły" : "dokumenty"}, potem te ważne dla zagadnienia. Najwyżej ${limit} tematów.`,
+    "Dla każdego tematu podaj cechy do porównania (np. „data”, „okres”, „kanał”, „treść”, „przebieg”, „ustalenie organu”, „ocena”, „twierdzenie strony”, „rozstrzygnięcie”, „źródło wiedzy”, „dokument powołany”) i nazwy dokumentów dokładnie jak w nagłówkach.",
+    'Zwróć WYŁĄCZNIE wiersze JSON, jeden obiekt w wierszu: {"temat": "...", "cechy": ["..."], "dokumenty": ["..."]}',
+    focus.trim() ? `Zagadnienie sprawy: ${focus.trim().slice(0, 600)}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return { system, user: records.map((record) => `## ${record}\n${unitList(units, record)}`).join("\n\n") };
+}
+
+export function parseTopics(text: string, records: readonly string[]): MatrixTopic[] {
+  const known = new Map(records.map((record) => [fold(record), record]));
+  const resolve = (name: string) => known.get(fold(name)) ?? records.find((record) => fold(record).startsWith(fold(name)) || fold(name).startsWith(fold(record).split(" ")[0]!));
+  return jsonObjects(text)
+    .map((item) => ({
+      topic: String(item.temat ?? "").trim(),
+      attributes: (Array.isArray(item.cechy) ? item.cechy : []).map((value) => String(value).trim()).filter(Boolean),
+      records: [...new Set((Array.isArray(item.dokumenty) ? item.dokumenty : []).map((value) => resolve(String(value))).filter((value): value is string => Boolean(value)))]
+    }))
+    .filter((item) => item.topic && !records.some((record) => fold(record) === fold(item.topic)));
+}
+
+export function recordFactRequest(record: string, units: readonly WitnessStatement[], topics: readonly MatrixTopic[], scope: MatrixScope): { system: string; user: string } {
+  const system = [
+    `Jesteś asystentem prawnika. Etap 2 budowy macierzy faktów: opisz, co ${scope === "witness" ? "świadek zeznał w tym protokole" : "stwierdza ten dokument"} o każdym temacie z listy.`,
+    "Używaj DOKŁADNIE nazw tematów i cech z listy, żeby fakty z różnych dokumentów dało się porównać; nowy temat tylko wtedy, gdy ważnego faktu nie da się przypisać do żadnego z listy. Temat, o którym dokument nie mówi, pomiń.",
+    "Ustalenie, ocenę i twierdzenie zapisz jako osobne cechy. Wypowiedź z zaimkiem przypisz do tematu poprzedniej. Gdy dokument powołuje się na inny dokument albo dowód, cecha „dokument powołany”; gdy mówi, skąd wie, cecha „źródło wiedzy”. Pomiń pouczenia, nagłówki i dane adresowe. Nie dodawaj faktów spoza dokumentu.",
+    'Zwróć WYŁĄCZNIE wiersze JSON, jeden obiekt w wierszu: {"temat": "...", "cecha": "...", "wartosc": "najwyżej 12 słów", "cytat": "DOSŁOWNY fragment dokumentu, min. 3 słowa"}'
+  ].join("\n");
+  const user = [
+    "Tematy i cechy:",
+    ...topics.map((topic) => `- ${topic.topic}: ${topic.attributes.join(", ") || "(cechy według treści)"}`),
+    "",
+    `## ${record}`,
+    unitList(units, record)
+  ].join("\n");
+  return { system, user };
+}
+
+/** The facts of one document's lines, each quote checked in that document. */
+export function recordFacts(text: string, record: string, units: readonly WitnessStatement[]): { facts: DescribedFact[]; dropped: number } {
+  const lines = jsonObjects(text).map((item) => ({ ...item, protokol: record }));
+  return verifiedFacts(JSON.stringify(lines), units);
+}
+
+export async function stagedFactMatrix(
+  units: readonly WitnessStatement[],
+  focus: string,
+  scope: MatrixScope,
+  call: ModelCall,
+  options: { concurrency?: number; topicTimeoutMs?: number; factTimeoutMs?: number; maxRecords?: number } = {}
+): Promise<{ facts: DescribedFact[]; dropped: number; topics: MatrixTopic[]; failures: string[] }> {
+  const records = [...new Set(units.map((item) => item.heading || item.documentId))];
+  const failures: string[] = [];
+  const first = topicRequest(units, focus, scope);
+  const topicReply = await call(first.system, first.user, options.topicTimeoutMs ?? 120_000);
+  if (topicReply.failure) failures.push(`tematy: ${topicReply.failure}`);
+  const topics = parseTopics(topicReply.text, records);
+  if (!topics.length) return { facts: [], dropped: 0, topics, failures: [...failures, "tematy: brak tematów w odpowiedzi"] };
+  // The documents that speak of a topic (all, when the model named none), those of shared topics first.
+  const mentions = new Map(records.map((record) => [record, topics.filter((topic) => topic.records.includes(record)).length]));
+  const chosen = (topics.some((topic) => topic.records.length) ? records.filter((record) => mentions.get(record)) : records)
+    .sort((a, b) => mentions.get(b)! - mentions.get(a)!)
+    .slice(0, options.maxRecords ?? 10);
+  const results: Array<{ facts: DescribedFact[]; dropped: number }> = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < chosen.length) {
+      const record = chosen[next++]!;
+      const own = topics.filter((topic) => !topic.records.length || topic.records.includes(record));
+      const ask = recordFactRequest(record, units, own.length ? own : topics, scope);
+      const reply = await call(ask.system, ask.user, options.factTimeoutMs ?? 150_000);
+      if (reply.failure) failures.push(`${record}: ${reply.failure}`);
+      results.push(recordFacts(reply.text, record, units));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(options.concurrency ?? 4, chosen.length) }, worker));
+  return { facts: results.flatMap((result) => result.facts), dropped: results.reduce((sum, result) => sum + result.dropped, 0), topics, failures };
 }

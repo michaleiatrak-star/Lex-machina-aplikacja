@@ -151,6 +151,58 @@ function locateQuote(
   }
   const segments = quoteSegments(quote);
   if (segments.length === 0) return undefined;
+  return locateSegments(contextText, segments) ?? locateWithPersonSymbols(contextText, quote);
+}
+
+// A quote with a person's name where the document holds the person's symbol (RD 121/26: „uniewinnia
+// obwinionego Michała Wiatraka” against „uniewinnia obwinionego [PII:PERSON:0008]”): each symbol
+// stands for one run of capitalised words of the quote; every other word must still be verbatim.
+const PERSON_SYMBOL = /\[(?:LMPII:D\d{2}|PII):PERSON:\d{4}\]/gu;
+const NAME_RUN = /\p{Lu}[\p{L}'’-]*(?:\s+\p{Lu}[\p{L}'’-]*){0,3}/gu;
+const SYMBOL_MARK = "\u24E7";
+
+function locateWithPersonSymbols(contextText: string, quote: string): { start: number; end: number } | undefined {
+  if (!PERSON_SYMBOL.test(contextText)) return undefined;
+  PERSON_SYMBOL.lastIndex = 0;
+  let masked = "";
+  const origin: number[] = [];
+  const originEnd: number[] = [];
+  let last = 0;
+  for (const match of contextText.matchAll(PERSON_SYMBOL)) {
+    for (let i = last; i < match.index; i += 1) {
+      masked += contextText[i];
+      origin.push(i);
+      originEnd.push(i + 1);
+    }
+    masked += SYMBOL_MARK;
+    origin.push(match.index);
+    originEnd.push(match.index + match[0].length);
+    last = match.index + match[0].length;
+  }
+  for (let i = last; i < contextText.length; i += 1) {
+    masked += contextText[i];
+    origin.push(i);
+    originEnd.push(i + 1);
+  }
+  const runs = [...quote.matchAll(NAME_RUN)].slice(0, 4);
+  // Every choice of which capitalised runs are names (a sentence's first word may not be one).
+  for (let choice = (1 << runs.length) - 1; choice > 0; choice -= 1) {
+    let variant = "";
+    let cursor = 0;
+    runs.forEach((run, index) => {
+      if (!(choice & (1 << index))) return;
+      variant += quote.slice(cursor, run.index) + SYMBOL_MARK;
+      cursor = run.index! + run[0].length;
+    });
+    variant += quote.slice(cursor);
+    const found = locateSegments(masked, quoteSegments(variant));
+    if (found) return { start: origin[found.start]!, end: originEnd[found.end - 1]! };
+  }
+  return undefined;
+}
+
+function locateSegments(contextText: string, segments: readonly string[]): { start: number; end: number } | undefined {
+  if (segments.length === 0) return undefined;
   const source = fold(contextText);
   let from = 0;
   let start = -1;

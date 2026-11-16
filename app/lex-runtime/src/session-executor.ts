@@ -217,7 +217,7 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePass
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
-import { factDescriptionRequest, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, verifiedFacts } from "./fact-matrix.js";
+import { documentUnits, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, passageUnits, stagedFactMatrix, type ModelCall } from "./fact-matrix.js";
 import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, witnessStatements, type WitnessStatement } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
@@ -3084,37 +3084,62 @@ export class SafeSessionExecutor implements SessionExecutor {
         // The matrix of each witness heard in two records or more: topics × records, every statement
         // of the topic in its cell; the facts of the pleading come from it (user 2026-11-16).
         const matrixGoalList: string[] = [];
+        // A model call taken in a stream: the text received so far stays when the time is up.
+        const streamedCall: ModelCall = async (system, user, timeoutMs) => {
+          let text = "";
+          let failure = "";
+          const abort = new AbortController();
+          const timer = setTimeout(() => {
+            failure = `limit czasu ${Math.round(timeoutMs / 1000)} s (przyjęto ${text.length} znaków)`;
+            abort.abort();
+          }, timeoutMs);
+          try {
+            const result = await Promise.race([
+              this.providers.stream(request.provider, {
+                model: request.model,
+                systemPrompt: system,
+                messages: [{ role: "user" as const, content: user }],
+                accountContinuity: "none",
+                reasoning: "none",
+                abortSignal: abort.signal,
+                callbacks: { onContentDelta: (piece) => (text += piece) }
+              }),
+              new Promise<null>((resolve) => abort.signal.addEventListener("abort", () => resolve(null), { once: true }))
+            ]);
+            if (result && result.fullText.length >= text.length) text = result.fullText;
+          } catch (error) {
+            failure ||= `błąd: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300);
+          } finally {
+            clearTimeout(timer);
+          }
+          return { text, failure };
+        };
+        const dumpMatrix = (name: string, data: unknown) => {
+          if (!process.env.LEX_DEBUG_FINALIZATION_DIR?.trim()) return;
+          try {
+            fs.writeFileSync(path.join(process.env.LEX_DEBUG_FINALIZATION_DIR.trim(), `${name}-${Date.now()}.json`), JSON.stringify(data, null, 1));
+          } catch {
+            // diagnostics only
+          }
+        };
         for (const [witness, list] of byWitness) {
           if (new Set(list.map((item) => item.documentId)).size < 2) continue;
           // First the facts described by the model (topic, attribute, value, verbatim words), every
           // quote checked in the record; word matching only when that fails.
           if (!request.model.startsWith("local/")) {
-            step("PREPARE", `macierz faktów zeznań świadka (${new Set(list.map((item) => item.documentId)).size} protokoły)`);
-            const ask = factDescriptionRequest(witness, list);
-            const reply = await Promise.race([
-              this.providers
-                .stream(request.provider, { model: request.model, systemPrompt: ask.system, messages: [{ role: "user" as const, content: ask.user }], accountContinuity: "none", reasoning: "none" })
-                .then((result) => result.fullText)
-                .catch(() => ""),
-              new Promise<string>((resolve) => setTimeout(() => resolve(""), 180_000))
-            ]);
-            const described = verifiedFacts(reply, list);
-            if (process.env.LEX_DEBUG_FINALIZATION_DIR?.trim()) {
-              try {
-                fs.writeFileSync(path.join(process.env.LEX_DEBUG_FINALIZATION_DIR.trim(), `fact-matrix-${Date.now()}.json`), JSON.stringify({ witness, reply, facts: described.facts.length, dropped: described.dropped }, null, 1));
-              } catch {
-                // diagnostics only
-              }
-            }
+            step("PREPARE", `macierz faktów zeznań świadka etapami (${new Set(list.map((item) => item.documentId)).size} protokoły)`);
+            const started = Date.now();
+            const described = await stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 });
+            dumpMatrix("fact-matrix", { witness, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
             const factRowList = factRows(described.facts);
             if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
               pathSections.push(factMatrixPrompt(witness, factRowList, described.dropped));
               matrixGoalList.push(...factMatrixGoals(witness, factRowList));
               strengthKeyFacts.push(...factMatrixRequired(factRowList));
-              audit.record("gate", "WITNESS_FACT_MATRIX", "OK", { witness, facts: described.facts.length, dropped: described.dropped, differing: factRowList.filter((row) => row.differs).length });
+              audit.record("gate", "WITNESS_FACT_MATRIX", "OK", { witness, topics: described.topics.length, facts: described.facts.length, dropped: described.dropped, differing: factRowList.filter((row) => row.differs).length, failures: described.failures });
               continue;
             }
-            audit.record("gate", "WITNESS_FACT_MATRIX", "DEGRADED", { witness, facts: described.facts.length, dropped: described.dropped });
+            audit.record("gate", "WITNESS_FACT_MATRIX", "DEGRADED", { witness, facts: described.facts.length, dropped: described.dropped, failures: described.failures });
           }
           const rows = testimonyMatrix(list);
           const prompt = testimonyMatrixPrompt(witness, rows);
@@ -3129,6 +3154,30 @@ export class SafeSessionExecutor implements SessionExecutor {
             }
           }
           audit.record("gate", "WITNESS_TESTIMONY_MATRIX", "OK", { witness, topics: rows.length, crossRecord: rows.filter((item) => item.byRecord.length >= 2).length });
+        }
+        // The same matrix for a pleading built from several documents, when no witness matrix was
+        // built: what each document states on the same topic, every quote checked in its document.
+        const matrixQuestion = latestUserTurn(request.query);
+        const matrixDocuments = recognisedDocuments.filter((document) => document.category !== "INNE" || recognisedDocuments.length <= 6);
+        if (!matrixGoalList.length && !request.model.startsWith("local/") && matrixDocuments.length >= 2 && (isCourtPleading(matrixQuestion) || isChallenge(matrixQuestion))) {
+          const labels = new Map(recognisedDocuments.map((document) => [document.documentId, document.label]));
+          const texts = matrixDocuments.map((document) => ({ documentId: document.documentId, label: document.label, chunks: attachments.find((attachment) => attachment.documentId === document.documentId)!.chunks }));
+          const units = documentUnits(texts) ?? passageUnits(issuePassages(attachments, contextFocus, 40, new Map(recognisedDocuments.map((document) => [document.documentId, document.category as string]))), labels);
+          if (new Set(units.map((unit) => unit.documentId)).size >= 2) {
+            step("PREPARE", `macierz faktów z dokumentów etapami (${new Set(units.map((unit) => unit.documentId)).size} dokumenty)`);
+            const started = Date.now();
+            const described = await stagedFactMatrix(units, contextFocus || matrixQuestion, "documents", streamedCall, { concurrency: 4, maxRecords: 10 });
+            dumpMatrix("document-matrix", { units: units.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
+            const rowList = factRows(described.facts);
+            if (described.facts.length >= 4 && rowList.some((row) => row.cells.length >= 2)) {
+              pathSections.push(factMatrixPrompt("", rowList, described.dropped, "documents"));
+              matrixGoalList.push(...factMatrixGoals("", rowList, 4, "documents"));
+              strengthKeyFacts.push(...factMatrixRequired(rowList, 4));
+              audit.record("gate", "DOCUMENT_FACT_MATRIX", "OK", { units: units.length, topics: described.topics.length, failures: described.failures, facts: described.facts.length, dropped: described.dropped, shared: rowList.filter((row) => row.cells.length >= 2).length, differing: rowList.filter((row) => row.differs).length });
+            } else {
+              audit.record("gate", "DOCUMENT_FACT_MATRIX", "DEGRADED", { units: units.length, facts: described.facts.length, dropped: described.dropped, failures: described.failures });
+            }
+          }
         }
         if (pairs.length) {
           pathSections.push(statementPairsPrompt(pairs));
