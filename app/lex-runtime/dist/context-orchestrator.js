@@ -511,8 +511,13 @@ export function documentCoveragePrompt(original, sent, options) {
             (missing.length ? `; NIEPRZEKAZANE s. ${pageRanges(missing)}` : "") +
             (options.inventoryDocuments?.has(document.documentId) ? " — CAŁY dokument przeczytany przez aplikację do INWENTARZA DOWODÓW" : ""));
     });
-    if (!lines.length)
-        return null;
+    // Every document delivered whole: said plainly (XI P 27/26: two hearing records in the context
+    // in full, the answer told the user they had been read "partly").
+    if (!lines.length) {
+        return original.length
+            ? `STAN ODCZYTU DOKUMENTÓW: wszystkie dokumenty (${original.length}) są w kontekście w całości, każda strona. Podając użytkownikowi stan odczytu, pisz „odczytane w całości”; nie pisz, że odczytano je częściowo albo tylko we fragmentach. Wskazania aplikacji (fragmenty, macierze, cele) są wyborem z tych pełnych tekstów, nie ich zastępstwem.`
+            : null;
+    }
     // Evidence inventory (evidence-inventory.ts): the application read every page, the model relies on its items.
     const inventory = options.inventoryDocuments?.size
         ? "Strony nieprzekazane albo streszczone dokumentów oznaczonych jako przeczytane do INWENTARZA DOWODÓW są ODCZYTANE: aplikacja przeczytała je w całości, a ich fakty z cytatami sprawdzonymi w dokumencie są w INWENTARZU DOWODÓW (pozycje D1, D2 …). Opieraj na tych pozycjach ustalenia i powołuj je ze źródłem; nie nazywaj tych dokumentów nieodczytanymi. "

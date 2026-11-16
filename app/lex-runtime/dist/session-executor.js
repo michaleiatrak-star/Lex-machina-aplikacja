@@ -75,7 +75,8 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
-import { credibilityGoals, statementPairs, statementPairsPrompt, witnessStatements } from "./witness-statements.js";
+import { factDescriptionRequest, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, verifiedFacts } from "./fact-matrix.js";
+import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, witnessStatements } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
@@ -1998,6 +1999,58 @@ export class SafeSessionExecutor {
                 const pairs = [...byWitness.values()].some((list) => new Set(list.map((item) => item.documentId)).size > 1) || /sprzeczn|wiarygodn|zeznan/iu.test(latestUserTurn(request.query))
                     ? statementPairs(byWitness)
                     : [];
+                // The matrix of each witness heard in two records or more: topics × records, every statement
+                // of the topic in its cell; the facts of the pleading come from it (user 2026-11-16).
+                const matrixGoalList = [];
+                for (const [witness, list] of byWitness) {
+                    if (new Set(list.map((item) => item.documentId)).size < 2)
+                        continue;
+                    // First the facts described by the model (topic, attribute, value, verbatim words), every
+                    // quote checked in the record; word matching only when that fails.
+                    if (!request.model.startsWith("local/")) {
+                        step("PREPARE", `macierz faktów zeznań świadka (${new Set(list.map((item) => item.documentId)).size} protokoły)`);
+                        const ask = factDescriptionRequest(witness, list);
+                        const reply = await Promise.race([
+                            this.providers
+                                .stream(request.provider, { model: request.model, systemPrompt: ask.system, messages: [{ role: "user", content: ask.user }], accountContinuity: "none", reasoning: "none" })
+                                .then((result) => result.fullText)
+                                .catch(() => ""),
+                            new Promise((resolve) => setTimeout(() => resolve(""), 180_000))
+                        ]);
+                        const described = verifiedFacts(reply, list);
+                        if (process.env.LEX_DEBUG_FINALIZATION_DIR?.trim()) {
+                            try {
+                                fs.writeFileSync(path.join(process.env.LEX_DEBUG_FINALIZATION_DIR.trim(), `fact-matrix-${Date.now()}.json`), JSON.stringify({ witness, reply, facts: described.facts.length, dropped: described.dropped }, null, 1));
+                            }
+                            catch {
+                                // diagnostics only
+                            }
+                        }
+                        const factRowList = factRows(described.facts);
+                        if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
+                            pathSections.push(factMatrixPrompt(witness, factRowList, described.dropped));
+                            matrixGoalList.push(...factMatrixGoals(witness, factRowList));
+                            strengthKeyFacts.push(...factMatrixRequired(factRowList));
+                            audit.record("gate", "WITNESS_FACT_MATRIX", "OK", { witness, facts: described.facts.length, dropped: described.dropped, differing: factRowList.filter((row) => row.differs).length });
+                            continue;
+                        }
+                        audit.record("gate", "WITNESS_FACT_MATRIX", "DEGRADED", { witness, facts: described.facts.length, dropped: described.dropped });
+                    }
+                    const rows = testimonyMatrix(list);
+                    const prompt = testimonyMatrixPrompt(witness, rows);
+                    if (!prompt)
+                        continue;
+                    pathSections.push(prompt);
+                    matrixGoalList.push(...matrixGoals(witness, rows));
+                    // From each topic heard in both records: one statement of each record must be used or set aside.
+                    for (const row of rows.filter((item) => item.byRecord.length >= 2).slice(0, 4)) {
+                        for (const column of row.byRecord) {
+                            const first = column.statements[0];
+                            strengthKeyFacts.push({ documentId: first.documentId, chunkIndex: first.chunkIndex, page: 1, text: first.text });
+                        }
+                    }
+                    audit.record("gate", "WITNESS_TESTIMONY_MATRIX", "OK", { witness, topics: rows.length, crossRecord: rows.filter((item) => item.byRecord.length >= 2).length });
+                }
                 if (pairs.length) {
                     pathSections.push(statementPairsPrompt(pairs));
                     audit.record("gate", "WITNESS_STATEMENT_PAIRS", "OK", { pairs: pairs.length });
@@ -2011,7 +2064,8 @@ export class SafeSessionExecutor {
                 const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
                 const goals = [
                     ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
-                    ...credibilityGoals(pairs)
+                    // One goal per topic of the matrix; the pairs' goals only without a matrix.
+                    ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs))
                 ].slice(0, 8);
                 if (goals.length) {
                     const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category]));

@@ -42,6 +42,12 @@ export function argumentSchemaGaps(answer: string): SchemaGap[] {
   const unproven = blocks.filter((block) => block.length > 300 && !/\[\[LEXDOC|„[^”]{15,}”|\(?Dowód|dowodem|protok[oó]ł|załącznik/iu.test(block));
   if (unproven.length) gaps.push({ element: "DOWÓD", detail: `${unproven.length} bloków uzasadnienia bez dowodu przy fakcie` });
   if (!/(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(answer)) gaps.push({ element: "WNIOSEK", detail: "brak wniosków (petitum)" });
+  // A conclusion that depends on a fact still to be filled in ("⬛ [UZUPEŁNIJ: data]") is stated as
+  // certain (XI P 27/26: "Jedno z tych zeznań jest nieprawdziwe" before the date was known).
+  const conditional = body
+    .split(/\n\s*\n/u)
+    .filter((paragraph) => /⬛/u.test(paragraph) && /(?:jest\s+nieprawdziw|nieprawdą|zaprzeczył|fałszyw|skłamał|kłamie|nie\s+mo(?:że|gą)\s+być\s+prawdziw)/iu.test(paragraph) && !/(?:wariant|jeżeli|jeśli|gdyby|o\s+ile|w\s+razie)/iu.test(paragraph));
+  if (conditional.length) gaps.push({ element: "TEZA WARUNKOWA", detail: `${conditional.length} akapitów przesądza wniosek zależny od faktu do uzupełnienia (⬛): rozpisz warianty albo usuń tezę do czasu ustalenia faktu` });
   return gaps;
 }
 

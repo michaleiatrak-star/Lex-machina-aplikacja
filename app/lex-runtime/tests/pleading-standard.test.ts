@@ -27,3 +27,12 @@ describe("a pleading to a court is built as pisma-procesowe-v3 prescribes (XI P 
     expect(prompt).toContain("ANTYCYPACJA");
   });
 });
+
+describe("a conclusion that depends on a fact still to fill in is not stated as certain", () => {
+  it("is caught without variants and passes with them", () => {
+    const certain = "### UZASADNIENIE\nWiadomość nosi datę ⬛ [UZUPEŁNIJ: data]. Jedno z tych zeznań jest nieprawdziwe.\n\nPozwany może podnieść… Nawet gdyby… wnoszę";
+    expect(argumentSchemaGaps(certain).map((gap) => gap.element)).toContain("TEZA WARUNKOWA");
+    const variants = "### UZASADNIENIE\nWariant A: jeżeli wiadomość ma datę ⬛ sprzed 17.03, jedno z zeznań jest nieprawdziwe.\n\nPozwany może podnieść… Nawet gdyby… wnoszę";
+    expect(argumentSchemaGaps(variants).map((gap) => gap.element)).not.toContain("TEZA WARUNKOWA");
+  });
+});

@@ -37,7 +37,7 @@ describe("long documents: the pages the model got, by model", () => {
   });
   it("hosted model with the document tool: read the rest; a document sent whole: nothing", () => {
     expect(documentCoveragePrompt(original, sent, { local: false, readTool: "read_case_file" })).toContain("doczytaj narzędziem read_case_file");
-    expect(documentCoveragePrompt(original, original, { local: true, readTool: null })).toBeNull();
+    expect(documentCoveragePrompt(original, original, { local: true, readTool: null })).toContain("odczytane w całości");
   });
   it("pages not sent but read into the evidence inventory are not called unread", () => {
     const prompt = documentCoveragePrompt(original, sent, { local: false, readTool: null, inventoryDocuments: new Set(["d1"]) })!;

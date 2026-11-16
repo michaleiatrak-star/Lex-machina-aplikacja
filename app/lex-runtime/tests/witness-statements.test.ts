@@ -40,3 +40,34 @@ describe("the same witness in two hearings (universal: no topics or words per ca
     expect(credibilityGoals(pairs)[0]).toMatch(/^Wykazać sprzeczność lub niespójność zeznań świadka Kast w temacie: /u);
   });
 });
+
+describe("the testimony matrix: topics × records, facts taken from it", async () => {
+  const { testimonyMatrix, matrixGoals } = await import("../src/witness-statements.js");
+  const s = (documentId: string, heading: string, text: string) => ({ documentId, chunkIndex: 0, heading, text });
+  const M = "VII P 94/25, 17 marca 2026";
+  const N = "XI P 27/26, 13 listopada 2026";
+  const statements = [
+    s("m", M, "Po rozwiązaniu umowy powód wysyłał mi wiadomości smsowo, w których straszył mnie przepisami karnymi."),
+    s("m", M, "Trwało to może 3 miesiące."),
+    s("m", M, "Wynagrodzenie płatne jest 10-go każdego miesiąca na konto bankowe."),
+    s("m", M, "Opłaty za zezwolenia ponosił wyłącznie prezes."),
+    s("n", N, "Wysyłał na Whatsapp wiadomości że mamy jako świadkowie mówić prawdę."),
+    s("n", N, "Dostawałem je raz na miesiąc."),
+    s("n", N, "Na spotkaniu pracowników poinformowano o zakazie kontaktu."),
+    s("n", N, "Po zwolnieniu zmieniono hasła dostępu.")
+  ];
+  const rows = testimonyMatrix(statements);
+
+  it("a statement that continues the previous one stays in its topic; the topic heard in both records comes first", () => {
+    const first = rows[0]!;
+    expect(first.byRecord.map((column) => column.documentId).sort()).toEqual(["m", "n"]);
+    const texts = first.byRecord.flatMap((column) => column.statements.map((item) => item.text));
+    expect(texts).toContain("Trwało to może 3 miesiące.");
+    expect(texts).toContain("Dostawałem je raz na miesiąc.");
+    expect(first.differences.join(" ")).toContain("raz na miesiac");
+  });
+
+  it("one goal per topic heard in both records", () => {
+    expect(matrixGoals("Kast", rows)).toHaveLength(rows.filter((row) => row.byRecord.length >= 2).length);
+  });
+});

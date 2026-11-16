@@ -45,7 +45,8 @@ export function witnessStatements(documentId, chunkIndex, text) {
             .replace(/\b\d{2}:\d{2}:\d{2}\b/gu, "\n")
             .split(/\n\s*[-–•]\s*|(?<=[.!?])\s+(?=\p{Lu})/u)
             .map((item) => item.replace(/\s+/gu, " ").trim())
-            .filter((item) => item.length >= 15 && !/^Na\s+pytani/iu.test(item));
+            // The record's own acts (the court, the parties, the clerk) are not the witness's words.
+            .filter((item) => item.length >= 15 && !/^Na\s+pytani/iu.test(item) && !/^(?:Przewodnicząc\p{L}*|S[ąa]d\s|Pow[óo]d\s+(?:podnosi|ponosi|wnosi|oświadcza|precyzuje)|Pe[łl]nomocnik|Protok|W\s+tym\s+miejscu|[ŚS]wiadk\p{L}*\s+zwolniono)/u.test(item));
         const list = result.get(witness) ?? [];
         for (const statement of statements) {
             const clean = statement.replace(/^Na\s+pytani\p{L}*\s+\p{L}+\s*:?\s*/iu, "");
@@ -128,4 +129,146 @@ export function statementPairsPrompt(pairs) {
 /** Goals of a credibility challenge: one per topic on which the witness's statements differ. */
 export function credibilityGoals(pairs, limit = 6) {
     return pairs.slice(0, limit).map((pair) => `Wykazać sprzeczność lub niespójność zeznań świadka ${pair.witness} w temacie: ${pair.shared.slice(0, 4).join(", ")}`);
+}
+// A statement that refers back: its subject is in the previous statement.
+const CONTINUES = /^(?:to|je|ją|go|on|ona|oni|one|tego|tam|wtedy|potem|było\s+to|trwało\s+to|\p{L}+(?:łem|łam|liśmy)\s+(?:je|ją|go|to))(?![\p{L}])/iu;
+export function testimonyMatrix(statements, maxTopics = 10) {
+    // Units: a statement with the ones that continue it (same record, in order).
+    const units = [];
+    for (const statement of statements) {
+        const last = units[units.length - 1];
+        if (last && CONTINUES.test(statement.text.trim()) && last.statements[0].documentId === statement.documentId)
+            last.statements.push(statement);
+        else
+            units.push({ statements: [statement], stems: new Set() });
+    }
+    for (const unit of units)
+        unit.stems = new Set(stemsOf(unit.statements.map((item) => item.text).join(" ")));
+    const frequency = new Map();
+    for (const unit of units)
+        for (const item of unit.stems)
+            frequency.set(item, (frequency.get(item) ?? 0) + 1);
+    // A word in few units of the testimony is a topic's word; a common one ("praca") is not.
+    const rare = (item) => (frequency.get(item) ?? 0) <= Math.max(2, Math.ceil(units.length / 8));
+    const similarity = (a, b) => {
+        const shared = [...a].filter((item) => b.has(item) && rare(item));
+        return { count: shared.length, weight: shared.reduce((sum, item) => sum + 1 / (frequency.get(item) ?? 1), 0) };
+    };
+    // Topics around a seed (no chaining: a unit joins a topic only if it is like the topic's seed),
+    // seeds taken in the order of the testimony; a unit joins the most similar topic.
+    const topicsList = [];
+    for (const unit of units) {
+        let best = null;
+        let bestWeight = 0;
+        for (const topic of topicsList) {
+            const sim = similarity(unit.stems, topic.seed);
+            if ((sim.count >= 2 || sim.weight >= 0.5) && sim.weight > bestWeight) {
+                best = topic;
+                bestWeight = sim.weight;
+            }
+        }
+        if (best)
+            best.units.push(unit);
+        else
+            topicsList.push({ seed: unit.stems, units: [unit] });
+    }
+    // Mutual nearest statements of two records (each the other's most similar in the other record)
+    // tell one thing twice: the second joins the first one's topic, whatever the order of seeding.
+    const recordOfUnit = (unit) => unit.statements[0].documentId;
+    const nearest = units.map((unit) => {
+        let best = -1;
+        let bestWeight = 0.3;
+        units.forEach((other, index) => {
+            if (recordOfUnit(other) === recordOfUnit(unit))
+                return;
+            const sim = similarity(unit.stems, other.stems);
+            if (sim.weight > bestWeight) {
+                best = index;
+                bestWeight = sim.weight;
+            }
+        });
+        return best;
+    });
+    const topicOf = (unit) => topicsList.find((topic) => topic.units.includes(unit));
+    units.forEach((unit, index) => {
+        const other = nearest[index];
+        if (other < 0 || nearest[other] !== index || index > other)
+            return;
+        const home = topicOf(unit);
+        const away = topicOf(units[other]);
+        if (home === away)
+            return;
+        away.units = away.units.filter((item) => item !== units[other]);
+        home.units.push(units[other]);
+    });
+    // A topic heard in one record only and one heard in another record only, on the same subject
+    // (one rarer word in common is enough here), are one topic told twice: joined.
+    const recordsOf = (topic) => new Set(topic.units.flatMap((unit) => unit.statements.map((item) => item.documentId)));
+    const stemsOfTopic = (topic) => new Set(topic.units.flatMap((unit) => [...unit.stems]));
+    for (let i = 0; i < topicsList.length; i++) {
+        const a = topicsList[i];
+        const recordsA = recordsOf(a);
+        if (recordsA.size !== 1 || !a.units.length)
+            continue;
+        let best = -1;
+        let bestWeight = 0.4;
+        for (let j = 0; j < topicsList.length; j++) {
+            const b = topicsList[j];
+            if (i === j || !b.units.length)
+                continue;
+            const recordsB = recordsOf(b);
+            if (recordsB.size !== 1 || [...recordsB][0] === [...recordsA][0])
+                continue;
+            const sim = similarity(stemsOfTopic(a), stemsOfTopic(b));
+            if (sim.weight > bestWeight) {
+                best = j;
+                bestWeight = sim.weight;
+            }
+        }
+        if (best >= 0) {
+            topicsList[best].units.push(...a.units);
+            a.units = [];
+        }
+    }
+    const topics = new Map(topicsList.filter((topic) => topic.units.length).map((topic, index) => [index, topic.units]));
+    const rows = [];
+    for (const group of topics.values()) {
+        const all = group.flatMap((unit) => unit.statements);
+        const records = [...new Set(all.map((item) => item.documentId))];
+        const counts = new Map();
+        for (const unit of group)
+            for (const item of unit.stems)
+                if (rare(item))
+                    counts.set(item, (counts.get(item) ?? 0) + 1);
+        const label = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([item]) => item).join(", ");
+        const byRecord = records.map((documentId) => {
+            const statementsOf = all.filter((item) => item.documentId === documentId);
+            return { documentId, heading: statementsOf[0].heading, statements: statementsOf };
+        });
+        const differences = [];
+        if (byRecord.length >= 2) {
+            const quantitiesOf = byRecord.map((column) => quantities(column.statements.map((item) => item.text).join(" ")));
+            if (quantitiesOf.every((list) => list.length) && new Set(quantitiesOf.map((list) => list.join("|"))).size > 1) {
+                differences.push(`liczby i czas: ${byRecord.map((column, index) => `${column.heading || column.documentId}: „${quantitiesOf[index].join(", ")}”`).join(" wobec ")}`);
+            }
+        }
+        // Rows on which the records differ first, then rows heard in both, then the rest.
+        const weight = (byRecord.length >= 2 ? 10 : 0) + differences.length * 5 + all.length;
+        rows.push({ label, byRecord, differences, weight });
+    }
+    return rows.sort((a, b) => b.weight - a.weight).slice(0, maxTopics).map(({ weight: _weight, ...row }) => row);
+}
+export function testimonyMatrixPrompt(witness, rows) {
+    if (!rows.length)
+        return "";
+    return [
+        `# MACIERZ ZEZNAŃ ŚWIADKA ${witness} — TEMATY × PROTOKOŁY (zestawione przez aplikację)`,
+        "Wiersz = temat, kolumny = protokoły; w komórce wszystkie wypowiedzi świadka na ten temat w tym protokole (dosłownie). Pracuj na macierzy: dla każdego tematu z dwoma protokołami porównaj komórki (sprzeczność, zmiana wersji, nowy element, zgodność) i oceń, czy ocena świadka zgadza się z jego własnym opisem faktów. Fakty do pisma bierz z macierzy, cytując obie komórki ze wskazaniem protokołu.",
+        ...rows.map((row, index) => `T${index + 1}. temat: ${row.label || "—"}${row.differences.length ? ` · różnice: ${row.differences.join("; ")}` : ""}\n` +
+            row.byRecord.map((column) => `  [${column.heading || column.documentId}] ${column.statements.map((item) => `„${item.text}” [[LEXDOC:${item.documentId}:${item.chunkIndex}]]`).join(" ")}`).join("\n"))
+    ].join("\n");
+}
+/** One goal per topic heard in two records (no duplicates for one topic). */
+export function matrixGoals(witness, rows, limit = 6) {
+    return rows.filter((row) => row.byRecord.length >= 2).slice(0, limit).map((row) => `Wykazać sprzeczność lub zmianę wersji zeznań świadka ${witness} w temacie: ${row.label}`);
 }
