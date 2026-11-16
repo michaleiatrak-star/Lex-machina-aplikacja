@@ -92,3 +92,31 @@ describe("WSD second round: the rulings the first ones cite", async () => {
     expect(second).toEqual([expect.objectContaining({ signature: "WSD 90/06", viaTag: "powołane w SDI 9/12" })]);
   });
 });
+
+describe("universal rules for the record's passages (no words or passages chosen per case)", async () => {
+  const { caseVocabulary, issuePassages } = await import("../src/case-issue.js");
+  it("the vocabulary comes from the sentences that name the issue in this record", () => {
+    const record = [
+      ...Array.from({ length: 12 }, (_, index) => `Świadek numer ${index} zeznał o grafiku zmian i urlopach w dziale.`),
+      "Najemca opóźnia zapłatę czynszu, a wynajmujący naliczył odsetki za opóźnienie.",
+      "Opóźnienie w zapłacie czynszu trwa trzy miesiące, odsetki rosną, wynajmujący wezwał najemcę.",
+      "Wynajmujący wezwał najemcę do zapłaty czynszu z odsetkami."
+    ].join("\n");
+    const words = caseVocabulary("opóźnienie zapłaty czynszu", record);
+    expect(words.some((word) => word.startsWith("odset"))).toBe(true);
+    expect(words.some((word) => word.startsWith("grafik"))).toBe(false);
+  });
+
+  it("by weight: no fixed share per document, novelty lowers each further sentence of one document, the record's source weighs more", () => {
+    const one = { documentId: "doc_complaint", chunks: [{ index: 0, text: Array.from({ length: 6 }, (_, index) => `Zarzut ${index}: opóźnienie zapłaty czynszu i odsetki za opóźnienie.`).join(" ") }] };
+    const other = { documentId: "doc_record", chunks: [{ index: 0, text: "Pozwany przyznał opóźnienie zapłaty czynszu na rozprawie." }] };
+    const kinds = new Map([["doc_complaint", "PISMO_PROCESOWE"], ["doc_record", "DOWOD"]]);
+    const passages = issuePassages([one, other], "opóźnienie zapłaty czynszu odsetki", 12, kinds);
+    expect(passages.filter((passage) => passage.documentId === "doc_complaint").length).toBeGreaterThan(2);
+    const record = passages.findIndex((passage) => passage.documentId === "doc_record");
+    expect(record).toBeGreaterThanOrEqual(0);
+    expect(record).toBeLessThan(3);
+    expect(passages[0]!.weight).toBe(1);
+    expect(passages.every((passage, index) => index === 0 || passage.weight! <= passages[index - 1]!.weight!)).toBe(true);
+  });
+});

@@ -216,6 +216,7 @@ import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/comm
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePassage } from "./case-issue.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
+import { credibilityGoals, statementPairs, statementPairsPrompt, witnessStatements, type WitnessStatement } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
@@ -2912,7 +2913,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     const ethicsResults = await ethicsFound;
     // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
     if (legalTurn && contextFocus) {
-      const passages = issuePassages(attachments, contextFocus);
+      const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category as string]));
+      const passages = issuePassages(attachments, contextFocus, 12, kinds);
       strengthPassages = passages;
       const prompt = issuePassagesPrompt(passages);
       if (prompt) {
@@ -3063,6 +3065,46 @@ export class SafeSessionExecutor implements SessionExecutor {
         // Facts of the files on the person the question names, under any of the person's symbols.
         const userSymbols = [...new Set([...asked, ...groups.filter((group) => group.some((token) => asked.has(token))).flat()])];
         strengthKeyFacts = personKeyFacts(attachments, userSymbols);
+        // The same witness in different records: statements paired by topic (witness-statements.ts).
+        const groupOf = new Map<string, string>();
+        groups.forEach((group) => group.forEach((token) => groupOf.set(token, group[0]!)));
+        const byWitness = new Map<string, WitnessStatement[]>();
+        for (const attachment of attachments) {
+          const text = attachment.chunks.map((chunk) => chunk.text).join("\n");
+          for (const [witness, statements] of witnessStatements(attachment.documentId, attachment.chunks[0]?.index ?? 0, text)) {
+            const key = groupOf.get(witness) ?? witness;
+            byWitness.set(key, [...(byWitness.get(key) ?? []), ...statements]);
+          }
+        }
+        const pairs = [...byWitness.values()].some((list) => new Set(list.map((item) => item.documentId)).size > 1) || /sprzeczn|wiarygodn|zeznan/iu.test(latestUserTurn(request.query))
+          ? statementPairs(byWitness)
+          : [];
+        if (pairs.length) {
+          pathSections.push(statementPairsPrompt(pairs));
+          audit.record("gate", "WITNESS_STATEMENT_PAIRS", "OK", { pairs: pairs.length });
+        }
+        // Goals to prove first, then the record's passages for each (user 2026-11-16): the decision's
+        // theses when it is challenged, the topics on which a witness's statements differ.
+        const goalQuestion = latestUserTurn(request.query);
+        const goalDecisions = recognisedDocuments
+          .filter((document) => document.category === "ORZECZENIE")
+          .map((document) => ({ documentId: document.documentId, text: attachments.find((attachment) => attachment.documentId === document.documentId)!.chunks.map((chunk) => chunk.text).join("\n") }));
+        const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
+        const goals = [
+          ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
+          ...credibilityGoals(pairs)
+        ].slice(0, 8);
+        if (goals.length) {
+          const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category as string]));
+          const sections: string[] = [];
+          goals.forEach((goal, index) => {
+            const passages = issuePassages(attachments, `${goal}\n${contextFocus}`, 3, kinds);
+            if (passages[0]) strengthKeyFacts.push(passages[0]);
+            sections.push(`CEL ${index + 1}: ${goal}${passages.length ? `\n${passages.map((passage) => `  - waga ${(passage.weight ?? 0).toFixed(2).replace(".", ",")} · [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`).join("\n")}` : "\n  - (brak fragmentów akt dla tego celu: wskaż, jakiego dowodu brakuje)"}`);
+          });
+          pathSections.push(["# CELE DO WYKAZANIA I FRAGMENTY AKT DLA KAŻDEGO (ustalone przez aplikację)", "Najpierw cele, które pismo ma wykazać; pod każdym informacje z akt według wagi. Każdy cel albo wykaż z cytatem, albo napisz w uwagach poza pismem, dlaczego go nie wykazujesz.", ...sections].join("\n"));
+          audit.record("gate", "GOALS_FIRST", "OK", { goals: goals.length });
+        }
         if (strengthKeyFacts.length) {
           pathSections.push(
             [

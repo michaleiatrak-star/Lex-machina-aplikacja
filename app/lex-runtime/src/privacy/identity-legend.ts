@@ -45,7 +45,12 @@ export function samePersonGroups(tokens: readonly string[], restore: (token: str
     .filter((item) => item.words.length > 0);
   const full = new Map<string, string[]>();
   for (const item of named.filter((entry) => entry.words.length >= 2)) {
-    const key = [...item.words].sort().join(" ");
+    // A given name in another transliteration ("Jurij" / "Yurii", "Aleksandr" / "Oleksandr")
+    // with the same surname is the same person: the first key whose surname matches and whose
+    // given name is within transliteration distance.
+    const exact = [...item.words].sort().join(" ");
+    const near = [...full.keys()].find((key) => key !== exact && sameNameAcrossScripts(key.split(" "), item.words));
+    const key = full.has(exact) ? exact : near ?? exact;
     full.set(key, [...(full.get(key) ?? []), item.token]);
   }
   // A surname alone: the full names ending with it.
@@ -63,4 +68,21 @@ export function identityLegendPrompt(groups: readonly string[][], questionTokens
     "Każdy dokument ma własne symbole osób. Symbole w jednym wierszu to ta sama osoba (aplikacja porównała nazwiska na tym komputerze, odmiana i samo nazwisko uwzględnione). Traktuj je jako jedną osobę we wszystkich dokumentach; nie pisz, że dokument dotyczy „innej osoby”, gdy jej symbol jest w tym samym wierszu.",
     ...groups.map((group) => `- ${group.join(" = ")}${group.some((token) => questionTokens.has(token)) ? " (osoba wymieniona w pytaniu użytkownika)" : ""}`)
   ].join("\n");
+}
+
+// Latin spellings of one Cyrillic name: y/j/i, kh/h/ch, ii/ij/iy at the end, doubled letters.
+function transliterated(word: string): string {
+  return word
+    .replace(/^y/u, "j")
+    .replace(/(?:ii|iy|ij|yj|yi)$/u, "ij")
+    .replace(/kh|ch/gu, "h")
+    .replace(/y/gu, "i")
+    .replace(/(.)\1/gu, "$1");
+}
+
+function sameNameAcrossScripts(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length || a.length < 2) return false;
+  const left = a.map(transliterated).sort();
+  const right = b.map(transliterated).sort();
+  return left.every((word, index) => word === right[index]);
 }

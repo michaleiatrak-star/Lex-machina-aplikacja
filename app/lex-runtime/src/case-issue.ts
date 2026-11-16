@@ -76,31 +76,56 @@ export function caseIssue(clauses: readonly EthicsClause[], fileText: string, qu
 }
 
 /**
- * The words in which case files speak of an issue (a threat of prosecution is "zgłaszana do
- * odpowiednich organów", "kroki prawne", "nękanie"): they choose which parts of long files reach
- * the model whole (context-orchestrator.ts), as a lawyer searching the record would.
+ * The words in which this case's files speak of the issue, taken from the files themselves (no
+ * word list per kind of case): the sentences that name the issue are read, and the words they
+ * use far more often than the rest of the record become its vocabulary, as a lawyer who has read
+ * the key passages then searches the record for the same words. RD 121/26: a statement on the
+ * issue at the end of a long hearing record shares those words, not the rule's.
  */
-const VOCABULARY: ReadonlyArray<{ when: RegExp; words: string }> = [
-  {
-    when: /groz|groź|ścig|ścigan|zawiadomieni\p{L}*\s+o\s+przestęp/iu,
-    words: "zgłaszana zgłoszenie zgłoszę organów zawiadomienie zawiadomić prokuratura policja nękanie uporczywe kroki prawne konsekwencje prawne odpowiedzialność karna 190a"
-  },
-  { when: /odm\p{L}*\s+wszczęcia|umorz\p{L}*/iu, words: "świadek zeznania przesłuchanie wyjaśnienia dowody nie ustalono pominięto wniosek dowodowy" },
-  { when: /obraźliw|znieważ|godnoś/iu, words: "obraźliwe wyrażenia znieważenie poniżenie" }
-];
-
-/** The issue and its vocabulary as one text for choosing the parts of long files. */
-export function caseFocus(clauses: readonly EthicsClause[], fileText: string, question: string): string {
-  // The merits (the rule in dispute and its words) when the file cites one; the procedural setting
-  // ("odmowa wszczęcia": witnesses, evidence) only without it: its words fill half of any record
-  // and would push the statement on the merits out (RD 121/26).
-  const merits = clauses.map((clause) => relevantClause(clause.text, `${fileText}\n${question}`));
-  const issue = merits.length ? merits.join("\n") : caseIssue(clauses, fileText, question).text;
-  const words = VOCABULARY.filter((item) => item.when.test(`${issue}\n${merits.length ? "" : question}`)).map((item) => item.words);
-  return [issue, ...words].filter(Boolean).join("\n");
+export function caseVocabulary(issue: string, fileText: string, limit = 16): string[] {
+  const issueStems = new Set(stemsOf(issue));
+  if (issueStems.size < 2) return [];
+  const sentences = (fileText.replace(/\s*\n\s*/gu, " ").match(/[^.!?]{20,}(?:[.!?]+|$)/gu) ?? []).map((sentence) => new Set(stemsOf(sentence)));
+  const seeds = sentences.filter((stems) => [...issueStems].filter((stem) => stems.has(stem)).length >= 2);
+  if (seeds.length < 2 || sentences.length < 10) return [];
+  const inAll = new Map<string, number>();
+  for (const stems of sentences) for (const stem of stems) inAll.set(stem, (inAll.get(stem) ?? 0) + 1);
+  const inSeeds = new Map<string, number>();
+  for (const stems of seeds) for (const stem of stems) inSeeds.set(stem, (inSeeds.get(stem) ?? 0) + 1);
+  return [...inSeeds]
+    .filter(([stem, count]) => count >= 2 && !issueStems.has(stem) && stem.length >= 4)
+    // How much more often in the issue's sentences than in the record (lift), common words out.
+    .map(([stem, count]) => ({ stem, lift: (count / seeds.length) / ((inAll.get(stem)! + 1) / sentences.length) }))
+    .filter((item) => item.lift >= 3)
+    .sort((a, b) => b.lift - a.lift)
+    .slice(0, limit)
+    .map((item) => item.stem);
 }
 
-export type FilePassage = { documentId: string; chunkIndex: number; page: number; text: string };
+/**
+ * Legal concepts and the words in which any record speaks of them (a thesaurus of the law, the
+ * same for every case): a threat of prosecution is spoken of as a notice to the authorities,
+ * reporting, the prosecutor or the police, legal steps; an insult as offensive words.
+ */
+const CONCEPTS: ReadonlyArray<{ when: RegExp; words: string }> = [
+  { when: /groz|groź|ścig|zawiadomieni\p{L}*\s+o\s+przestęp/iu, words: "zawiadomienie zgłoszenie zgłaszać organy prokuratura policja postępowanie karne kroki prawne konsekwencje odpowiedzialność karna" },
+  { when: /obraźliw|znieważ|zniesławi|godnoś/iu, words: "obraźliwe wyrażenia znieważenie poniżenie zniesławienie" },
+  { when: /tajemnic\p{L}*\s+(?:adwokack|zawodow|radcowsk)/iu, words: "ujawnienie poufne informacje klienta tajemnica" },
+  { when: /konflikt\p{L}*\s+interes/iu, words: "reprezentował przeciwnika poprzednio pełnomocnik strony przeciwnej" }
+];
+
+/** The issue and its vocabulary (the law's concepts and the files' own words) as one text for choosing the parts of long files. */
+export function caseFocus(clauses: readonly EthicsClause[], fileText: string, question: string): string {
+  // The merits (the rule in dispute) when the file cites one; the procedural setting only without
+  // it: the setting's words fill half of any record and would push the statement on the merits out.
+  const merits = clauses.map((clause) => relevantClause(clause.text, `${fileText}\n${question}`));
+  const issue = merits.length ? merits.join("\n") : caseIssue(clauses, fileText, question).text;
+  const concepts = CONCEPTS.filter((item) => item.when.test(issue)).map((item) => item.words);
+  const words = caseVocabulary(issue, fileText, 8);
+  return [issue, ...concepts, words.join(" ")].filter(Boolean).join("\n");
+}
+
+export type FilePassage = { documentId: string; chunkIndex: number; page: number; text: string; weight?: number };
 
 const fold = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/ł/gu, "l");
 const stemsOf = (text: string) =>
@@ -112,10 +137,30 @@ const FOCUS_STOP = new Set("ktore ktory ktora jest oraz przez przy jako tego tyc
  * with its document, chunk and page: the model is pointed at them, as a lawyer marks the record
  * (RD 121/26: the attorney's statement at 01:53:35 of the hearing record went unused).
  */
+/** How much a document's kind weighs as a source of facts (document-kind.ts categories). */
+const SOURCE_WEIGHT: Record<string, number> = {
+  ORZECZENIE: 1.3, // decisions and findings of an authority
+  DOWOD: 1.3, // records of hearings, testimony, expert opinions
+  KORESPONDENCJA: 1.2, // letters between the parties: often the very act in dispute
+  UMOWA: 1.1,
+  PISMO_PROCESOWE: 0.9, // a party's own pleading: its theses, not facts
+  MATERIAL_PRAWNY: 0.7,
+  INNE: 1
+};
+
+/**
+ * The record's information on the issue, each sentence weighed (RD 121/26, user 2026-11-16: score
+ * the information of the files and give it by its weight, without a fixed share per document):
+ * relevance (the issue's words, a rare one more than a common one) × the kind of the document it
+ * comes from × novelty (each further sentence of the same document weighs a little less, never
+ * excluded) × boilerplate (a list of authorities in a power of attorney weighs little). Given are
+ * the sentences above a share of the strongest one's weight, strongest first, with their weight.
+ */
 export function issuePassages(
   attachments: ReadonlyArray<{ documentId: string; chunks: ReadonlyArray<{ index: number; pageStart?: number; text: string }> }>,
   focus: string,
-  limit = 10
+  limit = 12,
+  kinds: ReadonlyMap<string, string> = new Map()
 ): FilePassage[] {
   // One stem per word family ("zglos" covers "zglosze"), so that a sentence is not counted twice.
   const all = stemsOf(focus);
@@ -127,37 +172,51 @@ export function issuePassages(
     )
   );
   const frequency = new Map(terms.map((term) => [term, sentences.filter((sentence) => sentence.folded.includes(term)).length]));
-  const scored = sentences
+  const candidates = sentences
     .map((sentence) => {
       const hits = terms.filter((term) => sentence.folded.includes(term));
-      let score = hits.reduce((sum, term) => sum + 1 / Math.max(1, frequency.get(term)!), 0);
-      // A statement announcing an act ("będzie zgłaszana do organów", "zostanie zawiadomiona
-      // prokuratura") weighs more; a list of authorities (a power of attorney's boilerplate:
-      // "przed sądami, prokuraturą, policją i organami") weighs less.
-      if (/\b(?:bedzie|beda|zostanie|zostana|zostal\p{L}*|podejm\p{L}*|skieruj\p{L}*|zglos\p{L}*|zawiadom\p{L}*)\b[\s\S]{0,80}\b(?:organ\p{L}*|prokurat\p{L}*|polic\p{L}*|nekan\p{L}*|krok\p{L}*|zawiadom\p{L}*|zglasz\p{L}*)/u.test(sentence.folded)) score *= 2;
-      if ((sentence.folded.match(/,/gu) ?? []).length >= 4 && /\b(?:sadami|organami|komornikami|prokuratura|policja)\b/u.test(sentence.folded)) score *= 0.3;
-      return { sentence, hits: hits.length, score };
+      let relevance = hits.reduce((sum, term) => sum + 1 / Math.max(1, frequency.get(term)!), 0);
+      // A list of authorities or courts (a power of attorney's boilerplate) weighs little.
+      if ((sentence.folded.match(/,/gu) ?? []).length >= 4 && /\b(?:sadami|organami|komornikami|prokuratura|policja)\b/u.test(sentence.folded)) relevance *= 0.3;
+      return { sentence, hits: hits.length, base: relevance * (SOURCE_WEIGHT[kinds.get(sentence.documentId) ?? "INNE"] ?? 1) };
     })
-    .filter((item) => item.hits >= 2)
-    // Three different words of the issue first (a statement on it), two only to fill the list.
-    .sort((a, b) => Number(b.hits >= 3) - Number(a.hits >= 3) || b.score - a.score);
+    .filter((item) => item.hits >= 2);
+  // Greedy by weight with novelty: a sentence's weight falls by a third for each sentence of its
+  // document already chosen, so a second document's strong sentence outranks a first one's weaker.
   const seen = new Set<string>();
-  const chosen: FilePassage[] = [];
-  for (const { sentence } of scored) {
-    const key = sentence.folded.slice(0, 120);
+  const perDocument = new Map<string, number>();
+  const chosen: Array<FilePassage & { weight: number }> = [];
+  let strongest = 0;
+  const pool = [...candidates];
+  while (chosen.length < limit && pool.length) {
+    let best = -1;
+    let bestWeight = 0;
+    pool.forEach((item, index) => {
+      const weight = item.base * Math.pow(2 / 3, perDocument.get(item.sentence.documentId) ?? 0);
+      if (weight > bestWeight) {
+        best = index;
+        bestWeight = weight;
+      }
+    });
+    if (best < 0) break;
+    const [item] = pool.splice(best, 1);
+    const key = item!.sentence.folded.slice(0, 120);
     if (seen.has(key)) continue;
+    strongest ||= bestWeight;
+    // Below a fifth of the strongest information: no longer worth the model's attention.
+    if (bestWeight < strongest * 0.2) break;
     seen.add(key);
-    chosen.push({ documentId: sentence.documentId, chunkIndex: sentence.chunkIndex, page: sentence.page, text: sentence.text.slice(0, 500) });
-    if (chosen.length >= limit) break;
+    perDocument.set(item!.sentence.documentId, (perDocument.get(item!.sentence.documentId) ?? 0) + 1);
+    chosen.push({ documentId: item!.sentence.documentId, chunkIndex: item!.sentence.chunkIndex, page: item!.sentence.page, text: item!.sentence.text.slice(0, 500), weight: bestWeight });
   }
-  return chosen;
+  return chosen.map((item) => ({ documentId: item.documentId, chunkIndex: item.chunkIndex, page: item.page, text: item.text, weight: strongest ? Math.round((item.weight / strongest) * 100) / 100 : 0 }));
 }
 
 export function issuePassagesPrompt(passages: readonly FilePassage[]): string {
   if (!passages.length) return "";
   return [
     "# FRAGMENTY AKT DOTYCZĄCE ZAGADNIENIA SPRAWY (wskazane przez aplikację)",
-    "Zdania z dokumentów sprawy najmocniej związane z zagadnieniem. Rozważ każde: czy wspiera, czy osłabia stanowisko strony. Powołując je, cytuj dosłownie ze wskazaniem dokumentu i strony, znacznikiem [[LEXDOC:<documentId>:<chunkIndex>]]. Nie pomijaj ich bez wyjaśnienia.",
-    ...passages.map((passage) => `- [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`)
+    "Informacje z akt ocenione przez aplikację według wagi (1,00 = najsilniejsza; waga łączy trafność do zagadnienia, rodzaj dokumentu i nowość). Rozważ każdą: czy wspiera, czy osłabia stanowisko strony. Powołując je, cytuj dosłownie ze wskazaniem dokumentu i strony, znacznikiem [[LEXDOC:<documentId>:<chunkIndex>]]. Nie pomijaj ich bez wyjaśnienia.",
+    ...passages.map((passage) => `- waga ${(passage.weight ?? 0).toFixed(2).replace(".", ",")} · [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`)
   ].join("\n");
 }
