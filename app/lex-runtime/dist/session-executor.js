@@ -72,7 +72,7 @@ import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal
 import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
 import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case-issue.js";
-import { strengthCorrection, strengthGaps } from "./answer-strength.js";
+import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
@@ -1813,6 +1813,7 @@ export class SafeSessionExecutor {
         }
         // For the strength check after the answer (answer-strength.ts).
         let strengthPassages = [];
+        let strengthKeyFacts = [];
         const strengthRulings = [];
         const ethicsResults = await ethicsFound;
         // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
@@ -1975,7 +1976,18 @@ export class SafeSessionExecutor {
                     }
                 };
                 const groups = samePersonGroups(personTokens(tokenText).slice(0, 400), restoreToken);
-                const legend = identityLegendPrompt(groups, new Set(personTokens([protectedQuery])));
+                const asked = new Set(personTokens([protectedQuery]));
+                const legend = identityLegendPrompt(groups, asked);
+                // Facts of the files on the person the question names, under any of the person's symbols.
+                const userSymbols = [...new Set([...asked, ...groups.filter((group) => group.some((token) => asked.has(token))).flat()])];
+                strengthKeyFacts = personKeyFacts(attachments, userSymbols);
+                if (strengthKeyFacts.length) {
+                    pathSections.push([
+                        "# FAKTY Z AKT O OSOBIE Z PYTANIA (wskazane przez aplikację)",
+                        "Rozstrzygnięcia i zawiadomienia dotyczące użytkownika w innych dokumentach (ten sam człowiek pod innym symbolem). Wykorzystaj je albo napisz, dlaczego nie:",
+                        ...strengthKeyFacts.map((fact) => `- [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]] (s. ${fact.page}) „${fact.text}”`)
+                    ].join("\n"));
+                }
                 if (legend) {
                     pathSections.push(legend);
                     audit.record("gate", "SAME_PERSON_LEGEND", "OK", { groups: groups.length });
@@ -3378,8 +3390,9 @@ export class SafeSessionExecutor {
         // Strength of a pleading (RD 121/26, 2026-11-16): the record's passages on the issue and the
         // rulings read before the answer must be used or consciously set aside, and a thesis of the
         // decision is not conceded before the substantive law is checked. One correcting round.
-        if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length)) {
-            const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)]);
+        if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length)) {
+            const required = requiredPassages(strengthPassages, strengthKeyFacts);
+            const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required);
             if (gaps.length) {
                 step("MODEL", `siła pisma: ${gaps.length} braków, runda poprawcza`);
                 let text = "";
@@ -3395,12 +3408,21 @@ export class SafeSessionExecutor {
                 catch {
                     text = "";
                 }
-                const accepted = text.length > modelOutput.length * 0.6 && strengthGaps(text, strengthPassages, [...new Set(strengthRulings)]).length < gaps.length;
+                // Accepted when it fixes something and loses no required passage the first draft had.
+                const after = strengthGaps(text, strengthPassages, [...new Set(strengthRulings)], required);
+                const lost = required.some((passage) => passageUsed(modelOutput, passage) && !passageUsed(text, passage));
+                const accepted = text.length > modelOutput.length * 0.6 && !lost && after.length <= gaps.length && JSON.stringify(after) !== JSON.stringify(gaps);
                 audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: gaps.map((gap) => gap.kind), corrected: accepted });
                 if (accepted) {
                     corrections.push(answerCorrection("STRENGTH", gaps.map((gap) => gap.label), modelOutput, text));
                     modelOutput = text;
                 }
+            }
+            // What still stays unused is shown under the pleading, quoted from the files.
+            const note = requiredPassagesNote(modelOutput, required);
+            if (note) {
+                modelOutput = `${modelOutput.trimEnd()}\n${note}`;
+                audit.record("gate", "REQUIRED_PASSAGES_NOTE", "DEGRADED", { missing: required.filter((passage) => !passageUsed(modelOutput, passage)).length });
             }
         }
         // The model's own ⚠️ at a statute does not stop the application from

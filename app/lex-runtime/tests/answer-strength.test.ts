@@ -56,3 +56,30 @@ describe("a deferral with empty control blocks is still a deferral (RD 121/26, 0
     expect(emptyDeferral(answer)).toBe(true);
   });
 });
+
+describe("key facts on the user and required passages (RD 121/26, 0.1.94 test 2)", async () => {
+  const { personKeyFacts, requiredPassages, requiredPassagesNote, strengthGaps, strengthCorrection } = await import("../src/answer-strength.js");
+  const files = [
+    { documentId: "doc_verdict", chunks: [{ index: 0, pageStart: 1, text: "Sąd Rejonowy po rozpoznaniu sprawy:\n1. uniewinnia obwinionego [LMPII:D02:PERSON:0003] od popełnienia zarzucanego mu czynu;" }] },
+    { documentId: "doc_notice", chunks: [{ index: 0, pageStart: 1, text: "Zgłaszająca składa zawiadomienie o możliwości popełnienia przestępstwa przez [LMPII:D07:PERSON:0002] z art. 190a k.k." }] },
+    { documentId: "doc_other", chunks: [{ index: 0, pageStart: 1, text: "Świadek [LMPII:D05:PERSON:0001] zeznał, że pracuje w dziale kadr od 2019 roku." }] }
+  ];
+  const facts = personKeyFacts(files, ["[PII:PERSON:0001]", "[LMPII:D02:PERSON:0003]", "[LMPII:D07:PERSON:0002]"]);
+
+  it("the acquittal and the notice about the user, not another person's testimony", () => {
+    expect(facts.map((fact) => fact.documentId)).toEqual(["doc_verdict", "doc_notice"]);
+  });
+
+  it("a draft that says the record lacks them is sent back with the passages; what stays unused is shown under it", () => {
+    const required = requiredPassages([P(3, "Każda taka sytuacja będzie traktowana jako nękanie i będzie zgłaszana do odpowiednich organów.")], facts);
+    const draft = "W materiale brak danych o wcześniejszych zapowiedziach adwokata (np. na rozprawach).";
+    const gaps = strengthGaps(draft, [], [], required);
+    expect(gaps[0]).toMatchObject({ kind: "REQUIRED" });
+    expect(gaps[0]!.label).toContain("projekt twierdzi, że czegoś w aktach brak");
+    expect(strengthCorrection(gaps)).toContain("Nie pisz, że czegoś w aktach nie ma");
+    const note = requiredPassagesNote(draft, required);
+    expect(note).toContain("uniewinnia obwinionego");
+    expect(note).toContain("będzie zgłaszana do odpowiednich organów");
+    expect(requiredPassagesNote("„uniewinnia obwinionego [LMPII:D02:PERSON:0003] od popełnienia” [[LEXDOC:doc_notice:0]] i „będzie traktowana jako nękanie i będzie zgłaszana”", required)).toBe("");
+  });
+});
