@@ -2933,6 +2933,5 @@
  "błąd": "fejl",
  "W SearXNG odpowiedziały: {engines}": "Svarede i SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Ingen søgemaskine i SearXNG gav resultater",
- "odmówiły: {engines}": "afviste: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Processkriftets fil blev ikke gemt: processkriftet gennemgår stadig trinene i sit forløb. Filen oprettes først efter den afsluttende revision med HYBRID-VAL-valideringen; indtil da er processkriftet et udkast i samtalen."
+ "odmówiły: {engines}": "afviste: {engines}"
 }

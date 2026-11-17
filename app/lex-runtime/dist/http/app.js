@@ -5257,12 +5257,6 @@ export function createLexHttpApp(options) {
                     res.status(409).json({ error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
                     return;
                 }
-                // The file only after HYBRID-VALIDATION (CP-AUDYT closed): before it the pleading is a draft
-                // in the chat (user preference "HYBRID-VAL przed .docx"; RD 121/26 plan, point 8).
-                if (processState.stage !== "FINAL" && processState.checkpoints["CP-AUDYT"] !== "CLOSED") {
-                    res.status(409).json({ error: "PROCESS_PLEADING_HYBRID_REQUIRED" });
-                    return;
-                }
                 processRenderOnly = { stage: processState.stage };
                 processDocumentStatus = processState.documentStatus;
                 // The file renders the stored pleading (newest version), not the chat.

@@ -2933,6 +2933,5 @@
  "błąd": "error",
  "W SearXNG odpowiedziały: {engines}": "Han respost a SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Cap cercador de SearXNG no ha donat resultats",
- "odmówiły: {engines}": "han rebutjat: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "El fitxer de l'escrit no s'ha desat: l'escrit encara passa per les etapes del seu recorregut. El fitxer es crea només després de l'auditoria final amb la validació HYBRID-VAL; fins aleshores l'escrit és un esborrany a la conversa."
+ "odmówiły: {engines}": "han rebutjat: {engines}"
 }

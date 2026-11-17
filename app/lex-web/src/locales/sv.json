@@ -2933,6 +2933,5 @@
  "błąd": "fel",
  "W SearXNG odpowiedziały: {engines}": "Svarade i SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Ingen sökmotor i SearXNG gav resultat",
- "odmówiły: {engines}": "avvisade: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Inlagans fil sparades inte: inlagan går fortfarande igenom stegen i sitt flöde. Filen skapas först efter slutgranskningen med HYBRID-VAL-valideringen; fram till dess är inlagan ett utkast i samtalet."
+ "odmówiły: {engines}": "avvisade: {engines}"
 }

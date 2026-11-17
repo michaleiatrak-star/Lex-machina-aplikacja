@@ -2933,6 +2933,5 @@
  "błąd": "virhe",
  "W SearXNG odpowiedziały: {engines}": "SearXNG:ssä vastasivat: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Mikään SearXNG:n hakukone ei antanut tuloksia",
- "odmówiły: {engines}": "kieltäytyivät: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Asiakirjan tiedostoa ei tallennettu: asiakirja käy vielä läpi työnkulkunsa vaiheita. Tiedosto luodaan vasta loppuauditoinnin ja HYBRID-VAL-validoinnin jälkeen; siihen asti asiakirja on luonnos keskustelussa."
+ "odmówiły: {engines}": "kieltäytyivät: {engines}"
 }

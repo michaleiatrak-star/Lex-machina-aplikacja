@@ -3174,7 +3174,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         // part with no fact back to the model once (fact-matrix.ts fullDocumentMatrix). The register
         // D01..DN records the kind, size, column and read state of each; a gap makes the pleading a draft.
         const matrixQuestion = latestUserTurn(request.query);
-        if (!request.model.startsWith("local/") && (isCourtPleading(matrixQuestion) || isChallenge(matrixQuestion))) {
+        // One document is sent to the model whole: the register and the matrix start at two.
+        if (!request.model.startsWith("local/") && recognisedDocuments.length >= 2 && (isCourtPleading(matrixQuestion) || isChallenge(matrixQuestion))) {
           const textOf = (documentId: string) => attachments.find((attachment) => attachment.documentId === documentId)!.chunks;
           const registerDocuments = recognisedDocuments.map((document) => ({
             documentId: document.documentId,
@@ -6429,11 +6430,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // so an earlier button would only move one step and come back with every answer. After
     // AU-STRIP the file is made on its own.
     const ownDocumentSkill = (skill: string | null | undefined) =>
-      // A pleading's file only after the final audit with HYBRID-VALIDATION (CP-AUDYT closed).
-      (skill === "pisma-procesowe-v3" &&
-        request.processWorkflowContext?.draft !== undefined &&
-        (request.processWorkflowContext.stage === "FINAL" ||
-          request.processWorkflowContext.register?.some((entry) => entry.checkpoint === "CP-AUDYT" && entry.status === "CLOSED") === true)) ||
+      (skill === "pisma-procesowe-v3" && request.processWorkflowContext?.draft !== undefined) ||
       (skill === "analizator-umow-v1" &&
         request.contractWorkflowContext !== undefined &&
         request.contractWorkflowContext.mode !== "ANALYSIS" &&

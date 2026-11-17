@@ -2933,6 +2933,5 @@
  "błąd": "erro",
  "W SearXNG odpowiedziały: {engines}": "Responderam no SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Nenhum motor no SearXNG deu resultados",
- "odmówiły: {engines}": "recusaram: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "O ficheiro da peça não foi guardado: a peça ainda está a passar pelas etapas do seu percurso. O ficheiro só é criado após a auditoria final com a validação HYBRID-VAL; até lá, a peça é um rascunho na conversa."
+ "odmówiły: {engines}": "recusaram: {engines}"
 }

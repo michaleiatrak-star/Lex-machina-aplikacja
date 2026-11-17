@@ -2939,6 +2939,5 @@
  "błąd": "error",
  "W SearXNG odpowiedziały: {engines}": "Answered in SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "No search engine in SearXNG gave results",
- "odmówiły: {engines}": "refused: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "The pleading file was not saved: the pleading is still going through the stages of its pipeline. The file is created only after the final audit with the HYBRID-VAL validation; until then the pleading is a draft in the conversation."
+ "odmówiły: {engines}": "refused: {engines}"
 }

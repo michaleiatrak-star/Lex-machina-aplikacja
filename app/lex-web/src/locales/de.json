@@ -2933,6 +2933,5 @@
  "błąd": "Fehler",
  "W SearXNG odpowiedziały: {engines}": "In SearXNG antworteten: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Keine Suchmaschine in SearXNG lieferte Ergebnisse",
- "odmówiły: {engines}": "abgelehnt: {engines}",
- "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Die Datei des Schriftsatzes wurde nicht gespeichert: Der Schriftsatz durchläuft noch die Schritte seines Ablaufs. Die Datei entsteht erst nach der Schlussprüfung mit der HYBRID-VAL-Validierung; bis dahin ist der Schriftsatz ein Entwurf im Gespräch."
+ "odmówiły: {engines}": "abgelehnt: {engines}"
 }
