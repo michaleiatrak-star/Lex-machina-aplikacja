@@ -2933,5 +2933,6 @@
  "błąd": "kļūda",
  "W SearXNG odpowiedziały: {engines}": "SearXNG atbildēja: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Neviena SearXNG meklētājprogramma nedeva rezultātus",
- "odmówiły: {engines}": "atteicās: {engines}"
+ "odmówiły: {engines}": "atteicās: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Procesuālā dokumenta fails netika saglabāts: dokuments vēl iziet sava procesa posmus. Fails tiek izveidots tikai pēc noslēguma audita ar HYBRID-VAL validāciju; līdz tam dokuments ir melnraksts sarunā."
 }

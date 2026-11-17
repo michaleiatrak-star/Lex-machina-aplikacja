@@ -170,8 +170,9 @@ export function passageUnits(passages: ReadonlyArray<{ documentId: string; chunk
 
 function documentMatrixPrompt(rows: readonly FactRow[], dropped: number): string {
   const byTopic = new Map<string, FactRow[]>();
-  // The topics stated by two documents first; a topic stated by one document only when it is short.
-  const shown = rows.filter((row) => row.cells.length >= 2 || rows.length <= 40).slice(0, 80);
+  // Every row up to 200 (shared and differing first, factRows order): a single strong fact of an official
+  // document (the opponent's statement in a protocol) is a fact of the pleading too (RD 121/26).
+  const shown = rows.slice(0, 200);
   for (const row of shown) byTopic.set(row.topic, [...(byTopic.get(row.topic) ?? []), row]);
   const cited = rows.filter((row) => /dokument\s+powołany|dowód\s+wskazany/iu.test(row.attribute));
   return [
@@ -318,4 +319,151 @@ export async function stagedFactMatrix(
   };
   await Promise.all(Array.from({ length: Math.min(options.concurrency ?? 4, chosen.length) }, worker));
   return { facts: results.flatMap((result) => result.facts), dropped: results.reduce((sum, result) => sum + result.dropped, 0), topics, failures };
+}
+
+// Nothing left out (RD 121/26, 2026-11-17): the 16.10.2025 protocol and the GDPR thread were not in
+// the matrix because unrecognised documents were dropped above six, at most ten records were described
+// and documents over 60k characters fell back to passages. Now every document is read: a document over
+// ~20k characters in parts, each part one call, all in parallel and streamed; a part with no fact goes
+// back to the model once and only an explicit "brak faktów do tematów" is accepted. What stays unread
+// is a gap of the register (document-register.ts), and the pleading is then a draft.
+
+export type MatrixDocument = { record: string; documentId: string; chunks: ReadonlyArray<{ index: number; text: string }> };
+export type DocumentCoverage = { record: string; documentId: string; parts: number; facts: number; state: "READ" | "NO_FACTS" | "GAP"; reasons: string[] };
+export const NO_FACTS_ANSWER = "brak faktów do tematów";
+
+function paragraphUnits(document: MatrixDocument, maxUnit: number): WitnessStatement[] {
+  return document.chunks.flatMap((chunk) => {
+    const units: string[] = [];
+    for (const paragraph of chunk.text.split(/\n\s*\n/u).map((item) => item.replace(/\s+/gu, " ").trim()).filter((item) => item.length >= 3)) {
+      if (units.length && units[units.length - 1]!.length < 200) units[units.length - 1] += ` ${paragraph}`;
+      else units.push(paragraph);
+    }
+    // A paragraph longer than a part (a scan without blank lines) is cut at sentence ends.
+    return units
+      .flatMap((text) => {
+        if (text.length <= maxUnit) return [text];
+        const pieces: string[] = [];
+        let rest = text;
+        while (rest.length > maxUnit) {
+          const cut = rest.lastIndexOf(". ", maxUnit);
+          const at = cut > maxUnit / 2 ? cut + 1 : maxUnit;
+          pieces.push(rest.slice(0, at).trim());
+          rest = rest.slice(at).trim();
+        }
+        return rest ? [...pieces, rest] : pieces;
+      })
+      .map((text) => ({ documentId: document.documentId, chunkIndex: chunk.index, heading: document.record, text }));
+  });
+}
+
+/** The document in parts of about `partChars` characters, each part with its own heading. */
+export function documentParts(document: MatrixDocument, partChars = 20_000): Array<{ part: string; units: WitnessStatement[] }> {
+  const units = paragraphUnits(document, Math.max(1_000, Math.floor(partChars / 2)));
+  const groups: WitnessStatement[][] = [];
+  let size = 0;
+  for (const unit of units) {
+    if (!groups.length || size + unit.text.length > partChars) {
+      groups.push([]);
+      size = 0;
+    }
+    groups[groups.length - 1]!.push(unit);
+    size += unit.text.length;
+  }
+  return groups.map((group, index) => {
+    const part = groups.length > 1 ? `${document.record} (cz. ${index + 1}/${groups.length})` : document.record;
+    return { part, units: group.map((unit) => ({ ...unit, heading: part })) };
+  });
+}
+
+/** The beginning of every document within a common budget: the topics are named from all of them. */
+export function topicExcerpts(documents: ReadonlyArray<{ record: string; units: readonly WitnessStatement[] }>, budget = 40_000): WitnessStatement[] {
+  const share = Math.max(1_500, Math.floor(budget / Math.max(1, documents.length)));
+  return documents.flatMap((document) => {
+    const chosen: WitnessStatement[] = [];
+    let size = 0;
+    for (const unit of document.units) {
+      if (size >= share) break;
+      const text = unit.text.slice(0, share - size);
+      chosen.push({ ...unit, heading: document.record, text });
+      size += text.length;
+    }
+    return chosen;
+  });
+}
+
+export function coverageRequest(part: string, units: readonly WitnessStatement[], topics: readonly MatrixTopic[]): { system: string; user: string } {
+  const system = [
+    "Jesteś asystentem prawnika. KONTROLA POKRYCIA macierzy faktów: z tego dokumentu (albo jego części) nie opisano dotąd żadnego faktu, a materiału nie wolno pominąć.",
+    "Przeczytaj go jeszcze raz w całości. Opisz każdy fakt istotny dla tematów z listy; zdarzenie, oświadczenie albo informację ważną dla sprawy, której nie da się przypisać do tematu, zapisz pod nowym tematem.",
+    `Tylko gdy dokument naprawdę nie zawiera żadnego faktu do tematów (np. sama koperta, pouczenie, potwierdzenie odbioru), zwróć jeden wiersz {"brak": "${NO_FACTS_ANSWER}", "powod": "czego dotyczy dokument, najwyżej 15 słów"}.`,
+    'Fakty zwróć WYŁĄCZNIE jako wiersze JSON, jeden obiekt w wierszu: {"temat": "...", "cecha": "...", "wartosc": "najwyżej 12 słów", "cytat": "DOSŁOWNY fragment dokumentu, min. 3 słowa"}'
+  ].join("\n");
+  const user = ["Tematy i cechy:", ...topics.map((topic) => `- ${topic.topic}: ${topic.attributes.join(", ") || "(cechy według treści)"}`), "", `## ${part}`, unitList(units, part)].join("\n");
+  return { system, user };
+}
+
+/** The model's explicit answer that the document states nothing on the topics, with its reason. */
+export function explicitNoFacts(text: string): string | null {
+  const item = jsonObjects(text).find((object) => new RegExp(NO_FACTS_ANSWER, "iu").test(String(object.brak ?? "")));
+  return item ? String(item.powod ?? "").trim() || NO_FACTS_ANSWER : null;
+}
+
+export async function fullDocumentMatrix(
+  documents: readonly MatrixDocument[],
+  focus: string,
+  call: ModelCall,
+  options: { concurrency?: number; partChars?: number; topicTimeoutMs?: number; factTimeoutMs?: number; retryTimeoutMs?: number; topicBudget?: number; topicLimit?: number } = {}
+): Promise<{ facts: DescribedFact[]; dropped: number; topics: MatrixTopic[]; failures: string[]; coverage: DocumentCoverage[] }> {
+  const failures: string[] = [];
+  const parted = documents.map((document) => ({ document, parts: documentParts(document, options.partChars ?? 20_000) }));
+  const records = documents.map((document) => document.record);
+  const excerpts = topicExcerpts(
+    parted.map((item) => ({ record: item.document.record, units: item.parts.flatMap((part) => part.units) })),
+    options.topicBudget ?? 40_000
+  );
+  const first = topicRequest(excerpts, focus, "documents", options.topicLimit ?? 24);
+  const topicReply = await call(first.system, first.user, options.topicTimeoutMs ?? 90_000);
+  if (topicReply.failure) failures.push(`tematy: ${topicReply.failure}`);
+  const topics = parseTopics(topicReply.text, records);
+  const jobs = parted.flatMap((item) => item.parts.map((part) => ({ document: item.document, ...part })));
+  const results = new Map<string, { facts: DescribedFact[]; dropped: number; none: string | null; failure: string }>();
+  const run = async (job: (typeof jobs)[number], retry: boolean) => {
+    const own = topics.filter((topic) => !topic.records.length || topic.records.includes(job.document.record));
+    const ask = retry ? coverageRequest(job.part, job.units, topics) : recordFactRequest(job.part, job.units, own.length ? own : topics, "documents");
+    const reply = await call(ask.system, ask.user, retry ? options.retryTimeoutMs ?? 90_000 : options.factTimeoutMs ?? 120_000);
+    const described = recordFacts(reply.text, job.part, job.units);
+    // The facts of every part are the document's: RÓŻNE is counted between documents, not parts.
+    const facts = described.facts.map((fact) => ({ ...fact, record: job.document.record }));
+    const before = results.get(job.part);
+    results.set(job.part, {
+      facts: [...(before?.facts ?? []), ...facts],
+      dropped: (before?.dropped ?? 0) + described.dropped,
+      none: explicitNoFacts(reply.text),
+      failure: reply.failure
+    });
+    if (reply.failure) failures.push(`${job.part}${retry ? " (kontrola pokrycia)" : ""}: ${reply.failure}`);
+  };
+  const pool = async (list: typeof jobs, retry: boolean) => {
+    let next = 0;
+    const worker = async () => {
+      while (next < list.length) await run(list[next++]!, retry);
+    };
+    await Promise.all(Array.from({ length: Math.min(options.concurrency ?? 6, list.length) }, worker));
+  };
+  if (topics.length) await pool(jobs, false);
+  else failures.push("tematy: brak tematów w odpowiedzi");
+  // Every part with no fact goes back once (also when the topics failed: then it is described freely).
+  await pool(jobs.filter((job) => !results.get(job.part)?.facts.length), true);
+  const coverage: DocumentCoverage[] = parted.map(({ document, parts }) => {
+    const own = parts.map((part) => ({ part: part.part, result: results.get(part.part) }));
+    const facts = own.reduce((sum, item) => sum + (item.result?.facts.length ?? 0), 0);
+    const open = own.filter((item) => !item.result?.facts.length && !item.result?.none);
+    const reasons = open.map((item) => `${item.part}: ${item.result?.failure || "brak faktów i brak potwierdzenia „brak faktów do tematów”"}`);
+    const state: DocumentCoverage["state"] = open.length ? "GAP" : facts ? "READ" : "NO_FACTS";
+    if (state === "NO_FACTS") reasons.push(...own.map((item) => item.result?.none ?? "").filter(Boolean));
+    return { record: document.record, documentId: document.documentId, parts: parts.length, facts, state, reasons };
+  });
+  const all = [...results.values()];
+  return { facts: all.flatMap((item) => item.facts), dropped: all.reduce((sum, item) => sum + item.dropped, 0), topics, failures, coverage };
 }

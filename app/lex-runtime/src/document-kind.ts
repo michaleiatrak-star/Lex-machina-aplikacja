@@ -23,6 +23,16 @@ export type DocumentKind = {
 
 type Rule = { kind: string; label: string; category: DocumentCategory; evidence: boolean; patterns: RegExp[]; minHits?: number };
 
+// In JavaScript `\b` knows only ASCII letters: after „PROTOKÓŁ” or before „Ł…” it finds no word
+// boundary, so the protocol of 16.10.2025 read as "nierozpoznany" and fell out of the fact matrix
+// (RD 121/26, 2026-11-17). Every `\b` of these patterns is the same boundary over Unicode letters.
+const WORD = "[\\p{L}\\p{N}_]";
+const UNICODE_BOUNDARY = `(?:(?<=${WORD})(?!${WORD})|(?<!${WORD})(?=${WORD}))`;
+export function unicodeWordBoundaries(pattern: RegExp): RegExp {
+  const source = pattern.source.replace(/(?<!\\)((?:\\\\)*)\\b/gu, (_match, escapes: string) => `${escapes}${UNICODE_BOUNDARY}`);
+  return new RegExp(source, pattern.flags.includes("u") ? pattern.flags : `${pattern.flags}u`);
+}
+
 // Ordered from the most specific; the head of the document weighs most.
 const RULES: Rule[] = [
   // The order's own heading or operative words; "Zaskarżam nakaz zapłaty" of a sprzeciw is not one.
@@ -40,6 +50,12 @@ const RULES: Rule[] = [
   { kind: "SPRZECIW", label: "sprzeciw / zarzuty", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*SPRZECIW\b/u, /\bwnoszę\s+sprzeciw\b/iu, /\bzarzuty\s+od\s+nakazu\b/iu] },
   { kind: "ODPOWIEDZ_NA_POZEW", label: "odpowiedź na pozew", category: "PISMO_PROCESOWE", evidence: false, patterns: [/\bodpowiedź\s+na\s+pozew\b/iu] },
   { kind: "POZEW", label: "pozew", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*POZEW\b/u, /\bpozew\s+o\s+\p{L}+/iu, /\bwartość\s+przedmiotu\s+sporu\b/iu] },
+  // A party's report of a professional or criminal wrongdoing (zawiadomienie do ORA / rzecznika
+  // dyscyplinarnego / prokuratury, skarga dyscyplinarna): the starting letter of a disciplinary
+  // or criminal case, read as "nierozpoznany" (RD 121/26).
+  { kind: "ZAWIADOMIENIE", label: "zawiadomienie / skarga o przewinieniu lub przestępstwie", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*(?:ZAWIADOMIENIE|SKARGA\s+DYSCYPLINARNA)\b/iu, /\bzawiadomieni\p{L}*\s+o\s+(?:podejrzeniu\s+)?(?:popełnieni\p{L}*\s+)?(?:przewinieni\p{L}*|przestępstw\p{L}*|deliktu|naruszeni\p{L}*)/iu, /\b(?:rzecznik\p{L}*\s+dyscyplinarn\p{L}*|okręgow\p{L}*\s+rad\p{L}*\s+adwokack\p{L}*|okręgow\p{L}*\s+izb\p{L}*\s+radców|prokuratur\p{L}*)/iu, /\b(?:zawiadamiam|wnoszę\s+o\s+wszczęcie)\b/iu], minHits: 2 },
+  // A party's or a professional's explanations in such a case (wyjaśnienia obwinionego / adwokata).
+  { kind: "WYJASNIENIA", label: "wyjaśnienia / stanowisko strony", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*WYJAŚNIENIA\b/iu, /\b(?:składam\s+(?:następujące\s+)?wyjaśnienia|w\s+odpowiedzi\s+na\s+(?:wezwanie|zawiadomienie|skargę|pismo)|wyjaśniam,?\s+że|odnosząc\s+się\s+do\s+(?:zarzut|zawiadomieni|skarg)\p{L}*)/iu, /\b(?:rzecznik\p{L}*\s+dyscyplinarn\p{L}*|zawiadomieni\p{L}*|skarg\p{L}*|zarzut\p{L}*)/iu], minHits: 2 },
   { kind: "SKARGA", label: "skarga", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*SKARGA\b/u, /\bwnoszę\s+skargę\b/iu] },
   { kind: "WNIOSEK", label: "wniosek / pismo procesowe", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*(?:WNIOSEK|PISMO\s+PROCESOWE)\b/u, /\bwnoszę\s+o\b/iu], minHits: 2 },
   { kind: "WEZWANIE", label: "wezwanie", category: "KORESPONDENCJA", evidence: true, patterns: [/\b(?:przedsądowe\s+)?wezwanie\s+do\s+(?:zapłaty|wydania|usunięcia|zaniechania)\b/iu, /(?:^|\n)\s*WEZWANIE\b/u] },
@@ -64,9 +80,12 @@ const RULES: Rule[] = [
   { kind: "EMAIL", label: "wiadomość e-mail", category: "KORESPONDENCJA", evidence: true, patterns: [/(?:^|\n)\s*(?:Od|From)\s*:/u, /(?:^|\n)\s*(?:Do|To)\s*:/u, /(?:^|\n)\s*(?:Temat|Subject)\s*:/u], minHits: 2 },
   { kind: "KOMUNIKATOR", label: "SMS / komunikator", category: "KORESPONDENCJA", evidence: true, patterns: [/\b(?:SMS|WhatsApp|Messenger|Signal|Telegram)\b/u, /(?:\n.{0,40}\b\d{1,2}:\d{2}\b.*){4,}/u] },
   { kind: "ZASWIADCZENIE", label: "zaświadczenie / dokumentacja", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*ZAŚWIADCZENIE\b/u, /\b(?:karta\s+informacyjna|historia\s+choroby|epikryza)\b/iu] },
+  { kind: "OSWIADCZENIE_STRONY", label: "oświadczenie strony / świadka (pisemne)", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*OŚWIADCZENIE\b/iu, /\b(?:oświadczam,?\s+że|niniejszym\s+oświadczam|świadom\p{L}*\s+odpowiedzialności)\b/iu], minHits: 2 },
   { kind: "PELNOMOCNICTWO", label: "pełnomocnictwo", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*PEŁNOMOCNICTWO\b/u, /\budzielam\s+pełnomocnictwa\b/iu] },
   { kind: "OPINIA_PRAWNA", label: "cudza opinia / analiza prawna", category: "MATERIAL_PRAWNY", evidence: false, patterns: [/\bopinia\s+prawna\b/iu, /\bklucz\s+odpowiedzi\b/iu, /\banaliza\s+prawna\b/iu] }
 ];
+
+for (const rule of RULES) rule.patterns = rule.patterns.map(unicodeWordBoundaries);
 
 const HEAD_CHARS = 6_000;
 
@@ -94,10 +113,10 @@ export function classifyDocument(input: { text: string; images?: number }): Docu
 // A court's summons or order to a party (zarządzenie / wezwanie with the case number or the
 // judge's words). prawny-router-v3 R-3.54-b: its content decides the letter — a demand for a
 // position, statements or evidence is a pleading, a formal defect or a document is a simple one.
-const COURT_HEADING = /(?:^|\n)\s*(?:ZARZĄDZENIE|WEZWANIE)\b/u;
-const COURT_MARK = /\bsygn\.\s*akt\b|przewodnicząc\p{L}*|referendarz\p{L}*|\bzarządza\b|\bsąd\s+wzywa\b|\bwzywa\s+(?:się\s+)?(?:pełnomocnik|stron|pozwan|powod|uczestnik|wnioskodawc)\p{L}*/iu;
-export const COURT_POSITION = /odpowiedzi?\s+na\s+(?:pozew|apelację|zażalenie|skargę|sprzeciw|zarzuty|pismo)|ustosunkowa\p{L}*|zajęci\p{L}*\s+stanowisk\p{L}*|stanowisk\p{L}*\s+(?:w\s+sprawie|co\s+do)|twierdze\p{L}*|wniosk\p{L}*\s+dowodow\p{L}*|wskazani\p{L}*\s+(?:wszystkich\s+)?(?:twierdzeń|dowodów)|pism\p{L}*\s+przygotowawcz\p{L}*|art\.\s*205/iu;
-export const COURT_FORMAL = /brak\p{L}*\s+formaln\p{L}*|uzupełni\p{L}*|pełnomocnictw\p{L}*|opłat\p{L}*|uiszcz\p{L}*|\bPESEL\b|adres\p{L}*|podpis\p{L}*|odpis\p{L}*/iu;
+const COURT_HEADING = unicodeWordBoundaries(/(?:^|\n)\s*(?:ZARZĄDZENIE|WEZWANIE)\b/u);
+const COURT_MARK = unicodeWordBoundaries(/\bsygn\.\s*akt\b|przewodnicząc\p{L}*|referendarz\p{L}*|\bzarządza\b|\bsąd\s+wzywa\b|\bwzywa\s+(?:się\s+)?(?:pełnomocnik|stron|pozwan|powod|uczestnik|wnioskodawc)\p{L}*/iu);
+export const COURT_POSITION = unicodeWordBoundaries(/odpowiedzi?\s+na\s+(?:pozew|apelację|zażalenie|skargę|sprzeciw|zarzuty|pismo)|ustosunkowa\p{L}*|zajęci\p{L}*\s+stanowisk\p{L}*|stanowisk\p{L}*\s+(?:w\s+sprawie|co\s+do)|twierdze\p{L}*|wniosk\p{L}*\s+dowodow\p{L}*|wskazani\p{L}*\s+(?:wszystkich\s+)?(?:twierdzeń|dowodów)|pism\p{L}*\s+przygotowawcz\p{L}*|art\.\s*205/iu);
+export const COURT_FORMAL = unicodeWordBoundaries(/brak\p{L}*\s+formaln\p{L}*|uzupełni\p{L}*|pełnomocnictw\p{L}*|opłat\p{L}*|uiszcz\p{L}*|\bPESEL\b|adres\p{L}*|podpis\p{L}*|odpis\p{L}*/iu);
 
 function courtSummons(head: string): DocumentKind | null {
   const heading = COURT_HEADING.exec(head);

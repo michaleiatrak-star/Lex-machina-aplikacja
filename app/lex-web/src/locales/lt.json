@@ -2933,5 +2933,6 @@
  "błąd": "klaida",
  "W SearXNG odpowiedziały: {engines}": "SearXNG atsakė: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Nė viena SearXNG paieškos sistema nedavė rezultatų",
- "odmówiły: {engines}": "atsisakė: {engines}"
+ "odmówiły: {engines}": "atsisakė: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Procesinio dokumento failas neišsaugotas: dokumentas dar eina savo eigos etapus. Failas sukuriamas tik po baigiamojo audito su HYBRID-VAL patvirtinimu; iki tol dokumentas yra juodraštis pokalbyje."
 }

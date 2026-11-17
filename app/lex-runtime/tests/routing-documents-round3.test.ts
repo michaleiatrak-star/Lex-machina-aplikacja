@@ -43,9 +43,9 @@ describe("editing a delivered letter is Test A", () => {
 });
 
 describe("a letter from a delivered decision is the next stage", () => {
-  it("odwołanie and skarga kasacyjna hand over to pisma-procesowe-v3", () => {
-    expect(executor.executiveSkillsWithMaterials("Napisz odwołanie od tej decyzji.", file(DECYZJA))).toEqual(["analiza-sadowa-v6", "pisma-procesowe-v3"]);
-    expect(executor.executiveSkillsWithMaterials("Przeanalizuj decyzję i napisz odwołanie.", file(DECYZJA))).toEqual(["analiza-sadowa-v6", "pisma-procesowe-v3"]);
+  it("odwołanie and skarga kasacyjna are led by pisma-procesowe-v3, the analysis serves it", () => {
+    expect(executor.executiveSkillsWithMaterials("Napisz odwołanie od tej decyzji.", file(DECYZJA))).toEqual(["pisma-procesowe-v3", "analiza-sadowa-v6"]);
+    expect(executor.executiveSkillsWithMaterials("Przeanalizuj decyzję i napisz odwołanie.", file(DECYZJA))).toEqual(["pisma-procesowe-v3", "analiza-sadowa-v6"]);
   });
 });
 

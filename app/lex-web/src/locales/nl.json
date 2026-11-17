@@ -2933,5 +2933,6 @@
  "błąd": "fout",
  "W SearXNG odpowiedziały: {engines}": "Antwoordden in SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Geen zoekmachine in SearXNG gaf resultaten",
- "odmówiły: {engines}": "weigerden: {engines}"
+ "odmówiły: {engines}": "weigerden: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Het bestand van het processtuk is niet opgeslagen: het processtuk doorloopt nog de stappen van zijn traject. Het bestand ontstaat pas na de eindcontrole met de HYBRID-VAL-validatie; tot dan is het processtuk een concept in het gesprek."
 }

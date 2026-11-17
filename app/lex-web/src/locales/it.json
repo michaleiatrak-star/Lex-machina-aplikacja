@@ -2933,5 +2933,6 @@
  "błąd": "errore",
  "W SearXNG odpowiedziały: {engines}": "Hanno risposto in SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Nessun motore in SearXNG ha dato risultati",
- "odmówiły: {engines}": "hanno rifiutato: {engines}"
+ "odmówiły: {engines}": "hanno rifiutato: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Il file dell'atto non è stato salvato: l'atto sta ancora attraversando le fasi del suo percorso. Il file viene creato solo dopo la verifica finale con la convalida HYBRID-VAL; fino ad allora l'atto è una bozza nella conversazione."
 }

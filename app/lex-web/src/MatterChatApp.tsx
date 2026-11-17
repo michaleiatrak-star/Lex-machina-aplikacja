@@ -1490,6 +1490,10 @@ export function exportBlockedMessage(error: unknown): string | null {
   if (error instanceof ApiError && /^(?:LETTER_MARKUP_TRUNCATED|DOCUMENT_OUTPUT_TRUNCATED)$/.test(error.code)) {
     return t("Plik nie został zapisany: pismo urywa się przed końcem (odpowiedź modelu ucięta na limicie długości). Długie pismo powstanie w częściach: poproś o nie ponownie albo kliknij Kontynuuj przy ostatniej części.");
   }
+  // A pleading becomes a file only after its pipeline closed the final audit (HYBRID-VALIDATION).
+  if (error instanceof ApiError && error.code === "PROCESS_PLEADING_HYBRID_REQUIRED") {
+    return t("Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.");
+  }
   if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
     const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
     return t("Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że {value}. Popraw treść w rozmowie i wygeneruj dokument ponownie.", { value: reasons

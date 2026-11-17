@@ -2933,5 +2933,6 @@
  "błąd": "villa",
  "W SearXNG odpowiedziały: {engines}": "Svöruðu í SearXNG: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Engin leitarvél í SearXNG skilaði niðurstöðum",
- "odmówiły: {engines}": "höfnuðu: {engines}"
+ "odmówiły: {engines}": "höfnuðu: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Skrá málsskjalsins var ekki vistuð: málsskjalið fer enn í gegnum skref ferlisins. Skráin verður aðeins til eftir lokaúttekt með HYBRID-VAL-staðfestingu; þangað til er málsskjalið drög í samtalinu."
 }

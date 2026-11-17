@@ -3,6 +3,7 @@ import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { COURT_FORMAL, COURT_POSITION } from "./document-kind.js";
 import { activeJurisdictionPack } from "./jurisdiction.js";
+import { isCourtPleading } from "./pleading-standard.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
 // has its trigger phrases and the PRIMARY executive skill. The application uses it
@@ -223,7 +224,37 @@ export type TaskDecision = {
   route?: TaskRoute;
   // Modules the decision itself requires (e.g. MOD-REDAKCJA for editing a finished pleading).
   modules?: string[];
+  // Skills that serve the primary one (analiza-sadowa-v6 reading the files for a pleading).
+  auxiliary?: string[];
 };
+
+const PLEADING_SKILL = "pisma-procesowe-v3";
+// Outputs the user names themselves: a report, a chronology, questions for a witness.
+const OWN_OUTPUTS: ReadonlySet<string> = new Set(["raport-sytuacyjny-v2", "raport-klienta-v1", "chronologia-sprawy-v1"]);
+const WITNESS_QUESTIONS = /(?<![\p{L}])pyta\p{L}*/iu;
+
+/**
+ * A pleading to a court or an authority asked for ("przygotuj podważenie postanowienia",
+ * "napisz zażalenie"): pisma-procesowe-v3 leads; the skill the material pointed to (analiza-sadowa-v6,
+ * the witness or evidence skill) serves it. RD 121/26 (2026-11-16): the court-analysis skill led and the
+ * pleading had no register, no matrix of goals and no validation of pisma-procesowe-v3.
+ * A simple letter of the catalogue (pisma-proste-v2) and an explicit pipeline step keep their decision.
+ */
+export function pleadingFirst(decision: TaskDecision | null, question: string, known: (skill: string) => boolean): TaskDecision | null {
+  if (!known(PLEADING_SKILL) || !isCourtPleading(question) || asksAbout(question)) return decision;
+  if (decision && (decision.primary === PLEADING_SKILL || decision.primary === "pisma-proste-v2" || OWN_OUTPUTS.has(decision.primary))) return decision;
+  if (decision?.primary === "przesluchanie-swiadkow-v2-min90" && WITNESS_QUESTIONS.test(question)) return decision;
+  if (decision?.then === "pisma-proste-v2") return decision;
+  const auxiliary = decision ? [decision.primary, decision.then].filter((skill): skill is string => Boolean(skill) && skill !== PLEADING_SKILL) : [];
+  return {
+    source: decision?.source ?? "ROUTER",
+    primary: PLEADING_SKILL,
+    then: null,
+    reason: `pismo do sądu lub organu: prowadzi ${PLEADING_SKILL}${auxiliary.length ? `, pomocniczo ${auxiliary.join(", ")} (${decision!.reason})` : ""}`,
+    ...(decision?.modules ? { modules: decision.modules } : {}),
+    ...(auxiliary.length ? { auxiliary } : {})
+  };
+}
 
 /**
  * pisma-procesowe-v3 KROK 0, Test A: editing an existing pleading (form, style,
@@ -377,6 +408,20 @@ const NAMED_OUTPUTS: ReadonlySet<string> = new Set([
 ]);
 
 export function decideTask(
+  routes: TaskRoute[],
+  matrix: MatrixRule[],
+  rawQuestion: string,
+  materials: DeliveredMaterial[] = [],
+  redaction: RedactionTest | null = null,
+  simpleLetters: { skill: string; entries: SchemaEntry[] } | null = null
+): TaskDecision | null {
+  const decision = decideTaskByRows(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+  if (explicitHandoff(rawQuestion, () => true)) return decision;
+  const known = (skill: string) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
+  return pleadingFirst(decision, requestOf(withoutRoutingMarkers(rawQuestion)), known);
+}
+
+function decideTaskByRows(
   routes: TaskRoute[],
   matrix: MatrixRule[],
   rawQuestion: string,

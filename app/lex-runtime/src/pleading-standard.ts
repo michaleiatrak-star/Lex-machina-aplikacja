@@ -7,13 +7,17 @@
 
 export const PLEADING_STANDARD_RESOURCE = "modules/MOD-BUDOWA-ARGUMENTU.md";
 
-const DRAFT = /\b(?:przygotuj|sporządź|napisz|zredaguj|opracuj|stwórz|przygotować|sporządzić|napisać|projekt)\p{L}*/iu;
+const DRAFT = /(?<![\p{L}])(?:przygotuj|sporządź|napisz|zredaguj|opracuj|stwórz|przygotować|sporządzić|napisać|projekt)\p{L}*/iu;
 const PLEADING =
-  /\b(?:pism\p{L}*\s+(?:procesow|przygotowawcz|do\s+s[ąa]du)\p{L}*|pozew|pozwu|odpowied\p{L}*\s+na\s+(?:pozew|apelacj|zażaleni|skarg)\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|odwołani\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*\s+(?:dowodow|o\s+)\p{L}*|podważeni\p{L}*|zarzut\p{L}*\s+od)/iu;
+  /(?<![\p{L}])(?:pism\p{L}*\s+(?:procesow|przygotowawcz|do\s+(?:s[ąa]du|organu|rzecznika|prokurat))\p{L}*|pozew|pozwu|odpowied\p{L}*\s+na\s+(?:pozew|apelacj|zażaleni|skarg)\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|odwołani\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*\s+(?:dowodow|o\s+)\p{L}*|podważeni\p{L}*|zarzut\p{L}*\s+od|kasacj\p{L}*|zawiadomieni\p{L}*\s+o\s+(?:popełnieni|przewinieni|przestęp|podejrzeni)\p{L}*)/iu;
+
+// What is drafted is an assessment, not the pleading ("przygotuj ocenę szans apelacji").
+const ASSESSMENT_DRAFTED =
+  /(?<![\p{L}])(?:przygotuj|sporządź|napisz|zredaguj|opracuj|stwórz|przygotować|sporządzić|napisać)\p{L}*\s+(?:\p{L}+\s+){0,2}?(?:ocen\p{L}*|analiz\p{L}*|opini\p{L}*|raport\p{L}*|podsumowani\p{L}*|notatk\p{L}*|streszczeni\p{L}*|pytani\p{L}*|chronologi\p{L}*|plan\p{L}*)(?![\p{L}])/iu;
 
 /** The turn asks for a pleading to a court or an authority (not an opinion or a summary). */
 export function isCourtPleading(question: string): boolean {
-  return DRAFT.test(question) && PLEADING.test(question);
+  return DRAFT.test(question) && PLEADING.test(question) && !ASSESSMENT_DRAFTED.test(question);
 }
 
 export function pleadingStandardPrompt(moduleText: string): string {
@@ -27,7 +31,25 @@ export function pleadingStandardPrompt(moduleText: string): string {
 export type SchemaGap = { element: string; detail: string };
 
 /** What a reader of the draft can check of the seven elements. */
-export function argumentSchemaGaps(answer: string): SchemaGap[] {
+// A motion to take evidence ("wnoszę o dopuszczenie dowodu z przesłuchania świadka", "wniosek dowodowy").
+const EVIDENCE_MOTION =
+  /(?<![\p{L}])(?:wnios\p{L}*\s+dowodow\p{L}*|wnosz\p{L}*\s+o\s+(?:dopuszczenie|przeprowadzenie|zobowiązanie|zwrócenie\s+się|przesłuchanie|zażądanie|dołączenie|włączenie)|o\s+dopuszczenie\s+(?:i\s+przeprowadzenie\s+)?dowodu)/iu;
+// A fact the draft says is not in the material (to be proven, completed, known to the party only).
+const OUTSIDE_MATERIAL =
+  /(?:⬛|nie\s+(?:zostało|zostały|został|jest|są)\s+(?:jeszcze\s+)?(?:udokumentowan\p{L}*|wykazan\p{L}*)|(?:brak|nie\s+ma)\s+(?:go\s+|jej\s+|ich\s+)?w\s+(?:aktach|materiał\p{L}*)|poza\s+(?:aktami|materiałem)|według\s+wiedzy\s+(?:strony|klienta|skarżąc\p{L}*)|(?:może|mogą)\s+(?:to\s+)?potwierdzić\s+(?:świad\p{L}*|\[PII))/iu;
+// Access to the files: the refusal relied on the opponent's explanations the party has not seen.
+const FILE_ACCESS = /(?:wgląd\p{L}*\s+do\s+akt|dostęp\p{L}*\s+do\s+akt|udostępni\p{L}*\s+(?:\p{L}+\s+){0,2}akt|przegląd\p{L}*\s+akt|kopi\p{L}*\s+(?:\p{L}+\s+){0,2}wyjaśnie\p{L}*|doręczeni\p{L}*\s+(?:\p{L}+\s+){0,2}wyjaśnie\p{L}*)/iu;
+
+/** The refusal in the files rests on the opponent's explanations (the motion for access to the files is due). */
+export function refusalOnExplanations(documents: ReadonlyArray<{ kind: string; category: string; text: string }>): boolean {
+  const refusal = documents.some((document) => document.category === "ORZECZENIE" && /odm(?:ow|aw)\p{L}*/iu.test(document.text.slice(0, 3_000)));
+  const explanations =
+    documents.some((document) => document.kind === "WYJASNIENIA") ||
+    documents.some((document) => document.category === "ORZECZENIE" && /(?:z\s+)?wyjaśnie\p{L}*\s+(?:\p{L}+\s+){0,3}(?:adwokat\p{L}*|radc\p{L}*|obwinion\p{L}*|pełnomocni\p{L}*|\[PII)/iu.test(document.text));
+  return refusal && explanations;
+}
+
+export function argumentSchemaGaps(answer: string, options: { refusalOnExplanations?: boolean } = {}): SchemaGap[] {
   const gaps: SchemaGap[] = [];
   const justification = /UZASADNIENIE/u.exec(answer);
   const body = justification ? answer.slice(justification.index) : answer;
@@ -42,6 +64,20 @@ export function argumentSchemaGaps(answer: string): SchemaGap[] {
   const unproven = blocks.filter((block) => block.length > 300 && !/\[\[LEXDOC|„[^”]{15,}”|\(?Dowód|dowodem|protok[oó]ł|załącznik/iu.test(block));
   if (unproven.length) gaps.push({ element: "DOWÓD", detail: `${unproven.length} bloków uzasadnienia bez dowodu przy fakcie` });
   if (!/(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(answer)) gaps.push({ element: "WNIOSEK", detail: "brak wniosków (petitum)" });
+  // A fact outside the material needs its evidence motion (RD 121/26 plan, point 7).
+  const outside = body.split(/\n\s*\n/u).filter((paragraph) => OUTSIDE_MATERIAL.test(paragraph));
+  if ((outside.length || unproven.length) && !EVIDENCE_MOTION.test(answer)) {
+    gaps.push({
+      element: "WNIOSEK DOWODOWY",
+      detail: `${outside.length + unproven.length} miejsc z faktem spoza materiału albo bez dowodu, a pismo nie zawiera wniosku dowodowego: dla każdego takiego faktu wnieś o przeprowadzenie dowodu (teza dowodowa, środek dowodowy) albo usuń fakt`
+    });
+  }
+  if (options.refusalOnExplanations && !FILE_ACCESS.test(answer)) {
+    gaps.push({
+      element: "WNIOSEK O DOSTĘP DO AKT",
+      detail: "odmowa opiera się na wyjaśnieniach strony przeciwnej, których strona nie zna: wnieś o udostępnienie akt (wgląd, kopie wyjaśnień) i o możliwość odniesienia się do nich"
+    });
+  }
   // A conclusion that depends on a fact still to be filled in ("⬛ [UZUPEŁNIJ: data]") is stated as
   // certain (XI P 27/26: "Jedno z tych zeznań jest nieprawdziwe" before the date was known).
   const conditional = body

@@ -2933,5 +2933,6 @@
  "błąd": "viga",
  "W SearXNG odpowiedziały: {engines}": "SearXNG-is vastasid: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Ükski SearXNG-i otsingumootor ei andnud tulemusi",
- "odmówiły: {engines}": "keeldusid: {engines}"
+ "odmówiły: {engines}": "keeldusid: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Menetlusdokumendi faili ei salvestatud: dokument läbib veel oma töövoo etappe. Fail luuakse alles pärast lõppauditit koos HYBRID-VAL-valideerimisega; seni on dokument vestluses mustand."
 }

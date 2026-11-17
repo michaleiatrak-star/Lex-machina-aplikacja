@@ -103,6 +103,7 @@ import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
+import { isCourtPleading } from "../pleading-standard.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
 const LOCAL_CASE_MEMORY_CHARS = 4_000;
@@ -5256,6 +5257,12 @@ export function createLexHttpApp(options) {
                     res.status(409).json({ error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
                     return;
                 }
+                // The file only after HYBRID-VALIDATION (CP-AUDYT closed): before it the pleading is a draft
+                // in the chat (user preference "HYBRID-VAL przed .docx"; RD 121/26 plan, point 8).
+                if (processState.stage !== "FINAL" && processState.checkpoints["CP-AUDYT"] !== "CLOSED") {
+                    res.status(409).json({ error: "PROCESS_PLEADING_HYBRID_REQUIRED" });
+                    return;
+                }
                 processRenderOnly = { stage: processState.stage };
                 processDocumentStatus = processState.documentStatus;
                 // The file renders the stored pleading (newest version), not the chat.
@@ -7051,7 +7058,6 @@ export function createLexHttpApp(options) {
             const routerExecutive = request.modelSelectsSkills &&
                 sessionAttachments.length === 0 &&
                 !(knowledge.caseId && knowledge.includeCase) &&
-                keywordPlan.executionSkill &&
                 options.sessionExecutor?.executiveSkillFor
                 ? options.sessionExecutor.executiveSkillFor(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query))
                 : undefined;
@@ -7067,7 +7073,6 @@ export function createLexHttpApp(options) {
             // pleading pipeline that one word ("pozew") would start (409 *_STATE_REQUIRED).
             const materialSkills = request.modelSelectsSkills &&
                 sessionAttachments.length > 0 &&
-                keywordPlan.executionSkill &&
                 options.sessionExecutor?.executiveSkillsWithMaterials
                 ? options.sessionExecutor.executiveSkillsWithMaterials(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query), sessionAttachments)
                 : [];
@@ -7079,19 +7084,34 @@ export function createLexHttpApp(options) {
                 !(knowledge.caseId && knowledge.includeCase) &&
                 !asksToDraft(turnMessage) &&
                 (/\?\s*$/u.test(turnMessage.trim()) || asksAbout(turnMessage));
-            const previewPlan = contractQuestion ||
-                pleadingRedaction ||
-                (routerExecutive !== undefined &&
-                    routerExecutive !== keywordPlan.executionSkill) ||
-                (materialSkills.length > 0 &&
-                    (!materialSkills.includes(keywordPlan.executionSkill) ||
-                        // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
-                        // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
-                        // to draft, the turn is the analysis, not the pleading pipeline (409).
-                        (materialSkills[0] !== keywordPlan.executionSkill &&
-                            !asksToDraft(turnMessage))))
-                ? createDeterministicWorkflowPlan(options.registry, null)
-                : keywordPlan;
+            // A pleading to a court or an authority asked for in a matter: the router puts
+            // pisma-procesowe-v3 first (task-routing.ts pleadingFirst) and the turn runs its pipeline,
+            // whatever skill the keywords picked (RD 121/26: "Przygotuj podważenie postanowienia"
+            // ran LEGAL_QUERY_V1 under analiza-sadowa-v6). Without a matter the pipeline has no state
+            // (PROCESS_PLEADING_CASE_REQUIRED), so the chat answers under the skill as before.
+            const pleadingCase = Boolean(knowledge.caseId) ||
+                new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean)).size === 1;
+            const pleadingRouted = keywordPlan.id !== "PROCESS_PLEADING_V1" &&
+                !pleadingRedaction &&
+                pleadingCase &&
+                Boolean(options.registry.get("pisma-procesowe-v3")) &&
+                (materialSkills[0] ?? routerExecutive) === "pisma-procesowe-v3" &&
+                isCourtPleading(turnMessage);
+            const previewPlan = pleadingRouted
+                ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
+                : contractQuestion ||
+                    pleadingRedaction ||
+                    (routerExecutive !== undefined &&
+                        routerExecutive !== keywordPlan.executionSkill) ||
+                    (materialSkills.length > 0 &&
+                        (!materialSkills.includes(keywordPlan.executionSkill) ||
+                            // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
+                            // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
+                            // to draft, the turn is the analysis, not the pleading pipeline (409).
+                            (materialSkills[0] !== keywordPlan.executionSkill &&
+                                !asksToDraft(turnMessage))))
+                    ? createDeterministicWorkflowPlan(options.registry, null)
+                    : keywordPlan;
             let processContext = null;
             // What the user's chat reply did to the pleading pipeline (accepted start, confirmed step, AUTO).
             let pleadingReplyNote = null;

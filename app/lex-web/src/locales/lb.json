@@ -2933,5 +2933,6 @@
  "błąd": "Feeler",
  "W SearXNG odpowiedziały: {engines}": "Am SearXNG hunn geäntwert: {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Keng Sichmaschinn am SearXNG huet Resultater geliwwert",
- "odmówiły: {engines}": "refuséiert: {engines}"
+ "odmówiły: {engines}": "refuséiert: {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "De Fichier vum Schrëftsaz gouf net gespäichert: de Schrëftsaz leeft nach duerch d'Etappe vu sengem Oflaf. De Fichier entsteet eréischt no der Schlusspréiwung mat der HYBRID-VAL-Validatioun; bis dohin ass de Schrëftsaz en Entworf am Gespréich."
 }

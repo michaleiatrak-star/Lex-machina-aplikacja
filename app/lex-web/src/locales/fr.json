@@ -2933,5 +2933,6 @@
  "błąd": "erreur",
  "W SearXNG odpowiedziały: {engines}": "Ont répondu dans SearXNG : {engines}",
  "W SearXNG żadna wyszukiwarka nie dała wyników": "Aucun moteur de SearXNG n’a donné de résultats",
- "odmówiły: {engines}": "ont refusé : {engines}"
+ "odmówiły: {engines}": "ont refusé : {engines}",
+ "Plik pisma nie został zapisany: pismo przechodzi jeszcze etapy ścieżki pisma. Plik powstaje dopiero po audycie końcowym z walidacją HYBRID-VAL; do tego czasu pismo jest szkicem w rozmowie.": "Le fichier de l'acte n'a pas été enregistré : l'acte passe encore les étapes de son parcours. Le fichier n'est créé qu'après l'audit final avec la validation HYBRID-VAL ; jusque-là, l'acte est un brouillon dans la conversation."
 }
