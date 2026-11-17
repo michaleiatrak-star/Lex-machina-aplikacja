@@ -5396,7 +5396,7 @@ export default function MatterChatApp({
         ) : (
         <div className="case-switcher" ref={switcherRef}>
           <div className="matter-thread-heading">
-            <strong>{t("Sprawa")}</strong>
+            <strong>{t("Sprawy")}</strong>
             <button
               type="button"
               disabled={caseBusy || executing}
@@ -5405,50 +5405,24 @@ export default function MatterChatApp({
               {t("+ Nowa sprawa")}
             </button>
           </div>
-          <button
-            type="button"
-            className="case-switcher-current"
-            aria-expanded={switcherOpen}
-            aria-controls="case-switcher-panel"
-            disabled={caseBusy || executing}
-            title={executing ? t("Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu") : t("Zmień sprawę")}
-            onClick={() => setSwitcherOpen((open) => !open)}
-          >
-            <span>
-              <strong>
-                {/* The case at work stays visible with the panel folded (the list is inside it). */}
-                {executingCaseId && executingCaseId === caseId ? (
-                  <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
-                ) : null}
-                {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : t("Wybierz albo utwórz sprawę")}
-              </strong>
-              {executingCaseId && executingCaseId !== caseId && !switcherOpen ? (
-                <small role="status" aria-label={t("Trwa przygotowanie odpowiedzi")}>{t("inna sprawa przygotowuje odpowiedź")}</small>
-              ) : null}
-              {selectedCase ? (
-                <small>{selectedCase.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[selectedCase.role]}</small>
-              ) : null}
-            </span>
-            <span aria-hidden="true" className="case-switcher-chevron">▾</span>
-          </button>
-          {switcherOpen ? (
+          {/* One list of cases in the sidebar, always visible (Patron-style; the dropdown and a
+              second "recent cases" list showed the same cases twice, user 2026-11-17). */}
+          {matterCases.length > 0 ? (
             <div
               id="case-switcher-panel"
               className="case-switcher-panel"
-              role="dialog"
-              aria-label={t("Wybór sprawy")}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setSwitcherOpen(false);
-              }}
+              role="group"
+              aria-label={t("Sprawy")}
             >
-              <input
-                type="search"
-                autoFocus
-                value={switcherQuery}
-                placeholder={t("Szukaj sprawy…")}
-                aria-label={t("Szukaj sprawy")}
-                onChange={(event) => setSwitcherQuery(event.target.value)}
-              />
+              {matterCases.length > SWITCHER_CASES ? (
+                <input
+                  type="search"
+                  value={switcherQuery}
+                  placeholder={t("Szukaj sprawy…")}
+                  aria-label={t("Szukaj sprawy")}
+                  onChange={(event) => setSwitcherQuery(event.target.value)}
+                />
+              ) : null}
               <small className="case-switcher-caption">
                 {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : t("Ostatnio zmieniane")}
               </small>
@@ -5545,6 +5519,7 @@ export default function MatterChatApp({
                 )}
               </div>
               {switcherCases.length === 0 ? <small className="case-switcher-caption">{t("Brak pasujących spraw.")}</small> : null}
+              {matterCases.length > SWITCHER_CASES ? (
               <button
                 type="button"
                 className="case-switcher-all"
@@ -5555,22 +5530,7 @@ export default function MatterChatApp({
               >
                 {t("Wszystkie sprawy (")}{matterCases.length}) →
               </button>
-              <form
-                className="case-switcher-create"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setSwitcherOpen(false);
-                  void createLocalCase(newCaseName.trim() || "Nowa sprawa");
-                }}
-              >
-                <input
-                  value={newCaseName}
-                  maxLength={160}
-                  placeholder={t("Nazwa nowej sprawy")}
-                  onChange={(event) => setNewCaseName(event.target.value)}
-                />
-                <button type="submit" disabled={caseBusy || executing}>{t("Utwórz")}</button>
-              </form>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -5604,38 +5564,6 @@ export default function MatterChatApp({
             </div>
           ))}
         </nav>
-
-        {/* Recent cases one click away (as in Patron's sidebar), not only behind the switcher. */}
-        {!individual && matterCases.length > 1 ? (
-          <div className="chat-recent-cases" role="group" aria-label={t("Ostatnie sprawy")}>
-            <small className="chat-tab-group-label">{t("Ostatnie sprawy")}</small>
-            {casesNewestFirst(matterCases)
-              .filter((item) => !item.archivedAt)
-              .slice(0, 5)
-              .map((item) => (
-                <button
-                  key={item.caseId}
-                  type="button"
-                  className={item.caseId === caseId ? "chat-recent-case active" : "chat-recent-case"}
-                  disabled={caseBusy || executing}
-                  aria-current={item.caseId === caseId ? "true" : undefined}
-                  title={item.displayName || t("Sprawa bez nazwy")}
-                  onClick={() => {
-                    setSwitcherOpen(false);
-                    setPendingFirstMessage(null);
-                    setExecutionError("");
-                    setCaseId(item.caseId);
-                    setActiveTab("chat");
-                  }}
-                >
-                  {item.caseId === executingCaseId ? (
-                    <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
-                  ) : null}
-                  {item.displayName || t("Sprawa bez nazwy")}
-                </button>
-              ))}
-          </div>
-        ) : null}
 
         {/* The case is named on the switcher; the card speaks up only when the runtime is down. */}
         {developerMode || !runtimeOnline ? (
