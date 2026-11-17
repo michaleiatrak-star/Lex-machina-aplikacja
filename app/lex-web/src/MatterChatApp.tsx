@@ -150,7 +150,7 @@ import { conversationTitle } from "./conversation-title.js";
 import { modelAvailable, noModelAvailable } from "./model-availability.js";
 import { markWebSearchPromptShown, requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptShown } from "./web-search-setup-prompt.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
-import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
+import { CoverageLine, RegisterLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
@@ -610,7 +610,7 @@ export function looksLikeLetter(answer: string): boolean {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument" | "answerDocument"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument" | "answerDocument" | "processAuto"
   >
 ): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" | "ANSWER"; answerSessionId?: string; longDocumentId?: string } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
@@ -643,8 +643,16 @@ export function letterDocumentPlan(
     return { documentType: "pleading", stage: ready ? "FINAL" : "DRAFT", source: "REDACTION" };
   }
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
+    // STOP 3 (W3 closed): the final file. STOP 2 (W2 closed, the turn ended at the stage
+    // boundary): the draft's file, whichever W2 step wrote the last version (in AUTO a later
+    // step of the same turn used to hide CP-ATAK, so no file was made).
     if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
-    return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
+    const workflow = result.processWorkflow;
+    const w2Closed =
+      workflow?.checkpoints?.["CP-ATAK"] === "CLOSED" &&
+      workflow.stage === "W3" &&
+      workflow.checkpoints["CP-QUALITY"] !== "CLOSED";
+    return workflow?.draftWritten?.checkpoint === "CP-ATAK" || (w2Closed && (result.processAuto?.stopped === "STAGE_STOP" || Boolean(workflow?.draftWritten)))
       ? { documentType: "pleading", stage: "DRAFT" }
       : null;
   }
@@ -1137,7 +1145,12 @@ function executionMessage(
           : "";
     // Instruction text of the turn (measure for moving skill procedure into the app).
     const instructionMeta = execution.context?.instructionChars
-      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())} tok.`
+      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())} tok.` +
+        (execution.context.instructionsTrimmedFrom
+          ? t(" (dopasowane do okna modelu z ~{from} tok.; pominięte moduły model doczytuje sam)", {
+              from: Math.round(execution.context.instructionsTrimmedFrom / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())
+            })
+          : "")
       : "";
     const citationMeta =
       execution.documentCitationFreshness
@@ -1183,6 +1196,7 @@ function executionMessage(
       ...(execution.documentCoverage?.length
         ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
         : {}),
+      ...(execution.documentRegister?.length ? { documentRegister: execution.documentRegister } : {}),
       ...(execution.corrections?.length ? { corrections: execution.corrections } : {}),
       ...(execution.auxiliarySources?.length
         ? {
@@ -1980,6 +1994,8 @@ export default function MatterChatApp({
   const [dropActive, setDropActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The model's text so far in the running turn: kept when the turn fails or is interrupted.
+  const lastDraftRef = useRef("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
   const activeCaseIdRef =
@@ -4540,10 +4556,14 @@ export default function MatterChatApp({
       setLastDelivery(null);
       const executionId =
         newExecutionId();
+      lastDraftRef.current = "";
       const stopDraftPolling =
         startDraftPolling(
           executionId,
-          setDraftText,
+          (text) => {
+            if (text) lastDraftRef.current = text;
+            setDraftText(text);
+          },
           DRAFT_POLL_MS,
           getSessionProgress,
           setExecutionSteps
@@ -4870,8 +4890,21 @@ export default function MatterChatApp({
                   : String(error)
             })
       });
+      // What the model had written before the failure or the interruption stays in the chat as
+      // a working draft (user, 2026-11-17: the text was lost on an interruption).
+      const keptDraft = lastDraftRef.current.trim();
+      lastDraftRef.current = "";
       setMessages((current) => [
         ...current,
+        ...(keptDraft
+          ? [
+              {
+                id: messageId(),
+                role: "assistant" as const,
+                content: `${t("Tura przerwana przed zakończeniem: poniżej tekst, który model zdążył napisać (roboczy, bez kontroli końcowej).")}\n\n${keptDraft}`
+              }
+            ]
+          : []),
         {
           id: messageId(),
           role: "system",
@@ -6473,6 +6506,7 @@ export default function MatterChatApp({
                   ) : null}
                   {developerMode && message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
                   {developerMode && message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
+                  {message.documentRegister?.length ? <RegisterLine entries={message.documentRegister} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
                   ) : null}

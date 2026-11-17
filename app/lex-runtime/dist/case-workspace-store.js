@@ -197,6 +197,21 @@ function safeMessage(input) {
                 entry.pages.every((range) => Array.isArray(range) && range.length === 2 && range.every((page) => Number.isInteger(page) && page >= 1))))) {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
+    const register = input.documentRegister;
+    if (register !== undefined &&
+        (!Array.isArray(register) ||
+            register.length > 60 ||
+            !register.every((entry) => typeof entry === "object" && entry !== null &&
+                /^D\d{2,3}$/u.test(String(entry.id)) &&
+                /^doc_[a-f0-9]{24}$/.test(String(entry.documentId)) &&
+                typeof entry.label === "string" && entry.label.length <= 300 &&
+                typeof entry.kind === "string" && entry.kind.length <= 80 &&
+                ["READ", "NO_FACTS", "GAP", "UNREAD"].includes(entry.state) &&
+                Number.isInteger(entry.parts) && entry.parts >= 0 && entry.parts <= 10_000 &&
+                Number.isInteger(entry.facts) && entry.facts >= 0 && entry.facts <= 100_000 &&
+                (entry.reasons === undefined || (Array.isArray(entry.reasons) && entry.reasons.length <= 3 && entry.reasons.every((reason) => typeof reason === "string" && reason.length <= 500)))))) {
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
     if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
@@ -207,7 +222,7 @@ function safeMessage(input) {
     if (input.corrections !== undefined && !validAnswerCorrections(input.corrections)) {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
-    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentAnalysis: _analysis, answerDocument: _answerDocument, corrections: _corrections, ...rest } = input;
+    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentRegister: _register, documentAnalysis: _analysis, answerDocument: _answerDocument, corrections: _corrections, ...rest } = input;
     return {
         ...rest,
         ...(coverage?.length
@@ -218,6 +233,20 @@ function safeMessage(input) {
                     totalPages: entry.totalPages,
                     pages: entry.pages.map(([start, end]) => [start, end]),
                     status: entry.status
+                }))
+            }
+            : {}),
+        ...(register?.length
+            ? {
+                documentRegister: register.map((entry) => ({
+                    id: entry.id,
+                    documentId: entry.documentId,
+                    label: entry.label,
+                    kind: entry.kind,
+                    state: entry.state,
+                    parts: entry.parts,
+                    facts: entry.facts,
+                    ...(entry.reasons?.length ? { reasons: [...entry.reasons] } : {})
                 }))
             }
             : {}),
@@ -644,6 +673,7 @@ export class EncryptedCaseWorkspaceStore {
             ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
             ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
             ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
+            ...(item.documentRegister ? { documentRegister: structuredClone(item.documentRegister) } : {}),
             ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
             ...(item.answerDocument ? { answerDocument: { sessionId: item.answerDocument.sessionId } } : {}),
             ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})

@@ -34,7 +34,10 @@ export type ProcessAutoSequenceResult<T> = {
     | "FINAL"
     | "LIMIT_REACHED"
     | "NODE_BLOCKED"
-    | "WAITING_FOR_USER";
+    | "WAITING_FOR_USER"
+    // W2 closed (STOP 2 of pisma-procesowe-v3): the turn ends on the draft, the application
+    // makes its file, the chain goes on to W3 (user, 2026-11-17).
+    | "STAGE_STOP";
   limitReached: boolean;
   blockedResult?: T;
   waitingResult?: T;
@@ -202,6 +205,7 @@ export async function runBoundedProcessAutoSequence<T>(args: {
       );
     }
 
+    const stagePassed = state.stage;
     state = persisted;
     steps.push({
       permit,
@@ -217,6 +221,14 @@ export async function runBoundedProcessAutoSequence<T>(args: {
         state,
         steps,
         stopped: "FINAL",
+        limitReached: false
+      };
+    }
+    if (stagePassed === "W2" && state.stage !== "W2") {
+      return {
+        state,
+        steps,
+        stopped: "STAGE_STOP",
         limitReached: false
       };
     }

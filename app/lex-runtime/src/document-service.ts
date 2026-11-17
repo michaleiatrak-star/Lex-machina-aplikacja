@@ -1,4 +1,4 @@
-import { EML_MEDIA_TYPE, RTF_MEDIA_TYPE } from "./office-document-extractor.js";
+import { DOC_MEDIA_TYPE, EML_MEDIA_TYPE, RTF_MEDIA_TYPE } from "./office-document-extractor.js";
 import { isRecordingMediaType, transcriptPages, type RecordingMediaType, type RecordingTranscriber } from "./transcription.js";
 import { alignProtected, protectedPageText, type DocxAnonymizationPlan } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
@@ -177,6 +177,7 @@ export type SupportedDocumentMediaType =
   | typeof TSV_MEDIA_TYPE
   | typeof EML_MEDIA_TYPE
   | typeof RTF_MEDIA_TYPE
+  | typeof DOC_MEDIA_TYPE
   | RecordingMediaType;
 
 export type PublicDocumentChunk = {
@@ -791,7 +792,8 @@ implements DocumentService {
       mediaType ===
         ODT_MEDIA_TYPE ||
       mediaType === EML_MEDIA_TYPE ||
-      mediaType === RTF_MEDIA_TYPE
+      mediaType === RTF_MEDIA_TYPE ||
+      mediaType === DOC_MEDIA_TYPE
     ) {
       if (!this.officeExtractor) {
         throw new Error(

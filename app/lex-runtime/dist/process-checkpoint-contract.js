@@ -227,3 +227,17 @@ export function processStepDone(workflow, checkpoint) {
     void checkpoint;
     return workflow?.markedDraftOnly === true;
 }
+/** The module names (file stems) each checkpoint reads: where a section of the skill text belongs. */
+export function checkpointModuleNames() {
+    const names = new Map();
+    for (const [checkpoint, resources] of [...Object.entries(CHECKPOINT_RESOURCES), ...Object.entries(LATER_STEP_RESOURCES)]) {
+        for (const resource of resources ?? []) {
+            if (resource.startsWith("JUR:"))
+                continue;
+            const stem = resource.split("/").pop().replace(/\.md$/u, "").replace(/_v[\d.]+$/u, "");
+            if (!names.has(stem))
+                names.set(stem, checkpoint);
+        }
+    }
+    return names;
+}

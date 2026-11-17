@@ -89,6 +89,16 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
       return sentences.flatMap((sentence, index) => (/⬛/u.test(sentence) ? [`${sentence} ${sentences[index + 1] ?? ""}`] : []));
     })
     .filter((sentence) => /⬛/u.test(sentence) && /(?:jest\s+nieprawdziw|nieprawdą|zaprzeczył|fałszyw|skłamał|kłamie|nie\s+mo(?:że|gą)\s+być\s+prawdziw)/iu.test(sentence) && !/(?:wariant|jeżeli|jeśli|gdyby|o\s+ile|w\s+razie)/iu.test(sentence));
+  // A provision a motion rests on (petitum: "wnoszę o … konfrontację (art. 272 k.p.c.)") is applied in the
+  // justification: its premises shown on these facts (user report 2026-11-17: art. 272 k.p.c., the
+  // confrontation of witnesses who contradict each other, moved for one witness's two testimonies).
+  const unapplied = motionProvisionsWithoutPremises(answer);
+  if (unapplied.length) {
+    gaps.push({
+      element: "PRZESŁANKI WNIOSKU",
+      detail: `wnioski powołują ${unapplied.join(", ")}, a uzasadnienie nie wykazuje, że przesłanki tego przepisu są spełnione w tej sprawie (kto, jakie fakty, który dowód): wykaż każdą przesłankę albo usuń wniosek`
+    });
+  }
   if (conditional.length) gaps.push({ element: "TEZA WARUNKOWA", detail: `${conditional.length} zdań przesądza wniosek zależny od faktu do uzupełnienia (⬛): rozpisz warianty albo usuń tezę do czasu ustalenia faktu` });
   return gaps;
 }
@@ -98,4 +108,25 @@ export function schemaCorrection(gaps: readonly SchemaGap[]): string {
     "4) Schemat budowy argumentu (pisma-procesowe-v3, MOD-BUDOWA-ARGUMENTU): uzupełnij brakujące elementy w piśmie, nie dopisując nowych faktów spoza akt:",
     ...gaps.map((gap) => `- ${gap.element}: ${gap.detail}`)
   ].join("\n");
+}
+
+const ARTICLE = /(?<![\p{L}])art\.\s*(\d+[a-z]?(?:[¹²³⁴⁵⁶⁷⁸⁹⁰]+)?)(?:\s*§\s*\d+[a-z]?)?/giu;
+// Words with which a justification applies a provision to the facts.
+const APPLIES = /(?:przesłan\p{L}*|spełnion\p{L}*|zachodz\p{L}*|zachodzi|wypełni\p{L}*|w\s+niniejszej\s+sprawie|w\s+tej\s+sprawie|ponieważ|skoro|albowiem|gdyż|bowiem)/iu;
+
+/** Articles cited in the motions (before the justification) that the justification never applies to the facts. */
+export function motionProvisionsWithoutPremises(answer: string): string[] {
+  const justification = /\n[#*\s]*UZASADNIENIE/iu.exec(answer);
+  if (!justification) return [];
+  const opening = /(?:wnosz[ęe]|wnosi)\s+o\s*:?/iu.exec(answer.slice(0, justification.index));
+  if (!opening) return [];
+  const petitum = answer.slice(opening.index, justification.index);
+  const body = answer.slice(justification.index);
+  const missing: string[] = [];
+  for (const match of petitum.matchAll(ARTICLE)) {
+    const number = match[1]!.toLowerCase();
+    const sentences = body.split(/(?<=[.;!?])\s+(?=[\p{Lu}„(])/u).filter((sentence) => new RegExp(`(?<![\\p{L}])art\\.\\s*${number}(?![\\d\\p{L}])`, "iu").test(sentence));
+    if (!sentences.some((sentence) => APPLIES.test(sentence)) && !missing.includes(`art. ${number}`)) missing.push(`art. ${number}`);
+  }
+  return missing;
 }

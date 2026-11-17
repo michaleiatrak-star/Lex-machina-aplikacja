@@ -2296,6 +2296,7 @@ export function registerWorkspaceRoutes(
         ...(raw.mandatoryPath !== undefined ? { mandatoryPath: raw.mandatoryPath } : {}),
         ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
         ...(raw.documentCoverage !== undefined ? { documentCoverage: raw.documentCoverage } : {}),
+        ...(raw.documentRegister !== undefined ? { documentRegister: raw.documentRegister } : {}),
         ...(raw.documentAnalysis !== undefined ? { documentAnalysis: raw.documentAnalysis } : {}),
         ...(raw.answerDocument !== undefined ? { answerDocument: raw.answerDocument as NonNullable<WorkspaceThreadMessage["answerDocument"]> } : {}),
         ...(raw.corrections !== undefined ? { corrections: raw.corrections } : {}),

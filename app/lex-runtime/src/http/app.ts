@@ -363,6 +363,7 @@ const DOCUMENT_MEDIA_TYPES =
     // E-mail and RTF: read as text by the office worker.
     "message/rfc822",
     "application/rtf",
+    "application/msword",
     // Recordings: the local speech-to-text model writes the text (transcription.ts).
     ...(Object.keys(RECORDING_MEDIA_TYPES) as SupportedDocumentMediaType[])
   ]);
@@ -6924,6 +6925,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       "application/vnd.ms-excel.sheet.macroenabled.12",
       "message/rfc822",
       "application/rtf",
+      "application/msword",
       ...Object.keys(RECORDING_MEDIA_TYPES)
     ],
     // A recording too: the body is held in memory, so the same bound as a scan (an hour of

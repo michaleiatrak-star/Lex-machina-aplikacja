@@ -101,6 +101,8 @@ export type WorkspaceThreadMessage = {
   mandatoryPath?: Record<string, unknown>;
   // Pages of the case's documents read for this answer (document-coverage.ts).
   documentCoverage?: Array<{ documentId: string; title?: string; totalPages: number; pages: Array<[number, number]>; status: "FULL" | "PARTIAL" }>;
+  // The register D01..DN of a pleading's turn (read state of each document).
+  documentRegister?: Array<{ id: string; documentId: string; label: string; kind: string; state: "READ" | "NO_FACTS" | "GAP" | "UNREAD"; parts: number; facts: number; reasons?: string[] }>;
   documentAnalysis?: boolean;
   // The answer is itself a letter kept for its file (answer-document.ts): its session.
   answerDocument?: { sessionId: string };
@@ -421,6 +423,26 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   ) {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
+  const register = input.documentRegister;
+  if (
+    register !== undefined &&
+    (!Array.isArray(register) ||
+      register.length > 60 ||
+      !register.every(
+        (entry) =>
+          typeof entry === "object" && entry !== null &&
+          /^D\d{2,3}$/u.test(String(entry.id)) &&
+          /^doc_[a-f0-9]{24}$/.test(String(entry.documentId)) &&
+          typeof entry.label === "string" && entry.label.length <= 300 &&
+          typeof entry.kind === "string" && entry.kind.length <= 80 &&
+          ["READ", "NO_FACTS", "GAP", "UNREAD"].includes(entry.state) &&
+          Number.isInteger(entry.parts) && entry.parts >= 0 && entry.parts <= 10_000 &&
+          Number.isInteger(entry.facts) && entry.facts >= 0 && entry.facts <= 100_000 &&
+          (entry.reasons === undefined || (Array.isArray(entry.reasons) && entry.reasons.length <= 3 && entry.reasons.every((reason) => typeof reason === "string" && reason.length <= 500)))
+      ))
+  ) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
   if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
@@ -442,6 +464,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     mandatoryPath: _path,
     pipelineNext: _next,
     documentCoverage: _coverage,
+    documentRegister: _register,
     documentAnalysis: _analysis,
     answerDocument: _answerDocument,
     corrections: _corrections,
@@ -457,6 +480,20 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
             totalPages: entry.totalPages,
             pages: entry.pages.map(([start, end]) => [start, end] as [number, number]),
             status: entry.status
+          }))
+        }
+      : {}),
+    ...(register?.length
+      ? {
+          documentRegister: register.map((entry) => ({
+            id: entry.id,
+            documentId: entry.documentId,
+            label: entry.label,
+            kind: entry.kind,
+            state: entry.state,
+            parts: entry.parts,
+            facts: entry.facts,
+            ...(entry.reasons?.length ? { reasons: [...entry.reasons] } : {})
           }))
         }
       : {}),
@@ -1026,6 +1063,7 @@ export class EncryptedCaseWorkspaceStore {
       ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
       ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
       ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
+      ...(item.documentRegister ? { documentRegister: structuredClone(item.documentRegister) } : {}),
       ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
       ...(item.answerDocument ? { answerDocument: { sessionId: item.answerDocument.sessionId } } : {}),
       ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})

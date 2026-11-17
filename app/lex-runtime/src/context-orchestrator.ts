@@ -15,6 +15,8 @@ export type ContextBudgetReport = {
   estimatedDocumentTokens: number;
   // Instruction text sent to the model in this turn (system prompt), by section.
   instructionChars?: number;
+  // The instructions were fitted to the model's window: their size before (characters).
+  instructionsTrimmedFrom?: number;
   instructionSections?: Array<{ label: string; chars: number }>;
   selectedChunks: number;
   compressedChunks: number;

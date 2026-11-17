@@ -358,6 +358,7 @@ export async function fullDocumentMatrix(documents, focus, call, options = {}) {
     const topics = parseTopics(topicReply.text, records);
     const jobs = parted.flatMap((item) => item.parts.map((part) => ({ document: item.document, ...part })));
     const results = new Map();
+    let done = 0;
     const run = async (job, retry) => {
         const own = topics.filter((topic) => !topic.records.length || topic.records.includes(job.document.record));
         const ask = retry ? coverageRequest(job.part, job.units, topics) : recordFactRequest(job.part, job.units, own.length ? own : topics, "documents");
@@ -374,6 +375,9 @@ export async function fullDocumentMatrix(documents, focus, call, options = {}) {
         });
         if (reply.failure)
             failures.push(`${job.part}${retry ? " (kontrola pokrycia)" : ""}: ${reply.failure}`);
+        if (!retry)
+            done += 1;
+        options.onPart?.({ record: job.document.record, part: job.part, done, total: jobs.length, facts: facts.length, retry });
     };
     const pool = async (list, retry) => {
         let next = 0;

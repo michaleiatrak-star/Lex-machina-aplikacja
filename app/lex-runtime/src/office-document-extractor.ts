@@ -14,12 +14,15 @@ export const ODT_MEDIA_TYPE =
 // An e-mail (.eml) and an RTF document are read by the same worker (text, no layout).
 export const EML_MEDIA_TYPE = "message/rfc822";
 export const RTF_MEDIA_TYPE = "application/rtf";
+// Word 97-2003 (.doc): read by the same worker from the compound file, text only.
+export const DOC_MEDIA_TYPE = "application/msword";
 
 export type OfficeDocumentMediaType =
   | typeof DOCX_MEDIA_TYPE
   | typeof ODT_MEDIA_TYPE
   | typeof EML_MEDIA_TYPE
-  | typeof RTF_MEDIA_TYPE;
+  | typeof RTF_MEDIA_TYPE
+  | typeof DOC_MEDIA_TYPE;
 
 export interface OfficeDocumentTextExtractor {
   extract(

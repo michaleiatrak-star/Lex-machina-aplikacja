@@ -199,7 +199,8 @@ function canRunPrivacyPipeline(
       // Transcribed (recordings) or read as text (e-mail, RTF) by the runtime as well.
       caseFileCategory(item) === "RECORDING" ||
       item.mediaType === "message/rfc822" ||
-      item.mediaType === "application/rtf"
+      item.mediaType === "application/rtf" ||
+      item.mediaType === "application/msword"
     )
   );
 }

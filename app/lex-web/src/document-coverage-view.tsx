@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import type { DocumentCoverageEntry } from "./api.js";
+import type { DocumentCoverageEntry, DocumentRegisterEntry } from "./api.js";
 
 type Range = [number, number];
 
@@ -114,5 +114,25 @@ export function UnfinishedAnalysis({
         ))}
       </ul>
     </div>
+  );
+}
+
+/** The register D01..DN under a pleading's answer: read, read without facts, gap — like the pleading monitor's steps. */
+export function RegisterLine({ entries }: { entries: DocumentRegisterEntry[] }) {
+  const read = entries.filter((entry) => entry.state === "READ" || entry.state === "NO_FACTS").length;
+  return (
+    <small className="chat-coverage-line">
+      {t("Rejestr dokumentów: przeczytane {read} z {total}", { read, total: entries.length })}
+      {": "}
+      {entries
+        .map((entry) =>
+          entry.state === "READ"
+            ? t("{id} {label} — przeczytany ({facts} faktów)", { id: entry.id, label: entry.label, facts: entry.facts })
+            : entry.state === "NO_FACTS"
+              ? t("{id} {label} — przeczytany, bez faktów do tematów", { id: entry.id, label: entry.label })
+              : t("{id} {label} — do dokończenia{reason}", { id: entry.id, label: entry.label, reason: entry.reasons?.length ? ` (${entry.reasons[0]})` : "" })
+        )
+        .join("; ")}
+    </small>
   );
 }

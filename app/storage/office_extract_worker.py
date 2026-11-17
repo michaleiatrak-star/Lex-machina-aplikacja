@@ -19,6 +19,7 @@ DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ODT = "application/vnd.oasis.opendocument.text"
 EML = "message/rfc822"
 RTF = "application/rtf"
+DOC = "application/msword"
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 TEXT_NS = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
@@ -569,6 +570,157 @@ def rtf_text(data: bytes) -> str:
             out.append(chunk)
     return re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
 
+
+# Word 97-2003 (.doc): a compound file (CFB) whose WordDocument stream holds the text in pieces
+# listed by the piece table (CLX) of the 0Table/1Table stream. Text only, no layout; standard
+# library only (the user's computer has no LibreOffice). [MS-CFB], [MS-DOC] 2.4.1.
+CFB_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+CFB_FREE = 0xFFFFFFFF
+CFB_END = 0xFFFFFFFE
+
+def u16(b: bytes, o: int) -> int:
+    return int.from_bytes(b[o:o + 2], "little")
+
+def u32(b: bytes, o: int) -> int:
+    return int.from_bytes(b[o:o + 4], "little")
+
+def cfb_streams(data: bytes) -> dict:
+    if len(data) < 512 or data[:8] != CFB_MAGIC:
+        fail("DOC_NOT_COMPOUND_FILE")
+    sector_size = 1 << u16(data, 0x1E)
+    mini_size = 1 << u16(data, 0x20)
+    if sector_size not in (512, 4096) or mini_size != 64:
+        fail("DOC_COMPOUND_FILE_INVALID")
+    mini_cutoff = u32(data, 0x38)
+
+    def sector(index: int) -> bytes:
+        start = (index + 1) * sector_size
+        if start + sector_size > len(data) + sector_size:
+            fail("DOC_COMPOUND_FILE_INVALID")
+        return data[start:start + sector_size]
+
+    difat = [u32(data, 0x4C + 4 * i) for i in range(109)]
+    next_difat, guard = u32(data, 0x44), 0
+    while next_difat not in (CFB_FREE, CFB_END) and guard < 10000:
+        block = sector(next_difat)
+        difat.extend(u32(block, 4 * i) for i in range(sector_size // 4 - 1))
+        next_difat, guard = u32(block, sector_size - 4), guard + 1
+    fat = []
+    for index in difat:
+        if index in (CFB_FREE, CFB_END):
+            continue
+        block = sector(index)
+        fat.extend(u32(block, 4 * i) for i in range(sector_size // 4))
+
+    def chain(start: int, table: list) -> list:
+        out, seen = [], set()
+        while start not in (CFB_FREE, CFB_END) and start < len(table):
+            if start in seen:
+                fail("DOC_COMPOUND_FILE_INVALID")
+            seen.add(start)
+            out.append(start)
+            start = table[start]
+        return out
+
+    directory = b"".join(sector(i) for i in chain(u32(data, 0x30), fat))
+    entries = []
+    for offset in range(0, len(directory) - 127, 128):
+        raw = directory[offset:offset + 128]
+        length = u16(raw, 0x40)
+        name = raw[:max(0, length - 2)].decode("utf-16-le", "replace")
+        entries.append((name, raw[0x42], u32(raw, 0x74), u32(raw, 0x78)))
+    if not entries:
+        fail("DOC_COMPOUND_FILE_INVALID")
+    root = entries[0]
+    mini_stream = b"".join(sector(i) for i in chain(root[2], fat))
+    minifat = []
+    for index in chain(u32(data, 0x3C), fat):
+        block = sector(index)
+        minifat.extend(u32(block, 4 * i) for i in range(sector_size // 4))
+    streams = {}
+    for name, kind, start, size in entries[1:]:
+        if kind != 2:
+            continue
+        if size < mini_cutoff:
+            body = b"".join(mini_stream[i * mini_size:(i + 1) * mini_size] for i in chain(start, minifat))
+        else:
+            body = b"".join(sector(i) for i in chain(start, fat))
+        streams[name] = body[:size]
+    return streams
+
+def doc_clean(text: str) -> str:
+    # Fields: keep the shown result, drop the instruction ("\\x13 PAGE \\x14 3 \\x15" -> "3").
+    out, depth_instr = [], []
+    for ch in text:
+        if ch == "\x13":
+            depth_instr.append(True)
+        elif ch == "\x14":
+            if depth_instr:
+                depth_instr[-1] = False
+        elif ch == "\x15":
+            if depth_instr:
+                depth_instr.pop()
+        elif depth_instr and depth_instr[-1]:
+            continue
+        else:
+            out.append(ch)
+    text = "".join(out)
+    text = text.replace("\r\x07", "\n").replace("\x07", "\t").replace("\r", "\n").replace("\x0b", "\n").replace("\x0c", "\n\n")
+    text = text.replace("\x1e", "-").replace("\x1f", "").replace("\xa0", " ")
+    text = re.sub(r"[\x00-\x08\x0e-\x1d]", "", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+
+def doc_text(data: bytes) -> str:
+    streams = cfb_streams(data)
+    word = streams.get("WordDocument")
+    if not word or len(word) < 0x200 or u16(word, 0) != 0xA5EC:
+        fail("DOC_FORMAT_UNSUPPORTED")
+    flags = u16(word, 0x0A)
+    if flags & 0x0100:
+        fail("OFFICE_DOCUMENT_ENCRYPTED")
+    table = streams.get("1Table" if flags & 0x0200 else "0Table")
+    if not table:
+        fail("DOC_FORMAT_UNSUPPORTED")
+    csw = u16(word, 32)
+    lw = 34 + csw * 2
+    cslw = u16(word, lw)
+    fc_lcb = lw + 2 + cslw * 4 + 2
+    ccp_text = u32(word, lw + 2 + 0x0C)
+    ccp_ftn = u32(word, lw + 2 + 0x10)
+    fc_clx, lcb_clx = u32(word, fc_lcb + 0x108), u32(word, fc_lcb + 0x10C)
+    clx = table[fc_clx:fc_clx + lcb_clx]
+    pos = 0
+    while pos < len(clx) and clx[pos] == 0x01:
+        pos += 3 + u16(clx, pos + 1)
+    if pos >= len(clx) or clx[pos] != 0x02:
+        fail("DOC_FORMAT_UNSUPPORTED")
+    lcb = u32(clx, pos + 1)
+    plc = clx[pos + 5:pos + 5 + lcb]
+    count = (lcb - 4) // 12
+    cps = [u32(plc, 4 * i) for i in range(count + 1)]
+    pieces = []
+    for i in range(count):
+        pcd = plc[4 * (count + 1) + 8 * i:4 * (count + 1) + 8 * i + 8]
+        fc = u32(pcd, 2)
+        chars = cps[i + 1] - cps[i]
+        if chars <= 0:
+            continue
+        if fc & 0x40000000:
+            start = (fc & 0x3FFFFFFF) // 2
+            pieces.append(word[start:start + chars].decode("cp1252", "replace"))
+        else:
+            pieces.append(word[fc:fc + 2 * chars].decode("utf-16-le", "replace"))
+    text = "".join(pieces)
+    main_text = text[:ccp_text] if ccp_text else text
+    notes = text[ccp_text:ccp_text + ccp_ftn] if ccp_ftn else ""
+    cleaned = doc_clean(main_text)
+    if notes.strip():
+        cleaned += "\nPrzypisy:\n" + doc_clean(notes)
+    if not cleaned.strip():
+        fail("DOC_TEXT_EMPTY")
+    return cleaned
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--media-type", required=True)
@@ -606,6 +758,8 @@ def main() -> None:
             text = eml_text(data)
         elif args.media_type == RTF:
             text = rtf_text(data)
+        elif args.media_type == DOC:
+            text = doc_text(data)
         else:
             fail("OFFICE_DOCUMENT_MEDIA_TYPE_UNSUPPORTED")
     except zipfile.BadZipFile:

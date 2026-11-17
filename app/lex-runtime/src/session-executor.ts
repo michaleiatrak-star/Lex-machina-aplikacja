@@ -1314,6 +1314,7 @@ export type SessionExecutionResponse = {
   waitingForUser?: boolean;
   // Pages of the case's documents read this turn; PARTIAL = the analysis of it is unfinished.
   documentCoverage?: DocumentCoverage[];
+  documentRegister?: Array<{ id: string; documentId: string; label: string; kind: string; state: "READ" | "NO_FACTS" | "GAP" | "UNREAD"; parts: number; facts: number; reasons?: string[] }>;
   // The turn analysed the documents: a PARTIAL one is open work the chat asks to finish.
   documentAnalysis?: boolean;
   // What the application's correcting rounds changed: findings and the removed sentences.
@@ -1330,7 +1331,8 @@ export type SessionExecutionResponse = {
       | "FINAL"
       | "LIMIT_REACHED"
       | "NODE_BLOCKED"
-      | "WAITING_FOR_USER";
+      | "WAITING_FOR_USER"
+      | "STAGE_STOP";
     limitReached: boolean;
     steps: Array<{
       stage: Exclude<
@@ -3229,7 +3231,16 @@ export class SafeSessionExecutor implements SessionExecutor {
           const started = Date.now();
           if (toRead.length) step("PREPARE", `macierz faktów: odczyt wszystkich dokumentów (${toRead.length}), duże w częściach, równolegle`);
           const described = toRead.length
-            ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, { concurrency: 6 })
+            ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
+                concurrency: 6,
+                onPart: (progress) =>
+                  step(
+                    "PREPARE",
+                    progress.retry
+                      ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
+                      : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`
+                  )
+              })
             : { facts: [], dropped: 0, topics: [], failures: [], coverage: [] as MatrixCoverage[] };
           dumpMatrix("document-matrix", { documents: toRead.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped, coverage: described.coverage });
           documentRegister = buildRegister(registerDocuments, [...witnessCoverage, ...described.coverage], challenged);
@@ -6671,6 +6682,21 @@ export class SafeSessionExecutor implements SessionExecutor {
           COVERAGE_SKILLS.has(taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "");
         return coverage.length ? { documentCoverage: coverage, ...(analysing ? { documentAnalysis: true } : {}) } : {};
       })(),
+      // The register D01..DN of this turn: each document's read state, as the pleading monitor shows its steps.
+      ...(documentRegister.length
+        ? {
+            documentRegister: documentRegister.map((entry) => ({
+              id: entry.id,
+              documentId: entry.documentId,
+              label: entry.label,
+              kind: entry.kind,
+              state: entry.state,
+              parts: entry.parts,
+              facts: entry.facts,
+              ...(entry.reasons.length ? { reasons: entry.reasons.slice(0, 3) } : {})
+            }))
+          }
+        : {}),
       // Shown with the user's data restored, as the answer is.
       ...(corrections.length
         ? {
@@ -6688,6 +6714,12 @@ export class SafeSessionExecutor implements SessionExecutor {
             String([...execution.events].reverse().find((event) => event.target === "PROMPT_BUDGET")?.detail ?? "")
           );
           return budget ? { instructionChars: budget.chars, instructionSections: budget.sections } : {};
+        })(),
+        ...(() => {
+          // The instructions were fitted to the model's window (instruction-budget.ts): shown, never silent.
+          const fit = [...execution.events].reverse().find((event) => event.target === "INSTRUCTION_BUDGET")?.detail;
+          const from = fit ? /from=(\d+)/u.exec(String(fit))?.[1] : undefined;
+          return from ? { instructionsTrimmedFrom: Number(from) } : {};
         })()
       },
       audit: {

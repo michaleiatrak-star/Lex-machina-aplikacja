@@ -413,7 +413,11 @@ export async function fullDocumentMatrix(
   documents: readonly MatrixDocument[],
   focus: string,
   call: ModelCall,
-  options: { concurrency?: number; partChars?: number; topicTimeoutMs?: number; factTimeoutMs?: number; retryTimeoutMs?: number; topicBudget?: number; topicLimit?: number } = {}
+  options: {
+    concurrency?: number; partChars?: number; topicTimeoutMs?: number; factTimeoutMs?: number; retryTimeoutMs?: number; topicBudget?: number; topicLimit?: number;
+    // Each part read (done / all): the live steps show what is read and what is left, as the pleading monitor does.
+    onPart?: (progress: { record: string; part: string; done: number; total: number; facts: number; retry: boolean }) => void;
+  } = {}
 ): Promise<{ facts: DescribedFact[]; dropped: number; topics: MatrixTopic[]; failures: string[]; coverage: DocumentCoverage[] }> {
   const failures: string[] = [];
   const parted = documents.map((document) => ({ document, parts: documentParts(document, options.partChars ?? 20_000) }));
@@ -428,6 +432,7 @@ export async function fullDocumentMatrix(
   const topics = parseTopics(topicReply.text, records);
   const jobs = parted.flatMap((item) => item.parts.map((part) => ({ document: item.document, ...part })));
   const results = new Map<string, { facts: DescribedFact[]; dropped: number; none: string | null; failure: string }>();
+  let done = 0;
   const run = async (job: (typeof jobs)[number], retry: boolean) => {
     const own = topics.filter((topic) => !topic.records.length || topic.records.includes(job.document.record));
     const ask = retry ? coverageRequest(job.part, job.units, topics) : recordFactRequest(job.part, job.units, own.length ? own : topics, "documents");
@@ -443,6 +448,8 @@ export async function fullDocumentMatrix(
       failure: reply.failure
     });
     if (reply.failure) failures.push(`${job.part}${retry ? " (kontrola pokrycia)" : ""}: ${reply.failure}`);
+    if (!retry) done += 1;
+    options.onPart?.({ record: job.document.record, part: job.part, done, total: jobs.length, facts: facts.length, retry });
   };
   const pool = async (list: typeof jobs, retry: boolean) => {
     let next = 0;
