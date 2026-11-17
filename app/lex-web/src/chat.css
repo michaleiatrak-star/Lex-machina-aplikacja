@@ -4745,3 +4745,46 @@ mark.restored {
 .chat-work-mode .chat-pipeline-option small {
   display: none;
 }
+
+/* Files added in the conversation: the decision about anonymization right above the message box. */
+.chat-file-decisions {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--lm-l33, rgb(var(--lm-o1-rgb) / 0.2));
+  border-radius: 12px;
+  background: var(--lm-s3, rgb(var(--lm-o1-rgb) / 0.05));
+}
+
+.chat-file-decisions-head {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.chat-file-decisions-head small {
+  color: var(--lm-t8);
+}
+
+.chat-file-decisions ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-file-decisions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-file-decisions-name {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

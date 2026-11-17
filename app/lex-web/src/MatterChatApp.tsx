@@ -1992,6 +1992,9 @@ export default function MatterChatApp({
   );
   // Mode of each file handed to the privacy review (anonymization modes).
   const reviewModes = useRef(new WeakMap<File, DocumentProcessingMode>());
+  // Files added in the conversation: stored and read in the background at once; the choice about
+  // anonymization stays with the user, next to the message box (user 2026-11-17).
+  const [chatAddedFiles, setChatAddedFiles] = useState<Array<{ caseId: string; uploadId: string; filename: string }>>([]);
   const [documentDropQueue, setDocumentDropQueue] = useState(
     createDocumentDropQueueState
   );
@@ -3100,7 +3103,8 @@ export default function MatterChatApp({
         const failed: string[] = [];
         for (const file of documents) {
           try {
-            await uploadCaseFile(target, file);
+            const stored = await uploadCaseFile(target, file);
+            setChatAddedFiles((current) => [...current, { caseId: target, uploadId: stored.uploadId, filename: file.name }]);
           } catch (error) {
             failed.push(`„${file.name}”: ${documentFailure(error).message}`);
           }
@@ -3109,7 +3113,7 @@ export default function MatterChatApp({
         setPickerNotice(
           failed.length
             ? t("Nie dodano: {value}", { value: failed.join("; ") })
-            : t("Dodano {count} plik(ów) do akt sprawy; odczyt w tle (OCR tylko dla skanów). Stan: Akta i dokumenty.", { count: documents.length })
+            : t("Dodano {count} plik(ów) do akt sprawy; odczyt trwa w tle (OCR tylko dla skanów). Zdecyduj o anonimizacji nad polem wiadomości.", { count: documents.length })
         );
       }
       if (activeTab !== "chat" && activeTab !== "case") setActiveTab(images.length ? "chat" : "case");
@@ -3188,7 +3192,7 @@ export default function MatterChatApp({
     try {
       const stored = await uploadCaseFile(targetCase, file);
       return await withDocumentProgress(id, targetCase, (progressId) =>
-        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, processingModeOptions(mode))
+        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, { ...processingModeOptions(mode), detect: false })
       );
     } catch (error) {
       setDocumentStaging((current) =>
@@ -5343,6 +5347,64 @@ export default function MatterChatApp({
     selectedFileCount <= documentLimit &&
     documentFit?.estimate?.fits !== false;
 
+  // A stored file of the case processed for the conversation: anonymized (preview) or, after a
+  // confirmation, in clear; then attached to the next message.
+  function processCaseFileForChat(item: { uploadId: string; filename: string }, keepClear: boolean): void {
+    if (keepClear && !window.confirm(t("„{filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?", { filename: item.filename }))) return;
+    setPickerAnonymizing(item.uploadId);
+    setCaseFileErrors(({ [item.uploadId]: _cleared, ...rest }) => rest);
+    // Without anonymization only the text is read: no personal-data recognizer runs.
+    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+      processStoredCaseFile(caseId, item.uploadId, undefined, progressId, keepClear ? { detect: false } : undefined)
+    )
+      .then((review) => previewThenFinalize(caseId, review, item.filename, keepClear))
+      .then((result) => {
+        if (!result) return;
+        pickFiles([{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }], true, caseId);
+        setChatAddedFiles((current) => current.filter((entry) => entry.uploadId !== item.uploadId));
+        setWorkspaceRefresh((value) => value + 1);
+      })
+      .catch((error) => setCaseFileErrors((current) => ({ ...current, [item.uploadId]: documentFailure(error).message })))
+      .finally(() => setPickerAnonymizing(null));
+  }
+
+  // Files of this conversation still waiting for the decision about anonymization.
+  const renderChatFileDecisions = () => {
+    const waiting = chatAddedFiles.filter(
+      (entry) => entry.caseId === caseId && !caseFiles.find((file) => file.uploadId === entry.uploadId)?.processing
+    );
+    if (!waiting.length) return null;
+    return (
+      <section className="chat-file-decisions" aria-label={t("Pliki do decyzji o anonimizacji")}>
+        <p className="chat-file-decisions-head">
+          <strong>{t("Dodane pliki: zdecyduj o anonimizacji")}</strong>
+          <small>{t("Odczyt (OCR tylko dla skanów) trwa w tle; plik trafi do rozmowy po Twoim wyborze.")}</small>
+        </p>
+        <ul>
+          {waiting.map((entry) => {
+            const progress = documentProgress[entry.uploadId];
+            return (
+              <li key={entry.uploadId}>
+                <span className="chat-file-decisions-name" title={entry.filename}>{entry.filename}</span>
+                {progress ? <small>{t("przetwarzanie…")}</small> : null}
+                {caseFileErrors[entry.uploadId] ? <small className="chat-inline-error">{caseFileErrors[entry.uploadId]}</small> : null}
+                <button type="button" className="chat-primary-action" disabled={pickerAnonymizing !== null} onClick={() => processCaseFileForChat(entry, false)}>
+                  {pickerAnonymizing === entry.uploadId ? t("Przetwarzam…") : t("Anonimizuj i dołącz")}
+                </button>
+                <button type="button" className="chat-secondary-action" disabled={pickerAnonymizing !== null} title={t("Tylko odczyt tekstu, bez anonimizacji - plik trafi do modelu z jawnymi danymi")} onClick={() => processCaseFileForChat(entry, true)}>
+                  {t("Bez anonimizacji")}
+                </button>
+                <button type="button" className="chat-link-button" title={t("Plik zostaje w aktach sprawy; decyzję podejmiesz tam")} onClick={() => setChatAddedFiles((current) => current.filter((other) => other.uploadId !== entry.uploadId))}>
+                  {t("Później")}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  };
+
   // Files waiting for a decision (images: read them or send as an image): shown where the user
   // works - above the message box in the conversation, above the documents in the case files -
   // not at the top of the page, where it went unseen (user 2026-11-17).
@@ -6799,6 +6861,7 @@ export default function MatterChatApp({
             </div>
 
             {renderStagingPanel()}
+            {renderChatFileDecisions()}
             <div className="chat-composer">
               {dropActive ? (
                 <div className="chat-drop-overlay">
@@ -7210,7 +7273,7 @@ export default function MatterChatApp({
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFileErrors(({ [item.uploadId]: _cleared, ...rest }) => rest);
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
-                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId, { detect: false })
                                     )
                                       .then((review) => previewThenFinalize(caseId, review, item.filename, true))
                                       .then((result) => {
