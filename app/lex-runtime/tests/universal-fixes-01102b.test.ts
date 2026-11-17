@@ -38,3 +38,25 @@ describe("the timeline names the event date for the wording", () => {
     expect(questionTimelinePrompt(timeline)).toContain("asOf=2024-09-09");
   });
 });
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { dockerDesktopSettingsFiles, hideDockerDashboardOnStart } from "../src/searxng-local.js";
+describe("Docker Desktop starts without its dashboard", () => {
+  it("sets the setting in both settings files, keeping the others", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dd-"));
+    const store = path.join(dir, "settings-store.json");
+    const legacy = path.join(dir, "settings.json");
+    fs.writeFileSync(store, JSON.stringify({ AutoStart: true }));
+    fs.writeFileSync(legacy, JSON.stringify({ memoryMiB: 4096 }));
+    expect(hideDockerDashboardOnStart([store, legacy, path.join(dir, "missing.json")])).toBe(2);
+    expect(JSON.parse(fs.readFileSync(store, "utf8"))).toEqual({ AutoStart: true, OpenUIOnStartupDisabled: true });
+    expect(JSON.parse(fs.readFileSync(legacy, "utf8"))).toEqual({ memoryMiB: 4096, openUIOnStartupDisabled: true });
+    expect(hideDockerDashboardOnStart([store, legacy])).toBe(0);
+  });
+  it("knows where Docker Desktop keeps its settings", () => {
+    expect(dockerDesktopSettingsFiles("win32", { APPDATA: "C:\\U\\AppData\\Roaming" }, "C:\\U")[0]).toMatch(/Docker[\\/]settings-store\.json$/u);
+    expect(dockerDesktopSettingsFiles("darwin", {}, "/Users/u")[0]).toBe("/Users/u/Library/Group Containers/group.com.docker/settings-store.json");
+  });
+});

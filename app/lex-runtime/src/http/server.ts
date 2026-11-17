@@ -92,7 +92,7 @@ import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
-import { autostartLocalSearxng } from "../searxng-local.js";
+import { autostartLocalSearxng, hideDockerDashboardOnStart } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
@@ -1258,6 +1258,8 @@ if (
   );
   // Local SearXNG created in Settings starts with the application (Docker Desktop opened if closed).
   const searchDirectory = webSearchDataDirectory();
+  // Docker Desktop started at sign-in opens its dashboard too: turned off once, the app uses the engine only.
+  if (process.platform !== "linux") hideDockerDashboardOnStart();
   if (searchDirectory && process.env.LEX_SEARXNG_AUTOSTART !== "0") {
     void autostartLocalSearxng({ directory: path.join(searchDirectory, "searxng"), searxngUrl: webSearchSettings().searxngUrl })
       .then((result) => {

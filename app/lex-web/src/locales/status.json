@@ -47,73 +47,73 @@
    "wcale": 0
   },
   "en": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "de": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "fr": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "it": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "es": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "pt": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "nl": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "ca": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "lb": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "sv": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "da": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "nb": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "fi": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "is": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "fo": {
@@ -122,18 +122,18 @@
    "wcale": 88
   },
   "et": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "lv": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "lt": {
-   "całość": 79,
-   "częściowo": 11,
+   "całość": 78,
+   "częściowo": 12,
    "wcale": 0
   },
   "cs": {
@@ -2840,47 +2840,47 @@
   },
   {
    "component": "HomeDashboard",
-   "translatable": 20,
+   "translatable": 24,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 20,
-    "da": 20,
-    "de": 20,
-    "en": 20,
-    "es": 20,
-    "et": 20,
-    "fi": 20,
-    "fr": 20,
-    "is": 20,
-    "it": 20,
-    "lb": 20,
-    "lt": 20,
-    "lv": 20,
-    "nb": 20,
-    "nl": 20,
-    "pt": 20,
-    "sv": 20
+    "ca": 22,
+    "da": 22,
+    "de": 22,
+    "en": 22,
+    "es": 22,
+    "et": 22,
+    "fi": 22,
+    "fr": 22,
+    "is": 22,
+    "it": 22,
+    "lb": 22,
+    "lt": 22,
+    "lv": 22,
+    "nb": 22,
+    "nl": 22,
+    "pt": 22,
+    "sv": 22
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
-    "de": "całość",
-    "fr": "całość",
-    "it": "całość",
-    "es": "całość",
-    "pt": "całość",
-    "nl": "całość",
-    "ca": "całość",
-    "lb": "całość",
-    "sv": "całość",
-    "da": "całość",
-    "nb": "całość",
-    "fi": "całość",
-    "is": "całość",
+    "en": "częściowo",
+    "de": "częściowo",
+    "fr": "częściowo",
+    "it": "częściowo",
+    "es": "częściowo",
+    "pt": "częściowo",
+    "nl": "częściowo",
+    "ca": "częściowo",
+    "lb": "częściowo",
+    "sv": "częściowo",
+    "da": "częściowo",
+    "nb": "częściowo",
+    "fi": "częściowo",
+    "is": "częściowo",
     "fo": "wcale",
-    "et": "całość",
-    "lv": "całość",
-    "lt": "całość",
+    "et": "częściowo",
+    "lv": "częściowo",
+    "lt": "częściowo",
     "cs": "wcale",
     "sk": "wcale",
     "hu": "wcale",
@@ -3815,7 +3815,7 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 644,
+   "translatable": 646,
    "notYetTranslatable": 1,
    "translated": {
     "ca": 634,

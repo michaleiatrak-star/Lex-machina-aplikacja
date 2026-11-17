@@ -5605,6 +5605,38 @@ export default function MatterChatApp({
           ))}
         </nav>
 
+        {/* Recent cases one click away (as in Patron's sidebar), not only behind the switcher. */}
+        {!individual && matterCases.length > 1 ? (
+          <div className="chat-recent-cases" role="group" aria-label={t("Ostatnie sprawy")}>
+            <small className="chat-tab-group-label">{t("Ostatnie sprawy")}</small>
+            {casesNewestFirst(matterCases)
+              .filter((item) => !item.archivedAt)
+              .slice(0, 5)
+              .map((item) => (
+                <button
+                  key={item.caseId}
+                  type="button"
+                  className={item.caseId === caseId ? "chat-recent-case active" : "chat-recent-case"}
+                  disabled={caseBusy || executing}
+                  aria-current={item.caseId === caseId ? "true" : undefined}
+                  title={item.displayName || t("Sprawa bez nazwy")}
+                  onClick={() => {
+                    setSwitcherOpen(false);
+                    setPendingFirstMessage(null);
+                    setExecutionError("");
+                    setCaseId(item.caseId);
+                    setActiveTab("chat");
+                  }}
+                >
+                  {item.caseId === executingCaseId ? (
+                    <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
+                  ) : null}
+                  {item.displayName || t("Sprawa bez nazwy")}
+                </button>
+              ))}
+          </div>
+        ) : null}
+
         {/* The case is named on the switcher; the card speaks up only when the runtime is down. */}
         {developerMode || !runtimeOnline ? (
         <div className="chat-sidebar-card">
@@ -6312,6 +6344,7 @@ export default function MatterChatApp({
                         ? "chat-pipeline-option selected"
                         : "chat-pipeline-option"
                     }
+                    title={developerMode ? t("Program sam dobiera skille i moduły.") : t("Aplikacja sama dobiera sposób pracy.")}
                     onClick={() => {
                       selectDeterministicAction("");
                       setWorkMode("AUTO");
@@ -6330,6 +6363,7 @@ export default function MatterChatApp({
                         ? "chat-pipeline-option selected"
                         : "chat-pipeline-option"
                     }
+                    title={t("Ty wybierasz rodzaj pracy (np. pismo, analiza umowy).")}
                     onClick={() => setWorkMode("MECHANICAL")}
                   >
                     <strong>{t("Mechaniczny")}</strong>
@@ -7748,6 +7782,26 @@ export default function MatterChatApp({
               </div>
             </article>
 
+            {/* The case's documents right under its overview (Patron: documents first in a case). */}
+            {selectedCase ? (
+              <div
+                className="chat-file-drop-zone"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={handleDrop}
+              >
+              <WorkspaceManager
+                caseId={caseId}
+                title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
+                canWrite={canWriteCase(selectedCase)}
+                refreshToken={workspaceRefresh}
+                onArtifactRenamed={rememberArtifactName}
+              />
+              </div>
+            ) : null}
+
             <CollapsibleCaseSection
               eyebrow={N_("Terminarz sprawy")}
               title={t("Spotkania, posiedzenia i terminy")}
@@ -8048,25 +8102,6 @@ export default function MatterChatApp({
                   if (!executing) void executeMessage(CASE_OVERVIEW_REQUEST);
                 }}
               />
-            ) : null}
-
-            {selectedCase ? (
-              <div
-                className="chat-file-drop-zone"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "copy";
-                }}
-                onDrop={handleDrop}
-              >
-              <WorkspaceManager
-                caseId={caseId}
-                title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
-                canWrite={canWriteCase(selectedCase)}
-                refreshToken={workspaceRefresh}
-                onArtifactRenamed={rememberArtifactName}
-              />
-              </div>
             ) : null}
 
             {selectedCase ? (

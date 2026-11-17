@@ -55,9 +55,47 @@ const defaultRunner: Runner = (command, args, cwd, timeoutMs) =>
  * application is open; `docker compose up` then fails with "failed to connect to the docker API"
  * (user, 2026-11-15). The application is started here and the engine awaited.
  */
+/**
+ * Docker Desktop opens its dashboard window when it starts, also at sign-in (user 2026-11-17: "docker
+ * powinien uruchamiać się zminimalizowany lub ukryty, bo i tak z niego nie korzystamy"). Its own setting
+ * "Open Docker Dashboard when Docker Desktop starts" is turned off in the settings files it reads
+ * (settings-store.json since 4.34, settings.json before); other settings are kept as they are.
+ */
+export function dockerDesktopSettingsFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, home = os.homedir()): string[] {
+  if (platform === "win32") {
+    const appData = env.APPDATA ?? path.join(home, "AppData", "Roaming");
+    return [path.join(appData, "Docker", "settings-store.json"), path.join(appData, "Docker", "settings.json")];
+  }
+  if (platform === "darwin") {
+    const group = path.join(home, "Library", "Group Containers", "group.com.docker");
+    return [path.join(group, "settings-store.json"), path.join(group, "settings.json")];
+  }
+  return [path.join(home, ".docker", "desktop", "settings-store.json"), path.join(home, ".docker", "desktop", "settings.json")];
+}
+
+export function hideDockerDashboardOnStart(files: string[] = dockerDesktopSettingsFiles()): number {
+  let changed = 0;
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const settings = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+      // settings-store.json uses PascalCase keys, the older settings.json camelCase.
+      const key = path.basename(file) === "settings-store.json" ? "OpenUIOnStartupDisabled" : "openUIOnStartupDisabled";
+      if (settings[key] === true) continue;
+      settings[key] = true;
+      fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
+      changed += 1;
+    } catch {
+      // An unreadable settings file stays as it is; Docker Desktop then opens as before.
+    }
+  }
+  return changed;
+}
+
 const defaultLauncher: Launcher = (engine) => {
   try {
     if (engine !== "docker") return false;
+    hideDockerDashboardOnStart();
     // In the background, no window (user 2026-11-15: the user does not use Docker Desktop's
     // window): `docker desktop start` starts the engine without the application window
     // (Docker Desktop CLI); an older Docker Desktop without it is opened hidden.
@@ -67,7 +105,8 @@ const defaultLauncher: Launcher = (engine) => {
       const roots = [process.env.ProgramFiles, process.env.ProgramW6432, "C:\\Program Files"].filter(Boolean) as string[];
       const exe = roots.map((root) => path.join(root, "Docker", "Docker", "Docker Desktop.exe")).find((file) => fs.existsSync(file));
       if (!exe) return false;
-      spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+      // Started minimised ("start /min"): an older Docker Desktop without the CLI shows no window.
+      spawn("cmd.exe", ["/d", "/c", "start", '""', "/min", exe], { detached: true, stdio: "ignore", windowsHide: true }).unref();
       return true;
     }
     if (process.platform === "linux") {

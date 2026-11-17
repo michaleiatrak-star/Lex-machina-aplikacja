@@ -4595,3 +4595,153 @@ mark.restored {
   color: var(--muted, inherit);
   font-size: 0.9em;
 }
+
+/* Recent cases in the sidebar (Patron-style): one click to the case's conversation. */
+.chat-recent-cases {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.chat-recent-case {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lm-t36);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-recent-case:hover,
+.chat-recent-case.active {
+  background: rgb(var(--lm-o1-rgb) / 0.07);
+  color: var(--lm-t1);
+}
+
+.chat-recent-case.active {
+  border-left-color: currentColor;
+}
+
+@media (max-width: 920px) {
+  .chat-recent-cases {
+    display: none;
+  }
+}
+
+/* Case list on Start as a table (Patron-style): name, state, last change. */
+.lex-case-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lex-case-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(var(--lm-o1-rgb) / 0.12);
+  color: var(--lm-t11);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.lex-case-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(var(--lm-o1-rgb) / 0.07);
+  color: inherit;
+  vertical-align: middle;
+}
+
+.lex-case-row:hover td {
+  background: rgb(var(--lm-o1-rgb) / 0.04);
+}
+
+.lex-case-table td:first-child {
+  color: inherit;
+}
+
+.lex-case-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lex-case-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  /* The card's own text colour (--lm-t1 is the dark sidebar's white). */
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lex-case-open:hover,
+.lex-case-open:focus-visible {
+  text-decoration: underline;
+}
+
+/* Patron-style compact chat header: the model in one slim line, the work mode as two pills
+   next to its label; descriptions stay in the tooltip ("i") and the buttons' titles. */
+.chat-model-dock {
+  gap: 6px 14px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.chat-model-dock-controls select {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.chat-model-dock-controls button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.chat-pipeline-picker {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+
+.chat-pipeline-picker > div:first-child h3 {
+  margin: 0;
+}
+
+.chat-pipeline-picker > :not(:first-child):not(.chat-work-mode) {
+  grid-column: 1 / -1;
+}
+
+.chat-work-mode {
+  display: inline-flex;
+  justify-self: end;
+  gap: 4px;
+}
+
+.chat-work-mode .chat-pipeline-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.chat-work-mode .chat-pipeline-option small {
+  display: none;
+}
