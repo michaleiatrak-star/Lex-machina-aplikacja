@@ -43,6 +43,8 @@ import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CompactSettingRow } from "./CompactSettingRow";
+import { CaseDocumentPreview } from "./CaseDocumentPreview";
+import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -454,6 +456,10 @@ const CASE_OVERVIEW_REQUEST =
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
+// Drag data of a case document moved from the files panel to the message box.
+const CASE_DOCUMENT_DRAG = "application/x-lex-case-document";
+const categoryOrder = (item: { filename: string; mediaType: string; archive: boolean }) =>
+  CASE_FILE_CATEGORIES.findIndex((entry) => entry.category === caseFileCategory({ kind: "", filename: item.filename, mediaType: item.mediaType, archive: item.archive }));
 // How long "Konto połączone." stays after the account connects.
 const ACCOUNT_CONNECTED_NOTICE_MS = 4000;
 const KNOWN_EXECUTION_SKILLS = new Set([
@@ -1709,7 +1715,25 @@ export default function MatterChatApp({
     }
   }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
-    useState(false);
+    useState(() => {
+      try {
+        return window.localStorage.getItem("lex.filesPanelOpen") === "1";
+      } catch {
+        return false;
+      }
+    });
+  // A read case document shown next to the conversation (the docked files panel).
+  const [filePreview, setFilePreview] = useState<{ documentId: string; title: string } | null>(null);
+  // The files panel is hidden or shown by the user and stays so (user 2026-11-17).
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("lex.filesPanelOpen", caseFilePickerOpen ? "1" : "0");
+    } catch {
+      // storage unavailable: the panel just starts closed next time
+    }
+    document.body.classList.toggle("lex-side-open", caseFilePickerOpen && activeTab === "chat");
+    return () => document.body.classList.remove("lex-side-open");
+  }, [caseFilePickerOpen, activeTab]);
   const [generatedDocumentMessage, setGeneratedDocumentMessage] =
     useState("");
   const [pendingFinalDocument, setPendingFinalDocument] =
@@ -3336,6 +3360,17 @@ export default function MatterChatApp({
     event.preventDefault();
     dragDepth.current = 0;
     setDropActive(false);
+    // A case document dragged from the files panel: attached to the message, nothing uploaded.
+    const dragged = event.dataTransfer.getData(CASE_DOCUMENT_DRAG);
+    if (dragged) {
+      try {
+        const pick = JSON.parse(dragged) as { documentId: string; chunkIndices: number[] };
+        if (caseId) pickFiles([{ kind: "document", documentId: pick.documentId, chunkIndices: pick.chunkIndices }], true, caseId);
+      } catch {
+        // not a document of this application
+      }
+      return;
+    }
     void acceptFiles(event.dataTransfer.files);
   }
 
@@ -6280,14 +6315,14 @@ export default function MatterChatApp({
           <section
             className={dropActive ? "chat-panel chat-drop-active" : "chat-panel"}
             onDragEnter={(event) => {
-              if (event.dataTransfer.types.includes("Files")) {
+              if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(CASE_DOCUMENT_DRAG)) {
                 event.preventDefault();
                 dragDepth.current += 1;
                 setDropActive(true);
               }
             }}
             onDragOver={(event) => {
-              if (event.dataTransfer.types.includes("Files")) {
+              if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(CASE_DOCUMENT_DRAG)) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
                 setDropActive(true);
@@ -6299,6 +6334,22 @@ export default function MatterChatApp({
             }}
             onDrop={handleDrop}
           >
+            {!caseFilePickerOpen && caseId ? (
+              <button
+                type="button"
+                className="chat-files-tab"
+                title={t("Pokaż panel plików sprawy")}
+                onClick={() => openFilePicker("case")}
+              >
+                {t("◂ Pliki sprawy")}
+              </button>
+            ) : null}
+            {/* The whole conversation window takes the dropped files (user 2026-11-17), not only the message box. */}
+            {dropActive ? (
+              <div className="chat-drop-overlay chat-drop-overlay-window">
+                {t("Upuść pliki, aby dodać je do tej sprawy")}
+              </div>
+            ) : null}
             <ProcessPleadingWorkflowPanel
               caseId={caseId}
               forceVisible={processWorkflowVisible}
@@ -6863,11 +6914,6 @@ export default function MatterChatApp({
             {renderStagingPanel()}
             {renderChatFileDecisions()}
             <div className="chat-composer">
-              {dropActive ? (
-                <div className="chat-drop-overlay">
-                  {t("Upuść pliki, aby dodać je do tej sprawy")}
-                </div>
-              ) : null}
               <div className="chat-composer-meta">
                 <span>{individual ? t("Rozmowa") : t("Sprawa")}: {selectedCase?.displayName || (individual ? t("nazwa z pierwszego pytania") : t("utworzy się przy pierwszej wiadomości"))}</span>
                 {individual ? null : (
@@ -7058,7 +7104,7 @@ export default function MatterChatApp({
               </div>
               {caseFilePickerOpen ? (
                 <div
-                  className="chat-case-file-picker"
+                  className={filePreview ? "chat-case-file-picker previewing" : "chat-case-file-picker"}
                   aria-label={t("Pliki do dołączenia")}
                 >
                   <div className="chat-file-picker-tabs" role="tablist">
@@ -7083,10 +7129,25 @@ export default function MatterChatApp({
                     <span className="chat-file-picker-count">
                       {selectedFileCount} z {documentLimit} {t("plików")}
                     </span>
-                    <button type="button" className="chat-secondary-action" onClick={() => setCaseFilePickerOpen(false)}>
-                      {t("Zamknij")}
+                    <button type="button" className="chat-secondary-action" title={t("Schowaj panel plików")} onClick={() => setCaseFilePickerOpen(false)}>
+                      {t("Schowaj ▸")}
                     </button>
                   </div>
+                  {filePreview && caseId ? (
+                    <CaseDocumentPreview
+                      caseId={caseId}
+                      documentId={filePreview.documentId}
+                      title={filePreview.title}
+                      onClose={() => setFilePreview(null)}
+                      attached={documentAttachments.some((attachment) => attachment.documentId === filePreview.documentId)}
+                      onAttach={() => {
+                        const file = caseFiles.find((item) => item.processing?.documentId === filePreview.documentId);
+                        if (!file?.processing) return;
+                        const attached = documentAttachments.some((attachment) => attachment.documentId === filePreview.documentId);
+                        pickFiles([{ kind: "document", documentId: file.processing.documentId, chunkIndices: file.processing.chunkIndices }], !attached, caseId);
+                      }}
+                    />
+                  ) : null}
                   {pickerNotice ? <p className="chat-inline-error" role="status">{pickerNotice}</p> : null}
                   {documentFit?.estimate ? (
                     <div
@@ -7164,8 +7225,13 @@ export default function MatterChatApp({
                   })()}
                   {caseFiles.length === 0 ? null : (
                     <ul className="chat-case-file-picker-list">
-                      {caseFiles.map(
-                        (item) => {
+                      {/* Grouped by kind of file, as in the case files (types kept, not flattened). */}
+                      {[...caseFiles]
+                        .sort((left, right) => categoryOrder(left) - categoryOrder(right) || left.filename.localeCompare(right.filename, "pl"))
+                        .map(
+                        (item, position, sorted) => {
+                          const category = caseFileCategory({ kind: "", filename: item.filename, mediaType: item.mediaType, archive: item.archive });
+                          const firstOfKind = position === 0 || caseFileCategory({ kind: "", filename: sorted[position - 1]!.filename, mediaType: sorted[position - 1]!.mediaType, archive: sorted[position - 1]!.archive }) !== category;
                           const ready =
                             Boolean(
                               item.processing &&
@@ -7181,10 +7247,21 @@ export default function MatterChatApp({
                               )
                             );
                           return (
+                            <Fragment key={item.uploadId}>
+                            {firstOfKind ? (
+                              <li className="chat-case-file-group" aria-hidden="true">
+                                {t(CASE_FILE_CATEGORIES.find((entry) => entry.category === category)?.label ?? "Inne")}
+                              </li>
+                            ) : null}
                             <li
-                              key={
-                                item.uploadId
-                              }
+                              draggable={ready}
+                              title={ready ? t("Przeciągnij do pola wiadomości, aby dołączyć") : undefined}
+                              onDragStart={(event) => {
+                                const processing = item.processing;
+                                if (!processing) return;
+                                event.dataTransfer.setData(CASE_DOCUMENT_DRAG, JSON.stringify({ documentId: processing.documentId, chunkIndices: processing.chunkIndices }));
+                                event.dataTransfer.effectAllowed = "copy";
+                              }}
                             >
                               <label>
                                 <input
@@ -7298,7 +7375,17 @@ export default function MatterChatApp({
                                 </button>
                                 </>
                               ) : null}
+                              {ready ? (
+                                <button
+                                  type="button"
+                                  className="chat-link-button"
+                                  onClick={() => setFilePreview({ documentId: item.processing!.documentId, title: item.filename })}
+                                >
+                                  {t("Podgląd")}
+                                </button>
+                              ) : null}
                             </li>
+                            </Fragment>
                           );
                         }
                       )}

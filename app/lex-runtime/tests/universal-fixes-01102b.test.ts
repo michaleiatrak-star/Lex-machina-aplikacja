@@ -83,3 +83,14 @@ with zipfile.ZipFile(sys.argv[1],"w") as z:
     expect(images[0]!.data.byteLength).toBe(40002);
   });
 });
+
+import { LocalPolishPseudonymizer, PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
+describe("a page kept whole runs no recognizer", () => {
+  it("returns the text as it is even when the recognizer would fail", async () => {
+    const failing = { recognize: async () => { throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE:test"); } } as any;
+    const text = "Jan Kowalski, PESEL 84030315255, ul. Długa 5.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), failing).pseudonymize(text, [{ start: 0, end: text.length, action: "KEEP" } as any]);
+    expect(result.text).toBe(text);
+    expect(result.findings).toEqual([]);
+  });
+});
