@@ -47,73 +47,73 @@
    "wcale": 0
   },
   "en": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "de": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "fr": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "it": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "es": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "pt": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "nl": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "ca": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "lb": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "sv": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "da": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "nb": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "fi": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "is": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "fo": {
@@ -122,18 +122,18 @@
    "wcale": 88
   },
   "et": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "lv": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "lt": {
-   "całość": 78,
-   "częściowo": 12,
+   "całość": 77,
+   "częściowo": 13,
    "wcale": 0
   },
   "cs": {
@@ -3815,26 +3815,26 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 640,
+   "translatable": 643,
    "notYetTranslatable": 1,
    "translated": {
-    "ca": 628,
-    "da": 628,
-    "de": 628,
-    "en": 628,
-    "es": 628,
-    "et": 628,
-    "fi": 628,
-    "fr": 628,
-    "is": 628,
-    "it": 628,
-    "lb": 628,
-    "lt": 628,
-    "lv": 628,
-    "nb": 628,
-    "nl": 628,
-    "pt": 628,
-    "sv": 628
+    "ca": 625,
+    "da": 625,
+    "de": 625,
+    "en": 625,
+    "es": 625,
+    "et": 625,
+    "fi": 625,
+    "fr": 625,
+    "is": 625,
+    "it": 625,
+    "lb": 625,
+    "lt": 625,
+    "lv": 625,
+    "nb": 625,
+    "nl": 625,
+    "pt": 625,
+    "sv": 625
    },
    "state": {
     "pl": "całość",
@@ -5833,44 +5833,44 @@
    "translatable": 141,
    "notYetTranslatable": 0,
    "translated": {
-    "ca": 141,
-    "da": 141,
-    "de": 141,
-    "en": 141,
-    "es": 141,
-    "et": 141,
-    "fi": 141,
-    "fr": 141,
-    "is": 141,
-    "it": 141,
-    "lb": 141,
-    "lt": 141,
-    "lv": 141,
-    "nb": 141,
-    "nl": 141,
-    "pt": 141,
-    "sv": 141
+    "ca": 138,
+    "da": 138,
+    "de": 138,
+    "en": 138,
+    "es": 138,
+    "et": 138,
+    "fi": 138,
+    "fr": 138,
+    "is": 138,
+    "it": 138,
+    "lb": 138,
+    "lt": 138,
+    "lv": 138,
+    "nb": 138,
+    "nl": 138,
+    "pt": 138,
+    "sv": 138
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
-    "de": "całość",
-    "fr": "całość",
-    "it": "całość",
-    "es": "całość",
-    "pt": "całość",
-    "nl": "całość",
-    "ca": "całość",
-    "lb": "całość",
-    "sv": "całość",
-    "da": "całość",
-    "nb": "całość",
-    "fi": "całość",
-    "is": "całość",
+    "en": "częściowo",
+    "de": "częściowo",
+    "fr": "częściowo",
+    "it": "częściowo",
+    "es": "częściowo",
+    "pt": "częściowo",
+    "nl": "częściowo",
+    "ca": "częściowo",
+    "lb": "częściowo",
+    "sv": "częściowo",
+    "da": "częściowo",
+    "nb": "częściowo",
+    "fi": "częściowo",
+    "is": "częściowo",
     "fo": "wcale",
-    "et": "całość",
-    "lv": "całość",
-    "lt": "całość",
+    "et": "częściowo",
+    "lv": "częściowo",
+    "lt": "częściowo",
     "cs": "wcale",
     "sk": "wcale",
     "hu": "wcale",

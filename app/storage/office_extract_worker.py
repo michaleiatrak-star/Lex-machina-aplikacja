@@ -721,11 +721,53 @@ def doc_text(data: bytes) -> str:
         fail("DOC_TEXT_EMPTY")
     return cleaned
 
+# Pictures embedded in a DOCX or ODT (a scan pasted into the document): the text of the document
+# needs no OCR, the pictures do (user 2026-11-17). Small pictures (logos, icons, signatures) are left.
+IMAGE_MIN_BYTES = 30 * 1024
+IMAGE_MAX_COUNT = 20
+
+
+def embedded_images(data: bytes, media_type: str) -> list:
+    prefix = "word/media/" if media_type == DOCX else "Pictures/" if media_type == ODT else None
+    if prefix is None:
+        return []
+    images = []
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        validate_archive(zf)
+        for info in zf.infolist():
+            name = info.filename
+            lower = name.lower()
+            if not name.startswith(prefix) or info.file_size < IMAGE_MIN_BYTES or info.file_size > 20 * 1024 * 1024:
+                continue
+            kind = "image/png" if lower.endswith(".png") else "image/jpeg" if lower.endswith((".jpg", ".jpeg")) else None
+            if kind is None:
+                continue
+            with zf.open(info, "r") as handle:
+                raw = handle.read(20 * 1024 * 1024 + 1)
+            if len(raw) > 20 * 1024 * 1024:
+                continue
+            images.append({"name": name, "mediaType": kind, "data": base64.b64encode(raw).decode("ascii")})
+            if len(images) >= IMAGE_MAX_COUNT:
+                break
+    return images
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--media-type", required=True)
     parser.add_argument("--anonymize", action="store_true")
+    parser.add_argument("--images", action="store_true")
     args = parser.parse_args()
+
+    if args.images:
+        data = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
+        if not data or len(data) > MAX_INPUT_BYTES:
+            fail("OFFICE_DOCUMENT_SIZE_INVALID")
+        try:
+            sys.stdout.write(json.dumps({"images": embedded_images(data, args.media_type)}))
+        except zipfile.BadZipFile:
+            fail("OFFICE_DOCUMENT_ARCHIVE_INVALID")
+        return
 
     if args.anonymize:
         # stdin: {"data": base64, "source", "expected", "replacements": [[start, end, token]], "values": [[value, token]]}

@@ -10,10 +10,10 @@ import { createDocumentStagingState, setStagedDocumentMode, stageDocuments } fro
 describe("document processing modes", () => {
   it("offers four modes and maps them to the runtime options", () => {
     expect(DOCUMENT_PROCESSING_MODES.map((item) => item.label)).toEqual([
-      "OCR + anonimizacja",
-      "OCR + anonimizacja z AI",
-      "Tylko OCR",
-      "Tylko OCR z korektą AI"
+      "Odczyt + anonimizacja",
+      "Odczyt + anonimizacja z AI",
+      "Tylko odczyt",
+      "Tylko odczyt z korektą AI"
     ]);
     expect(processingModeOptions("ANONYMIZE")).toBeUndefined();
     expect(processingModeOptions("ANONYMIZE_AI")).toEqual({ localAi: true, ocrFix: true });

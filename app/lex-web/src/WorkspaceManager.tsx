@@ -512,6 +512,18 @@ export function WorkspaceManager({
     if (approved.length) void processAll(approved.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item)));
     readInBackground(read.filter((item) => needsOcr(item) && !processingFor(item)));
   }, [workspace]);
+  // Every file of the case not read yet is read at once, whichever way it came (the conversation,
+  // a drop, an import): text files and PDFs with a text layer without OCR, scans and pictures
+  // with OCR (the runtime decides per page). Anonymization still waits for the chosen way.
+  const autoRead = useRef(new Set<string>());
+  useEffect(() => {
+    if (!workspace) return;
+    const fresh = workspace.items.filter(
+      (item) => canRunPrivacyPipeline(item) && !processingFor(item) && !autoRead.current.has(item.itemId) && !pendingAutoQueue.current.has(item.itemId)
+    );
+    for (const item of fresh) autoRead.current.add(item.itemId);
+    if (fresh.length) readInBackground(fresh);
+  }, [workspace, caseFiles]);
 
   async function addFiles(
     files: FileList | null
@@ -545,7 +557,7 @@ export function WorkspaceManager({
       setNotice(
         autoQueue
           ? t("Dodano {count} plik(ów) do akt sprawy i do kolejki przetwarzania.", { count: files.length })
-          : t("Dodano {count} plik(ów) do akt sprawy. PDF i zdjęcia przechodzą OCR w tle; potem wybierz sposób i „Przetwórz”.", { count: files.length })
+          : t("Dodano {count} plik(ów) do akt sprawy. Odczyt rusza sam (OCR tylko dla skanów i obrazów); potem wybierz sposób i „Przetwórz”.", { count: files.length })
       );
     });
   }
@@ -695,7 +707,7 @@ export function WorkspaceManager({
       readerRunning.current = false;
       if (caseRef.current === runCase) {
         const summary = queueSummary(queueRef.current);
-        if (summary.toChoose) setNotice(t("OCR w tle zakończony: {toChoose} plików czeka na wybór sposobu i „Przetwórz”{value}.", { toChoose: summary.toChoose, value: summary.failed ? `, ${summary.failed} z błędem` : "" }));
+        if (summary.toChoose) setNotice(t("Odczyt w tle zakończony: {toChoose} plików czeka na wybór sposobu i „Przetwórz”{value}.", { toChoose: summary.toChoose, value: summary.failed ? `, ${summary.failed} z błędem` : "" }));
       }
     }
   }
@@ -1305,7 +1317,7 @@ export function WorkspaceManager({
                 <input type="checkbox" checked={autoQueue} onChange={(event) => setAutoQueue(event.target.checked)} />
                 {t("Od razu do kolejki")}
               </label>
-              <InfoTip>{t("Dodane pliki od razu przechodzą OCR i anonimizację w domyślnym sposobie. Bez tego PDF i zdjęcia przechodzą tylko OCR w tle, a korekta i anonimizacja czekają na Twój wybór.")}</InfoTip>
+              <InfoTip>{t("Dodane pliki od razu przechodzą odczyt i anonimizację w domyślnym sposobie. Bez tego każdy plik jest tylko odczytywany w tle (OCR wyłącznie dla skanów i obrazów), a korekta i anonimizacja czekają na Twój wybór.")}</InfoTip>
             </span>
           ) : null}
           {canWrite ? (
@@ -1613,7 +1625,9 @@ export function WorkspaceManager({
                                     ? processingFor(item)!.ocrPages > 0
                                       ? t("OCR: {ocrPages} z {totalPages} stron", { ocrPages: processingFor(item)!.ocrPages, totalPages: processingFor(item)!.totalPages })
                                       : `Tekst cyfrowy · ${processingFor(item)!.totalPages} ${processingFor(item)!.totalPages === 1 ? "strona" : "stron"}`
-                                    : t("Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”")}
+                                    : queue.some((entry) => entry.itemId === item.itemId)
+                                      ? ""
+                                      : t("Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”")}
                                 </span>
                               </small>
                             ) : null}

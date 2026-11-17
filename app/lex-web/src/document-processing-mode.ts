@@ -18,22 +18,22 @@ export const DOCUMENT_PROCESSING_MODES: ReadonlyArray<{
 }> = [
   {
     mode: "ANONYMIZE",
-    label: "OCR + anonimizacja",
-    title: "Tekst i OCR stron bez warstwy tekstowej, dane osobowe zastąpione symbolami; osobny zaszyfrowany klucz dokumentu."
+    label: "Odczyt + anonimizacja",
+    title: "Tekst pliku (OCR tylko dla skanów, obrazów i stron bez warstwy tekstowej), dane osobowe zastąpione symbolami; osobny zaszyfrowany klucz dokumentu."
   },
   {
     mode: "ANONYMIZE_AI",
-    label: "OCR + anonimizacja z AI",
+    label: "Odczyt + anonimizacja z AI",
     title: "Jak wyżej, a model wizyjny ponownie czyta niepewne linie skanu, potem model tekstowy (uruchamiany sam przed anonimizacją) podpowiada przy danych osobowych. Wymaga zainstalowanych modeli lokalnych."
   },
   {
     mode: "OCR",
-    label: "Tylko OCR",
-    title: "Sam tekst i OCR, bez anonimizacji: do modelu trafia tekst jawny z danymi osobowymi."
+    label: "Tylko odczyt",
+    title: "Sam tekst (OCR tylko dla skanów i obrazów), bez anonimizacji: do modelu trafia tekst jawny z danymi osobowymi."
   },
   {
     mode: "OCR_AI",
-    label: "Tylko OCR z korektą AI",
+    label: "Tylko odczyt z korektą AI",
     title: "Tekst i OCR, a model wizyjny ponownie czyta niepewne linie skanu; modele tekstowe są na ten czas zatrzymywane. Bez anonimizacji - tekst jawny. Wymaga zainstalowanego modelu wizyjnego."
   }
 ];

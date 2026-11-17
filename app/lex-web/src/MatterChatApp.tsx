@@ -3085,13 +3085,34 @@ export default function MatterChatApp({
     const incoming = Array.from(files);
     if (incoming.length === 0) return;
     try {
+      let target = caseId;
       if (!selectedCase || selectedCase.archivedAt) {
-        await createLocalCase(newCaseName.trim() || "Nowa sprawa");
+        target = await createLocalCase(newCaseName.trim() || "Nowa sprawa");
       }
-      setDocumentStaging((current) =>
-        stageDocuments(current, incoming)
-      );
-      setActiveTab("chat");
+      // Documents go to the case files at once and are read there automatically (text files and
+      // PDFs with a text layer without OCR, scans with OCR); only a photo waits for the choice
+      // between reading it and sending it to the model as an image (user 2026-11-17).
+      const images = incoming.filter((file) => directImageType(file));
+      const documents = incoming.filter((file) => !directImageType(file) && file.size > 0);
+      if (images.length) setDocumentStaging((current) => stageDocuments(current, images));
+      if (documents.length) {
+        setPickerNotice(t("Dodaję {count} plik(ów) do akt sprawy; odczyt rusza sam (OCR tylko dla skanów).", { count: documents.length }));
+        const failed: string[] = [];
+        for (const file of documents) {
+          try {
+            await uploadCaseFile(target, file);
+          } catch (error) {
+            failed.push(`„${file.name}”: ${documentFailure(error).message}`);
+          }
+        }
+        setWorkspaceRefresh((value) => value + 1);
+        setPickerNotice(
+          failed.length
+            ? t("Nie dodano: {value}", { value: failed.join("; ") })
+            : t("Dodano {count} plik(ów) do akt sprawy; odczyt w tle (OCR tylko dla skanów). Stan: Akta i dokumenty.", { count: documents.length })
+        );
+      }
+      if (activeTab !== "chat" && activeTab !== "case") setActiveTab(images.length ? "chat" : "case");
     } catch {
       setExecutionError(
         t("Nie udało się utworzyć aktywnej sprawy dla dodawanych plików.")
@@ -3136,7 +3157,7 @@ export default function MatterChatApp({
     if (items.some((item) => processingModeOptions(item.mode)?.ocrFix)) {
       const vision = await getVisionOcrStatus().catch(() => null);
       if (!vision?.installed || !vision.engineInstalled) {
-        setExecutionError(t("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”."));
+        setExecutionError(t("„Tylko odczyt z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”."));
         return;
       }
     }
@@ -5322,6 +5343,104 @@ export default function MatterChatApp({
     selectedFileCount <= documentLimit &&
     documentFit?.estimate?.fits !== false;
 
+  // Files waiting for a decision (images: read them or send as an image): shown where the user
+  // works - above the message box in the conversation, above the documents in the case files -
+  // not at the top of the page, where it went unseen (user 2026-11-17).
+  const renderStagingPanel = () =>
+    documentStaging.items.length > 0 ? (
+
+          <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
+            <article className="chat-card">
+              <p className="eyebrow">{t("Dodane pliki")}</p>
+              <h2>
+                {documentStaging.items.length} {t("do decyzji")}
+                <InfoTip>
+                  {t("OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików. Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.")}
+                </InfoTip>
+              </h2>
+              {documentStaging.rejected > 0 ? (
+                <p className="chat-inline-error">
+                  {t("Pominięto")} {documentStaging.rejected} {t("plików (puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE}).
+                </p>
+              ) : null}
+              <ul className="chat-file-list">
+                {documentStaging.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.file.name}</strong>
+                    <small>
+                      {describeDocumentFile(item.file)}
+                      {item.status === "SAVING"
+                        ? documentProgress[item.id]
+                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
+                          : t(" · zapisuję i przetwarzam…")
+                        : ""}
+                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
+                    </small>
+                    <span className="chat-file-actions">
+                      <select
+                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
+                        value={item.mode}
+                        disabled={item.status === "SAVING"}
+                        title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
+                        onChange={(event) =>
+                          setDocumentStaging((current) =>
+                            setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
+                          )
+                        }
+                      >
+                        {processingModesFor(item.file).map((entry) => (
+                          <option key={entry.mode} value={entry.mode} title={entry.title}>
+                            {t(entry.label)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => processStagedDocuments([item.id])}
+                      >
+                        {t("Przetwórz")}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => void saveStagedDocuments([item.id])}
+                      >
+                        {t("Zapisz bez przetwarzania")}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING"}
+                        onClick={() => removeStagedDocuments([item.id])}
+                      >
+                        {t("Usuń")}
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {documentStaging.items.length > 1 ? (
+                <span className="chat-file-actions">
+                  <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
+                    {t("Przetwórz wszystkie (wybrane sposoby)")}
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={!caseId}
+                    onClick={() => void saveStagedDocuments()}
+                  >
+                    {t("Zapisz wszystkie bez przetwarzania")}
+                  </button>
+                </span>
+              ) : null}
+            </article>
+          </section>
+    ) : null;
+
   return (
     <DeveloperModeContext.Provider value={developerMode}>
     <div className="chat-app-shell matter-chat-app">
@@ -6044,99 +6163,6 @@ export default function MatterChatApp({
           </div>
         ))}
 
-        {/* Files waiting for a decision belong to the case's work (chat, case files), not to the settings or the firm's modules. */}
-        {documentStaging.items.length > 0 && (activeTab === "chat" || activeTab === "case") ? (
-          <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
-            <article className="chat-card">
-              <p className="eyebrow">{t("Dodane pliki")}</p>
-              <h2>
-                {documentStaging.items.length} {t("do decyzji")}
-                <InfoTip>
-                  {t("OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików. Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.")}
-                </InfoTip>
-              </h2>
-              {documentStaging.rejected > 0 ? (
-                <p className="chat-inline-error">
-                  {t("Pominięto")} {documentStaging.rejected} {t("plików (puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE}).
-                </p>
-              ) : null}
-              <ul className="chat-file-list">
-                {documentStaging.items.map((item) => (
-                  <li key={item.id}>
-                    <strong>{item.file.name}</strong>
-                    <small>
-                      {describeDocumentFile(item.file)}
-                      {item.status === "SAVING"
-                        ? documentProgress[item.id]
-                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
-                          : t(" · zapisuję i przetwarzam…")
-                        : ""}
-                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
-                    </small>
-                    <span className="chat-file-actions">
-                      <select
-                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
-                        value={item.mode}
-                        disabled={item.status === "SAVING"}
-                        title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
-                        onChange={(event) =>
-                          setDocumentStaging((current) =>
-                            setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
-                          )
-                        }
-                      >
-                        {processingModesFor(item.file).map((entry) => (
-                          <option key={entry.mode} value={entry.mode} title={entry.title}>
-                            {t(entry.label)}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING" || !caseId}
-                        onClick={() => processStagedDocuments([item.id])}
-                      >
-                        {t("Przetwórz")}
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING" || !caseId}
-                        onClick={() => void saveStagedDocuments([item.id])}
-                      >
-                        {t("Zapisz bez przetwarzania")}
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING"}
-                        onClick={() => removeStagedDocuments([item.id])}
-                      >
-                        {t("Usuń")}
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {documentStaging.items.length > 1 ? (
-                <span className="chat-file-actions">
-                  <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
-                    {t("Przetwórz wszystkie (wybrane sposoby)")}
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={!caseId}
-                    onClick={() => void saveStagedDocuments()}
-                  >
-                    {t("Zapisz wszystkie bez przetwarzania")}
-                  </button>
-                </span>
-              ) : null}
-            </article>
-          </section>
-        ) : null}
 
         {documentDropQueue.total > 0 ? (
           <section ref={documentFlowRef} className="chat-card-stack chat-document-flow" aria-label={t("Odczyt plików i ochrona danych")}>
@@ -6772,6 +6798,7 @@ export default function MatterChatApp({
               <div ref={chatEndRef} />
             </div>
 
+            {renderStagingPanel()}
             <div className="chat-composer">
               {dropActive ? (
                 <div className="chat-drop-overlay">
@@ -7171,7 +7198,7 @@ export default function MatterChatApp({
                                   type="button"
                                   className="chat-secondary-action"
                                   disabled={pickerAnonymizing !== null}
-                                  title={t("Tylko OCR/tekst, bez anonimizacji - plik trafi do modelu z jawnymi danymi")}
+                                  title={t("Tylko odczyt tekstu, bez anonimizacji - plik trafi do modelu z jawnymi danymi")}
                                   onClick={() => {
                                     if (
                                       !window.confirm(
@@ -7204,7 +7231,7 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {t("Tylko OCR i zaznacz")}
+                                  {t("Tylko odczyt i zaznacz")}
                                 </button>
                                 </>
                               ) : null}
@@ -7710,6 +7737,7 @@ export default function MatterChatApp({
               </div>
             </article>
 
+            {activeTab === "case" ? renderStagingPanel() : null}
             {/* The case's documents right under its overview (Patron: documents first in a case). */}
             {selectedCase ? (
               <div

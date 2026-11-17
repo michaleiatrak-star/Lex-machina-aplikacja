@@ -60,3 +60,26 @@ describe("Docker Desktop starts without its dashboard", () => {
     expect(dockerDesktopSettingsFiles("darwin", {}, "/Users/u")[0]).toBe("/Users/u/Library/Group Containers/group.com.docker/settings-store.json");
   });
 });
+
+import { execFileSync } from "node:child_process";
+import { LocalOfficeDocumentTextExtractor, DOCX_MEDIA_TYPE } from "../src/office-document-extractor.js";
+describe("a Word file: its text without OCR, only a pasted picture for OCR", () => {
+  it("lists the large embedded pictures, not the logos", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "docx-"));
+    const file = path.join(dir, "a.docx");
+    execFileSync("python3", ["-c", `
+import zipfile,os,sys
+with zipfile.ZipFile(sys.argv[1],"w") as z:
+    z.writestr("[Content_Types].xml","<Types/>")
+    z.writestr("word/document.xml","<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body><w:p><w:r><w:t>Ala</w:t></w:r></w:p></w:body></w:document>")
+    z.writestr("word/media/scan.jpeg", b"\\xff\\xd8"+os.urandom(40000))
+    z.writestr("word/media/logo.png", b"\\x89PNG"+os.urandom(200))
+`, file]);
+    const extractor = new LocalOfficeDocumentTextExtractor();
+    const data = new Uint8Array(fs.readFileSync(file));
+    expect(await extractor.extract(data, DOCX_MEDIA_TYPE)).toContain("Ala");
+    const images = await extractor.images(data, DOCX_MEDIA_TYPE);
+    expect(images.map((image) => [image.name, image.mediaType])).toEqual([["word/media/scan.jpeg", "image/jpeg"]]);
+    expect(images[0]!.data.byteLength).toBe(40002);
+  });
+});
