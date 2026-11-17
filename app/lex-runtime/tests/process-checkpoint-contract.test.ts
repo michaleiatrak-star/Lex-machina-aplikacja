@@ -67,8 +67,9 @@ describe("pisma-procesowe-v3 checkpoint contract", () => {
     const marked = { result: "BLOCKED" as const, markedDraftOnly: true };
     expect(processStepDone(marked, "CP-1b")).toBe(true);
     expect(processStepDone(marked, "CP-ATAK")).toBe(true);
-    expect(processStepDone(marked, "CP-QUALITY")).toBe(false);
-    expect(processStepDone(marked, "CP-PEER")).toBe(false);
+    // Every step: a soft finding is a warning on the draft, the sequence goes on to the letter (user, 2026-11-17).
+    expect(processStepDone(marked, "CP-QUALITY")).toBe(true);
+    expect(processStepDone(marked, "CP-PEER")).toBe(true);
     expect(processStepDone({ result: "BLOCKED" }, "CP-1b")).toBe(false);
     expect(processStepDone({ result: "PASS" }, "CP-PEER")).toBe(true);
   });

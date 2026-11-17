@@ -54,6 +54,9 @@ export function statuteQuoteFindings(answer: string, statutes: ReadonlyArray<{ c
     const quote = (match[1] ?? match[2] ?? "").trim();
     if (quote.split(/\s+/u).length < 4) continue;
     const end = match.index + match[0].length;
+    // A quote marked with its case document ("„…” [[LEXDOC:…]]") is that document's words, not the
+    // provision standing near it (RD 121/26: a message quoted from the file was compared with art. 190a k.k.).
+    if (/^[\s*_)]*\[\[LEXDOC/u.test(answer.slice(end, end + 40))) continue;
     // The provision right after the quote ("…”, art. 41 ust. 2") or the last one before it in the sentence.
     const after = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*\(?\s*(art\.[^\n.;]{0,60})/u.exec(answer.slice(end, end + 120))?.[1];
     // The sentence before the quote: a full stop followed by a capital ends a sentence ("art. 483" does not).

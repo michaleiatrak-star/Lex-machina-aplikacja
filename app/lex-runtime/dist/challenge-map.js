@@ -17,6 +17,25 @@ export function challengedDecision(decisions, question) {
     const scored = decisions.map((decision) => ({ decision, hit: [...issueStems(decision.text.slice(0, 2_000))].filter((stem) => asked.has(stem)).length }));
     return scored.sort((a, b) => b.hit - a.hit)[0].decision;
 }
+// A sentence a scan's text recognition garbled ("Zakaz s 8 18 KE* chran poż…", RD 121/26) is not a
+// thesis: stray symbols, one-letter tokens that are not Polish words, lower-case words without a vowel.
+const ONE_LETTER_WORDS = new Set(["a", "i", "o", "u", "w", "z"]);
+export function ocrNoise(sentence) {
+    const tokens = sentence
+        .replace(/\[[^\]]*\]/gu, " ")
+        .split(/\s+/u)
+        .map((token) => token.replace(/^[„"“(\[]+|[”"),.;:!?\]]+$/gu, ""))
+        .filter(Boolean);
+    if (tokens.length < 4)
+        return 0;
+    const junk = tokens.filter((token) => /[*~|^#@{}<>=_$\\]/u.test(token) ||
+        (/^\p{L}$/u.test(token) && !ONE_LETTER_WORDS.has(token.toLocaleLowerCase("pl"))) ||
+        (/^\p{Ll}{4,}$/u.test(token) && !/[aeiouyąęó]/u.test(token)) ||
+        /\p{L}\d|\d\p{L}{2,}/u.test(token.replace(/^\d+[a-z]?$/u, ""))).length;
+    return junk / tokens.length;
+}
+export const legible = (sentence) => ocrNoise(sentence) <= 0.15;
+const OCR_NOTE = " [tekst skanu częściowo nieczytelny: odczytaj tezę z obrazu strony, nie z tego zapisu]";
 /** The theses of a decision's reasoning: its sentences that state a finding or a reason (at most `limit`). */
 export function decisionTheses(text, limit = 10) {
     const reasons = /UZASADNIENIE/u.exec(text);
@@ -33,13 +52,13 @@ export function decisionTheses(text, limit = 10) {
     for (const sentence of sentences) {
         const clean = sentence.replace(/\s+/gu, " ").trim();
         // The instruction on the remedy is not a reason of the decision.
-        if (!REASONING.test(clean) || /pouczeni|od\s+niniejszego\s+postanowienia|należy\s+złożyć\s+w\s+\d|egzemplarz/iu.test(clean))
+        if (!REASONING.test(clean) || !legible(clean) || /pouczeni|od\s+niniejszego\s+postanowienia|należy\s+złożyć\s+w\s+\d|egzemplarz/iu.test(clean))
             continue;
         const key = clean.slice(0, 80).toLocaleLowerCase("pl");
         if (seen.has(key))
             continue;
         seen.add(key);
-        theses.push({ text: clean.slice(0, 400) });
+        theses.push({ text: clean.slice(0, 400) + (ocrNoise(clean) > 0 ? OCR_NOTE : "") });
         if (theses.length >= limit)
             break;
     }

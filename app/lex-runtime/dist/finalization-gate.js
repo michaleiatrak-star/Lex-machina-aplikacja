@@ -128,6 +128,10 @@ export function ambiguousBareArticles(text, ledger) {
         if (!acts || acts.size < 2)
             continue;
         const written = reference.span ?? reference.claim;
+        // The act written in the citation itself ("art. 17 § 1 pkt 2 k.p.k.") names it (RD 121/26: read as
+        // bare because the claim's suffix was normalized and art. 17 RODO was verified in the same turn).
+        if (actsIn(written).size > 0 || namesOtherAct(written) || euAct(written))
+            continue;
         const at = reference.lineText.indexOf(written);
         const own = at < 0 ? "" : reference.lineText.slice(at + written.length).replace(STATUS_MARKERS, "").split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].slice(0, 120);
         if (actsIn(own).size > 0 || namesOtherAct(own) || euAct(own))
@@ -521,11 +525,14 @@ export function ownCaseFileNumbers(documents, userText) {
             continue;
         // A header line ("Sygn. akt I C 900/26", "Sygn. akt I Nc 1234/26 — nakaz"), not a sentence
         // naming another proceeding ("skazany wyrokiem …, sygn. akt II K 345/24, za czyn …").
+        // The signature opens the line (after line numbers or a separator); the rest of the line may be
+        // the record's heading spread by a PDF text layer ("Sygn. akt: XI P 27/26      PROTOKÓŁ", user
+        // report 2026-11-17: the user's own case was marked "z materiałów sprawy" and blocked the gate).
         for (const line of head.split(/\r?\n/u)) {
-            if (line.trim().length > 80)
-                continue;
-            for (const match of line.matchAll(SIGNATURE))
-                own.add(caseFileKey(match[1]));
+            for (const match of line.matchAll(SIGNATURE)) {
+                if (line.slice(0, match.index).replace(/[\s\d|.:,;-]+/gu, "").length <= 3)
+                    own.add(caseFileKey(match[1]));
+            }
         }
     }
     // The user's own case ("w mojej sprawie sygn. akt …"), never a judgment the user asks about.

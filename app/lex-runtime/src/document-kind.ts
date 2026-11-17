@@ -96,6 +96,10 @@ export function classifyDocument(input: { text: string; images?: number }): Docu
   if ((input.images ?? 0) > 0 && words.replace(/\s+/g, "").length < 200) {
     return { kind: "ZDJECIE", label: "zdjęcie / obraz", category: "DOWOD", evidence: true, signals: [`obrazy: ${input.images}`] };
   }
+  // A court's own record of a hearing comes before the parties' letters it quotes (RD 121/26: a hearing
+  // protocol mentioning a prosecutor and "zawiadamiam" was read as a party's complaint).
+  const record = courtRecord(head);
+  if (record) return record;
   const court = courtSummons(head);
   if (court) return court;
   for (const rule of RULES) {
@@ -129,6 +133,23 @@ function courtSummons(head: string): DocumentKind | null {
     return { kind: "WEZWANIE_SADU_BRAKI", label: "wezwanie sądu do uzupełnienia braków formalnych / złożenia dokumentu", category: "ORZECZENIE", evidence: false, signals: [...signals, COURT_FORMAL.exec(head)![0].trim()] };
   }
   return { kind: "WEZWANIE_SADU", label: "wezwanie / zarządzenie sądu", category: "ORZECZENIE", evidence: false, signals };
+}
+
+// The court's record of a hearing or sitting: the heading "Protokół" on its own line (any case, as
+// courts print it, after line numbers of a text layer) and one formal mark of the record — the
+// clerk, the recording, the opening or closing of the hearing.
+const RECORD_HEADING = /(?:^|\n)[\s\d|]*(?:PROTOKÓŁ|Protokół)(?:\s+(?:ROZPRAWY|POSIEDZENIA|PRZESŁUCHANIA|rozprawy|posiedzenia|przesłuchania))?[\s:]*(?:\n|$)/u;
+const RECORD_MARK = /protokolant\p{L}*\s*:|uruchomiono\s+rejestrację|rozpraw\p{L}*\s+rozpoczęto|zakończono\s+rejestrację|zamknięto\s+o\s+godzinie|w\s+składzie\s*:/iu;
+const RECORD_TESTIMONY = /(?<![\p{L}])(?:świad\p{L}+|zezna\p{L}+|przesłuchan\p{L}+)/iu;
+
+function courtRecord(head: string): DocumentKind | null {
+  const heading = RECORD_HEADING.exec(head);
+  const mark = RECORD_MARK.exec(head);
+  if (!heading || !mark) return null;
+  const signals = [heading[0].trim().slice(0, 40), mark[0].trim()];
+  return RECORD_TESTIMONY.test(head)
+    ? { kind: "PROTOKOL_PRZESLUCHANIA", label: "protokół przesłuchania / rozprawy (zeznania)", category: "DOWOD", evidence: true, signals }
+    : { kind: "PROTOKOL", label: "protokół", category: "DOWOD", evidence: true, signals };
 }
 
 export type RecognisedDocument = DocumentKind & { documentId: string };

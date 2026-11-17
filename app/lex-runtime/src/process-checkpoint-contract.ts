@@ -253,5 +253,9 @@ export function processStepDone(
   checkpoint: ProcessPleadingCheckpoint
 ): boolean {
   if (workflow?.result === "PASS") return true;
-  return workflow?.markedDraftOnly === true && !VERIFYING_CHECKPOINTS.has(checkpoint);
+  // A step presentable with warnings closes too, the verifying ones included: the warnings stay in the
+  // answer and the step register, the pleading stays a draft (ST-FINAL), and the sequence reaches the
+  // pleading the skill prescribes instead of stopping the AUTO mode on a soft gate.
+  void checkpoint;
+  return workflow?.markedDraftOnly === true;
 }

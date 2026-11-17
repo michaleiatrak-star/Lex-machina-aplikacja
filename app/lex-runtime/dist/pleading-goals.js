@@ -48,6 +48,16 @@ export function officialFactGoals(rows, officialRecords, focus, limit = 4) {
     return chosen;
 }
 const CHARGE = /(?<![\p{L}])(?:zarzuca\p{L}*|zarzut\p{L}*|naruszy\p{L}*|naruszeni\p{L}*|naruszaj\p{L}*|dopuści\p{L}*\s+się|przewinieni\p{L}*|nękani\p{L}*|nęka\p{L}*|bezprawn\p{L}*|niezgodn\p{L}*\s+z\s+(?:prawem|zasadami|art)|przetwarza\p{L}*\s+(?:moich\s+|moje\s+)?dan\p{L}*|ujawni\p{L}*)(?![\p{L}])/iu;
+// A letter written for someone else by a professional (a law firm's letterhead, "działając w imieniu
+// Pani…", "reprezentowana przez adwokata"): its charges are the other side's, never the party's own
+// (RD 121/26: the opponent's counsel's criminal complaint against the party was read as the party's letter).
+const REPRESENTATIVE = /(?:reprezentowan\p{L}*\s+przez\s+(?:adwokat|radc|pełnomocnik)\p{L}*|działając\s+w\s+imieniu\s+(?!własnym)(?:\p{Lu}|Pan|Pani|Spół|spół|moich|mojego|mojej|klient|mocodaw)|kancelari\p{L}*\s+(?:adwokack|radcow|prawn|adwokatów|radców)\p{L}*)/u;
+const OWN_NAME = /(?:w\s+imieniu\s+własnym|działając\s+osobiście|we\s+własnym\s+imieniu)/iu;
+/** The letter is the party's own: written in the party's own name, not by a representative of someone else. */
+export function ownLetter(text) {
+    const head = text.slice(0, 2_500);
+    return OWN_NAME.test(head) || !REPRESENTATIVE.test(head);
+}
 /** The charges of the party's earlier letter: sentences that charge someone, in order, at most `limit`. */
 export function partyCharges(text, limit = 8) {
     const sentences = text

@@ -11,10 +11,23 @@ import type { NormalizedToolCall, NormalizedToolResult } from "./providers/types
 const ADMISSION =
   /(?<![\p{L}])(?:tez\p{L}*\s+(?:\p{L}+\s+){0,6}?(?:jest\s+)?trafn\p{L}*|trafn\p{L}*\s+(?:jest\s+)?tez\p{L}*|(?:ma|mają|miał\p{L}*)\s+rację|rację\s+(?:ma|mają|należy\s+przyznać)|nie\s+podtrzymuj\p{L}*|nie\s+odpieram\p{L}*|nie\s+kwestionuj\p{L}*|przyznaj\p{L}*\s+(?:rację|że)|słusznie\s+(?:\p{L}+\s+)?(?:wskaza\p{L}*|przyj\p{L}*|uzna\p{L}*|stwierdzi\p{L}*|ustali\p{L}*)|rezygnuj\p{L}*\s+z\s+zarzut\p{L}*|wycofuj\p{L}*\s+zarzut\p{L}*)(?![\p{L}])/iu;
 
+// Notes outside the letter (the working table, "Uwagi poza pismem", the step tracker) are not the
+// party's word: a concession counts only in the letter itself (RD 121/26: a note was read as one).
+const NOTES_HEADING =
+  /\n[ \t>*#_]*(?:uwagi\s+(?:poza\s+pismem|dla\s+(?:użytkownika|pełnomocnika|klienta))|notatk\p{L}*\s+robocz\p{L}*|===\s*KONIEC\s+PISMA\s*===|ST-FINAL|STEP-TRACKER)/iu;
+
+/** The letter's own text: from "=== PISMO ===" (when marked) to its end or the first heading of notes. */
+export function letterBody(answer: string): string {
+  const start = /===\s*PISMO\s*===/u.exec(answer);
+  const body = start ? answer.slice(start.index) : answer;
+  const end = NOTES_HEADING.exec(body);
+  return end && end.index > 200 ? body.slice(0, end.index) : body;
+}
+
 /** Lines (sentences) of the draft that concede a thesis or drop a charge, at most `limit`. */
 export function admissions(answer: string, limit = 6): string[] {
   const found: string[] = [];
-  for (const line of answer.split(/\n+/u)) {
+  for (const line of letterBody(answer).split(/\n+/u)) {
     for (const sentence of line.split(/(?<=[.;!?])\s+(?=[\p{Lu}„(])/u)) {
       if (!ADMISSION.test(sentence)) continue;
       const text = sentence.trim().slice(0, 400);

@@ -4,8 +4,9 @@ import {
 import type {
   ExecutionEvent
 } from "./execution-engine.js";
-import type {
-  FinalizationReport
+import {
+  CASE_MATERIAL_MARKER_TEXT,
+  type FinalizationReport
 } from "./finalization-gate.js";
 import type {
   DeterministicWorkflowReadReport
@@ -462,7 +463,11 @@ function caseSignatures(
             .kind ===
               "case" &&
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" &&
+          // Another proceeding the case's files name ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"): a fact
+          // of the case, marked where it comes from, not a cited judgment to verify.
+          !(finding.status === "UNVERIFIED_MARKED" &&
+            finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT))
       );
   const invalidQuotes =
     finalization

@@ -222,11 +222,12 @@ import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable
 import { confirmedSteps, stFinal, verified, type PleadingEvidence } from "./step-register.js";
 import { deadlineCorrection, deadlineProvisions, deadlineWordings } from "./deadline-wording.js";
 import { admissionCorrection, admissions, citedProvisions, ethicsWordings, provisionWordings } from "./admission-check.js";
-import { chargeCorrection, chargeGoal, officialFactGoals, officialKind, partyCharges, unaddressedCharges } from "./pleading-goals.js";
+import { chargeCorrection, chargeGoal, officialFactGoals, officialKind, ownLetter, partyCharges, unaddressedCharges } from "./pleading-goals.js";
 import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, witnessStatements, type WitnessStatement } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { recordParties, recordPartiesPrompt } from "./record-parties.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, collapseRepeatedVerMarkers, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
@@ -1045,6 +1046,15 @@ export type SessionExecutionInternalState = {
   auditEvents: AuditEvent[];
   documentAliasDocumentIds?: string[];
 };
+
+/** The headings of the case's documents (court, division, parties, subject): where the matter is named. */
+export function documentHeadings(attachments: ReadonlyArray<{ sourceScope?: string; chunks: ReadonlyArray<{ text: string }> }>): string {
+  return attachments
+    .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+    .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 900))
+    .join("\n")
+    .trim();
+}
 
 export const SESSION_EXECUTION_INTERNAL =
   Symbol("LEX_SESSION_EXECUTION_INTERNAL");
@@ -2927,6 +2937,20 @@ export class SafeSessionExecutor implements SessionExecutor {
       const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category as string]));
       const passages = issuePassages(attachments, contextFocus, 12, kinds);
       strengthPassages = passages;
+      // The parties and the case of each court record, from its heading (record-parties.ts).
+      const records = attachments
+        .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+        .flatMap((attachment) => {
+          const text = attachment.chunks.map((chunk) => chunk.text).join("\n");
+          if (!classifyDocument({ text: text.slice(0, 8_000) }).kind.startsWith("PROTOKOL")) return [];
+          const found = recordParties(attachment.documentId, text);
+          return found ? [{ ...found, label: attachment.title ?? `dokument ${attachment.documentId}` }] : [];
+        });
+      const partiesPrompt = recordPartiesPrompt(records);
+      if (partiesPrompt) {
+        pathSections.push(partiesPrompt);
+        audit.record("gate", "RECORD_PARTIES", "OK", { records: records.map((record) => `${record.documentId}:${record.signature ?? "?"}:${record.date ?? "?"}`) });
+      }
       const prompt = issuePassagesPrompt(passages);
       if (prompt) {
         pathSections.push(prompt);
@@ -3095,6 +3119,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         const matrixGoalList: string[] = [];
         // Goals the pleading must take up besides the contradictions: official facts, the party's charges.
         const mandatoryGoalList: string[] = [];
+        // The charges of the party's own letters: never cut by the goal limit after the official facts.
+        const chargeGoalList: string[] = [];
         // Documents the witness matrix has read (its facts by document): the document matrix reads the rest.
         const witnessFactsByDocument = new Map<string, number>();
         // A model call taken in a stream: the text received so far stays when the time is up.
@@ -3223,10 +3249,14 @@ export class SafeSessionExecutor implements SessionExecutor {
           const officialGoals = officialFactGoals(rowList, official, contextFocus || matrixQuestion, 4);
           mandatoryGoalList.push(...officialGoals.map((item) => item.goal));
           strengthKeyFacts.push(...officialGoals.map((item) => ({ documentId: item.fact.documentId, chunkIndex: item.fact.chunkIndex, page: 1, text: item.fact.quote })));
+          // The party's own earlier letters only (ownLetter): a complaint the opponent's counsel filed against
+          // the party is the other side's material, and a court record is nobody's letter.
           for (const entry of documentRegister.filter((item) => item.kind === "ZAWIADOMIENIE" || item.kind === "SKARGA")) {
-            const charges = partyCharges(textOf(entry.documentId).map((chunk) => chunk.text).join("\n"));
+            const text = textOf(entry.documentId).map((chunk) => chunk.text).join("\n");
+            if (!ownLetter(text)) continue;
+            const charges = partyCharges(text);
             pleadingCharges.push(...charges);
-            mandatoryGoalList.push(...charges.map((charge) => chargeGoal(entry.id, charge)));
+            chargeGoalList.push(...charges.map((charge) => chargeGoal(entry.id, charge)));
           }
           if (officialGoals.length || pleadingCharges.length) {
             audit.record("gate", "MANDATORY_GOALS", "OK", { officialFacts: officialGoals.length, charges: pleadingCharges.length });
@@ -3253,10 +3283,12 @@ export class SafeSessionExecutor implements SessionExecutor {
         const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
         const goals = [
           ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
+          // The party's own charges right after the theses: each is upheld or dropped with a reason.
+          ...chargeGoalList.slice(0, 8),
           // One goal per topic of the matrix; the pairs' goals only without a matrix.
-          ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs)),
-          ...mandatoryGoalList
-        ].slice(0, 16);
+          ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs)).slice(0, 4),
+          ...mandatoryGoalList.slice(0, 4)
+        ].slice(0, 22);
         if (goals.length) {
           const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category as string]));
           const sections: string[] = [];
@@ -3433,9 +3465,16 @@ export class SafeSessionExecutor implements SessionExecutor {
         .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
         .join("\n")
         .slice(0, 30_000);
-      const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
-        .modules.map((item) => item.skill)
-        .find((skill) => isDomainSkill(skill));
+      // The act the question cites names the domain; an act a document merely mentions ("art. 158 § 1
+      // k.p.c." in a hearing protocol) does not outrank the matter its heading states (user report
+      // 2026-11-17: a labour-court case routed to DR-02 through the protocol's procedural article).
+      const citedIn = (text: string) =>
+        resolveActModulesWithChecks(this.registry, text)
+          .modules.map((item) => item.skill)
+          .find((skill) => isDomainSkill(skill));
+      const cited = citedIn(caseText);
+      const citedInDocuments = documentText.trim() ? citedIn(documentText) : undefined;
+      const headings = documentHeadings(attachments);
       const phrased = (text: string) => {
         const ranked = rankDomains(this.registry, this.flashRoutes(), text);
         return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
@@ -3456,9 +3495,17 @@ export class SafeSessionExecutor implements SessionExecutor {
         };
         // The documents of a workflow (a witness to question, an evidence file) name the
         // matter when the question does not ("Przygotuj przesłuchanie świadka Jana Nowaka").
-        return allowed(cited) ?? allowed(ofMatter(caseText)) ?? allowed(ofMatter(threadUserText(request.query))) ?? allowed(documentText.trim() ? ofMatter(documentText) : undefined) ?? request.primarySkill;
+        return (
+          allowed(cited) ??
+          allowed(ofMatter(caseText)) ??
+          allowed(ofMatter(threadUserText(request.query))) ??
+          allowed(headings ? ofMatter(headings) : undefined) ??
+          allowed(citedInDocuments) ??
+          allowed(documentText.trim() ? ofMatter(documentText) : undefined) ??
+          request.primarySkill
+        );
       }
-      return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
+      return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? (headings ? phrased(headings) : undefined) ?? citedInDocuments ?? procedural ?? request.primarySkill;
     };
     // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
     // named): those modules are loaded and required; the hint below covers the rest.
@@ -3506,7 +3553,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
       // A follow-up naming no domain of its own keeps the domain of the thread.
-      const ownDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+      // The question's domains, and the matter the documents' headings state (court, division, subject
+      // of the case: "Wydział Pracy … o wynagrodzenie" is labour law whatever the question's words).
+      const headingText = documentHeadings(attachments);
+      const headingDomains = headingText ? rankDomains(this.registry, this.flashRoutes(), headingText).filter((domain) => domain.strong) : [];
+      const questionDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+      const ownDomains = [...headingDomains, ...questionDomains.filter((domain) => !headingDomains.some((other) => other.skill === domain.skill))];
       let domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> =
         ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
           ? ownDomains
@@ -6520,7 +6572,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       const appeal = districtCourt(district)?.sa;
       if (appeal) known.add(appeal);
     }
-    const courtCheck = addressee && !known.has(addressee) ? { unverified: [addressee] } : null;
+    // A court named in the case's own documents (a protocol's or a ruling's heading) comes from the
+    // files: no warning (XI P 27/26: the court stood in the protocol's heading, yet was flagged).
+    const foldCourt = (text: string) => text.toLowerCase().replace(/\s+/gu, " ");
+    const inFiles = addressee ? foldCourt(fileText).includes(foldCourt(addressee)) : false;
+    const courtCheck = addressee && !known.has(addressee) && !inFiles ? { unverified: [addressee] } : null;
     if (courtCheck) {
       restoredAnswer.text += `\n\n[SĄD DO SPRAWDZENIA: „${addressee}” nie pochodzi z ustalenia aplikacji (court_for_address) ani z akt sprawy. Sprawdź właściwość dla adresu strony.]`;
     }
@@ -6662,12 +6718,16 @@ export class SafeSessionExecutor implements SessionExecutor {
             : "PASS",
         requiredResources: workflowReads.required,
         missingResources: workflowReads.missing,
+        // Presentable with warnings (user 2026-11-17: "blokady zdejmować, dać tylko ostrzeżenia, a na koniec
+        // sekwencji generować pismo"): a soft gate (citations, finalization, a missing part of the output,
+        // the guide's step) closes the step with its warnings shown; only a structural block stops it —
+        // the workflow's own files not read, no corpus, a report without its blueprint, a critical Gate I
+        // check (router first, core resources, required modules, workflow resources, output contract).
         ...(!workflowResourcesBlocked &&
-        !workflowOutputBlocked &&
-        !guideOutputBlocked &&
         !reportBlueprintBlocked &&
-        finalization.result === "DEGRADED" &&
-        gateI.checks.every((item) => item.result === "PASS" || MARKED_DRAFT_CHECKS.has(item.id))
+        !corpusBlocked &&
+        !criticalGateIBlocked &&
+        (workflowOutputBlocked || guideOutputBlocked || finalization.result !== "PASS" || gateIBlocked)
           ? { markedDraftOnly: true }
           : {})
       },

@@ -33,7 +33,7 @@ export type SchemaGap = { element: string; detail: string };
 /** What a reader of the draft can check of the seven elements. */
 // A motion to take evidence ("wnoszę o dopuszczenie dowodu z przesłuchania świadka", "wniosek dowodowy").
 const EVIDENCE_MOTION =
-  /(?<![\p{L}])(?:wnios\p{L}*\s+dowodow\p{L}*|wnosz\p{L}*\s+o\s+(?:dopuszczenie|przeprowadzenie|zobowiązanie|zwrócenie\s+się|przesłuchanie|zażądanie|dołączenie|włączenie)|o\s+dopuszczenie\s+(?:i\s+przeprowadzenie\s+)?dowodu)/iu;
+  /(?<![\p{L}])(?:wnios\p{L}*\s+dowodow\p{L}*|wnosz\p{L}*\s+o\s+(?:dopuszczenie|przeprowadzenie|zobowiązanie|zwrócenie\s+się|przesłuchanie|zażądanie|dołączenie|włączenie)|dopuszczeni\p{L}*\s+(?:i\s+przeprowadzeni\p{L}*\s+)?dowod\p{L}*|przeprowadzeni\p{L}*\s+dowod\p{L}*|zobowiązani\p{L}*\s+(?:\p{L}+\s+){0,3}do\s+(?:złożenia|przedłożenia|przedstawienia)|zwróceni\p{L}*\s+się\s+do\s+(?:\p{L}+\s+){0,3}o\s+(?:nadesłanie|przesłanie|udostępnienie))/iu;
 // A fact the draft says is not in the material (to be proven, completed, known to the party only).
 const OUTSIDE_MATERIAL =
   /(?:⬛|nie\s+(?:zostało|zostały|został|jest|są)\s+(?:jeszcze\s+)?(?:udokumentowan\p{L}*|wykazan\p{L}*)|(?:brak|nie\s+ma)\s+(?:go\s+|jej\s+|ich\s+)?w\s+(?:aktach|materiał\p{L}*)|poza\s+(?:aktami|materiałem)|według\s+wiedzy\s+(?:strony|klienta|skarżąc\p{L}*)|(?:może|mogą)\s+(?:to\s+)?potwierdzić\s+(?:świad\p{L}*|\[PII))/iu;
@@ -82,8 +82,14 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
   // certain (XI P 27/26: "Jedno z tych zeznań jest nieprawdziwe" before the date was known).
   const conditional = body
     .split(/\n\s*\n/u)
-    .filter((paragraph) => /⬛/u.test(paragraph) && /(?:jest\s+nieprawdziw|nieprawdą|zaprzeczył|fałszyw|skłamał|kłamie|nie\s+mo(?:że|gą)\s+być\s+prawdziw)/iu.test(paragraph) && !/(?:wariant|jeżeli|jeśli|gdyby|o\s+ile|w\s+razie)/iu.test(paragraph));
-  if (conditional.length) gaps.push({ element: "TEZA WARUNKOWA", detail: `${conditional.length} akapitów przesądza wniosek zależny od faktu do uzupełnienia (⬛): rozpisz warianty albo usuń tezę do czasu ustalenia faktu` });
+    // The sentence with the open fact and the one after it: the categorical conclusion drawn from it
+    // there, without a condition (a whole paragraph flagged conclusions about other, settled facts).
+    .flatMap((paragraph) => {
+      const sentences = paragraph.split(/(?<=[.!?\]])\s+(?=[\p{Lu}„(])/u);
+      return sentences.flatMap((sentence, index) => (/⬛/u.test(sentence) ? [`${sentence} ${sentences[index + 1] ?? ""}`] : []));
+    })
+    .filter((sentence) => /⬛/u.test(sentence) && /(?:jest\s+nieprawdziw|nieprawdą|zaprzeczył|fałszyw|skłamał|kłamie|nie\s+mo(?:że|gą)\s+być\s+prawdziw)/iu.test(sentence) && !/(?:wariant|jeżeli|jeśli|gdyby|o\s+ile|w\s+razie)/iu.test(sentence));
+  if (conditional.length) gaps.push({ element: "TEZA WARUNKOWA", detail: `${conditional.length} zdań przesądza wniosek zależny od faktu do uzupełnienia (⬛): rozpisz warianty albo usuń tezę do czasu ustalenia faktu` });
   return gaps;
 }
 
