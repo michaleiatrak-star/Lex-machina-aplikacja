@@ -3077,7 +3077,7 @@ export function validateRoute(
 }
 
 /** The account session's models: the provider's newest of each line (the seed when unreadable). */
-export function getAccountModels(provider: ProviderId): Promise<{ provider: ProviderId; models: Array<{ id: string; label: string }>; source: "PROVIDER" | "SEED" }> {
+export function getAccountModels(provider: ProviderId): Promise<{ provider: ProviderId; models: Array<{ id: string; label: string }>; source: "PROVIDER" | "SEED" | "CLIENT_DEFAULT" }> {
   return json(`/api/models/${provider}/account`);
 }
 

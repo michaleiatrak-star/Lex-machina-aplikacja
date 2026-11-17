@@ -6857,6 +6857,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       res.status(404).json({ error: "UNKNOWN_PROVIDER" });
       return;
     }
+    // The Grok account client (ACP) takes no model choice: its account runs the client's model only.
+    if (provider === "xai") {
+      res.json({ provider, models: [], source: "CLIENT_DEFAULT" });
+      return;
+    }
     let listed: ModelDescriptor[] | null = null;
     try {
       listed = await options.modelCatalog.list(provider);
