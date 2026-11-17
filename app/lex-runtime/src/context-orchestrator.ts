@@ -94,7 +94,8 @@ export const HOSTED_CONTEXT_TOKENS: Record<string, number> = {
 };
 const LEGACY_CHAR_CAP = 160_000;
 const MIN_CONTEXT_WINDOW = 8_192;
-const MAX_CONTEXT_WINDOW = 262_144;
+// Hosted models read up to 1M tokens (Claude 4.6+ and 5.x, Gemini); the window is used, not capped at 256k.
+const MAX_CONTEXT_WINDOW = 2_097_152;
 const DIGEST_MIN_TOKENS = 96;
 const DIGEST_MAX_TOKENS = 1_024;
 const DIGEST_SEPARATOR = "\n[…]\n";
@@ -961,5 +962,9 @@ export function documentCoveragePrompt(
     : options.local
       ? "Odpowiadaj wyłącznie na podstawie stron przekazanych w całości. Jeśli odpowiedź zależy od stron nieprzekazanych albo tylko streszczonych, napisz wprost, których stron nie przeczytano, i zaproponuj odczyt następnej porcji (np. „przeczytaj s. 12–20”); nie uzupełniaj ich treści z domysłu."
       : "Strony nieprzekazane albo tylko streszczone nie są odczytane: nie opieraj na nich ustaleń; wskaż je użytkownikowi.");
-  return ["# ZAKRES DOKUMENTÓW PRZEKAZANYCH MODELOWI (ustalone przez aplikację)", "Dobrane według pytania i okna modelu.", ...lines, how].join("\n");
+  // Data in stages: what the window left out comes in the next turn (the chat sends it by itself).
+  const stages = lines.some((line) => /NIEPRZEKAZANE/u.test(line))
+    ? "DANE W ETAPACH: to, co się nie zmieściło w oknie modelu, aplikacja dośle w kolejnym etapie (następna tura, automatycznie). Opracuj teraz przekazane strony; ustalenia, które zależą od stron nieprzekazanych, oznacz jako „do uzupełnienia po dosłaniu s. …”, nie jako ustalone."
+    : "";
+  return ["# ZAKRES DOKUMENTÓW PRZEKAZANYCH MODELOWI (ustalone przez aplikację)", "Dobrane według pytania i okna modelu.", ...lines, how, stages].filter(Boolean).join("\n");
 }

@@ -126,16 +126,17 @@ export function canExecutePrimaryModel(
 }
 
 // Account sessions (Claude Code / Codex): "default" leaves the choice to the
-// client; the rest are the two newest versions of each main family. Keep in
-// sync with ACCOUNT_SESSION_MODELS in the runtime (model-families.ts).
+// client; the rest are the two newest versions of each main family, read from the
+// provider by the runtime (/api/models/:provider/account). This seed is shown until
+// that list arrives, or when it cannot be read.
 const ACCOUNT_SESSION_MODELS: Partial<Record<ProviderId, Array<{ id: string; label: string }>>> = {
   anthropic: [
+    { id: "claude-fable-5-2", label: "Claude Fable 5.2" },
     { id: "claude-fable-5-1", label: "Claude Fable 5.1" },
-    { id: "claude-fable-5", label: "Claude Fable 5" },
     { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
     { id: "claude-opus-5", label: "Claude Opus 5" },
-    { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
-    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" }
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { id: "claude-sonnet-5", label: "Claude Sonnet 5" }
   ],
   openai: [
     { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
@@ -145,14 +146,16 @@ const ACCOUNT_SESSION_MODELS: Partial<Record<ProviderId, Array<{ id: string; lab
 
 export function accountModelChoices(
   source: PrimaryModelSource,
-  defaultLabel: string
+  defaultLabel: string,
+  // The runtime's list of the provider's newest models (replaces the seed).
+  listed?: ReadonlyArray<{ id: string; label: string }>
 ): Array<{ id: string; label: string }> {
   const defaultId = accountModelIdForPrimarySource(source);
   if (!defaultId) return [];
   const provider = runtimeProviderForPrimarySource(source);
   return [
     { id: defaultId, label: defaultLabel },
-    ...(ACCOUNT_SESSION_MODELS[provider] ?? []).map((item) => ({
+    ...(listed?.length ? listed : ACCOUNT_SESSION_MODELS[provider] ?? []).map((item) => ({
       id: `account/${provider}/${item.id}`,
       label: `${item.label} · konto`
     }))

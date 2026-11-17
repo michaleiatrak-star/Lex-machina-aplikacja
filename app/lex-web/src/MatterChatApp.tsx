@@ -85,6 +85,7 @@ import {
   checkDocumentFit,
   getFirmKnowledgeWorkspace,
   getSessionProgress,
+  getAccountModels,
   finalizeDeanonymization,
   generateLegalDocument,
   getHealth,
@@ -150,7 +151,7 @@ import { conversationTitle } from "./conversation-title.js";
 import { modelAvailable, noModelAvailable } from "./model-availability.js";
 import { markWebSearchPromptShown, requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptShown } from "./web-search-setup-prompt.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
-import { CoverageLine, RegisterLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
+import { CoverageLine, RegisterLine, UnfinishedAnalysis, finishAnalysisMessage, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
@@ -246,7 +247,7 @@ import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
-import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
+import { AUTO_ADVANCE_MAX_STEPS, autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 import {
   DeveloperModeContext,
@@ -1919,6 +1920,8 @@ export default function MatterChatApp({
   // case (progress check) and the user's "Zatrzymaj".
   const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
   const workflowClosedRef = useRef<Record<string, number>>({});
+  // Pages still unread per case while the chat sends documents in stages.
+  const pagesLeftRef = useRef<Record<string, number>>({});
   const autoStopRef = useRef(false);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
@@ -2537,6 +2540,23 @@ export default function MatterChatApp({
               runtimeProvider
             ]
           );
+        // The provider's newest models replace the seed once the runtime has read them.
+        void getAccountModels(runtimeProvider)
+          .then((listed) => {
+            if (cancelled || !listed.models.length) return;
+            const dynamic = accountModelChoices(provider, ACCOUNT_MODEL_LABELS[runtimeProvider], listed.models);
+            setModels(dynamic.map((choice) => ({
+              provider: runtimeProvider,
+              id: choice.id,
+              displayName: choice.label,
+              selectable: authenticated,
+              ownedBy: "account-session",
+              capabilities: ["account-session", "lex-runtime-tools"]
+            })));
+          })
+          .catch(() => {
+            // The seed stays: the list could not be read.
+          });
         setModels(
           choices.map((choice) => ({
             provider:
@@ -4668,6 +4688,31 @@ export default function MatterChatApp({
       }
       if (autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId) {
         setAutoNext({ caseId: executionCaseId, text: autoDecision.message, meta: autoDecision.meta, step: (options.autoStep ?? 0) + 1 });
+      }
+      // Data in stages: the pages the model's window left out this turn are sent in the next turn by
+      // the chat itself (user, 2026-11-17: "rozdzielana informacją o dosłaniu w kolejnym etapie"),
+      // while each turn reads more of them; it stops when a turn read nothing new.
+      if (!autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId && answerMessage.documentAnalysis) {
+        const left = unfinishedDocuments([...priorMessages, answerMessage]);
+        const leftPages = left.reduce((sum, item) => sum + item.missing.reduce((pages, [start, end]) => pages + end - start + 1, 0), 0);
+        const before = pagesLeftRef.current[executionCaseId];
+        const step = (options.autoStep ?? 0) + 1;
+        if (left.length && step <= AUTO_ADVANCE_MAX_STEPS && (before === undefined || leftPages < before)) {
+          pagesLeftRef.current[executionCaseId] = leftPages;
+          const first = left[0]!;
+          setMessages((current) => [
+            ...current,
+            { id: messageId(), role: "system", content: t("Dane w etapach: zostało {pages} stron do przeczytania; dosyłam kolejną porcję automatycznie.", { pages: leftPages }) }
+          ]);
+          setAutoNext({
+            caseId: executionCaseId,
+            text: finishAnalysisMessage(fileLabel(first.documentId, first.title), first),
+            meta: `automatycznie · dosłanie stron · ${fileLabel(first.documentId, first.title)}`,
+            step
+          });
+        } else {
+          delete pagesLeftRef.current[executionCaseId];
+        }
       }
 
       // Letter workflows end with a file, like a document artifact: after each

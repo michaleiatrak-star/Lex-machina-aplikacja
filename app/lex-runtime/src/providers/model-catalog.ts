@@ -116,7 +116,24 @@ async function parseJson(response: Response, provider: ProviderId): Promise<unkn
   return response.json() as Promise<unknown>;
 }
 
+// The context window of hosted models whose list carries none (an account session, OpenAI): from
+// the provider's documentation (Claude API reference, 2026-11: every Claude model from 4.6 on, and
+// the 5.x lines, read 1M tokens; Haiku 4.5 200k). Never a guess for a line it does not name.
+export function knownContextWindow(provider: ProviderId, modelId: string): number | undefined {
+  const id = modelId.replace(/^account\/[a-z]+\//u, "");
+  if (provider === "anthropic") {
+    if (id === "default") return 1_000_000;
+    if (/^claude-(?:fable|mythos|opus|sonnet|haiku)-5(?:-\d+)?$/u.test(id)) return 1_000_000;
+    if (/^claude-(?:opus-4-[6-9]|sonnet-4-6)$/u.test(id)) return 1_000_000;
+    if (/^claude-haiku-4-5/u.test(id)) return 200_000;
+  }
+  return undefined;
+}
+
 export class DynamicModelCatalog {
+  // The windows the providers' model lists reported (provider:model -> tokens).
+  private readonly windows = new Map<string, number>();
+
   constructor(
     private readonly credentials: ProviderCredentialResolver,
     private readonly fetcher: FetchLike = globalThis.fetch.bind(globalThis),
@@ -149,6 +166,19 @@ export class DynamicModelCatalog {
       : undefined;
   }
 
+  /** Windows read from a list outside the catalog (the account session's model list). */
+  rememberWindows(provider: ProviderId, models: ReadonlyArray<{ id: string; contextWindow?: number }>): void {
+    for (const model of models) {
+      if (model.contextWindow && model.contextWindow >= 8_192) this.windows.set(`${provider}:${model.id}`, model.contextWindow);
+    }
+  }
+
+  /** The hosted model's window: as its provider's list reported it, else as its documentation states. */
+  hostedContextWindow(provider: ProviderId, modelId: string): number | undefined {
+    const id = modelId.replace(/^account\/[a-z]+\//u, "");
+    return this.windows.get(`${provider}:${id}`) ?? knownContextWindow(provider, modelId);
+  }
+
   localTokenCharsPerToken(
     modelId: string
   ): number | undefined {
@@ -176,6 +206,9 @@ export class DynamicModelCatalog {
    */
   async list(provider: ProviderId): Promise<ModelDescriptor[]> {
     const models = await this.listAll(provider);
+    for (const model of models) {
+      if (model.contextWindow && model.contextWindow >= 8_192) this.windows.set(`${provider}:${model.id}`, model.contextWindow);
+    }
     return /^(1|true|on)$/i.test(process.env.LEX_MODEL_CATALOG_ALL?.trim() ?? "")
       ? models
       : newestModelFamilies(models);
@@ -309,6 +342,8 @@ export class DynamicModelCatalog {
           id,
           displayName,
           selectable: true,
+          // The Models API's context window (since 2026-03): max_input_tokens.
+          ...(typeof model?.max_input_tokens === "number" ? { contextWindow: model.max_input_tokens } : {}),
           ...(typeof model?.created_at === "string"
             ? { createdAt: model.created_at }
             : {}),

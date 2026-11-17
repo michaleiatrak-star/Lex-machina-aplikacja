@@ -99,6 +99,8 @@ import {
   ProviderGatewayError
 } from "../providers/gateway.js";
 import { accountPolicyResponse } from "../server-mode/service.js";
+import { anthropicAccountModels } from "../providers/account-session.js";
+import { accountModelList } from "../providers/model-families.js";
 import type { ProviderId } from "../providers/types.js";
 import type {
   AccountSessionManager
@@ -594,6 +596,8 @@ export type LexHttpAppOptions = {
         DynamicModelCatalog,
         | "localContextWindow"
         | "localTokenCharsPerToken"
+        | "hostedContextWindow"
+        | "rememberWindows"
       >
     >;
   credentialResolver?: ProviderCredentialResolver;
@@ -6845,6 +6849,30 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     });
   });
 
+  // The account session's models: the provider's list (API key, or the Claude account's token)
+  // reduced to the two newest of each main line; the seed when no list is read.
+  app.get("/api/models/:provider/account", async (req, res) => {
+    const provider = String(req.params.provider ?? "");
+    if (!isProviderId(provider)) {
+      res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+      return;
+    }
+    let listed: ModelDescriptor[] | null = null;
+    try {
+      listed = await options.modelCatalog.list(provider);
+    } catch {
+      listed = null;
+    }
+    if (!listed?.length && provider === "anthropic") {
+      const account = await anthropicAccountModels();
+      if (account?.length) {
+        options.modelCatalog.rememberWindows?.(provider, account);
+        listed = account.map((model) => ({ provider, id: model.id, displayName: model.displayName, selectable: true, ...(model.createdAt ? { createdAt: model.createdAt } : {}), ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}) }));
+      }
+    }
+    res.json({ provider, models: accountModelList(provider, listed), source: listed?.length ? "PROVIDER" : "SEED" });
+  });
+
   app.get("/api/models/:provider", async (req, res) => {
     const provider = String(req.params.provider ?? "");
     if (!isProviderId(provider)) {
@@ -10139,7 +10167,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         count,
         estimate: estimateDocumentFit({
           attachments: picked,
-          modelContextTokens: localWindow ?? HOSTED_CONTEXT_TOKENS[provider] ?? 128_000,
+          modelContextTokens: localWindow ?? options.modelCatalog.hostedContextWindow?.(provider, model) ?? HOSTED_CONTEXT_TOKENS[provider] ?? 128_000,
           ...(charsPerToken ? { tokenCharsPerToken: charsPerToken } : {})
         })
       });
@@ -10963,9 +10991,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           .localContextWindow?.(
             request.model
           );
-      if (!localContextWindow && sessionAttachments.length > 0) {
+      // The window is known for every turn: the instructions fit it even without documents (instruction-budget.ts).
+      if (!localContextWindow) {
         request.modelContextTokens =
-          HOSTED_CONTEXT_TOKENS[request.provider] ?? 128_000;
+          options.modelCatalog.hostedContextWindow?.(request.provider, request.model) ?? HOSTED_CONTEXT_TOKENS[request.provider] ?? 128_000;
       }
       if (localContextWindow) {
         request.modelContextTokens =
