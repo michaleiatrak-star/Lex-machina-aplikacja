@@ -201,7 +201,7 @@ export function threadEvidencePrompt(evidence: ThreadEvidence, reuse: ThreadEvid
   }
   if (evidence.sources.length) {
     lines.push(
-      "Inne źródła użyte wcześniej (status z chwili użycia; orzeczenia NSA/WSA z CBOSA pozostają snapshotem):",
+      "Inne źródła użyte wcześniej (status z chwili użycia; orzeczenia NSA/WSA z CBOSA to kopia bazy, bez potwierdzenia na żywo):",
       ...evidence.sources.slice(-15).map((source) => `- ${source.claim}: ${source.status}, ${source.url}, ${source.fetchedAt.slice(0, 10)}`)
     );
   }

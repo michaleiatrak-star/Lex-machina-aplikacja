@@ -134,7 +134,7 @@ export function threadEvidencePrompt(evidence, reuse) {
         lines.push("Przepisy zweryfikowane wcześniej, ale do ponownej weryfikacji (zmiana w ELI albo brak odpowiedzi ELI); bez nowej weryfikacji są niezweryfikowane:", ...reuse.recheck.map((item) => `- ${item.claim}: ${item.reason}`));
     }
     if (evidence.sources.length) {
-        lines.push("Inne źródła użyte wcześniej (status z chwili użycia; orzeczenia NSA/WSA z CBOSA pozostają snapshotem):", ...evidence.sources.slice(-15).map((source) => `- ${source.claim}: ${source.status}, ${source.url}, ${source.fetchedAt.slice(0, 10)}`));
+        lines.push("Inne źródła użyte wcześniej (status z chwili użycia; orzeczenia NSA/WSA z CBOSA to kopia bazy, bez potwierdzenia na żywo):", ...evidence.sources.slice(-15).map((source) => `- ${source.claim}: ${source.status}, ${source.url}, ${source.fetchedAt.slice(0, 10)}`));
     }
     if (evidence.skills.length) {
         lines.push(`Skille przeczytane wcześniej w tej sprawie: ${evidence.skills.join(", ")}.`);

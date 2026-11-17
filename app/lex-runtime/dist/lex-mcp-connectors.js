@@ -34,7 +34,7 @@ export const LEX_MCP_CATALOG = [
     { id: "isap", group: "Akty prawne i orzecznictwo", label: "ISAP/ELI — tekst aktu i przepisu (Sejm ELI)" },
     { id: "eurlex", group: "Akty prawne i orzecznictwo", label: "EUR-Lex + TSUE — akty UE, status, wyroki" },
     { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — agregator orzeczeń (ranga najniższa; gdy źródło urzędowe nie działa), cytator" },
-    { id: "cbosa", group: "Akty prawne i orzecznictwo", label: "CBOSA — orzeczenia NSA/WSA (snapshot 🟨)" },
+    { id: "cbosa", group: "Akty prawne i orzecznictwo", label: "CBOSA — orzeczenia NSA/WSA (kopia bazy, bez potwierdzenia na żywo)" },
     { id: "sn", group: "Akty prawne i orzecznictwo", label: "SN — orzeczenia Sądu Najwyższego (sn.pl, źródłem karta orzeczenia)" },
     { id: "sp", group: "Akty prawne i orzecznictwo", label: "Sądy powszechne — Portal Orzeczeń (stały link do orzeczenia)" },
     { id: "tk", group: "Akty prawne i orzecznictwo", label: "TK — orzeczenia Trybunału Konstytucyjnego (IPO, OTK ZU; bez SAOS)" },

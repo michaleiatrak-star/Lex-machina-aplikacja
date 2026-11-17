@@ -42,6 +42,7 @@ import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 // Kept in Polish: the same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
+import { CompactSettingRow } from "./CompactSettingRow";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -5880,15 +5881,16 @@ export default function MatterChatApp({
                     : activeTab === "firm"
                       ? t("Wzory i wiedza kancelarii")
                       : activeTab === "search"
-                        ? t("Wyszukiwanie w źródłach MCP")
+                        ? t("Wyszukiwanie w źródłach prawa")
                         : activeTab === "invoices"
                           ? t("Faktury")
                           : t("Ustawienia")}
             </h1>
           </div>
           <div className="chat-header-actions">
-            {/* Case filters belong to the list of cases (Start), not to every view. */}
-            {activeTab === "home" ? (
+            {/* Case filters belong to the list of cases (Start), not to every view; with no case
+                there is nothing to filter (an empty "Sprawa" list read as a broken field). */}
+            {activeTab === "home" && matterCases.length > 0 ? (
             <div className="chat-case-switcher">
               <label className="chat-case-search">
                 <span>{t("Szukaj spraw")}</span>
@@ -5994,6 +5996,11 @@ export default function MatterChatApp({
                     )
                   }
                 >
+                  {!caseId ? (
+                    <option value="" disabled>
+                      {t("Wybierz sprawę ({count})", { count: filteredMatterCases.length })}
+                    </option>
+                  ) : null}
                   {filteredMatterCases.map(
                     (item) => (
                       <option
@@ -6049,16 +6056,7 @@ export default function MatterChatApp({
               ) : null}
             </div>
             ) : null}
-            {activeTab === "case" ? (
-              <button
-                type="button"
-                className="chat-secondary-action"
-                disabled={Boolean(selectedCase?.archivedAt)}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {t("+ Dodaj pliki")}
-              </button>
-            ) : null}
+            {/* Files are added from the "Dokumenty sprawy" row of the case card (one button, not two). */}
             <input
               ref={fileInputRef}
               className="chat-hidden-file-input"
@@ -6086,7 +6084,8 @@ export default function MatterChatApp({
           </div>
         ))}
 
-        {documentStaging.items.length > 0 ? (
+        {/* Files waiting for a decision belong to the case's work (chat, case files), not to the settings or the firm's modules. */}
+        {documentStaging.items.length > 0 && (activeTab === "chat" || activeTab === "case") ? (
           <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
             <article className="chat-card">
               <p className="eyebrow">{t("Dodane pliki")}</p>
@@ -7936,6 +7935,8 @@ export default function MatterChatApp({
               canWrite={canWriteCase(selectedCase)}
             />
 
+            {/* With a case, its file manager below is the one place files are added and dropped. */}
+            {!selectedCase ? (
             <article
               className="chat-card matter-compact-row chat-file-drop-card"
               onDragOver={(event) => {
@@ -7955,17 +7956,21 @@ export default function MatterChatApp({
                 <button
                   type="button"
                   className="chat-secondary-action"
-                  disabled={Boolean(selectedCase?.archivedAt)}
+                  disabled={false}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {t("+ Dodaj pliki")}
                 </button>
               </span>
             </article>
+            ) : null}
 
-            <article className="chat-card">
-              <p className="eyebrow">{t("Wiedza w sesji")}</p>
-              <h2>{t("Co model dostaje w rozmowie")}</h2>
+            <CompactSettingRow
+              title={t("Co model dostaje w rozmowie")}
+              summary={t("włączone: {on} z 3", {
+                on: [includeCaseKnowledge && Boolean(selectedCase) && !selectedCase?.archivedAt, includeFirmKnowledge && Boolean(firmKnowledgeWorkspace), imagesWithText].filter(Boolean).length
+              })}
+            >
               <div className="session-knowledge">
                 <label className="session-knowledge-option">
                   <input
@@ -8023,7 +8028,7 @@ export default function MatterChatApp({
                   </span>
                 </label>
               </div>
-            </article>
+            </CompactSettingRow>
 
             {selectedCase ? (
               <CaseCourtCard
@@ -8046,6 +8051,14 @@ export default function MatterChatApp({
             ) : null}
 
             {selectedCase ? (
+              <div
+                className="chat-file-drop-zone"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={handleDrop}
+              >
               <WorkspaceManager
                 caseId={caseId}
                 title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
@@ -8053,6 +8066,7 @@ export default function MatterChatApp({
                 refreshToken={workspaceRefresh}
                 onArtifactRenamed={rememberArtifactName}
               />
+              </div>
             ) : null}
 
             {selectedCase ? (
@@ -8690,11 +8704,11 @@ export default function MatterChatApp({
                 </div>
               ) : settingsSection === "display" ? (
                 <div className="chat-settings-section-stack">
-                  <article className="chat-card">
+                  <article className="chat-card display-settings">
                     <h2>{t("Wygląd i czytelność")}</h2>
                     <LanguagePicker />
                     <TranslationStatus />
-                    <label>
+                    <label className="display-setting">
                       {t("Rozmiar tekstu rozmowy")}
                       <select
                         value={chatTextSize}
@@ -8708,8 +8722,9 @@ export default function MatterChatApp({
                           <option key={option.size} value={option.size}>{t(option.label)}</option>
                         ))}
                       </select>
+                      <small className="field-help">{t("Zmienia tekst wiadomości i pola pisania.")}</small>
                     </label>
-                    <label>
+                    <label className="display-setting">
                       {t("Motyw kolorów")}
                       <select
                         value={theme}
@@ -8724,7 +8739,7 @@ export default function MatterChatApp({
                         ))}
                       </select>
                     </label>
-                    <p className="field-help">{t("Rozmiar zmienia tekst wiadomości i pola pisania. Ustawienia zostają w tej przeglądarce.")}</p>
+                    <p className="field-help">{t("Ustawienia wyglądu zostają w tej przeglądarce.")}</p>
                   </article>
                 </div>
               ) : settingsSection === "security" ? (

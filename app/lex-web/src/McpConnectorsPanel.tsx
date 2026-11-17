@@ -188,7 +188,7 @@ export function McpConnectorsPanel() {
   return (
     <article className="chat-card">
       <p className="eyebrow">
-        {t("Audyt systemu · FAZA 0E")}
+        {t("Źródła prawa i orzecznictwa")}
       </p>
       <h2>
         {t("Konektory MCP Lex Machina")}
@@ -202,7 +202,7 @@ export function McpConnectorsPanel() {
 
       {status?.packageAvailable ? (
         <p className={status.package.integrity === "MATCH" ? "field-help" : "alert alert-error"}>
-          {t("Pakiet serwerów")}{status.package.version ? ` ${status.package.version}` : ""}
+          {t("Wersja źródeł")}{status.package.version ? ` ${status.package.version}` : ""}
           {status.package.skillVersion ? ` (pakiet jurysdykcji ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
         </p>
       ) : null}
