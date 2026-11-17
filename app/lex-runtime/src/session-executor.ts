@@ -2938,11 +2938,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     const strengthRulings: string[] = [];
     const ethicsResults = await ethicsFound;
     // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
-    if (legalTurn && contextFocus) {
-      const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category as string]));
-      const passages = issuePassages(attachments, contextFocus, 12, kinds);
-      strengthPassages = passages;
-      // The parties and the case of each court record, from its heading (record-parties.ts).
+    // The parties and the case of each court record, from its heading (record-parties.ts): whether or
+    // not the files gave an issue focus (XI P 27/26: no focus, so no parties and no case subject).
+    if (legalTurn) {
       const records = attachments
         .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
         .flatMap((attachment) => {
@@ -2957,6 +2955,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         pathSections.push(partiesPrompt);
         audit.record("gate", "RECORD_PARTIES", "OK", { records: records.map((record) => `${record.documentId}:${record.signature ?? "?"}:${record.date ?? "?"}`) });
       }
+    }
+    if (legalTurn && contextFocus) {
+      const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category as string]));
+      const passages = issuePassages(attachments, contextFocus, 12, kinds);
+      strengthPassages = passages;
       const prompt = issuePassagesPrompt(passages);
       if (prompt) {
         pathSections.push(prompt);
