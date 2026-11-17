@@ -217,7 +217,8 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePass
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
-import { factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, type DocumentCoverage as MatrixCoverage, type ModelCall } from "./fact-matrix.js";
+import { factMatrixGoalEvidence, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments, type DocumentCoverage as MatrixCoverage, type FactRow, type MatrixTopic, type ModelCall } from "./fact-matrix.js";
+import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable, type RegisterEntry } from "./document-register.js";
 import { confirmedSteps, stFinal, verified, type PleadingEvidence } from "./step-register.js";
 import { deadlineCorrection, deadlineProvisions, deadlineWordings } from "./deadline-wording.js";
@@ -3120,6 +3121,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         // The matrix of each witness heard in two records or more: topics × records, every statement
         // of the topic in its cell; the facts of the pleading come from it (user 2026-11-16).
         const matrixGoalList: string[] = [];
+        // The checked quotes of each matrix goal: its passages (not a word search that the question's
+        // own words pull to one sentence for every goal, as in the XI P 27/26 run).
+        const goalEvidence = new Map<string, FilePassage[]>();
+        // The witness matrices: their topics seed the document matrix, their rows meet the documents'.
+        const witnessMatrices: Array<{ witness: string; rows: FactRow[]; topics: MatrixTopic[] }> = [];
         // Goals the pleading must take up besides the contradictions: official facts, the party's charges.
         const mandatoryGoalList: string[] = [];
         // The charges of the party's own letters: never cut by the goal limit after the official facts.
@@ -3177,7 +3183,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
               for (const fact of described.facts) witnessFactsByDocument.set(fact.documentId, (witnessFactsByDocument.get(fact.documentId) ?? 0) + 1);
               pathSections.push(factMatrixPrompt(witness, factRowList, described.dropped));
-              matrixGoalList.push(...factMatrixGoals(witness, factRowList));
+              for (const item of factMatrixGoalEvidence(witness, factRowList)) {
+                matrixGoalList.push(item.goal);
+                goalEvidence.set(item.goal, item.evidence);
+              }
+              witnessMatrices.push({ witness, rows: factRowList, topics: described.topics });
               strengthKeyFacts.push(...factMatrixRequired(factRowList));
               audit.record("gate", "WITNESS_FACT_MATRIX", "OK", { witness, topics: described.topics.length, facts: described.facts.length, dropped: described.dropped, differing: factRowList.filter((row) => row.differs).length, failures: described.failures });
               continue;
@@ -3234,6 +3244,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           const described = toRead.length
             ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
                 concurrency: 6,
+                seedTopics: witnessMatrices.flatMap((matrix) => matrix.topics),
                 onPart: (progress) =>
                   step(
                     "PREPARE",
@@ -3275,7 +3286,17 @@ export class SafeSessionExecutor implements SessionExecutor {
           }
           if (described.facts.length) {
             pathSections.push(factMatrixPrompt("", rowList, described.dropped, "documents"));
-            if (!matrixGoalList.length) matrixGoalList.push(...factMatrixGoals("", rowList, 4, "documents"));
+            const labels = new Map(documentRegister.map((entry) => [entry.documentId, `${entry.id} ${entry.kind}`]));
+            for (const matrix of witnessMatrices) {
+              const versus = witnessVersusDocuments(matrix.witness, matrix.rows, rowList, labels);
+              if (versus) pathSections.push(versus);
+            }
+            if (!matrixGoalList.length) {
+              for (const item of factMatrixGoalEvidence("", rowList, 4, "documents")) {
+                matrixGoalList.push(item.goal);
+                goalEvidence.set(item.goal, item.evidence);
+              }
+            }
             strengthKeyFacts.push(...factMatrixRequired(rowList, 4));
             audit.record("gate", "DOCUMENT_FACT_MATRIX", "OK", { documents: toRead.length, topics: described.topics.length, failures: described.failures, facts: described.facts.length, dropped: described.dropped, shared: rowList.filter((row) => row.cells.length >= 2).length, differing: rowList.filter((row) => row.differs).length });
           } else if (toRead.length) {
@@ -3293,7 +3314,18 @@ export class SafeSessionExecutor implements SessionExecutor {
           .filter((document) => document.category === "ORZECZENIE")
           .map((document) => ({ documentId: document.documentId, text: attachments.find((attachment) => attachment.documentId === document.documentId)!.chunks.map((chunk) => chunk.text).join("\n") }));
         const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
+        // The user's own demands first: what the question asks the pleading to prove.
+        const askedGoals = questionGoals(goalQuestion);
+        const timeline = questionTimeline(
+          goalQuestion,
+          attachments.map((attachment) => ({ documentId: attachment.documentId, text: attachment.chunks.map((chunk) => chunk.text).join("\n") }))
+        );
+        if (timeline) {
+          pathSections.push(questionTimelinePrompt(timeline));
+          audit.record("gate", "QUESTION_TIMELINE", "OK", { periods: timeline.periods.length, dates: timeline.dates.length, confirmed: [...timeline.periods, ...timeline.dates].filter((item) => item.documents.length).length });
+        }
         const goals = [
+          ...askedGoals,
           ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
           // The party's own charges right after the theses: each is upheld or dropped with a reason.
           ...chargeGoalList.slice(0, 8),
@@ -3305,7 +3337,15 @@ export class SafeSessionExecutor implements SessionExecutor {
           const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category as string]));
           const sections: string[] = [];
           goals.forEach((goal, index) => {
-            const passages = issuePassages(attachments, `${goal}\n${contextFocus}`, 3, kinds);
+            // The goal's own words (its generic opening dropped); the question only when they find nothing.
+            const topic = goal.replace(/^(?:Wykazać sprzeczność lub zmianę wersji zeznań świadka [^:]*|Rozstrzygnąć rozbieżność dokumentów[^:]*):\s*/u, "");
+            const searched = issuePassages(attachments, topic, 3, kinds);
+            const found = searched.length ? searched : issuePassages(attachments, `${topic}\n${contextFocus}`, 3, kinds);
+            // A matrix goal's passages are its own checked quotes; a demand to show contradictions takes
+            // the quotes of the matrix differences (a word search found the witness's personal data).
+            const contradictions = /sprzeczn|niespójn|zmian\p{L}*\s+wersji/iu.test(goal) && !goalEvidence.has(goal) ? [...goalEvidence.values()].flatMap((list) => list.slice(0, 2)).slice(0, 6) : [];
+            const own = goalEvidence.get(goal) ?? contradictions;
+            const passages = own.length ? own.map((item, rank) => ({ ...item, weight: Math.max(0.5, 1 - rank * 0.05) })) : found;
             if (passages[0]) strengthKeyFacts.push(passages[0]);
             sections.push(`CEL ${index + 1}: ${goal}${passages.length ? `\n${passages.map((passage) => `  - waga ${(passage.weight ?? 0).toFixed(2).replace(".", ",")} · [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`).join("\n")}` : "\n  - (brak fragmentów akt dla tego celu: wskaż, jakiego dowodu brakuje)"}`);
           });
@@ -3317,7 +3357,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             [
               "# FAKTY Z AKT O OSOBIE Z PYTANIA (wskazane przez aplikację)",
               "Rozstrzygnięcia i zawiadomienia dotyczące użytkownika w innych dokumentach (ten sam człowiek pod innym symbolem). Wykorzystaj je albo napisz, dlaczego nie:",
-              ...strengthKeyFacts.map((fact) => `- [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]] (s. ${fact.page}) „${fact.text}”`)
+              ...[...new Map(strengthKeyFacts.map((fact) => [`${fact.documentId}|${fact.text}`, fact])).values()].map((fact) => `- [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]] (s. ${fact.page}) „${fact.text}”`)
             ].join("\n")
           );
         }

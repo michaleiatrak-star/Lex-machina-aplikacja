@@ -90,11 +90,16 @@ export function statementPairs(byWitness: ReadonlyMap<string, WitnessStatement[]
         const shared = a.filter((item) => b.has(item));
         const sameRecord = first.documentId === second.documentId;
         // Within one record only a sharp difference (a quantity or a negation on three shared words).
-        if (shared.length < (sameRecord ? 3 : 2)) continue;
+        if (shared.length < 2) continue;
         const differences: string[] = [];
         const qa = quantities(first.text);
         const qb = quantities(second.text);
-        if (qa.length && qb.length && qa.join("|") !== qb.join("|")) differences.push(`liczby i czas: „${qa.join(", ")}” wobec „${qb.join(", ")}”`);
+        const quantityDiffers = qa.length > 0 && qb.length > 0 && qa.join("|") !== qb.join("|");
+        // Two shared words make a topic only with a differing quantity ("ostatnią wiadomość … w marcu
+        // 2026" / "… w zeszłym roku"); otherwise three (XI P 27/26: "pracowników" and "związany" paired
+        // the witness's job with documents he never saw).
+        if (shared.length < 3 && (sameRecord || !quantityDiffers)) continue;
+        if (quantityDiffers) differences.push(`liczby i czas: „${qa.join(", ")}” wobec „${qb.join(", ")}”`);
         const negA = /\bnie\b/u.test(fold(first.text));
         const negB = /\bnie\b/u.test(fold(second.text));
         if (negA !== negB) differences.push("zaprzeczenie tylko w jednej wypowiedzi");

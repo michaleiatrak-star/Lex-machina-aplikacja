@@ -56,7 +56,8 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
   if (!/(?:może\s+(?:podnieść|twierdzić|argumentować|zarzucić)|można\s+(?:by\s+)?(?:zarzucić|podnieść)|Argument\s+ten\s+(?:jest\s+)?(?:chybiony|nietrafny)|antycypac)/iu.test(body)) {
     gaps.push({ element: "ANTYCYPACJA", detail: "brak przewidzianego zarzutu przeciwnika i jego obalenia przy najsilniejszej tezie" });
   }
-  if (!/(?:Nawet\s+(?:gdyby|jeżeli|jeśli|w\s+razie)|niezależnie\s+od\s+powyższego|z\s+ostrożności|ewentualnie)/iu.test(body)) {
+  // "Gdyby sąd uznał …, i tak …" and a heading "Podstawa alternatywna" close the gap as well (XI P 27/26 run).
+  if (!/(?:Nawet\s+(?:gdyby|jeżeli|jeśli|w\s+razie)|niezależnie\s+od\s+powyższego|z\s+ostrożności|ewentualnie|podstaw\p{L}*\s+alternatywn\p{L}*|(?:Gdyby|Jeżeli|Jeśli)\s+(?:\p{L}+\s+){0,3}(?:uzna\p{L}*|przyj\p{L}*|nie\s+podzieli\p{L}*)[^.]{0,200}?\bi\s+tak\b|w\s+przeciwnym\s+razie)/iu.test(body)) {
     gaps.push({ element: "ZAMKNIĘCIE FURTKI", detail: "brak podstawy alternatywnej na wypadek nieuwzględnienia tezy głównej" });
   }
   // Facts without their proof: blocks of the justification with no quote, document marker or "Dowód".

@@ -130,6 +130,48 @@ export function factMatrixGoals(witness: string, rows: readonly FactRow[], limit
     );
 }
 
+/** The goals of the differing rows with the rows' own checked quotes as their evidence. */
+export function factMatrixGoalEvidence(witness: string, rows: readonly FactRow[], limit = 6, scope: "witness" | "documents" = "witness"): Array<{ goal: string; evidence: Array<{ documentId: string; chunkIndex: number; page: number; text: string }> }> {
+  const goals = factMatrixGoals(witness, rows, limit, scope);
+  const topics = [...new Set(rows.filter((row) => row.differs).map((row) => row.topic))].slice(0, limit);
+  return goals.map((goal, index) => ({
+    goal,
+    evidence: rows
+      .filter((row) => row.topic === topics[index] && row.differs)
+      .flatMap((row) => row.cells.map((cell) => cell.facts[0]!))
+      .map((fact) => ({ documentId: fact.documentId, chunkIndex: fact.chunkIndex, page: 1, text: fact.quote }))
+      .slice(0, 4)
+  }));
+}
+
+/**
+ * The witness's testimony against the documents on one topic: the rows of the witness matrix whose
+ * topic the documents also speak of (same name, the document matrix was seeded with it).
+ */
+export function witnessVersusDocuments(witness: string, witnessRows: readonly FactRow[], documentRows: readonly FactRow[], labels: ReadonlyMap<string, string> = new Map()): string {
+  const byTopic = new Map<string, { said: DescribedFact[]; documents: DescribedFact[] }>();
+  for (const row of witnessRows) for (const cell of row.cells) for (const fact of cell.facts) {
+    const entry = byTopic.get(fold(row.topic)) ?? { said: [], documents: [] };
+    entry.said.push(fact);
+    byTopic.set(fold(row.topic), entry);
+  }
+  for (const row of documentRows) for (const cell of row.cells) for (const fact of cell.facts) byTopic.get(fold(row.topic))?.documents.push(fact);
+  const shared = [...byTopic.entries()].filter(([, entry]) => entry.said.length && entry.documents.length);
+  if (!shared.length) return "";
+  const line = (fact: DescribedFact) => `${fact.attribute}: ${fact.value} („${fact.quote}” [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]])`;
+  return [
+    `# ZEZNANIA ŚWIADKA ${witness} WOBEC DOKUMENTÓW — TEN SAM TEMAT (zestawione przez aplikację z obu macierzy)`,
+    "Co świadek zeznał i co o tym samym zdarzeniu mówią dokumenty. Sprawdź każdą cechę (czas, adresaci, nadawca, treść): niezgodność ze świadkiem wykaż cytatem obu stron; dokument z datą jest silniejszy niż ogólnikowe określenie czasu w zeznaniu.",
+    ...shared.map(([, entry]) =>
+      [
+        `## ${entry.said[0]!.topic}`,
+        ...entry.said.map((fact) => `- świadek [${fact.record}] ${line(fact)}`),
+        ...entry.documents.map((fact) => `- dokument [${labels.get(fact.documentId) ?? fact.record}] ${line(fact)}`)
+      ].join("\n")
+    )
+  ].join("\n");
+}
+
 /** The first fact of each record in each differing row: the pleading must use them or set them aside. */
 export function factMatrixRequired(rows: readonly FactRow[], limitRows = 6): Array<{ documentId: string; chunkIndex: number; page: number; text: string }> {
   return rows
@@ -417,6 +459,9 @@ export async function fullDocumentMatrix(
   call: ModelCall,
   options: {
     concurrency?: number; partChars?: number; topicTimeoutMs?: number; factTimeoutMs?: number; retryTimeoutMs?: number; topicBudget?: number; topicLimit?: number;
+    // The witness matrix's topics: a document on the same event uses the same name, so the testimony
+    // and the documents meet in one row (the ban message of 29.09 against "po ustaniu stosunku pracy").
+    seedTopics?: readonly MatrixTopic[];
     // Each part read (done / all): the live steps show what is read and what is left, as the pleading monitor does.
     onPart?: (progress: { record: string; part: string; done: number; total: number; facts: number; retry: boolean }) => void;
   } = {}
@@ -429,9 +474,15 @@ export async function fullDocumentMatrix(
     options.topicBudget ?? 40_000
   );
   const first = topicRequest(excerpts, focus, "documents", options.topicLimit ?? 24);
+  const seeds = options.seedTopics ?? [];
+  if (seeds.length) {
+    first.system += `\nTematy z macierzy zeznań świadka w tej sprawie: gdy dokument mówi o tym samym zdarzeniu, użyj DOKŁADNIE tej nazwy tematu i tych cech: ${seeds.map((topic) => `„${topic.topic}” (${topic.attributes.join(", ")})`).join("; ")}.`;
+  }
   const topicReply = await call(first.system, first.user, options.topicTimeoutMs ?? 90_000);
   if (topicReply.failure) failures.push(`tematy: ${topicReply.failure}`);
-  const topics = parseTopics(topicReply.text, records);
+  const parsed = parseTopics(topicReply.text, records);
+  // The seeds stay on the list for every document even when the model did not repeat them.
+  const topics = [...parsed, ...seeds.filter((seed) => !parsed.some((topic) => fold(topic.topic) === fold(seed.topic))).map((seed) => ({ ...seed, records: [] }))];
   const jobs = parted.flatMap((item) => item.parts.map((part) => ({ document: item.document, ...part })));
   const results = new Map<string, { facts: DescribedFact[]; dropped: number; none: string | null; failure: string }>();
   let done = 0;
