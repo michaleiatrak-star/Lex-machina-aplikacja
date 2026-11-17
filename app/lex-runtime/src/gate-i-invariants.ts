@@ -363,6 +363,14 @@ function temporalFreshness(
   };
 }
 
+// A provision the answer names only to say it is repealed or not relied on ("art. 217 KPC jest
+// uchylony … nie powołano", XI P 27/26): marked unverified, it is a disclosure, not a citation, and
+// does not block the answer (the finalization report still lists it).
+const DISCLOSED_NOT_CITED = /(?:uchylon\p{L}*|nie\s+(?:został\p{L}*\s+|jest\s+)?powołan\p{L}*|nie\s+powołuj\p{L}*|nie\s+ma\s+(?:tej\s+)?jednostki|brak\s+(?:tej\s+)?jednostki)/iu;
+function citedClaim(finding: FinalizationReport["findings"][number]): boolean {
+  return !(finding.status === "UNVERIFIED_MARKED" && finding.reference.kind === "statute" && DISCLOSED_NOT_CITED.test(finding.reference.lineText));
+}
+
 function citationLedger(
   finalization:
     FinalizationReport
@@ -372,7 +380,7 @@ function citationLedger(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" && citedClaim(finding)
       );
   return {
     id:
@@ -426,7 +434,7 @@ function citations(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" && citedClaim(finding)
       );
   return {
     id:

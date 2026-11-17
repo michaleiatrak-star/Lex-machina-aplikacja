@@ -93,6 +93,13 @@ export function questionTimelinePrompt(timeline: QuestionTimeline): string {
   return [
     "# DATY Z PYTANIA WOBEC DOKUMENTÓW (oś czasu ustalona przez aplikację)",
     "Daty i okresy podane przez użytkownika, sprawdzone w treści dokumentów; położenie dat względem okresów policzone przez aplikację. Zestaw je z tym, co świadek zeznał o czasie tych zdarzeń (np. „po ustaniu stosunku pracy”, „w obecności powoda”), i wykaż niezgodność albo zgodność cytatem.",
-    ...lines
+    ...lines,
+    // The wording on the event date (PRAWO-HARDGATE KROK 4): the earliest event the question dates.
+    ...(() => {
+      const earliest = [...timeline.periods.map((period) => period.from), ...timeline.dates.map((item) => item.date)].sort()[0];
+      return earliest
+        ? [`Przepis prawa materialnego, który rozstrzyga o tych zdarzeniach, powołuj w brzmieniu z dnia zdarzenia (najwcześniejsze: ${polish(earliest)}): verify_legal_reference z asOf=${earliest}; brzmienie aktualne podaj tylko obok, gdy się różni.`]
+        : [];
+    })()
   ].join("\n");
 }

@@ -228,7 +228,7 @@ import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, te
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
-import { recordParties, recordPartiesPrompt } from "./record-parties.js";
+import { recordParties, recordPartiesPrompt, subjectGoal, targetRecord } from "./record-parties.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, collapseRepeatedVerMarkers, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
@@ -2933,6 +2933,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     let documentRegister: RegisterEntry[] = [];
     // The charges of the party's earlier letter (pleading-goals.ts): each upheld or dropped with a reason.
     let pleadingCharges: string[] = [];
+    // The claims of the case the pleading is for (its record's heading): one goal.
+    let caseSubjectGoal: string | null = null;
     const strengthRulings: string[] = [];
     const ethicsResults = await ethicsFound;
     // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
@@ -2949,6 +2951,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           const found = recordParties(attachment.documentId, text);
           return found ? [{ ...found, label: attachment.title ?? `dokument ${attachment.documentId}` }] : [];
         });
+      caseSubjectGoal = subjectGoal(targetRecord(records, latestUserTurn(request.query)));
       const partiesPrompt = recordPartiesPrompt(records);
       if (partiesPrompt) {
         pathSections.push(partiesPrompt);
@@ -3331,7 +3334,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           ...chargeGoalList.slice(0, 8),
           // One goal per topic of the matrix; the pairs' goals only without a matrix.
           ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs)).slice(0, 4),
-          ...mandatoryGoalList.slice(0, 4)
+          ...mandatoryGoalList.slice(0, 4),
+          ...(caseSubjectGoal && isCourtPleading(goalQuestion) ? [caseSubjectGoal] : [])
         ].slice(0, 22);
         if (goals.length) {
           const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category as string]));

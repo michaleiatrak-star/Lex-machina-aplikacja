@@ -501,6 +501,17 @@ function linkDocumentAnchors(text: string, entries: ChunkEntry[]): { text: strin
     const lineStart = text.lastIndexOf("\n", end) + 1;
     const line = text.slice(lineStart, end);
     if (/\[(?:VER|NIEWERYFIKOWANE)[^\]]*$|\]\([^)]*$/u.test(line)) continue;
+    // A heading, or a sentence the model already linked to its source, needs no link at each date
+    // (XI P 27/26: "17 marca 2026 r. [link]" next to the quote's own link, in every paragraph).
+    if (/^\s*#/u.test(line)) continue;
+    // Sentence bounds: a full stop not after an abbreviation ("r.", "ust.", "art."), a semicolon, a line end.
+    const STOP = /(?<!(?:\br|\bust|\bart|\bpkt|\bnr|\bpoz|\bsygn|\bzm|\btj|\bm\.in))[.!?;](?=\s)|\n/gu;
+    let sentenceStart = lineStart;
+    for (const stop of text.slice(lineStart, end).matchAll(STOP)) sentenceStart = lineStart + stop.index! + 1;
+    STOP.lastIndex = 0;
+    const tail = new RegExp(STOP.source, "u").exec(text.slice(end));
+    const sentenceEnd = tail ? end + tail.index : text.length;
+    if (/\[\[LEXDOC:/u.test(text.slice(sentenceStart, sentenceEnd))) continue;
     const entry = owner(anchor);
     if (!entry) continue;
     seen.add(anchor.key);
