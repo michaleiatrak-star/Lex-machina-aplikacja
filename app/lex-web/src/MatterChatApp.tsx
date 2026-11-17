@@ -44,6 +44,7 @@ const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CompactSettingRow } from "./CompactSettingRow";
 import { CaseDocumentPreview } from "./CaseDocumentPreview";
+import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
 import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
@@ -1715,22 +1716,12 @@ export default function MatterChatApp({
     }
   }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
-    useState(() => {
-      try {
-        return window.localStorage.getItem("lex.filesPanelOpen") === "1";
-      } catch {
-        return false;
-      }
-    });
+    useState(readFilesPanelOpen);
   // A read case document shown next to the conversation (the docked files panel).
   const [filePreview, setFilePreview] = useState<{ documentId: string; title: string } | null>(null);
   // The files panel is hidden or shown by the user and stays so (user 2026-11-17).
   useEffect(() => {
-    try {
-      window.localStorage.setItem("lex.filesPanelOpen", caseFilePickerOpen ? "1" : "0");
-    } catch {
-      // storage unavailable: the panel just starts closed next time
-    }
+    saveFilesPanelOpen(caseFilePickerOpen);
     document.body.classList.toggle("lex-side-open", caseFilePickerOpen && activeTab === "chat");
     return () => document.body.classList.remove("lex-side-open");
   }, [caseFilePickerOpen, activeTab]);

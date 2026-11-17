@@ -69,3 +69,22 @@ export function saveTheme(theme: Theme): void {
   }
   applyTheme(theme);
 }
+
+// Whether the case files panel beside the conversation is shown (a viewer's choice, no case data).
+const FILES_PANEL_KEY = "lex.filesPanelOpen";
+
+export function readFilesPanelOpen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(FILES_PANEL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveFilesPanelOpen(open: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(FILES_PANEL_KEY, open ? "1" : "0");
+  } catch {
+    // storage unavailable: the panel starts closed next time
+  }
+}
