@@ -6,6 +6,7 @@ import {
   type EvidenceItem,
   type AnswerCorrection,
   type DocumentCoverageEntry,
+  type DocumentRegisterEntry,
   type MandatoryPathView
 } from "./api.js";
 
@@ -73,6 +74,7 @@ export type WorkspaceThreadMessage = {
   mandatoryPath?: MandatoryPathView;
   pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] }; longDocumentId?: string }> };
   documentCoverage?: DocumentCoverageEntry[];
+  documentRegister?: DocumentRegisterEntry[];
   documentAnalysis?: boolean;
   // The answer is itself a letter: its .docx is made from it mechanically (no model turn).
   answerDocument?: { sessionId: string };
