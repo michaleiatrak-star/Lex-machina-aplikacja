@@ -278,3 +278,32 @@ export function testimonyMatrixPrompt(witness: string, rows: readonly TopicRow[]
 export function matrixGoals(witness: string, rows: readonly TopicRow[], limit = 6): string[] {
   return rows.filter((row) => row.byRecord.length >= 2).slice(0, limit).map((row) => `Wykazać sprzeczność lub zmianę wersji zeznań świadka ${witness} w temacie: ${row.label}`);
 }
+
+/**
+ * A name's key across transliterations ("Jurij Kast" / "Yurii Kast", "Mychajło" / "Mykhailo"): the same
+ * witness in two records written differently (XI P 27/26 and VII P 94/25). Not for symbols ([PII…]).
+ */
+export function transliteratedName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/ł/gu, "l")
+    .split(/\s+/u)
+    .map((word) =>
+      word
+        .replace(/kh/gu, "ch")
+        .replace(/sh/gu, "sz")
+        .replace(/zh/gu, "z")
+        .replace(/ts/gu, "c")
+        .replace(/^y(?=[aeiou])/u, "j")
+        .replace(/yu/gu, "ju")
+        .replace(/ya/gu, "ja")
+        .replace(/ye/gu, "je")
+        .replace(/(?:ii|iy|yi|ij|yj)$/u, "ij")
+        .replace(/y(?=[aeiou])/gu, "j")
+        .replace(/w/gu, "v")
+        .replace(/([a-z])\1/gu, "$1")
+    )
+    .join(" ");
+}

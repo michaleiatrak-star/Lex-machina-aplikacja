@@ -3750,8 +3750,8 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 640,
-   "notYetTranslatable": 0,
+   "translatable": 642,
+   "notYetTranslatable": 1,
    "translated": {
     "ca": 637,
     "da": 637,

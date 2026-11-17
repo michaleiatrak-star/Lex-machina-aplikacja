@@ -223,7 +223,7 @@ import { confirmedSteps, stFinal, verified, type PleadingEvidence } from "./step
 import { deadlineCorrection, deadlineProvisions, deadlineWordings } from "./deadline-wording.js";
 import { admissionCorrection, admissions, citedProvisions, ethicsWordings, provisionWordings } from "./admission-check.js";
 import { chargeCorrection, chargeGoal, officialFactGoals, officialKind, ownLetter, partyCharges, unaddressedCharges } from "./pleading-goals.js";
-import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, witnessStatements, type WitnessStatement } from "./witness-statements.js";
+import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, transliteratedName, witnessStatements, type WitnessStatement } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText, type SaosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
@@ -3109,7 +3109,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         for (const attachment of attachments) {
           const text = attachment.chunks.map((chunk) => chunk.text).join("\n");
           for (const [witness, statements] of witnessStatements(attachment.documentId, attachment.chunks[0]?.index ?? 0, text)) {
-            const key = groupOf.get(witness) ?? witness;
+            // The same witness under a symbol group, or the same name written in another transliteration.
+            const key = groupOf.get(witness) ?? (/^\[/u.test(witness) ? witness : transliteratedName(witness));
             byWitness.set(key, [...(byWitness.get(key) ?? []), ...statements]);
           }
         }

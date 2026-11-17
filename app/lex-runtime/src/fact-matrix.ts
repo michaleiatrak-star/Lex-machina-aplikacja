@@ -5,6 +5,7 @@
 // then the application checks every quote against the record, drops what it cannot find, and
 // lays the facts out: topic × attribute × record, a difference marked where the values differ.
 // Word matching (witness-statements.ts testimonyMatrix) stays the fallback.
+import { transliteratedName } from "./witness-statements.js";
 import type { WitnessStatement } from "./witness-statements.js";
 
 export type DescribedFact = { topic: string; attribute: string; value: string; record: string; quote: string; documentId: string; chunkIndex: number };
@@ -77,8 +78,9 @@ export function factRows(facts: readonly DescribedFact[]): FactRow[] {
   // Values worded differently but saying the same ("kontakt zakazany przez kierownika" / "kierownik
   // zakazał kontaktu") are not a
   // difference: cells differ when their words (5-letter stems, digits) overlap less than half.
+  // Names written in another transliteration ("Jurij" / "Yurii") are the same word, not a difference.
   const words = (cell: FactRow["cells"][number]) =>
-    new Set(cell.facts.flatMap((fact) => fold(fact.value).split(" ")).filter((word) => word.length >= 3 || /\d/u.test(word)).map((word) => word.slice(0, 5)));
+    new Set(cell.facts.flatMap((fact) => transliteratedName(fold(fact.value)).split(" ")).filter((word) => word.length >= 3 || /\d/u.test(word)).map((word) => word.slice(0, 5)));
   const overlap = (a: Set<string>, b: Set<string>) => {
     const union = new Set([...a, ...b]);
     return union.size ? [...a].filter((word) => b.has(word)).length / union.size : 1;

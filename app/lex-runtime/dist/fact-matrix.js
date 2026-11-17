@@ -1,3 +1,11 @@
+// The fact matrix as a lawyer (and the chat) builds it (user 2026-11-16: "the model builds the
+// matrix from the descriptions of the facts"): every statement is first described as facts —
+// topic, attribute, value, the verbatim words — by the model, which understands that "Trwało to
+// może 3 miesiące" and "Dostawałem je raz na miesiąc" both speak of how long the messages went on;
+// then the application checks every quote against the record, drops what it cannot find, and
+// lays the facts out: topic × attribute × record, a difference marked where the values differ.
+// Word matching (witness-statements.ts testimonyMatrix) stays the fallback.
+import { transliteratedName } from "./witness-statements.js";
 const fold = (text) => text
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
@@ -65,7 +73,8 @@ export function factRows(facts) {
     // Values worded differently but saying the same ("kontakt zakazany przez kierownika" / "kierownik
     // zakazał kontaktu") are not a
     // difference: cells differ when their words (5-letter stems, digits) overlap less than half.
-    const words = (cell) => new Set(cell.facts.flatMap((fact) => fold(fact.value).split(" ")).filter((word) => word.length >= 3 || /\d/u.test(word)).map((word) => word.slice(0, 5)));
+    // Names written in another transliteration ("Jurij" / "Yurii") are the same word, not a difference.
+    const words = (cell) => new Set(cell.facts.flatMap((fact) => transliteratedName(fold(fact.value)).split(" ")).filter((word) => word.length >= 3 || /\d/u.test(word)).map((word) => word.slice(0, 5)));
     const overlap = (a, b) => {
         const union = new Set([...a, ...b]);
         return union.size ? [...a].filter((word) => b.has(word)).length / union.size : 1;

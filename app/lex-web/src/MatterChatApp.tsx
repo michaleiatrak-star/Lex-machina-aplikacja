@@ -4145,6 +4145,32 @@ export default function MatterChatApp({
         ]);
         setWorkspaceRefresh((value) => value + 1);
       }
+      // A file with personal-data symbols gets its copy with the data restored at once, with the
+      // signed-in session's grant (as the chat shows them); the file with symbols stays as it is.
+      if (generated.readyForDownload !== true && canWriteCase(selectedCase)) {
+        try {
+          const intent = await createDeanonymizationIntent(executionCaseId, generated.artifact.artifactId);
+          const authorized = await reauthorizeDeanonymization(intent.intent.intentId);
+          const restoredName = generated.artifact.filename.replace(/\.(docx|odt|pdf)$/iu, " (z danymi).$1");
+          const final = await finalizeDeanonymization(authorized.grant.grantId, restoredName, {});
+          const toCheck = (final.restorations ?? []).filter((item) => item.status !== "ok").length;
+          if (activeCaseIdRef.current === executionCaseId) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "system",
+                content:
+                  t("Wersja z przywróconymi danymi „{filename}” jest w aktach sprawy ({replacements} podstawień).", { filename: final.artifact.filename, replacements: final.replacements }) +
+                  (toCheck ? t(" Formy do sprawdzenia: {toCheck} — użyj „Deanonimizuj” z podglądem na karcie pliku.", { toCheck }) : "")
+              }
+            ]);
+            setWorkspaceRefresh((value) => value + 1);
+          }
+        } catch {
+          // The file with symbols stays; "Deanonimizuj" on its card restores the data by hand.
+        }
+      }
       if (download) {
         const blob = await downloadGeneratedArtifact(executionCaseId, generated.artifact.artifactId);
         await downloadBlob(blob, generated.artifact.filename);
