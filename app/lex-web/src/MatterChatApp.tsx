@@ -2039,10 +2039,12 @@ export default function MatterChatApp({
   const switcherRef = useRef<HTMLDivElement>(null);
   const switcherCases = useMemo(() => {
     const query = switcherQuery.trim().toLocaleLowerCase("pl");
+    // Only the name and the pencil per row (user 2026-11-18); archived cases are in Sprawy > Archiwalne.
     return casesNewestFirst(matterCases)
+      .filter((item) => !item.archivedAt || item.caseId === caseId)
       .filter((item) => !query || `${item.displayName ?? ""} ${item.caseId}`.toLocaleLowerCase("pl").includes(query))
       .slice(0, SWITCHER_CASES);
-  }, [matterCases, switcherQuery]);
+  }, [matterCases, switcherQuery, caseId]);
   useEffect(() => {
     if (!switcherOpen) return;
     const close = (event: MouseEvent) => {
@@ -5597,9 +5599,7 @@ export default function MatterChatApp({
                   onChange={(event) => setSwitcherQuery(event.target.value)}
                 />
               ) : null}
-              <small className="case-switcher-caption">
-                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : t("Ostatnio zmieniane")}
-              </small>
+              {switcherQuery.trim() ? <small className="case-switcher-caption">{t("Wyniki ({count})", { count: String(switcherCases.length) })}</small> : null}
               <div className="matter-thread-items">
                 {switcherCases.map((item) =>
                   sidebarRename?.caseId === item.caseId ? (
@@ -5662,9 +5662,6 @@ export default function MatterChatApp({
                           ) : null}
                           {item.displayName || "Sprawa bez nazwy"}
                         </strong>
-                        <small>
-                          {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
-                        </small>
                       </button>
                       {item.role === "OWNER" ? (
                         <button

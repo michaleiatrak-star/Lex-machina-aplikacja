@@ -5248,3 +5248,19 @@ mark.restored {
 .mcp-connector-list li > button {
   margin: 0;
 }
+
+/* Sidebar case list: one line per case, the name and the pencil only (user 2026-11-18). */
+.case-switcher .matter-thread-items {
+  gap: 2px;
+  min-height: 32px;
+}
+
+.case-switcher .matter-thread {
+  padding: 6px 10px;
+}
+
+.case-switcher .matter-thread strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
