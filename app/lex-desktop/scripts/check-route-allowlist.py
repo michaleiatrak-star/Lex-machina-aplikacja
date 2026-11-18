@@ -69,7 +69,7 @@ def main() -> int:
             routes.add((match.group(1).upper(), match.group(2)))
     trust = open(TRUST, encoding="utf8").read()
     helpers = [name for name in re.findall(r"^fn (\w+)\(", trust, re.M)
-               if name in {"route_allowed", "is_mcp_route", "is_invoice_route", "is_widget_frame_route", "is_execution_progress_route"}]
+               if name in {"route_allowed", "is_mcp_route", "is_invoice_route", "is_widget_frame_route", "is_execution_progress_route", "is_execution_cancel_route"}]
     rows = []
     for method, route in sorted(routes):
         sample = route
