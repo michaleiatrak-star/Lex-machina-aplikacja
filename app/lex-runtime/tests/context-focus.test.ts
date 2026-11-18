@@ -22,7 +22,7 @@ function knowledge(id: string, texts: string[]): SessionDocumentAttachment {
   } as SessionDocumentAttachment;
 }
 
-describe("long case files: the parts on the issue reach the model (RD 121/26, protocol 01:53:35)", () => {
+describe("long case files: the parts on the issue reach the model (protocol 01:53:35)", () => {
   const record = knowledge("doc_protocol", [...Array.from({ length: 40 }, (_, page) => filler(page)), `${filler(41)}\n${LAST}`]);
   const decision = knowledge("doc_decision", [DECISION]);
   const question = "przygotuj podważenie postanowienia zastępcy rzecznika dyscyplinarnego";

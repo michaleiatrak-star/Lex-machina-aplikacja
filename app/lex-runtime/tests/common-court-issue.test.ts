@@ -8,7 +8,7 @@ const RULING =
   "Decyzja o odmowie wszczęcia śledztwa była przedwczesna albowiem prokurator dokonał rozstrzygnięcia w oparciu o niekompletny materiał dowodowy. " +
   "Koszty postępowania ponosi Skarb Państwa. ".repeat(40);
 
-describe("common courts' rulings on the procedural setting (RD 121/26: XII Kp 176/20)", () => {
+describe("common courts' rulings on the procedural setting (live case: XII Kp 176/20)", () => {
   it("searches the portal with the setting's phrase, reads the ruling and gives the passage on the issue", async () => {
     const asked: string[] = [];
     const search = async (query: string): Promise<CaseLawSearchResult> => {

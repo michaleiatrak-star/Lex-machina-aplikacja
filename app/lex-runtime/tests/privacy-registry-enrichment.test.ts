@@ -17,7 +17,7 @@ import { placeholderGrammar } from "../src/privacy/token-legend.js";
 const WL = {
   status: "FOUND",
   result: {
-    identyfikator: "NIP 5261040828",
+    identyfikator: "NIP 9876543210",
     tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
     adres: "UL. JANA PAWŁA II 12/4, 25-001 KIELCE",
     osoby: [
@@ -30,7 +30,7 @@ const WL_COMPANY = { ...WL, result: { ...WL.result, krs: "0000019193" } };
 // CEIDG: the fixture shape of ceidg_szukaj_firmy (fictitious data).
 const CEIDG = {
   status: "FOUND",
-  result: { identyfikator: "1234563218", tytul_lub_nazwa: "Marex Usługi Remontowe Marek Zając", wlasciciel: "Marek Zając", adres_dzialalnosci: "ul. Przykładowa 1/2 43-600 Jaworzno" }
+  result: { identyfikator: "1234563218", tytul_lub_nazwa: "Marex Usługi Remontowe Marek Zając", wlasciciel: "Marek Zając", adres_dzialalnosci: "ul. Przykładowa 1/2 43-600 Warszawa" }
 };
 const KRS = { status: "FOUND", result: { tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", adres: "JANA PAWŁA II 12/4, 25-001 KIELCE" } };
 
@@ -63,32 +63,32 @@ describe("register forms", () => {
   });
 
   it("keys: NIP in any spelling and KRS numbers", () => {
-    expect(registryKeys("NIP 526-104-08-28, KRS 0000019193")).toEqual([
-      { source: "nip", id: "5261040828" },
+    expect(registryKeys("NIP 987-654-32-10, KRS 0000019193")).toEqual([
+      { source: "nip", id: "9876543210" },
       { source: "krs", id: "0000019193" }
     ]);
   });
 
   it("keys: a NIP as OCR damaged it (dash, letter for a digit, glued label) and a split KRS, digits only", () => {
-    for (const damaged of ["NIP 526–104–08–28", "NIP 526-1O4-08-28", "NIP526 104 08 2B", "NlP: 526-104-08-2 8"]) {
+    for (const damaged of ["NIP 987–654–32–10", "NIP 987-654-32-1O", "NIP987 654 32 1B", "NlP: 987-654-32-1 0"]) {
       expect(registryKeys(damaged).filter((key) => key.source === "nip"), damaged).toEqual(
-        damaged.endsWith("2B") ? [] : [{ source: "nip", id: "5261040828" }]
+        damaged.endsWith("1B") ? [] : [{ source: "nip", id: "9876543210" }]
       );
     }
     // Checksum: digits that are no NIP are never asked.
-    expect(registryKeys("NIP 526-104-08-29")).toEqual([]);
+    expect(registryKeys("NIP 987-654-32-11")).toEqual([]);
     expect(registryKeys("KRS 0000 019193")).toEqual([{ source: "krs", id: "0000019193" }]);
   });
 });
 
 describe("pseudonymization with register data", () => {
   const text =
-    "Pozwana: Transkom, NIP 526-104-08-28, KRS 0000019193, z siedzibą przy Jana Pawła II 12/4, 25-001 Kielce. " +
+    "Pozwana: Transkom, NIP 987-654-32-10, KRS 0000019193, z siedzibą przy Jana Pawła II 12/4, 25-001 Kielce. " +
     "W imieniu TRANSKOM działała Anna Wiśniewska-Kowal. Wspólnikiem jest Budex.";
 
   it("name without a legal form, address, representative and partner firm are masked; firms keyed as firms", async () => {
     const vault = new PseudonymizationVault();
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "krs:0000019193": KRS }));
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": WL_COMPANY, "krs:0000019193": KRS }));
     const result = await new LocalPolishPseudonymizer(vault, undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Transkom", "TRANSKOM", "Jana Pawła", "25-001", "Wiśniewska", "Budex"]) expect(result.text).not.toContain(leak);
     const firms = placeholderGrammar(result.text, vault).filter((item) => item.entity === "organization");
@@ -108,46 +108,46 @@ describe("pseudonymization with register data", () => {
       async (request) => {
         calls.push(request.source);
         if (fail) throw new Error("offline");
-        return stub({ "wl:5261040828": WL })(request);
+        return stub({ "wl:9876543210": WL })(request);
       },
       { timeoutMs: 50 }
     );
     const pseudonymizer = new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry);
-    const first = await pseudonymizer.pseudonymize("Kontrahent NIP 5261040828, firma Transkom.");
-    expect(first.text).not.toContain("5261040828");
+    const first = await pseudonymizer.pseudonymize("Kontrahent NIP 9876543210, firma Transkom.");
+    expect(first.text).not.toContain("9876543210");
     fail = false;
-    const second = await pseudonymizer.pseudonymize("Kontrahent NIP 5261040828. Transkom nie zapłacił.");
+    const second = await pseudonymizer.pseudonymize("Kontrahent NIP 9876543210. Transkom nie zapłacił.");
     expect(second.text).not.toContain("Transkom");
     expect(calls).toEqual(["wl", "ceidg", "wl", "ceidg"]);
 
     const slow = new RegistryEnrichment(() => new Promise(() => {}), { timeoutMs: 20 });
-    expect(await slow.forms("NIP 5261040828")).toEqual([]);
+    expect(await slow.forms("NIP 9876543210")).toEqual([]);
     expect(slow.events[0]).toMatchObject({ status: "TIMEOUT" });
   });
 
   it("one lookup per NIP across texts (cache)", async () => {
     const calls: string[] = [];
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL }, calls));
-    await registry.forms("NIP 5261040828");
-    await registry.forms("NIP: 526-104-08-28 ponownie");
-    expect(calls).toEqual(["wl:5261040828", "ceidg:5261040828"]);
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": WL }, calls));
+    await registry.forms("NIP 9876543210");
+    await registry.forms("NIP: 987-654-32-10 ponownie");
+    expect(calls).toEqual(["wl:9876543210", "ceidg:9876543210"]);
   });
 });
 
 describe("CEIDG for a NIP outside KRS (sole trader), when its key is set", () => {
   it("forms: business name, owner in both orders, address without a comma before the code", () => {
     const texts = ceidgForms(CEIDG).map((form) => form.text);
-    expect(texts).toEqual(expect.arrayContaining(["Marex Usługi Remontowe Marek Zając", "Marek Zając", "Zając Marek", "Przykładowa 1/2", "43-600 Jaworzno"]));
+    expect(texts).toEqual(expect.arrayContaining(["Marex Usługi Remontowe Marek Zając", "Marek Zając", "Zając Marek", "Przykładowa 1/2", "43-600 Warszawa"]));
   });
 
   it("a company with KRS on the white list is not asked in CEIDG; a sole trader is", async () => {
     const calls: string[] = [];
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "ceidg:1234563218": CEIDG }, calls));
-    await registry.forms("NIP 5261040828");
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": WL_COMPANY, "ceidg:1234563218": CEIDG }, calls));
+    await registry.forms("NIP 9876543210");
     const forms = await registry.forms("NIP 1234563218");
-    expect(calls).toEqual(["wl:5261040828", "wl:1234563218", "ceidg:1234563218"]);
+    expect(calls).toEqual(["wl:9876543210", "wl:1234563218", "ceidg:1234563218"]);
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(
-      "Wykonawca: Marex Usługi Remontowe Marek Zając, NIP 1234563218, ul. Przykładowa 1/2, 43-600 Jaworzno. Zając Marek nie usunął wad."
+      "Wykonawca: Marex Usługi Remontowe Marek Zając, NIP 1234563218, ul. Przykładowa 1/2, 43-600 Warszawa. Zając Marek nie usunął wad."
     );
     for (const leak of ["Marex", "Zając", "Przykładowa", "43-600"]) expect(result.text).not.toContain(leak);
     expect(forms.length).toBeGreaterThan(0);
@@ -164,11 +164,11 @@ describe("CEIDG for a NIP outside KRS (sole trader), when its key is set", () =>
       },
       { now: () => now }
     );
-    expect((await registry.forms("NIP 5261040828")).map((form) => form.text)).toContain("Transkom");
-    await registry.forms("NIP 5261040828");
+    expect((await registry.forms("NIP 9876543210")).map((form) => form.text)).toContain("Transkom");
+    await registry.forms("NIP 9876543210");
     expect(calls).toEqual(["wl", "ceidg"]);
     now = 11 * 60_000;
-    await registry.forms("NIP 5261040828");
+    await registry.forms("NIP 9876543210");
     expect(calls).toEqual(["wl", "ceidg", "wl", "ceidg"]);
     expect(registry.events.some((event) => event.source === "ceidg")).toBe(false);
   });
@@ -224,7 +224,7 @@ describe("register and firm names as whole elements", () => {
       calls.push(tool);
       return { ok: true, result: tool === "krs_reprezentacja" ? board : tool === "wl_sprawdz_nip" && args.nip ? list : { status: "NOT_FOUND" } };
     });
-    const text = "Spółkę reprezentuje Mirosław Wiśniewski (NIP 5261040828). Pismo doręczono Mirosławowi Wiśniewskiemu; Wiśniewski Mirosław podpisał. Ewa Kot przyszła.";
+    const text = "Spółkę reprezentuje Mirosław Wiśniewski (NIP 9876543210). Pismo doręczono Mirosławowi Wiśniewskiemu; Wiśniewski Mirosław podpisał. Ewa Kot przyszła.";
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Mirosław Wiśniewski", "Wiśniewski Mirosław"]) expect(result.text).not.toContain(leak);
     expect(result.findings.some((finding) => finding.uncertain?.includes("KRS"))).toBe(true);
@@ -237,22 +237,22 @@ describe("register and firm names as whole elements", () => {
     await new RegistryEnrichment(async ({ tool }) => {
       calls2.push(tool);
       return { ok: true, result: tool === "wl_sprawdz_nip" ? named : board };
-    }).forms("NIP 5261040828");
+    }).forms("NIP 9876543210");
     expect(calls2).toEqual(["wl_sprawdz_nip"]);
   });
 
   it("a register form as OCR distorted it is masked and marked for confirmation", async () => {
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "krs:0000019193": KRS }));
-    const text = "NIP 5261040828. Umowę zawarła Anna Wisniewska-Kowa1, a podpisała Ana Wiśniewska-Kowal.";
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": WL_COMPANY, "krs:0000019193": KRS }));
+    const text = "NIP 9876543210. Umowę zawarła Anna Wisniewska-Kowa1, a podpisała Ana Wiśniewska-Kowal.";
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Wisniewska", "Ana Wi"]) expect(result.text).not.toContain(leak);
     expect(result.findings.filter((finding) => finding.uncertain?.startsWith("odczyt zniekształcony")).length).toBeGreaterThanOrEqual(2);
   });
 
   it("a firm's name as OCR distorted it is the register's firm: one token, marked for confirmation", async () => {
-    const wl = { status: "FOUND", result: { tytul_lub_nazwa: "HUMAN PARK GLOBAL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [] } };
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": wl }));
-    const text = "Human Park Global sp. z o.o., NIP 526-104-08-28.\nDziałając w imieniu Spółki Human Park Giobal sp. z o.o. wzywam do zapłaty.";
+    const wl = { status: "FOUND", result: { tytul_lub_nazwa: "LUMEN PARK GLOBAL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [] } };
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": wl }));
+    const text = "Lumen Park Global sp. z o.o., NIP 987-654-32-10.\nDziałając w imieniu Spółki Lumen Park Giobal sp. z o.o. wzywam do zapłaty.";
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
     expect(result.text).not.toContain("Giobal");
     const tokens = new Set(result.findings.filter((finding) => finding.firm).map((finding) => finding.token));
@@ -266,8 +266,8 @@ describe("register and firm names as whole elements", () => {
       status: "FOUND",
       result: { tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [], rachunki: ["61109010140000071219812874"] }
     };
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": wl }));
-    const text = "Transkom sp. z o.o., NIP 526-104-08-28, ul. Kolorowa l5, 4O-001 Katowice. Wpłata na rachunek 61 1090 1014 0000 0712 1981 287A? " +
+    const registry = new RegistryEnrichment(stub({ "wl:9876543210": wl }));
+    const text = "Transkom sp. z o.o., NIP 987-654-32-10, ul. Kolorowa l5, 4O-001 Katowice. Wpłata na rachunek 61 1090 1014 0000 0712 1981 287A? " +
       "Nie: 61 1090 1014 0000 0712 1981 2875. Sąsiad mieszka przy ul. Kolorowa 16.";
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Kolorowa l5", "4O-001", "1981 2875"]) expect(result.text).not.toContain(leak);
@@ -280,9 +280,9 @@ describe("register and firm names as whole elements", () => {
   });
 
   it("the whole name decides: a letter lost or misread in a long name, never a short or a single word", () => {
-    const text = "uman Park Global\nHurnan Park Global\nHuman Park Global sp. z o.o.\nhuman park global\nLorem Park Global";
-    const found = findNameApproximately(text, "Human Park Global").map((match) => `${match.value}:${match.exact}`);
-    expect(found).toEqual(["uman Park Global:false", "Hurnan Park Global:false", "Human Park Global:true"]);
+    const text = "umen Park Global\nLurnen Park Global\nLumen Park Global sp. z o.o.\nlumen park global\nLorem Park Global";
+    const found = findNameApproximately(text, "Lumen Park Global").map((match) => `${match.value}:${match.exact}`);
+    expect(found).toEqual(["umen Park Global:false", "Lurnen Park Global:false", "Lumen Park Global:true"]);
     // Up to 7 letters no edit is allowed; one word alone is never matched loosely.
     expect(findNameApproximately("Ewa Kos przyszła", "Ewa Kot")).toEqual([]);
     expect(findNameApproximately("Transkon", "Transkom")).toEqual([]);
@@ -292,11 +292,11 @@ describe("register and firm names as whole elements", () => {
 describe("register facts for the analysis (comparison with the chat, 2026-11-06)", () => {
   it("what KRS and the white list said: legal form, status, VAT, accounts — shown with the source and date", async () => {
     const { registryFactsText } = await import("../src/privacy/registry-enrichment.js");
-    const wl = { status: "FOUND", result: { ...WL_COMPANY.result, nip: "5261040828", status_vat: "Czynny", data_rejestracji_vat: "2023-03-31", rachunki: ["61105012141000009032934763"] } };
-    const krs = { status: "FOUND", result: { ...KRS.result, identyfikator: "KRS 0000019193", status_rejestru: "wpisany", forma_prawna: "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", stan_z_dnia: "15.08.2026", nip: "5261040828" } };
+    const wl = { status: "FOUND", result: { ...WL_COMPANY.result, nip: "9876543210", status_vat: "Czynny", data_rejestracji_vat: "2023-03-31", rachunki: ["61105012141000009032934763"] } };
+    const krs = { status: "FOUND", result: { ...KRS.result, identyfikator: "KRS 0000019193", status_rejestru: "wpisany", forma_prawna: "SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", stan_z_dnia: "15.08.2026", nip: "9876543210" } };
     const enrichment = new RegistryEnrichment(async ({ source }) => ({ ok: true, result: source === "wl" ? wl : source === "krs" ? krs : { status: "NOT_FOUND" } }), { now: () => Date.parse("2026-11-06T12:00:00Z") });
-    await enrichment.forms("NIP 526-104-08-28, KRS 0000019193");
-    const facts = enrichment.facts(["526-104-08-28"]);
+    await enrichment.forms("NIP 987-654-32-10, KRS 0000019193");
+    const facts = enrichment.facts(["987-654-32-10"]);
     expect(facts).toHaveLength(1);
     const shown = registryFactsText(facts);
     expect(shown).toContain("KRS 0000019193");

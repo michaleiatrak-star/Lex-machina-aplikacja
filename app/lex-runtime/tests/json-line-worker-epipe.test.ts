@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { JsonLineWorker } from "../src/privacy/json-line-worker.js";
 
-// RD 121/26, live: a privacy worker that died while the runtime wrote to it (EPIPE) stopped the
+// a live case, live: a privacy worker that died while the runtime wrote to it (EPIPE) stopped the
 // whole server mid-turn. The failure is the request's: it rejects, the process goes on.
 describe("a worker that closes its input", () => {
   it("rejects the request instead of an unhandled EPIPE", async () => {

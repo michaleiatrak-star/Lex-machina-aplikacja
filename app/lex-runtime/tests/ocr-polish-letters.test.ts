@@ -36,8 +36,8 @@ describe("OCR: Polish text without other languages' marks", () => {
   });
 
   it.skipIf(!dictionary)("a word the dictionary does not know gets its lost mark; known words, abbreviations and names stay", () => {
-    const out = run("Human Park Spóika z ograniczoną odpowiedziainością, zazalenia do godz. 12, Juneyoung Park", "dict");
-    expect(out.dict).toBe("Human Park Spółka z ograniczoną odpowiedzialnością, zażalenia do godz. 12, Juneyoung Park");
+    const out = run("Lumen Park Spóika z ograniczoną odpowiedziainością, zazalenia do godz. 12, Juneyoung Park", "dict");
+    expect(out.dict).toBe("Lumen Park Spółka z ograniczoną odpowiedzialnością, zażalenia do godz. 12, Juneyoung Park");
   });
 });
 

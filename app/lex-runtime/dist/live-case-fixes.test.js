@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compactActAbbreviations, expandProfessionActAbbreviations } from "./legal-act-abbreviations.js";
 import { collapseRepeatedVerMarkers } from "./finalization-gate.js";
 import { wsdRegisterSignature, wsdPageNames } from "./courts/wsd-portal.js";
-describe("RD 121/26: skróty ustaw zawodowych, znaczniki, rejestr WSD", () => {
+describe("a live case: skróty ustaw zawodowych, znaczniki, rejestr WSD", () => {
     it("PrAdw i u.r.p. po artykule są nazwą aktu; definicja „dalej: PrAdw” zostaje", () => {
         expect(expandProfessionActAbbreviations("art. 91 ust. 2 PrAdw oraz art. 95n pkt 1 PrAdw (dalej: PrAdw)")).toBe("art. 91 ust. 2 Prawa o adwokaturze oraz art. 95n pkt 1 Prawa o adwokaturze (dalej: PrAdw)");
         expect(expandProfessionActAbbreviations("art. 91 ust. 2 ⚠️ [NIEWERYFIKOWANE] PrAdw")).toBe("art. 91 ust. 2 ⚠️ [NIEWERYFIKOWANE] Prawa o adwokaturze");

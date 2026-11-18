@@ -56,7 +56,7 @@ export function caretSuperscripts(text: string): string {
 
 // Abbreviations of the professions' statutes a model writes after an article ("art. 91 ust. 2
 // PrAdw", "art. 64 u.r.p."): the act is not recognised under them, the article counts as bare
-// and is marked unverified (RD 121/26: art. 91 and 95n PrAdw ⚠️ next to art. 80 Prawa o
+// and is marked unverified (live case: art. 91 and 95n PrAdw ⚠️ next to art. 80 Prawa o
 // adwokaturze ✅, and a 206 s round asking the model to name the act). After an article only:
 // "(dalej: PrAdw)" stays as written.
 const PROFESSION_ACTS: Array<[string, string]> = [

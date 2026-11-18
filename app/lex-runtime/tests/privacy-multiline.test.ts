@@ -15,7 +15,7 @@ describe("addresses without the Python gazetteer, also across lines", () => {
       "ul. Śródziemno-\nmorskiej 11/5",
       "UL. DŁUGA 5 m. 3"
     ]);
-    expect(values(detectStreetAddresses("Sz.P. Jan Nowak\nul. Azot 2A/31, 43-600 Jaworzno"))).toEqual(["ul. Azot 2A/31, 43-600 Jaworzno"]);
+    expect(values(detectStreetAddresses("Sz.P. Jan Nowak\nul. Lipowa 2A/31, 00-950 Warszawa"))).toEqual(["ul. Lipowa 2A/31, 00-950 Warszawa"]);
     expect(values(detectStreetAddresses("ul. Lipowa 7\nTel. 32-111 22 33"))).toEqual(["ul. Lipowa 7"]);
   });
 
@@ -36,14 +36,14 @@ describe("addresses without the Python gazetteer, also across lines", () => {
 describe("brand of a law office ([FIRMA])", () => {
   it("before the office on its line or as the line above, and its OCR spelling later", () => {
     const text = [
-      "LORICA IURIS",
+      "AEQUITAS IURIS",
       "Kancelaria Adwokatów i Radców Prawnych",
       "adres do doręczeń:",
-      "Lorica luris Kancelaria Adwokatów i Radców Prawnych",
-      "z LORICA IURIS Kancelarii Adwokatów i Radców Prawnych Ciecierski Rak Spółka",
+      "Aequitas luris Kancelaria Adwokatów i Radców Prawnych",
+      "z AEQUITAS IURIS Kancelarii Adwokatów i Radców Prawnych Zawadzki Rak Spółka",
       "Komandytowa z siedzibą w Warszawie"
     ].join("\n");
-    expect(values(detectFirmNames(text)).sort()).toEqual(["Ciecierski Rak", "LORICA IURIS", "LORICA IURIS", "Lorica luris"].sort());
+    expect(values(detectFirmNames(text)).sort()).toEqual(["Zawadzki Rak", "AEQUITAS IURIS", "AEQUITAS IURIS", "Aequitas luris"].sort());
   });
 
   it("no brand from a sentence, a role or a heading word", () => {

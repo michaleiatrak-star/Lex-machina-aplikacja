@@ -155,7 +155,7 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     expect(mixed.blocks[2]).toMatchObject({ type: "table" });
   });
 
-  it("pozycje listy jako {children} albo list_item (RD 121/26, AST_INLINE_TYPE_UNSUPPORTED)", () => {
+  it("pozycje listy jako {children} albo list_item (AST_INLINE_TYPE_UNSUPPORTED)", () => {
     const ast = validateLegalDocumentAst(
       normalizeAstBlocks(normalizeAstHeader({
         title: "Zażalenie",
@@ -290,8 +290,8 @@ describe("LegalDocumentAstGenerator", () => {
       mode: "PRAWNIK",
       documentType: "letter",
       styleProfile: "lex-classic-clean-v1",
-      // The thread's evidence reaches the file's session (RD 121/26).
-      threadEvidence: { schemaVersion: 1, updatedAt: "2026-10-30T10:00:00Z", provisions: [], skills: [], sources: [], caseReferences: ["VIII W 633/25"] },
+      // The thread's evidence reaches the file's session.
+      threadEvidence: { schemaVersion: 1, updatedAt: "2026-10-30T10:00:00Z", provisions: [], skills: [], sources: [], caseReferences: ["II W 101/25"] },
       caseSignatureSearch: { search: async () => [] },
       aliases: {
         schemaVersion: 1,
@@ -304,7 +304,7 @@ describe("LegalDocumentAstGenerator", () => {
       }
     });
 
-    expect(threadEvidence).toMatchObject({ caseReferences: ["VIII W 633/25"] });
+    expect(threadEvidence).toMatchObject({ caseReferences: ["II W 101/25"] });
     expect(signatureSearch).toBeDefined();
     expect(query).toContain("[PII:PERSON:0001] -> [LMPII:D01:PERSON:0001]");
     expect(query).not.toContain("Jan Kowalski");

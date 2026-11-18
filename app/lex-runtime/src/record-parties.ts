@@ -1,6 +1,6 @@
 // Who is a party is read from the court records' headings, never guessed from who speaks most
 // (user report 2026-11-17: an automatic pleading named the witness "Powód: Jurij" and was addressed
-// to the older case VII P 94/25 instead of XI P 27/26, whose hearing the question was about).
+// to the older case IV P 12/25 instead of V P 3/26, whose hearing the question was about).
 export type RecordParties = {
   documentId: string;
   signature?: string;
@@ -101,7 +101,7 @@ export function targetRecord<T extends RecordParties>(records: readonly T[], que
 }
 
 /**
- * The goal that ties the pleading to the claims of its case (XI P 27/26: a pleading on a witness's
+ * The goal that ties the pleading to the claims of its case (V P 3/26: a pleading on a witness's
  * credibility said nothing about which claim it serves; a chat version added a claim the case does
  * not have). Only the claims the heading names.
  */

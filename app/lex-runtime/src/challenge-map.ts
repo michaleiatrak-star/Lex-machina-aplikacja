@@ -1,4 +1,4 @@
-// A challenge answers the decision challenged (RD 121/26, 2026-11-16): the application's draft
+// A challenge answers the decision challenged (2026-11-16): the application's draft
 // added arguments outside the subject of the proceedings (the employment dispute, art. 25¹ KP;
 // § 23e KEA on AI) while the chat answered the decision's own reasons one by one. The decision's
 // theses are taken from its reasoning and every ground of the challenge is tied to one of them.
@@ -24,7 +24,7 @@ export function challengedDecision<T extends { documentId: string; text: string 
   return scored.sort((a, b) => b.hit - a.hit)[0]!.decision;
 }
 
-// A sentence a scan's text recognition garbled ("Zakaz s 8 18 KE* chran poż…", RD 121/26) is not a
+// A sentence a scan's text recognition garbled ("Zakaz s 8 18 KE* chran poż…", a live case) is not a
 // thesis: stray symbols, one-letter tokens that are not Polish words, lower-case words without a vowel.
 const ONE_LETTER_WORDS = new Set(["a", "i", "o", "u", "w", "z"]);
 export function ocrNoise(sentence: string): number {

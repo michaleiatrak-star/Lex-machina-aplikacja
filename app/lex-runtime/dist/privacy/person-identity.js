@@ -1,8 +1,8 @@
 // The same person written another way in one document: by OCR (a mark lost, a space lost, a
 // letter misread) or by the writer (a given name inflected, the surname not: "Panem Michałem
-// Wiatrak"). The morphology reads each spelling as its own person; the model would then see
+// Kowalczyk"). The morphology reads each spelling as its own person; the model would then see
 // several persons where the case has one.
-/** Letters only, without marks or case: "MICHAŁ WIATRAK", "Michal  Wiatrak" -> "michalwiatrak". */
+/** Letters only, without marks or case: "MICHAŁ KOWALCZYK", "Michal  Kowalczyk" -> "michalkowalczyk". */
 function loose(text) {
     return text
         .replace(/ł/gu, "l")
@@ -29,7 +29,7 @@ function distance(a, b) {
 /**
  * The known person a mention is, or null: the same letters (marks, case and spaces aside);
  * every word a case form of the person's word in its place ("Michałem" of Michał,
- * "Wiatrak" of Wiatrak; "Michalina" is no form of Michał); one letter off in a long name,
+ * "Kowalczyk" of Kowalczyk; "Michalina" is no form of Michał); one letter off in a long name,
  * marked for the user to confirm.
  */
 export function samePerson(value, own, known) {

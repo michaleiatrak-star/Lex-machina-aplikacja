@@ -8449,7 +8449,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         // The thread's evidence memory, as in the chat: provisions verified in the conversation are
         // checked again in ELI and the case's signatures stay "z materiałów sprawy". Without it the
-        // file's session started from an empty register and blocked them (RD 121/26).
+        // file's session started from an empty register and blocked them.
         const threadEvidence = options.caseMemoryStore
           ? await options.caseAccessService
               .withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) =>
@@ -11145,7 +11145,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         (/\?\s*$/u.test(turnMessage.trim()) || asksAbout(turnMessage));
       // A pleading to a court or an authority asked for in a matter: the router puts
       // pisma-procesowe-v3 first (task-routing.ts pleadingFirst) and the turn runs its pipeline,
-      // whatever skill the keywords picked (RD 121/26: "Przygotuj podważenie postanowienia"
+      // whatever skill the keywords picked (live case: "Przygotuj podważenie postanowienia"
       // ran LEGAL_QUERY_V1 under analiza-sadowa-v6). Without a matter the pipeline has no state
       // (PROCESS_PLEADING_CASE_REQUIRED), so the chat answers under the skill as before.
       const pleadingCase =

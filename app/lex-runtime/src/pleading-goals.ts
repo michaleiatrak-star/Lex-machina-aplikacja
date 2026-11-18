@@ -1,4 +1,4 @@
-// Goals a pleading must take up besides the contradictions of the matrix (RD 121/26 plan, point 4):
+// Goals a pleading must take up besides the contradictions of the matrix (point 4):
 // a single strong fact of an official document on the topic (the opponent's statement in a protocol:
 // "każda taka sytuacja będzie traktowana jako nękanie"), and every charge of the party's earlier
 // letter, which the pleading upholds with its evidence or drops with a stated reason.
@@ -66,7 +66,7 @@ const CHARGE =
 
 // A letter written for someone else by a professional (a law firm's letterhead, "działając w imieniu
 // Pani…", "reprezentowana przez adwokata"): its charges are the other side's, never the party's own
-// (RD 121/26: the opponent's counsel's criminal complaint against the party was read as the party's letter).
+// (live case: the opponent's counsel's criminal complaint against the party was read as the party's letter).
 const REPRESENTATIVE =
   /(?:reprezentowan\p{L}*\s+przez\s+(?:adwokat|radc|pełnomocnik)\p{L}*|działając\s+w\s+imieniu\s+(?!własnym)(?:\p{Lu}|Pan|Pani|Spół|spół|moich|mojego|mojej|klient|mocodaw)|kancelari\p{L}*\s+(?:adwokack|radcow|prawn|adwokatów|radców)\p{L}*)/u;
 const OWN_NAME = /(?:w\s+imieniu\s+własnym|działając\s+osobiście|we\s+własnym\s+imieniu)/iu;

@@ -128,7 +128,7 @@ export function ambiguousBareArticles(text, ledger) {
         if (!acts || acts.size < 2)
             continue;
         const written = reference.span ?? reference.claim;
-        // The act written in the citation itself ("art. 17 § 1 pkt 2 k.p.k.") names it (RD 121/26: read as
+        // The act written in the citation itself ("art. 17 § 1 pkt 2 k.p.k.") names it (live case: read as
         // bare because the claim's suffix was normalized and art. 17 RODO was verified in the same turn).
         if (actsIn(written).size > 0 || namesOtherAct(written) || euAct(written))
             continue;
@@ -488,7 +488,7 @@ function namedActRecord(ledger, reference) {
     if (exact)
         return exact;
     // "art. 95n pkt 1 Prawa o adwokaturze" and the verified article "art. 95n Prawa o adwokaturze"
-    // (RD 121/26): the record of the whole article holds the unit when its fetched text has it.
+    //: the record of the whole article holds the unit when its fetched text has it.
     const match = /^(art\.?\s*\d+[a-zA-Z⁰¹²³⁴⁵⁶⁷⁸⁹^]*)\s+(?=§|ust|pkt|lit)/iu.exec(reference.claim.trim());
     if (!match)
         return undefined;
@@ -526,7 +526,7 @@ export function ownCaseFileNumbers(documents, userText) {
         // A header line ("Sygn. akt I C 900/26", "Sygn. akt I Nc 1234/26 — nakaz"), not a sentence
         // naming another proceeding ("skazany wyrokiem …, sygn. akt II K 345/24, za czyn …").
         // The signature opens the line (after line numbers or a separator); the rest of the line may be
-        // the record's heading spread by a PDF text layer ("Sygn. akt: XI P 27/26      PROTOKÓŁ", user
+        // the record's heading spread by a PDF text layer ("Sygn. akt: V P 3/26      PROTOKÓŁ", user
         // report 2026-11-17: the user's own case was marked "z materiałów sprawy" and blocked the gate).
         for (const line of head.split(/\r?\n/u)) {
             for (const match of line.matchAll(SIGNATURE)) {
@@ -932,7 +932,7 @@ const NAMED_ACT_AFTER = /^\s+(?:RODO|TFUE|TUE|EKPC|DSA|DMA|Prawa\s+o\s+\p{L}+|Pr
 // documents): not in the judgment databases is no sign of a fabrication; the marker says where
 // it comes from (a parallel proceeding, a ruling the firm holds).
 export const CASE_MATERIAL_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]";
-/** Signatures a text marks as coming from the case's materials ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"). */
+/** Signatures a text marks as coming from the case's materials ("II W 101/25 ⚠️ [… z materiałów sprawy]"). */
 export function caseMaterialSignatures(text) {
     const found = new Set();
     for (let at = text.indexOf(CASE_MATERIAL_MARKER_TEXT); at >= 0; at = text.indexOf(CASE_MATERIAL_MARKER_TEXT, at + 1)) {
@@ -1026,7 +1026,7 @@ function insertMarkersAfterClaims(text, byLine) {
                 continue;
             done.add(claim);
             // An occurrence another finding already marked ("XII Kp 176/20 🟨" holds "Kp 176/20"): the
-            // next one, never a second marker on the same place (RD 121/26, 2026-11-12).
+            // next one, never a second marker on the same place (2026-11-12).
             const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
             let at = lineText.indexOf(claim);
             while (at >= 0 &&
@@ -1037,7 +1037,7 @@ function insertMarkersAfterClaims(text, byLine) {
             if (at < 0)
                 continue;
             // After the act's short name, not inside the citation: "art. 4 pkt 1 RODO ⚠️", not
-            // "art. 4 pkt 1 ⚠️ RODO" (RD 121/26; also "art. 95n pkt 1 Prawa o adwokaturze").
+            // "art. 4 pkt 1 ⚠️ RODO" (a live case; also "art. 95n pkt 1 Prawa o adwokaturze").
             const actName = NAMED_ACT_AFTER.exec(lineText.slice(at + claim.length))?.[0] ?? "";
             const end = at + claim.length + actName.length;
             lineText = `${lineText.slice(0, end)} ${marker}${lineText.slice(end)}`;
@@ -1172,7 +1172,7 @@ export function softenRemainingBlockers(text, report) {
  */
 /**
  * One VER marker per provision where two stand next to each other ("✅ [VER: art. 460 KPK,
- * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", RD 121/26): the fuller one.
+ * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", a live case): the fuller one.
  */
 export function collapseRepeatedVerMarkers(text) {
     const pair = /✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\][ \t]*✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\]/gu;

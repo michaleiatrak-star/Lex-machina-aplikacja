@@ -448,6 +448,33 @@ export class LocalAuthService {
         return publicUser(this.store.getUserById(userId));
     }
     /** The administrator edits an account's name and contact e-mail (own account included). */
+    /**
+     * The signed-in account changes its own display name (Ustawienia > Profil). Its e-mail, used for
+     * the password reset, and every other account stay with the administrator (setProfile).
+     */
+    setOwnDisplayName(actor, displayName) {
+        const target = this.store.getUserById(actor.user.userId);
+        if (!target)
+            throw new AuthError("USER_NOT_FOUND", 404);
+        let name;
+        try {
+            name = validateDisplayName(String(displayName ?? ""));
+        }
+        catch {
+            throw new AuthError("INVALID_USER_REQUEST", 400);
+        }
+        const now = new Date(this.clock.now()).toISOString();
+        this.store.setProfile(target.userId, { displayName: name, email: target.email ?? null }, now);
+        this.store.recordSecurityEvent({
+            eventId: "event_" + randomBytes(16).toString("hex"),
+            userId: target.userId,
+            eventType: "account_profile_changed",
+            occurredAt: now,
+            result: "PASS",
+            metadata: { targetUserId: target.userId, displayNameChanged: name !== target.displayName, emailChanged: false }
+        });
+        return publicUser(this.store.getUserById(target.userId));
+    }
     setProfile(actor, userId, profile) {
         if (actor.user.appRole !== "ADMIN")
             throw new AuthError("AUTHORIZATION_DENIED", 403);

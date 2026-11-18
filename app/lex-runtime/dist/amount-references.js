@@ -83,7 +83,7 @@ export function evidenceHasAmount(evidence, key) {
 export function markerSpansAfter(lineText, ends) {
     const spans = [];
     for (const end of ends) {
-        // Also "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]" and 🟨 after a signature (RD 121/26, live):
+        // Also "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]" and 🟨 after a signature (live):
         // read as the next article's marker, it was dropped when that article was verified.
         const marker = /^\s{0,2}(?:⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\])/u.exec(lineText.slice(end));
         if (marker)

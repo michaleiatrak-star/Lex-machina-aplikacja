@@ -7,14 +7,14 @@ const HEADER = (signature: string, date: string, subject: string) =>
   `Sygn. akt: ${signature}\n\nPROTOKÓŁ\n\nDnia ${date} r.\n\nSąd Okręgowy w Katowicach\n\nna rozprawie rozpoznał sprawę\nz powództwa Jan Nowak\nprzeciwko Firma sp. z o.o.\no ${subject}\n\nRozprawę rozpoczęto o godz. 12:53`;
 
 describe("the case subject from the record heading", () => {
-  const xi = recordParties("a", HEADER("XI P 27/26", "13 listopada 2026", "wynagrodzenie za pracę, ekwiwalent za urlop,\nsprostowanie świadectwa pracy"))!;
-  const vii = recordParties("b", HEADER("VII P 94/25", "17 marca 2026", "odszkodowanie"))!;
+  const xi = recordParties("a", HEADER("V P 3/26", "13 listopada 2026", "wynagrodzenie za pracę, ekwiwalent za urlop,\nsprostowanie świadectwa pracy"))!;
+  const vii = recordParties("b", HEADER("IV P 12/25", "17 marca 2026", "odszkodowanie"))!;
   it("reads the claims after 'o' up to the hearing notes", () => {
     expect(xi.subject).toBe("wynagrodzenie za pracę, ekwiwalent za urlop, sprostowanie świadectwa pracy");
   });
   it("targets the case the question names, else the newest record", () => {
-    expect(targetRecord([vii, xi], "pismo w sprawie VII P 94/25")!.signature).toBe("VII P 94/25");
-    expect(targetRecord([vii, xi], "pismo do sądu")!.signature).toBe("XI P 27/26");
+    expect(targetRecord([vii, xi], "pismo w sprawie IV P 12/25")!.signature).toBe("IV P 12/25");
+    expect(targetRecord([vii, xi], "pismo do sądu")!.signature).toBe("V P 3/26");
   });
   it("the goal names only the heading's claims", () => {
     expect(subjectGoal(xi)).toMatch(/o wynagrodzenie za pracę.*nie dopisywać żądań spoza przedmiotu sprawy/u);

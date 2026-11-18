@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import { argumentSchemaGaps, isCourtPleading, pleadingStandardPrompt, schemaCorrection } from "../src/pleading-standard.js";
 
-describe("a pleading to a court is built as pisma-procesowe-v3 prescribes (XI P 27/26)", () => {
+describe("a pleading to a court is built as pisma-procesowe-v3 prescribes (V P 3/26)", () => {
   it("recognises the request for a pleading, not for an opinion", () => {
-    expect(isCourtPleading("Przygotuj pismo procesowe powoda do sprawy XI P 27/26, w którym wykażę sprzeczności świadka")).toBe(true);
+    expect(isCourtPleading("Przygotuj pismo procesowe powoda do sprawy V P 3/26, w którym wykażę sprzeczności świadka")).toBe(true);
     expect(isCourtPleading("Przygotuj podważenie postanowienia zastępcy rzecznika dyscyplinarnego")).toBe(true);
     expect(isCourtPleading("Napisz apelację od wyroku")).toBe(true);
     expect(isCourtPleading("Czy świadek jest wiarygodny?")).toBe(false);
     expect(isCourtPleading("Streść protokół rozprawy")).toBe(false);
   });
 
-  it("the application's XI P 27/26 draft lacks anticipation and the fallback; the chat's draft has all elements", () => {
+  it("the application's V P 3/26 draft lacks anticipation and the fallback; the chat's draft has all elements", () => {
     const app = "### UZASADNIENIE\n**I. Przebieg zatrudnienia**\n„Powód był zatrudniony na początku jako informatyk” [[LEXDOC:d:0]]\n**VI. Wnioski**\nwnoszę jak na wstępie";
     expect(argumentSchemaGaps(app).map((gap) => gap.element)).toEqual(["ANTYCYPACJA", "ZAMKNIĘCIE FURTKI"]);
     const chat = "Wnoszę o:\n### UZASADNIENIE\n**I. Tożsamość**\n„tekst protokołu z cytatem świadka” \n**III. Antycypacja**\nPozwany może podnieść, że rozbieżności wynikają z czasu. Argument ten jest chybiony.\n**IV. Zamknięcie furtki**\nNawet gdyby Sąd uznał inaczej, to…";

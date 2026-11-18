@@ -27,7 +27,10 @@ function temporalDenialPayload(details) {
             ...(item.promulgation ? { promulgation: item.promulgation } : {})
         })),
         ...(details.transitionalProvisions.length ? { transitionalProvisions: details.transitionalProvisions } : {}),
-        instruction: "The local consolidated text does not give this provision's wording in force: the listed amendments change it (or their impact is unknown). Name the amendment (Dz.U.) and its date; do not present the consolidated-text wording as current. transitionalProvisions are the amendment's own rules for matters begun before it: apply them from this text, not from memory. Mark the provision ⚠️ [NIEWERYFIKOWANE] unless verified in ELI."
+        ...(details.articleChanges?.length
+            ? { articleChanges: details.articleChanges.slice(0, 8).map((change) => ({ eli: change.eli, kind: change.kind, instruction: change.instruction.slice(0, 2_000) })) }
+            : {}),
+        instruction: "The local consolidated text does not give this provision's wording in force: the listed amendments change it (or their impact is unknown). Name the amendment (Dz.U.) and its date; do not present the consolidated-text wording as current. articleChanges are the amendment's own points for this article (new wording, units changed, repeal): state the wording from them. transitionalProvisions are the amendment's own rules for matters begun before it: apply them from this text, not from memory. Mark the provision ⚠️ [NIEWERYFIKOWANE] unless verified in ELI."
     };
 }
 const OFFLINE_VERIFICATION_APPENDIX = "TRYB OFFLINE (ustawienie administratora): aplikacja nie łączy się ze źródłami zewnętrznymi. verify_legal_reference sprawdza przepis wyłącznie w lokalnej kopii ELI (data kopii w wyniku); search_case_law_library przeszukuje orzeczenia zapisane na dysku. Nie powołuj orzeczeń ani interpretacji spoza biblioteki jako zweryfikowanych i nie podawaj brzmienia przepisu, którego kopia nie zawiera.";
@@ -434,7 +437,7 @@ function publicCaseToolResult(record, judgment) {
         sourceUrl: record.sourceUrl ?? null,
         fetchedAt: record.fetchedAt,
         marker,
-        // The official text itself (RD 121/26, 2026-11-12: the model got the metadata only and wrote
+        // The official text itself (2026-11-12: the model got the metadata only and wrote
         // "the fragment holds no content" for SDI 9/12, verified on sn.pl with the user's session).
         ...(judgment.normalizedFullText ? caseTextForModel(judgment.signature, record.sourceUrl ?? "sn.pl", judgment.normalizedFullText) : {}),
         instruction: "The signature/metadata and official full-text identity are verified; `text` is the official text of the judgment. " +
@@ -469,6 +472,17 @@ function amendmentList(freshness) {
         };
     });
 }
+// The amendments' own points for the article, with the Dz.U. address the model cites.
+function articleChangeList(freshness) {
+    const addresses = new Map(freshness.amendmentsAfter.map((amendment) => [amendment.eli, amendment.displayAddress]));
+    return (freshness.articleChanges ?? []).slice(0, 8).map((change) => ({
+        eli: change.eli,
+        ...(addresses.get(change.eli) ? { dzU: addresses.get(change.eli) } : {}),
+        ...(change.from ? { from: change.from } : {}),
+        kind: change.kind === "REPEALED" ? "UCHYLENIE" : change.kind === "REPLACED" ? "NOWE_BRZMIENIE" : "ZMIANA_JEDNOSTEK",
+        instruction: change.instruction.slice(0, 2_000)
+    }));
+}
 function publicToolResult(record, act, freshness) {
     const marker = record.status === "VERIFIED"
         ? verificationMarker({
@@ -497,9 +511,15 @@ function publicToolResult(record, act, freshness) {
                 amendmentsAfter: freshness.amendmentsAfter.length,
                 amendments: amendmentList(freshness),
                 ...(freshness.pendingWordingAmendments?.length ? { pendingWordingAmendments: freshness.pendingWordingAmendments } : {}),
+                ...(freshness.articleChanges?.length ? { articleChanges: articleChangeList(freshness) } : {}),
                 ...(freshness.transitionalProvisions?.length ? { transitionalProvisions: freshness.transitionalProvisions } : {})
             }
             : null,
+        ...(freshness?.articleChanges?.length && record.status === "VERIFIED"
+            ? {
+                amendmentInstruction: "The consolidated text predates amendments in force that change this article (freshness.articleChanges, from the amending acts' own text). The evidence is the wording after them. Cite the provision 'w brzmieniu nadanym ustawą z … (Dz.U. … poz. …)' naming that amendment, quote only the amended wording, and apply its transitionalProvisions to matters begun before the change."
+            }
+            : {}),
         sourceUrl: record.sourceUrl ?? null,
         sourceLink: verificationSourceLink(record) ?? null,
         sourceFormat: record.sourceFormat ?? null,
@@ -1011,6 +1031,7 @@ export class LegalVerificationToolRuntime {
                     expectedTitle,
                     toolCallId,
                     ...(freshness?.pendingWordingAmendments?.length ? { requireFootnoteWording: true } : {}),
+                    ...(freshness?.articleChanges?.length && temporalMode === "CURRENT" ? { articleChanges: freshness.articleChanges } : {}),
                     ...(temporalMode === "HISTORICAL" && asOf ? { asOf } : {})
                 });
                 if (result.record.status ===
@@ -1887,6 +1908,7 @@ export class LegalVerificationToolRuntime {
                                 amendmentsAfter: freshness.amendmentsAfter
                                     .length,
                                 amendments: amendmentList(freshness),
+                                ...(freshness.articleChanges?.length ? { articleChanges: articleChangeList(freshness) } : {}),
                                 ...(freshness.transitionalProvisions?.length
                                     ? {
                                         // From the amending act itself (normalized to lower case): the rule for

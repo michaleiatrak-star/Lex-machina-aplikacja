@@ -62,7 +62,7 @@ describe("markers: one per place", () => {
   });
 });
 
-describe("a ruling that cites another is not that other ruling (RD 121/26: WSD 111/22 cites SDI 87/17)", async () => {
+describe("a ruling that cites another is not that other ruling (live case: WSD 111/22 cites SDI 87/17)", async () => {
   const { wsdPageNames } = await import("../src/courts/wsd-portal.js");
   it("the page's own field Sygnatura decides", () => {
     const page = "Orzeczenie WSD z dnia 21 września 2022 r. Sygn. akt: WSD 111/22 … por. wyrok SN z 2017 r., SDI 87/17 … Sygnatura: WSD 111/22 Tagi";

@@ -5,9 +5,9 @@ import type { CaseListItem } from "./api.js";
 const item = (caseId: string, displayName: string, role: CaseListItem["role"], updatedAt: string, archivedAt?: string): CaseListItem =>
   ({ caseId, displayName, role, caseKind: "MATTER", createdAt: "2026-01-01T00:00:00Z", updatedAt, createdByUserId: "u", keyVersion: 1, canReidentify: true, ...(archivedAt ? { archivedAt } : {}) }) as CaseListItem;
 const cases = [
-  item("a", "XI P 27/26", "OWNER", "2026-11-17T10:00:00Z"),
+  item("a", "V P 3/26", "OWNER", "2026-11-17T10:00:00Z"),
   item("b", "Łódź – najem", "EDITOR", "2026-10-01T10:00:00Z"),
-  item("c", "RD 121/26", "OWNER", "2026-11-10T10:00:00Z", "2026-11-12T00:00:00Z")
+  item("c", "Najem lokalu", "OWNER", "2026-11-10T10:00:00Z", "2026-11-12T00:00:00Z")
 ];
 const base: CaseListFilters = { query: "", scope: "ACTIVE", period: "ANY", sort: "updated", direction: "desc" };
 const now = new Date("2026-11-18T00:00:00Z");

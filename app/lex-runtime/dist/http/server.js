@@ -1,3 +1,4 @@
+import { configureUsageLog } from "../usage-log.js";
 import { PublicWebSearch } from "../web-search.js";
 import { configurePortalSearch } from "../official-portal-search.js";
 import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
@@ -66,7 +67,7 @@ import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
-import { autostartLocalSearxng } from "../searxng-local.js";
+import { autostartLocalSearxng, hideDockerDashboardOnStart } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
@@ -74,7 +75,7 @@ import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "..
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
-import { TemporalSourceFreshnessChecker } from "../temporal-source-freshness.js";
+import { TemporalSourceFreshnessChecker, setLocalAmendmentText } from "../temporal-source-freshness.js";
 import { OfficialLegalSourceVerifier } from "../legal-source-verifier.js";
 import { LocalPdfTextExtractor } from "../pdf-text-extractor.js";
 import { CompleteDocumentIngestor } from "../document-ingestion.js";
@@ -261,6 +262,7 @@ export async function startLocalServer(options) {
     configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
     configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
     configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
+    configureUsageLog(path.join(caseFileStore.rootDir, "usage"));
     // Pages built by JavaScript or behind a bot check: read through the local browser (Docker, next
     // to SearXNG) when it runs; LEX_BROWSER_RENDER=0 turns it off.
     if (process.env.LEX_BROWSER_RENDER !== "0")
@@ -465,6 +467,12 @@ export async function startLocalServer(options) {
     const anomalyJournal = new AnomalyJournal(caseFileStore.rootDir);
     // Pamięć dowodowa wątku: przepis z poprzedniej wiadomości tylko przy tym samym t.j. w ELI.
     const actFreshness = new TemporalSourceFreshnessChecker();
+    // An amending act after the t.j. is read from the local ELI copy when it holds its text layer
+    // (not OCR); otherwise ELI is asked.
+    setLocalAmendmentText((eli) => {
+        const record = coreLawIndex.record(eli);
+        return record && (record.textSource === "html" || record.textSource === "pdf") && record.text?.trim() ? record.text : null;
+    });
     const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), 
     // sn.pl with the session the user verified in the app's sn.pl window,
     // as the SN connector of the case-law search does.
@@ -842,6 +850,9 @@ if (process.argv[1] &&
     process.stdout.write(`Lex Machina runtime listening on http://${server.host}:${server.port}\n`);
     // Local SearXNG created in Settings starts with the application (Docker Desktop opened if closed).
     const searchDirectory = webSearchDataDirectory();
+    // Docker Desktop started at sign-in opens its dashboard too: turned off once, the app uses the engine only.
+    if (process.platform !== "linux")
+        hideDockerDashboardOnStart();
     if (searchDirectory && process.env.LEX_SEARXNG_AUTOSTART !== "0") {
         void autostartLocalSearxng({ directory: path.join(searchDirectory, "searxng"), searxngUrl: webSearchSettings().searxngUrl })
             .then((result) => {

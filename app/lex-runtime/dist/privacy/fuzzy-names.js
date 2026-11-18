@@ -1,6 +1,6 @@
 // A known name (a firm or a person from a register, a firm found in the text) as OCR damaged
-// it: a letter lost, added or misread ("uman Park Global", "Hurnan Park Global", "Michal
-// Wiatrak"). The whole name decides: the text is read in windows of as many words as the name
+// it: a letter lost, added or misread ("umen Park Global", "Lurnen Park Global", "Michal
+// Kowalczyk"). The whole name decides: the text is read in windows of as many words as the name
 // has, and a window close enough to the whole name (after letter case, Polish letters and the
 // usual OCR confusions are folded) is that name. A single word alone is never matched loosely.
 const OCR_FOLD = { "0": "o", "1": "l", "|": "l", i: "l", ł: "l" };
@@ -67,7 +67,7 @@ export function findNameApproximately(text, name) {
             found.push({ start: window[0].start, end: window.at(-1).end, value, exact: value.replace(/\s+/gu, " ").toLocaleLowerCase("pl") === name.replace(/\s+/gu, " ").toLocaleLowerCase("pl") });
             continue;
         }
-        // The first letters of every word but one agree: "uman Park Global" yes, "Lorem Ipsum Dolor" no.
+        // The first letters of every word but one agree: "umen Park Global" yes, "Lorem Ipsum Dolor" no.
         const initialsDiffer = window.filter((word, offset) => foldName(word.value)[0] !== target.split(" ")[offset][0]).length;
         if (limit === 0 || initialsDiffer > 1)
             continue;

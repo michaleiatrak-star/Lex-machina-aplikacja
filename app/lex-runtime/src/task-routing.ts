@@ -236,7 +236,7 @@ const WITNESS_QUESTIONS = /(?<![\p{L}])pyta\p{L}*/iu;
 /**
  * A pleading to a court or an authority asked for ("przygotuj podważenie postanowienia",
  * "napisz zażalenie"): pisma-procesowe-v3 leads; the skill the material pointed to (analiza-sadowa-v6,
- * the witness or evidence skill) serves it. RD 121/26 (2026-11-16): the court-analysis skill led and the
+ * the witness or evidence skill) serves it. A live case (2026-11-16): the court-analysis skill led and the
  * pleading had no register, no matrix of goals and no validation of pisma-procesowe-v3.
  * A simple letter of the catalogue (pisma-proste-v2) and an explicit pipeline step keep their decision.
  */

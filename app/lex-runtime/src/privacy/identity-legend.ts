@@ -1,4 +1,4 @@
-// The same person under different placeholders (RD 121/26, 2026-11-16): every document of a case
+// The same person under different placeholders (2026-11-16): every document of a case
 // has its own key, so the user (in the question) and the person acquitted in a verdict, or an
 // attorney named in full in one document and by surname in another, were different symbols to
 // the model; it wrote that the acquittal "concerned another person". The application restores
@@ -18,8 +18,8 @@ const fold = (text: string) =>
     .split(/[\s-]+/u)
     .filter((word) => word.length >= 2);
 
-// A case form to its stem: "Wiatraka", "Wiatrakowi" -> "wiatrak"; "Michała" -> "michal";
-// "Ciecierskiego" -> "ciecierski".
+// A case form to its stem: "Kowalczyka", "Kowalczykowi" -> "kowalczyk"; "Michała" -> "michal";
+// "Zawadzkiego" -> "zawadzki".
 function stem(word: string): string {
   for (const ending of ["skiego", "skiemu", "skim", "ckiego", "ckiemu", "ckim", "dzkiego"]) {
     if (word.endsWith(ending)) return word.slice(0, word.length - ending.length + 3);

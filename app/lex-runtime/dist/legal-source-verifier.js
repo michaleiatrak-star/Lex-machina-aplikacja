@@ -1,3 +1,4 @@
+import { applyArticleChanges } from "./amendment-instructions.js";
 import { DEFAULT_PDF_MAX_BYTES, LocalPdfTextExtractor, PdfTextExtractionError } from "./pdf-text-extractor.js";
 import { articleWording, extractPageFootnotes } from "./core-law-footnotes.js";
 import { todayWarsaw } from "./warsaw-date.js";
@@ -329,6 +330,31 @@ export function claimedUnitState(claim, evidence, pending) {
     const noUnitsAtAll = !/(?:^|\n|\.\s)§\s*\d|\n\d+[a-z]*[.)]\s/u.test(evidence) && !/\bArt\.\s*\d+[\d^a-z]*\.\s*1\.\s/u.test(evidence);
     return para || anyOfKind.test(evidence) || noUnitsAtAll ? { state: "MISSING" } : { state: "NOT_CHECKED" };
 }
+/**
+ * The article's wording after the amendments in force that the consolidated text does not hold
+ * yet: a new wording or word substitutions applied; a unit replaced or added is read from the
+ * amendment's quoted text (the unit check sees it); the amendment's points go with the evidence
+ * when they could not be applied, so the wording is never the old one alone.
+ */
+function amendedWording(consolidated, changes, claim) {
+    const result = applyArticleChanges(consolidated, changes);
+    const quoted = changes.flatMap((change) => [...change.instruction.matchAll(/„([^]*?)”/gu)].map((match) => match[1].trim()));
+    const unit = /§\s*(\d+[a-z]{0,2})(?![a-z\d])|\bust\.?\s*(\d+[a-z]{0,2})(?![a-z\d])/u.exec(superscriptsAsCaret(claim));
+    const label = unit?.[1] ? `§ ${unit[1]}` : unit?.[2] ? `ust. ${unit[2]}` : null;
+    const repealed = label
+        ? changes.find((change) => 
+        // "uchyla się § 2", "uchyla się § 1 i 2", "§ 2 uchyla się" - not "w § 2 uchyla się pkt 3".
+        new RegExp(`uchyla\\s+się\\s+(?:(?:§|ust\\.)?\\s*\\d+[a-z]*\\s*(?:,|\\si\\s|\\soraz\\s)\\s*)*(?:${escapeUnit(label)}|(?<=(?:§|ust\\.)\\s*\\d+[a-z]*\\s*(?:,|\\si|\\soraz)\\s*)${escapeUnit(label.replace(/^\\S+\\s/u, ""))})(?![\\d\\p{L}])|(?<!w\\s)${escapeUnit(label)}\\s+uchyla\\s+się(?!\\s+(?:pkt|lit|zdani|zd\\.|ust|wyraz|część))`, "u").test(change.instruction.replace(/„[^]*?”/gu, "„…”")))
+        : undefined;
+    const notes = result.applied
+        ? ""
+        : `\n\n[Zmiany artykułu wprowadzone po tekście jednolitym, obowiązujące:]\n${changes.map((change) => `${change.from ? `od ${change.from} ` : ""}(ELI ${change.eli}): ${change.instruction}`).join("\n")}`;
+    return {
+        evidence: `${result.text}${notes}`,
+        unitText: `${result.text}\n${quoted.join("\n")}`,
+        ...(repealed ? { repealedUnit: `ELI ${repealed.eli}${repealed.from ? `, od ${repealed.from}` : ""}` } : {})
+    };
+}
 export class OfficialLegalSourceVerifier {
     fetcher;
     now;
@@ -446,25 +472,28 @@ export class OfficialLegalSourceVerifier {
         const wording = request.kind === "statute" && snippet
             ? statuteWording(snippet, footnotes, request.asOf ?? todayWarsaw(Date.parse(fetchedAt) || Date.now()))
             : null;
-        const evidence = wording?.evidence ?? snippet;
+        const amended = request.articleChanges?.length && wording ? amendedWording(wording.evidence, request.articleChanges, request.claim) : null;
+        const evidence = amended?.evidence ?? wording?.evidence ?? snippet;
         // Not verified: two wordings without a readable date, a repealed article, or a change not
         // in force printed in the text that its footnotes do not settle.
-        const unit = wording ? claimedUnitState(request.claim, wording.evidence, wording.pending) : null;
+        const unit = wording ? claimedUnitState(request.claim, amended?.unitText ?? wording.evidence, wording.pending) : null;
         const wordingProblem = !wording
             ? null
-            : unit?.state === "PENDING"
-                ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
-                : unit?.state === "REPEALED"
-                    ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
-                    : unit?.state === "MISSING"
-                        ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
-                        : wording.unresolved
-                            ? `Tekst jednolity${sourceJournal(sourceUrl)} drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś; jeżeli to nie jest aktualny tekst jednolity aktu, sprawdź brzmienie w aktualnym.`
-                            : wording.repealed
-                                ? "Przepis jest w aktualnym tekście jednolitym uchylony."
-                                : request.requireFootnoteWording && !wording.pending.length
-                                    ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
-                                    : null;
+            : amended?.repealedUnit
+                ? `Ta jednostka została uchylona nowelą po tekście jednolitym (${amended.repealedUnit}).`
+                : unit?.state === "PENDING"
+                    ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
+                    : unit?.state === "REPEALED"
+                        ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
+                        : unit?.state === "MISSING"
+                            ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
+                            : wording.unresolved
+                                ? `Tekst jednolity${sourceJournal(sourceUrl)} drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś; jeżeli to nie jest aktualny tekst jednolity aktu, sprawdź brzmienie w aktualnym.`
+                                : wording.repealed
+                                    ? "Przepis jest w aktualnym tekście jednolitym uchylony."
+                                    : request.requireFootnoteWording && !wording.pending.length
+                                        ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
+                                        : null;
         const snapshotOnly = NSA_WSA_SNAPSHOT_HOSTS.has(host);
         const sourceAnchorUrl = matched && request.kind === "statute"
             ? anchoredUrl(sourceUrl, pdfSource

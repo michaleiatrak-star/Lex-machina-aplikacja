@@ -5,11 +5,11 @@ import type { WsdFetch } from "../src/courts/wsd-portal.js";
 
 const KEA_16 =
   "§ 16. W razie konieczności przytoczenia drastycznych okoliczności lub wyrażeń adwokat powinien nadać swemu wystąpieniu taką formę, aby nie uchybiać powadze sądu, władz i godności zawodu adwokackiego. W korespondencji zawodowej należy przestrzegać właściwych form. Nie wolno używać wyrażeń czy zwrotów obraźliwych ani grozić ściganiem karnym lub dyscyplinarnym.";
-// RD 121/26: the decision refusing to open disciplinary proceedings, in its own words.
+// a live case: the decision refusing to open disciplinary proceedings, in its own words.
 const FILE =
   "POSTANOWIENIE o odmowie wszczęcia dochodzenia. Zastępca Rzecznika Dyscyplinarnego Izby Adwokackiej. Zakaz z § 16 KEA chroni przed wykorzystywaniem groźby ścigania karnego jako środka nacisku. Pismo adwokata nie zapowiada złożenia zawiadomienia o przestępstwie.";
 
-describe("the case's legal issue (RD 121/26)", () => {
+describe("the case's legal issue", () => {
   it("takes the clause of § 16 KEA the file speaks of, not the whole paragraph", () => {
     expect(relevantClause(KEA_16, FILE)).toBe("grozić ściganiem karnym lub dyscyplinarnym");
   });

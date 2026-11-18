@@ -31,6 +31,45 @@ export class LocalOfficeDocumentTextExtractor {
             options.timeoutMs ??
                 60_000;
     }
+    async images(data, mediaType) {
+        if (mediaType !== DOCX_MEDIA_TYPE && mediaType !== ODT_MEDIA_TYPE)
+            return [];
+        if (data.byteLength < 1 || data.byteLength > 64 * 1024 * 1024)
+            return [];
+        const output = await new Promise((resolve, reject) => {
+            const child = spawn(this.python, [this.workerPath, "--media-type", mediaType, "--images"], { stdio: ["pipe", "pipe", "pipe"] });
+            const parts = [];
+            let size = 0;
+            const timer = setTimeout(() => {
+                child.kill("SIGKILL");
+                reject(new Error("OFFICE_DOCUMENT_EXTRACTION_TIMEOUT"));
+            }, this.timeoutMs);
+            child.stdout.on("data", (chunk) => {
+                size += chunk.byteLength;
+                if (size > 600 * 1024 * 1024)
+                    child.kill("SIGKILL");
+                else
+                    parts.push(chunk);
+            });
+            child.once("error", (error) => {
+                clearTimeout(timer);
+                reject(error);
+            });
+            child.once("exit", (code) => {
+                clearTimeout(timer);
+                if (code === 0)
+                    resolve(Buffer.concat(parts).toString("utf8"));
+                else
+                    reject(new Error("OFFICE_DOCUMENT_IMAGES_FAILED"));
+            });
+            child.stdin.once("error", () => undefined);
+            child.stdin.end(Buffer.from(data));
+        });
+        const parsed = JSON.parse(output);
+        return (parsed.images ?? [])
+            .filter((image) => typeof image.data === "string" && (image.mediaType === "image/png" || image.mediaType === "image/jpeg"))
+            .map((image) => ({ name: String(image.name ?? "obraz"), mediaType: image.mediaType, data: new Uint8Array(Buffer.from(String(image.data), "base64")) }));
+    }
     async extract(data, mediaType) {
         if (data.byteLength < 1 ||
             data.byteLength >

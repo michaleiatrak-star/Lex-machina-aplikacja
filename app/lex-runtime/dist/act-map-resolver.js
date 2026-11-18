@@ -287,6 +287,19 @@ function distinctive(label) {
     return new RegExp(`(?<![a-z])${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u");
 }
 /**
+ * What the module must mention to be the row's: the row's longest distinctive word, or the act named
+ * at the head of the label ("Kodeks pracy — indeks całego aktu; rozwiązanie umowy …": the KP index
+ * module names "Kodeks pracy", not "wypowiedzenie"; it was rejected and the KPC/KC modules went in).
+ */
+function actMention(label) {
+    const word = distinctive(label);
+    const head = fold(label.split(/\s+[—–]\s+|;|\(/u)[0] ?? "").trim();
+    const named = /^(?:kodeks|ustawa|prawo|rozporzadzenie|konstytucja)\b/u.test(head) && head.split(" ").length >= 2 ? head.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+    if (!word && !named)
+        return undefined;
+    return new RegExp([word?.source, named].filter(Boolean).join("|"), "u");
+}
+/**
  * The DR whose modules hold the resource: a row of one map may route to another DR's module
  * (DR-04 „KPA — sprawy administracyjne świadczeń” → DR-05 mod-KPA-current-state-COV).
  */
@@ -377,7 +390,7 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
             (singles.length && (headed || rareTwo) ? singles[0] : undefined) ??
             row.unique.find((pattern) => pattern.test(folded));
         if (phrase)
-            add(row, "NAZWA", `„${row.label}” w treści sprawy`, distinctive(row.label) ?? undefined);
+            add(row, "NAZWA", `„${row.label}” w treści sprawy`, actMention(row.label));
     }
     return { modules: found, rejected };
 }

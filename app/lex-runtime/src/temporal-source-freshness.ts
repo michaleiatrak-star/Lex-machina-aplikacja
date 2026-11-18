@@ -322,8 +322,7 @@ export function amendmentText(
   } catch {
     local = null;
   }
-  // One more try after a pause: of a dozen checks run at once one read may fail (RD 121/26:
-  // art. 190a and 245 KK unverified in the turn, verified when checked again).
+  // One more try after a pause: of a dozen checks run at once one read may fail (live case: // art. 190a and 245 KK unverified in the turn, verified when checked again).
   const body = local?.trim()
     ? Promise.resolve(normalizedAmendmentText(local))
     : fetchAmendmentBody(fetcher, pdfTextExtractor, eli).then(

@@ -1,3 +1,4 @@
+import { recordTurnUsage } from "./usage-log.js";
 import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock } from "./chat-turn-journal.js";
@@ -75,7 +76,8 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
-import { factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix } from "./fact-matrix.js";
+import { factMatrixGoalEvidence, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments } from "./fact-matrix.js";
+import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable } from "./document-register.js";
 import { confirmedSteps, stFinal, verified } from "./step-register.js";
 import { deadlineCorrection, deadlineProvisions, deadlineWordings } from "./deadline-wording.js";
@@ -85,7 +87,7 @@ import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, te
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
-import { recordParties, recordPartiesPrompt } from "./record-parties.js";
+import { recordParties, recordPartiesPrompt, subjectGoal, targetRecord } from "./record-parties.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, collapseRepeatedVerMarkers, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
@@ -582,7 +584,7 @@ const CITATION_FORM_RULE = [
     "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”.",
     "",
     "# PLIK PISMA (aplikacja)",
-    // RD 121/26, live: "Pliku .docx nie mogę zapisać… wklej tekst do Worda" while the application makes it.
+    // a live case, live: "Pliku .docx nie mogę zapisać… wklej tekst do Worda" while the application makes it.
     "Plik .docx (i PDF) tworzy aplikacja z treści pisma: etap pisma albo przycisk „Generuj dokument”. Krok skilla „generowanie pliku” jest więc wykonywany przez aplikację — nie pisz, że nie możesz utworzyć pliku, i nie odsyłaj do Worda ani do kopiowania tekstu."
 ].join("\n");
 const MATERIAL_SKILLS = {
@@ -1190,6 +1192,8 @@ export class SafeSessionExecutor {
             // Tokens of every model call in this turn (benchmark and cost display).
             const { result, usage } = await meterUsage(() => this.executeTurn(request));
             result.usage = usage;
+            // Ustawienia > Zużycie: the turn's tokens under the account that sent it.
+            void recordTurnUsage(request.provider, request.model, usage);
             record(result.status === "BLOCKED" ? "BLOCKED" : "OK", result.taskSkill ?? basePath);
             return result;
         }
@@ -1752,7 +1756,7 @@ export class SafeSessionExecutor {
             }
         }
         // Rulings of the Bar's disciplinary court the case file cites ("WSD 113/22"): looked up by the
-        // application in the WSD portal before the model answers, every one of them (RD 121/26: the
+        // application in the WSD portal before the model answers, every one of them (live case: the
         // model read one of three and left the others "z materiałów sprawy").
         // What the file quotes from each ruling goes to the model first; a local model (a small
         // window) gets shorter excerpts and reads further with read_case_law_text.
@@ -1762,11 +1766,11 @@ export class SafeSessionExecutor {
         const fileSignatures = legalTurn && activeCountry() === "PL" ? signaturesIn(attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n")) : [];
         const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
         // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
-        // (sn.pl often asks for its human check; RD 121/26 then had no text of SDI 9/12 at all).
+        // (sn.pl often asks for its human check; a live case then had no text of SDI 9/12 at all).
         const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
         const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([]);
         // A code of professional ethics the file cites ("§ 16 zd. 3 KEA"): its paragraphs read from
-        // the council's consolidated text, as the chat did (RD 121/26: the central norm was never read).
+        // the council's consolidated text, as the chat did (live case: the central norm was never read).
         const ethicsCited = legalTurn && activeCountry() === "PL" ? citedEthicsParagraphs([...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)), latestUserTurn(request.query)].join("\n")) : [];
         const ethicsFound = Promise.all(ethicsCited.map((item) => readEthicsParagraphs(item.code, item.paragraphs)));
         // A question about case law, interpretations or an authority's decisions: the courts' and the
@@ -1835,14 +1839,14 @@ export class SafeSessionExecutor {
         let documentRegister = [];
         // The charges of the party's earlier letter (pleading-goals.ts): each upheld or dropped with a reason.
         let pleadingCharges = [];
+        // The claims of the case the pleading is for (its record's heading): one goal.
+        let caseSubjectGoal = null;
         const strengthRulings = [];
         const ethicsResults = await ethicsFound;
         // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
-        if (legalTurn && contextFocus) {
-            const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category]));
-            const passages = issuePassages(attachments, contextFocus, 12, kinds);
-            strengthPassages = passages;
-            // The parties and the case of each court record, from its heading (record-parties.ts).
+        // The parties and the case of each court record, from its heading (record-parties.ts): whether or
+        // not the files gave an issue focus (V P 3/26: no focus, so no parties and no case subject).
+        if (legalTurn) {
             const records = attachments
                 .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
                 .flatMap((attachment) => {
@@ -1852,11 +1856,17 @@ export class SafeSessionExecutor {
                 const found = recordParties(attachment.documentId, text);
                 return found ? [{ ...found, label: attachment.title ?? `dokument ${attachment.documentId}` }] : [];
             });
+            caseSubjectGoal = subjectGoal(targetRecord(records, latestUserTurn(request.query)));
             const partiesPrompt = recordPartiesPrompt(records);
             if (partiesPrompt) {
                 pathSections.push(partiesPrompt);
                 audit.record("gate", "RECORD_PARTIES", "OK", { records: records.map((record) => `${record.documentId}:${record.signature ?? "?"}:${record.date ?? "?"}`) });
             }
+        }
+        if (legalTurn && contextFocus) {
+            const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category]));
+            const passages = issuePassages(attachments, contextFocus, 12, kinds);
+            strengthPassages = passages;
             const prompt = issuePassagesPrompt(passages);
             if (prompt) {
                 pathSections.push(prompt);
@@ -1993,7 +2003,7 @@ export class SafeSessionExecutor {
             });
             pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
             // The same person under the symbols of different documents and of the question, compared
-            // locally (names never leave the computer): RD 121/26 "the acquittal concerns another person".
+            // locally (names never leave the computer): a live case "the acquittal concerns another person".
             {
                 const tokenText = [protectedQuery, ...attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text))];
                 const restoreToken = (token) => {
@@ -2036,6 +2046,11 @@ export class SafeSessionExecutor {
                 // The matrix of each witness heard in two records or more: topics × records, every statement
                 // of the topic in its cell; the facts of the pleading come from it (user 2026-11-16).
                 const matrixGoalList = [];
+                // The checked quotes of each matrix goal: its passages (not a word search that the question's
+                // own words pull to one sentence for every goal, as in the V P 3/26 run).
+                const goalEvidence = new Map();
+                // The witness matrices: their topics seed the document matrix, their rows meet the documents'.
+                const witnessMatrices = [];
                 // Goals the pleading must take up besides the contradictions: official facts, the party's charges.
                 const mandatoryGoalList = [];
                 // The charges of the party's own letters: never cut by the goal limit after the official facts.
@@ -2100,7 +2115,11 @@ export class SafeSessionExecutor {
                             for (const fact of described.facts)
                                 witnessFactsByDocument.set(fact.documentId, (witnessFactsByDocument.get(fact.documentId) ?? 0) + 1);
                             pathSections.push(factMatrixPrompt(witness, factRowList, described.dropped));
-                            matrixGoalList.push(...factMatrixGoals(witness, factRowList));
+                            for (const item of factMatrixGoalEvidence(witness, factRowList)) {
+                                matrixGoalList.push(item.goal);
+                                goalEvidence.set(item.goal, item.evidence);
+                            }
+                            witnessMatrices.push({ witness, rows: factRowList, topics: described.topics });
                             strengthKeyFacts.push(...factMatrixRequired(factRowList));
                             audit.record("gate", "WITNESS_FACT_MATRIX", "OK", { witness, topics: described.topics.length, facts: described.facts.length, dropped: described.dropped, differing: factRowList.filter((row) => row.differs).length, failures: described.failures });
                             continue;
@@ -2122,7 +2141,7 @@ export class SafeSessionExecutor {
                     }
                     audit.record("gate", "WITNESS_TESTIMONY_MATRIX", "OK", { witness, topics: rows.length, crossRecord: rows.filter((item) => item.byRecord.length >= 2).length });
                 }
-                // Every document of a pleading is read (RD 121/26, 2026-11-17: "nic nie pomijamy"): the documents
+                // Every document of a pleading is read (2026-11-17: "nic nie pomijamy"): the documents
                 // the witness matrix did not read go to the document matrix whole, the large ones in parts, each
                 // part with no fact back to the model once (fact-matrix.ts fullDocumentMatrix). The register
                 // D01..DN records the kind, size, column and read state of each; a gap makes the pleading a draft.
@@ -2156,6 +2175,7 @@ export class SafeSessionExecutor {
                     const described = toRead.length
                         ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
                             concurrency: 6,
+                            seedTopics: witnessMatrices.flatMap((matrix) => matrix.topics),
                             onPart: (progress) => step("PREPARE", progress.retry
                                 ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
                                 : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`)
@@ -2174,7 +2194,7 @@ export class SafeSessionExecutor {
                     });
                     const rowList = factRows(described.facts);
                     // A single strong fact of an official document on the matter (the opponent's statement in a
-                    // protocol) and every charge of the party's earlier letter are goals (RD 121/26 plan, point 4).
+                    // protocol) and every charge of the party's earlier letter are goals (point 4).
                     const official = new Set(documentRegister.filter((entry) => officialKind(entry.kind, entry.category)).map((entry) => entry.record));
                     const officialGoals = officialFactGoals(rowList, official, contextFocus || matrixQuestion, 4);
                     mandatoryGoalList.push(...officialGoals.map((item) => item.goal));
@@ -2194,8 +2214,18 @@ export class SafeSessionExecutor {
                     }
                     if (described.facts.length) {
                         pathSections.push(factMatrixPrompt("", rowList, described.dropped, "documents"));
-                        if (!matrixGoalList.length)
-                            matrixGoalList.push(...factMatrixGoals("", rowList, 4, "documents"));
+                        const labels = new Map(documentRegister.map((entry) => [entry.documentId, `${entry.id} ${entry.kind}`]));
+                        for (const matrix of witnessMatrices) {
+                            const versus = witnessVersusDocuments(matrix.witness, matrix.rows, rowList, labels);
+                            if (versus)
+                                pathSections.push(versus);
+                        }
+                        if (!matrixGoalList.length) {
+                            for (const item of factMatrixGoalEvidence("", rowList, 4, "documents")) {
+                                matrixGoalList.push(item.goal);
+                                goalEvidence.set(item.goal, item.evidence);
+                            }
+                        }
                         strengthKeyFacts.push(...factMatrixRequired(rowList, 4));
                         audit.record("gate", "DOCUMENT_FACT_MATRIX", "OK", { documents: toRead.length, topics: described.topics.length, failures: described.failures, facts: described.facts.length, dropped: described.dropped, shared: rowList.filter((row) => row.cells.length >= 2).length, differing: rowList.filter((row) => row.differs).length });
                     }
@@ -2214,19 +2244,36 @@ export class SafeSessionExecutor {
                     .filter((document) => document.category === "ORZECZENIE")
                     .map((document) => ({ documentId: document.documentId, text: attachments.find((attachment) => attachment.documentId === document.documentId).chunks.map((chunk) => chunk.text).join("\n") }));
                 const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
+                // The user's own demands first: what the question asks the pleading to prove.
+                const askedGoals = questionGoals(goalQuestion);
+                const timeline = questionTimeline(goalQuestion, attachments.map((attachment) => ({ documentId: attachment.documentId, text: attachment.chunks.map((chunk) => chunk.text).join("\n") })));
+                if (timeline) {
+                    pathSections.push(questionTimelinePrompt(timeline));
+                    audit.record("gate", "QUESTION_TIMELINE", "OK", { periods: timeline.periods.length, dates: timeline.dates.length, confirmed: [...timeline.periods, ...timeline.dates].filter((item) => item.documents.length).length });
+                }
                 const goals = [
+                    ...askedGoals,
                     ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
                     // The party's own charges right after the theses: each is upheld or dropped with a reason.
                     ...chargeGoalList.slice(0, 8),
                     // One goal per topic of the matrix; the pairs' goals only without a matrix.
                     ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs)).slice(0, 4),
-                    ...mandatoryGoalList.slice(0, 4)
+                    ...mandatoryGoalList.slice(0, 4),
+                    ...(caseSubjectGoal && isCourtPleading(goalQuestion) ? [caseSubjectGoal] : [])
                 ].slice(0, 22);
                 if (goals.length) {
                     const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category]));
                     const sections = [];
                     goals.forEach((goal, index) => {
-                        const passages = issuePassages(attachments, `${goal}\n${contextFocus}`, 3, kinds);
+                        // The goal's own words (its generic opening dropped); the question only when they find nothing.
+                        const topic = goal.replace(/^(?:Wykazać sprzeczność lub zmianę wersji zeznań świadka [^:]*|Rozstrzygnąć rozbieżność dokumentów[^:]*):\s*/u, "");
+                        const searched = issuePassages(attachments, topic, 3, kinds);
+                        const found = searched.length ? searched : issuePassages(attachments, `${topic}\n${contextFocus}`, 3, kinds);
+                        // A matrix goal's passages are its own checked quotes; a demand to show contradictions takes
+                        // the quotes of the matrix differences (a word search found the witness's personal data).
+                        const contradictions = /sprzeczn|niespójn|zmian\p{L}*\s+wersji/iu.test(goal) && !goalEvidence.has(goal) ? [...goalEvidence.values()].flatMap((list) => list.slice(0, 2)).slice(0, 6) : [];
+                        const own = goalEvidence.get(goal) ?? contradictions;
+                        const passages = own.length ? own.map((item, rank) => ({ ...item, weight: Math.max(0.5, 1 - rank * 0.05) })) : found;
                         if (passages[0])
                             strengthKeyFacts.push(passages[0]);
                         sections.push(`CEL ${index + 1}: ${goal}${passages.length ? `\n${passages.map((passage) => `  - waga ${(passage.weight ?? 0).toFixed(2).replace(".", ",")} · [[LEXDOC:${passage.documentId}:${passage.chunkIndex}]] (s. ${passage.page}) „${passage.text}”`).join("\n")}` : "\n  - (brak fragmentów akt dla tego celu: wskaż, jakiego dowodu brakuje)"}`);
@@ -2238,7 +2285,7 @@ export class SafeSessionExecutor {
                     pathSections.push([
                         "# FAKTY Z AKT O OSOBIE Z PYTANIA (wskazane przez aplikację)",
                         "Rozstrzygnięcia i zawiadomienia dotyczące użytkownika w innych dokumentach (ten sam człowiek pod innym symbolem). Wykorzystaj je albo napisz, dlaczego nie:",
-                        ...strengthKeyFacts.map((fact) => `- [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]] (s. ${fact.page}) „${fact.text}”`)
+                        ...[...new Map(strengthKeyFacts.map((fact) => [`${fact.documentId}|${fact.text}`, fact])).values()].map((fact) => `- [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]] (s. ${fact.page}) „${fact.text}”`)
                     ].join("\n"));
                 }
                 if (legend) {
@@ -2736,7 +2783,7 @@ export class SafeSessionExecutor {
                 // Shared files every executive skill names for this case: the runtime adapter
                 // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
                 // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
-                // A pleading to a court asked for, whatever skill leads (XI P 27/26: the witness skill led).
+                // A pleading to a court asked for, whatever skill leads (V P 3/26: the witness skill led).
                 const courtPleading = isCourtPleading(latestUserTurn(request.query));
                 const draftsLetter = courtPleading || [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
                 // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
@@ -3506,7 +3553,7 @@ export class SafeSessionExecutor {
             pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
         }
         // Professions' statutes under the model's own abbreviations ("art. 91 PrAdw"): named, so the
-        // article is matched to its act by the gates (RD 121/26).
+        // article is matched to its act by the gates.
         let modelOutput = legalTurn ? expandProfessionActAbbreviations(execution.output) : execution.output;
         const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
@@ -3635,7 +3682,7 @@ export class SafeSessionExecutor {
                 const text = corrected.fullText.trim();
                 const remaining = text ? ambiguousBareArticles(text, ledger) : ambiguous;
                 // The same answer with the acts named: about the same length, fewer ambiguous citations.
-                // Nothing of the answer may go: the round only names acts (a removed paragraph, RD 121/26).
+                // Nothing of the answer may go: the round only names acts (a removed paragraph, a live case).
                 const accepted = Boolean(text) && remaining.length < ambiguous.length && text.length >= modelOutput.length * 0.9 && text.length <= modelOutput.length * 1.2 && removedSentences(modelOutput, text).length === 0;
                 if (accepted) {
                     corrections.push(answerCorrection("ACT_NAME", ambiguous.map((item) => `${item.claim}: ${item.acts.join(" / ")}`), modelOutput, text));
@@ -3682,7 +3729,7 @@ export class SafeSessionExecutor {
                 modelOutput = text;
             }
         }
-        // Strength of a pleading (RD 121/26, 2026-11-16): the record's passages on the issue and the
+        // Strength of a pleading (2026-11-16): the record's passages on the issue and the
         // rulings read before the answer must be used or consciously set aside, and a thesis of the
         // decision is not conceded before the substantive law is checked. One correcting round.
         const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query));
@@ -3756,7 +3803,7 @@ export class SafeSessionExecutor {
             }
         }
         // An admission (a thesis conceded, a charge dropped) is checked on the wording of the provisions
-        // before it stays (admission-check.ts; RD 121/26: the GDPR thesis conceded for companies).
+        // before it stays (admission-check.ts; a live case: the GDPR thesis conceded for companies).
         if (pleadingAsked && !waitsForUser(modelOutput)) {
             const conceded = admissions(modelOutput);
             if (conceded.length) {
@@ -3792,7 +3839,7 @@ export class SafeSessionExecutor {
                 }
             }
         }
-        // A deadline the pleading adopts from a provision: its wording on the event date first (RD 121/26
+        // A deadline the pleading adopts from a provision: its wording on the event date first (a live case
         // plan, point 9: art. 88a Pr. adw., 7 or 14 days). Event dates from the question and the decisions.
         if (pleadingAsked && !offline && this.verificationToolFactory && !waitsForUser(modelOutput)) {
             const provisions = deadlineProvisions(modelOutput);
@@ -3865,7 +3912,7 @@ export class SafeSessionExecutor {
             automaticVerificationPlan =
                 planAutomaticLegalVerification(
                 // A document AST is one line of JSON: the act of a provision is read from its line, so
-                // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+                // every block is a line of its own (live case: 9 of 14 provisions of the file were left
                 // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
                 request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text, ledger, requestedHistoricalAsOf);
             if (automaticVerificationPlan.calls.length > 0 &&
@@ -4163,7 +4210,7 @@ export class SafeSessionExecutor {
                 ledger.addLeadCase(reference.claim);
         // A signature the answer names that the case's own files hold (a judgment or a proceeding of
         // the case's documents, not read again in this turn: a file written from the conversation) is
-        // "z materiałów sprawy", not a judgment to verify (RD 121/26 blocked VIII W 633/25 so).
+        // "z materiałów sprawy", not a judgment to verify (a live case blocked II W 101/25 so).
         await registerCaseFileSignatures(citedAnswer.text, ledger, request.caseFiles ?? request.caseSignatureSearch);
         const preFinalization = new FinalizationGate().evaluate(citedAnswer.text, ledger);
         const markedAnswer = preFinalization.result === "BLOCKED"
@@ -4604,7 +4651,7 @@ export class SafeSessionExecutor {
                     `nie wszystkie powołania potwierdzono w źródłach${softenedClaims.length ? ` (${softenedClaims.slice(0, 6).join(", ")}${softenedClaims.length > 6 ? " i inne" : ""})` : ""} — miejsca oznaczone ⚠️ sprawdź przed użyciem odpowiedzi`
                 ]
                 : []),
-            // A blocked citation gate named at the top (RD 121/26 plan, point 9), not only in the audit.
+            // A blocked citation gate named at the top (point 9), not only in the audit.
             ...(() => {
                 const names = { LEGAL_CITATIONS: "przepisów", CASE_SIGNATURES: "sygnatur orzeczeń", DOCUMENT_CITATIONS: "cytatów z dokumentów" };
                 const blocked = gateI.checks.filter((item) => item.id in names && item.result === "BLOCKED").map((item) => names[item.id]);
@@ -4929,7 +4976,7 @@ export class SafeSessionExecutor {
                 known.add(appeal);
         }
         // A court named in the case's own documents (a protocol's or a ruling's heading) comes from the
-        // files: no warning (XI P 27/26: the court stood in the protocol's heading, yet was flagged).
+        // files: no warning (V P 3/26: the court stood in the protocol's heading, yet was flagged).
         const foldCourt = (text) => text.toLowerCase().replace(/\s+/gu, " ");
         const inFiles = addressee ? foldCourt(fileText).includes(foldCourt(addressee)) : false;
         const courtCheck = addressee && !known.has(addressee) && !inFiles ? { unverified: [addressee] } : null;

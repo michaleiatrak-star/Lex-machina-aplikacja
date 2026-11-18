@@ -43,7 +43,7 @@ function sentences(text: string): string[] {
     .filter((part) => normalize(part).length >= 20);
 }
 
-// A sentence the round only added to ("art. 17 ust. 3 lit. e" -> "... lit. e RODO", RD 121/26)
+// A sentence the round only added to ("art. 17 ust. 3 lit. e" -> "... lit. e RODO", a live case)
 // is kept, not removed: every word stays, in order, with a few new ones.
 const MAX_INSERTED_WORDS = 6;
 function amended(words: string[], candidates: string[][]): boolean {
@@ -115,7 +115,7 @@ const DEFERRAL = new RegExp(
     // "Następnie przedstawię gotowy projekt", "Przygotuję odpowiedź, ale…"
     String.raw`\b(?:następnie|potem|wówczas|później)\s+(?:przedstawię|przygotuję|sporządzę|podam|prześlę)`,
     String.raw`\bprzygotuję\s+(?:odpowiedź|pismo|projekt)\p{L}*\s*,\s*ale`,
-    // "Czekam na wynik niezależnej recenzji projektu, zanim oddam gotowe pismo." (RD 121/26, 0.1.94)
+    // "Czekam na wynik niezależnej recenzji projektu, zanim oddam gotowe pismo." (0.1.94)
     String.raw`\bczekam\s+na\s+(?:wynik|wyniki|recenzj\p{L}*|odpowiedź|weryfikacj\p{L}*|potwierdzeni\p{L}*)`,
     String.raw`\bzanim\s+(?:oddam|przekażę|przedstawię|przygotuję|podam)`
   ].join("|"),
@@ -135,7 +135,7 @@ function answerBody(text: string): string {
   const cut = text.search(/⚖️|\bWażna informacja:/u);
   const body = (cut >= 0 ? text.slice(0, cut) : text).trim();
   // The control blocks the application asks for (CN-GATE, REM-GATE…) are no substance: a deferral
-  // followed by them is still a deferral (RD 121/26: 2.9 thousand characters of empty gates).
+  // followed by them is still a deferral (live case: 2.9 thousand characters of empty gates).
   const gates = body.search(/^\s*(?:\*\*)?(?:CN|WYJ|REM|OŚ|PP|ODW|SN|WER)-GATE\b/mu);
   return (gates > 0 ? body.slice(0, gates) : body).trim();
 }

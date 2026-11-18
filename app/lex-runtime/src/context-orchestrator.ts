@@ -416,7 +416,7 @@ export function orchestrateDocumentContext(args: {
   /**
    * The case's issue in words (case-issue.ts: the clause of the rule in dispute, the kind of
    * decision challenged, their usual vocabulary). When the files exceed the budget, the chunks
-   * that speak of it are kept whole first and digests keep its sentences (RD 121/26: the end of a
+   * that speak of it are kept whole first and digests keep its sentences (live case: the end of a
    * long hearing record, "każda taka sytuacja będzie zgłaszana do odpowiednich organów", was cut).
    */
   focus?: string;
@@ -946,7 +946,7 @@ export function documentCoveragePrompt(
         (options.inventoryDocuments?.has(document.documentId) ? " — CAŁY dokument przeczytany przez aplikację do INWENTARZA DOWODÓW" : "")
     );
   });
-  // Every document delivered whole: said plainly (XI P 27/26: two hearing records in the context
+  // Every document delivered whole: said plainly (V P 3/26: two hearing records in the context
   // in full, the answer told the user they had been read "partly").
   if (!lines.length) {
     return original.length

@@ -1,4 +1,4 @@
-// The register of the documents of a pleading, kept by the application (RD 121/26, 2026-11-17):
+// The register of the documents of a pleading, kept by the application (2026-11-17):
 // every delivered document gets a number D01..DN, its kind, its size, the column of the fact matrix
 // and its read state with the number of facts taken from it. The register goes to the model before
 // the pleading, under the pleading and into the audit; a document left unread makes the pleading a

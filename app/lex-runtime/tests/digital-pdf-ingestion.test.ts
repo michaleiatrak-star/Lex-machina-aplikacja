@@ -127,12 +127,12 @@ describe("scan with a foreign OCR text layer", () => {
     const ocr: OcrEngine = {
       async recognizePages(_bytes, pages) {
         ocrPages = pages;
-        return pages.map((page) => ({ page, text: "Human Park Global sp. z o.o.", confidence: 0.98, engine: "fake" }));
+        return pages.map((page) => ({ page, text: "Lumen Park Global sp. z o.o.", confidence: 0.98, engine: "fake" }));
       }
     };
     const result = await new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), ocr).ingest(data());
     expect(ocrPages).toEqual([1]);
-    expect(result.pages[0]).toMatchObject({ source: "OCR", text: "Human Park Global sp. z o.o." });
+    expect(result.pages[0]).toMatchObject({ source: "OCR", text: "Lumen Park Global sp. z o.o." });
   });
 
   it("keeps the foreign layer when no local OCR is configured", async () => {

@@ -599,7 +599,7 @@ function accountEnvironment(provider) {
         env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS = "0";
         env.MCP_CONNECTION_NONBLOCKING = "true";
         // The application's tools (independent_review, SAOS, SUDOP) run longer than Claude Code's
-        // default 60 s per MCP call (RD 121/26: the review cut off at 60 s, 164 s lost); 900 s as for
+        // default 60 s per MCP call (live case: the review cut off at 60 s, 164 s lost); 900 s as for
         // Codex (tool_timeout_sec) and Gemini (timeout).
         env.MCP_TOOL_TIMEOUT = "900000";
         const token = currentAnthropicOAuthToken();
@@ -1072,7 +1072,7 @@ export function classifyAccountCliFailureDetail(detail) {
         return "ACCOUNT_SESSION_AUTH_EXPIRED";
     }
     if (
-    // "You've hit your 5-hour limit · resets 12:30am (UTC)" (Claude account, RD 121/26).
+    // "You've hit your 5-hour limit · resets 12:30am (UTC)" (Claude account, a live case).
     /rate limit|too many requests|at capacity|capacity|quota exceeded|usage limit|hit your [\w -]{0,20}limit|\d+-hour limit|weekly limit/.test(lower)) {
         return "ACCOUNT_SESSION_CAPACITY";
     }

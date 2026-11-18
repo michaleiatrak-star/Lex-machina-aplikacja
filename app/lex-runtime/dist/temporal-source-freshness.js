@@ -1,6 +1,7 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { superscriptsAsCaret } from "./legal-source-verifier.js";
+import { amendmentTextLine, articleChanges } from "./amendment-instructions.js";
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
 import { AmendmentApplicabilityResolver, partEntryDates } from "./amendment-applicability.js";
 const ELI_API = "https://api.sejm.gov.pl/eli/acts";
@@ -135,16 +136,34 @@ function articleTokenFromClaim(claim) {
 const BODY_CACHE_MS = 10 * 60 * 1000;
 const bodyCache = new WeakMap();
 const AMENDMENT_RETRY_MS = 1500;
+// The application's local official ELI copy (RAG) of an amending act, read before ELI is asked:
+// registered by the server (core-law index); null when the copy does not hold its text.
+let localAmendmentText = null;
+export function setLocalAmendmentText(source) {
+    localAmendmentText = source;
+}
 function amendmentBody(fetcher, pdfTextExtractor, eli) {
+    return amendmentText(fetcher, pdfTextExtractor, eli).then((text) => (text === null ? null : text.toLocaleLowerCase("pl")));
+}
+/** The amending act's text with its letter case (its new wordings are quoted from it). */
+export function amendmentText(fetcher, pdfTextExtractor, eli) {
     let cache = bodyCache.get(fetcher);
     if (!cache)
         bodyCache.set(fetcher, (cache = new Map()));
     const hit = cache.get(eli);
     if (hit && Date.now() - hit.at < BODY_CACHE_MS)
         return hit.body;
-    // One more try after a pause: of a dozen checks run at once one read may fail (RD 121/26:
-    // art. 190a and 245 KK unverified in the turn, verified when checked again).
-    const body = fetchAmendmentBody(fetcher, pdfTextExtractor, eli).then((first) => first ?? new Promise((resolve) => setTimeout(() => resolve(fetchAmendmentBody(fetcher, pdfTextExtractor, eli)), AMENDMENT_RETRY_MS)));
+    let local = null;
+    try {
+        local = localAmendmentText?.(eli) ?? null;
+    }
+    catch {
+        local = null;
+    }
+    // One more try after a pause: of a dozen checks run at once one read may fail (live case: // art. 190a and 245 KK unverified in the turn, verified when checked again).
+    const body = local?.trim()
+        ? Promise.resolve(normalizedAmendmentText(local))
+        : fetchAmendmentBody(fetcher, pdfTextExtractor, eli).then((first) => first ?? new Promise((resolve) => setTimeout(() => resolve(fetchAmendmentBody(fetcher, pdfTextExtractor, eli)), AMENDMENT_RETRY_MS)));
     cache.set(eli, { at: Date.now(), body });
     // A failed read is not kept: the next check tries again.
     void body.then((value) => {
@@ -245,13 +264,15 @@ async function fetchAmendmentBody(fetcher, pdfTextExtractor, eli) {
     else {
         return null;
     }
-    // Superscripts first (art. 385¹ -> 385^1): NFKC alone would make "3851" of it.
-    return superscriptsAsCaret(rawText)
+    return normalizedAmendmentText(rawText);
+}
+// Superscripts first (art. 385¹ -> 385^1): NFKC alone would make "3851" of it. Dz.U. page
+// headers out, words split at a line end joined, one line.
+function normalizedAmendmentText(rawText) {
+    return amendmentTextLine(superscriptsAsCaret(rawText)
         .normalize("NFKC")
         .replace(/<[^>]+>/gu, " ")
-        .replace(/&nbsp;|&#160;/giu, " ")
-        .replace(/\s+/gu, " ")
-        .toLocaleLowerCase("pl");
+        .replace(/&nbsp;|&#160;/giu, " "));
 }
 const ARTICLE_UNIT = "\\d+(?:\\^\\d+)?[a-ząćęłńóśźż]*";
 // "art. 10", "art. 10–15", "art. 10 do 15", "art. 10, 11 i 12"; po "§", "ust.", "pkt"
@@ -277,6 +298,11 @@ export function amendmentMentionsArticle(body, article) {
     const wanted = articleKey(article);
     if (!wanted)
         return null;
+    // A PDF text loses superscripts: art. 647^1 reads "art. 6471". Such a number is taken as the
+    // article (a false "untouched" would let the old wording through).
+    const sup = /^(\d+)\^(\d+)([a-ząćęłńóśźż]*)$/u.exec(article.trim().toLocaleLowerCase("pl"));
+    if (sup && new RegExp(`\\bart\\.?\\s*${sup[1]}${sup[2]}${sup[3]}(?![\\d\\p{L}^])`, "iu").test(body))
+        return true;
     let uncertain = false;
     for (const group of body.matchAll(ARTICLE_GROUP)) {
         let previous = null;
@@ -339,7 +365,8 @@ export function amendmentPartFor(body, actTitle) {
     if (key.length < 6)
         return body;
     const units = body.split(/(?=\bart\.\s*\d+[a-ząćęłńóśźż]*\.\s+w\s+ustawie\b)/iu);
-    if (units.length < 3)
+    // One amended act (or the text starts with its unit, no title before it): the whole text.
+    if (units.filter((unit) => /^art\./iu.test(unit)).length < 2)
         return body;
     const own = units.filter((unit) => /^art\./iu.test(unit) && flat(unit.slice(0, 700)).includes(key));
     return own.length ? own.join("\n") : body;
@@ -405,12 +432,12 @@ async function effectiveAmendmentsTouchArticle(fetcher, pdfTextExtractor, decisi
         const body = await amendmentBody(fetcher, pdfTextExtractor, decision.eli);
         const part = body === null ? "" : amendmentPartFor(body, actTitle);
         const touches = body === null ? null : amendmentMentionsArticle(part, article);
-        return {
-            eli: decision.eli,
-            decision,
-            touches,
-            notYet: touches === true && Boolean(today) && partNotYetInForce(decision, part, today)
-        };
+        const notYet = touches === true && Boolean(today) && partNotYetInForce(decision, part, today);
+        // The amendment's own points for the article: a new wording, a unit changed, a repeal;
+        // none when the article is named only inside another article's new wording.
+        const cased = touches === true && !notYet ? await amendmentText(fetcher, pdfTextExtractor, decision.eli) : null;
+        const changes = cased === null ? null : articleChanges(amendmentPartFor(cased, actTitle), article);
+        return { eli: decision.eli, decision, touches: changes?.length === 0 ? false : touches, notYet, changes };
     }));
     const checked = checks.map((item) => item.eli);
     const notYet = checks.filter((item) => item.notYet).map((item) => item.decision);
@@ -418,10 +445,15 @@ async function effectiveAmendmentsTouchArticle(fetcher, pdfTextExtractor, decisi
         .filter((item) => item.touches === true && !item.notYet)
         .map((item) => item.eli);
     if (affected.length > 0) {
+        const from = (decision) => decision.effectiveFrom ?? decision.entryIntoForce ?? decision.validFrom;
         return {
             status: "AFFECTED",
             checked,
-            affected
+            affected,
+            changes: checks
+                .filter((item) => affected.includes(item.eli))
+                .sort((a, b) => (from(a.decision) ?? "").localeCompare(from(b.decision) ?? ""))
+                .map((item) => ({ eli: item.eli, ...(from(item.decision) ? { from: from(item.decision) } : {}), changes: item.changes }))
         };
     }
     const unknown = checks
@@ -942,8 +974,19 @@ export class TemporalSourceFreshnessChecker {
                     pendingWordingAmendments.push(decision.eli);
             }
             const notYetForArticle = impact?.status === "UNAFFECTED" ? (impact.notYet ?? []).map((decision) => decision.eli) : [];
+            // An amendment in force changed the article after the t.j.: its own points give the wording
+            // in force (a new wording, a unit replaced or added, words substituted). Read only when
+            // every affecting amendment's points could be read; a repeal leaves nothing to verify.
+            const amended = impact?.status === "AFFECTED" && impact.changes.every((item) => item.changes !== null)
+                ? impact.changes.flatMap((item) => item.changes.map((change) => ({ eli: item.eli, ...(item.from ? { from: item.from } : {}), ...change })))
+                : null;
+            const lastWhole = amended ? [...amended].reverse().find((change) => change.kind !== "CHANGED") : undefined;
+            if (amended && lastWhole?.kind === "REPEALED") {
+                return fail("POST_TJ_AMENDMENTS", "POST_TJ_AMENDMENT_REPEALS_REQUESTED_ARTICLE", { ...common, articleChanges: amended });
+            }
             if (impact?.status ===
-                "UNAFFECTED") {
+                "UNAFFECTED" ||
+                (amended !== null && amended.length > 0)) {
                 const sourceUrl = textAct.textHTML === true
                     ? apiUrl(textEli, "/text.html")
                     : textAct.textPDF === true
@@ -965,12 +1008,15 @@ export class TemporalSourceFreshnessChecker {
                     amendmentApplicability,
                     ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {}),
                     ...(notYetForArticle.length ? { notYetForArticle } : {}),
+                    ...(amended?.length ? { articleChanges: amended } : {}),
                     ...(pinnedSuperseded ? { pinnedSuperseded: true } : {}),
                     ...(textPendingEli ? { textPendingEli, textEli } : {}),
-                    ...(await this.transitionalOf([...notYetForArticle, ...pendingWordingAmendments]).then((found) => found.length ? { transitionalProvisions: found } : {})),
-                    reason: textPendingEli
-                        ? "CURRENT_TJ_TEXT_PENDING_PREVIOUS_TJ_AMENDMENTS_DO_NOT_TOUCH_ARTICLE"
-                        : "POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
+                    ...(await this.transitionalOf([...notYetForArticle, ...pendingWordingAmendments, ...(amended ?? []).map((change) => change.eli)]).then((found) => found.length ? { transitionalProvisions: found } : {})),
+                    reason: amended?.length
+                        ? "POST_TJ_AMENDMENT_WORDING_FROM_AMENDMENT"
+                        : textPendingEli
+                            ? "CURRENT_TJ_TEXT_PENDING_PREVIOUS_TJ_AMENDMENTS_DO_NOT_TOUCH_ARTICLE"
+                            : "POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
                 };
             }
             const transitional = impact?.status === "AFFECTED" ? await this.transitionalOf(impact.affected) : [];

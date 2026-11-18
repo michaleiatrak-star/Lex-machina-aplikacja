@@ -4007,7 +4007,7 @@ export default function MatterChatApp({
         try {
           await acceptProcessPleadingWorkflowStart(pending.caseId);
         } catch (error) {
-          // The case's pipeline is already started (RD 121/26): continue in it, as with an
+          // The case's pipeline is already started: continue in it, as with an
           // existing state, instead of offering a start that fails every time.
           if (!(error instanceof ApiError && error.code === "PROCESS_PLEADING_START_TRANSITION_INVALID")) throw error;
         }

@@ -6,10 +6,10 @@ import { LocalPolishPseudonymizer, PseudonymizationVault } from "../src/privacy/
 describe("names from the PESEL registers without the Python gazetteer", () => {
   it("a given name with a surname in any case and order; not a patron, a court or a firm", () => {
     const text =
-      "Sz.P. Michał Wiatrak\nreprezentowana przez radcę prawnego Pawła Raka. Wnosi przeciwko Janowi Kowalskiemu i Annie Nowak. " +
-      "Szpital im. Jana Pawła II. Sąd Rejonowy w Krakowie. Wiatrak Michał\nadwokata Katarzyny Oksiędzkiej. Human Park Global. Kodeks Cywilny.";
+      "Sz.P. Michał Kowalczyk\nreprezentowana przez radcę prawnego Pawła Raka. Wnosi przeciwko Janowi Kowalskiemu i Annie Nowak. " +
+      "Szpital im. Jana Pawła II. Sąd Rejonowy w Krakowie. Kowalczyk Michał\nadwokata Katarzyny Oksiędzkiej. Lumen Park Global. Kodeks Cywilny.";
     expect(detectPeselNames(text).map((span) => span.value)).toEqual([
-      "Michał Wiatrak", "Pawła Raka", "Janowi Kowalskiemu", "Annie Nowak", "Wiatrak Michał", "Katarzyny Oksiędzkiej"
+      "Michał Kowalczyk", "Pawła Raka", "Janowi Kowalskiemu", "Annie Nowak", "Kowalczyk Michał", "Katarzyny Oksiędzkiej"
     ]);
   });
 
@@ -28,8 +28,8 @@ describe("names from the PESEL registers without the Python gazetteer", () => {
     const stanza = { recognize: async () => [] };
     const recognizer = new CompositeRecognizer([new LocalGazetteerRecognizer(), stanza]);
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), recognizer).pseudonymize(
-      "Sz.P. Michał Wiatrak\nul. Azot 2A/31, 43-600 Jaworzno\nreprezentowana przez radcę prawnego Pawła Raka"
+      "Sz.P. Michał Kowalczyk\nul. Lipowa 2A/31, 00-950 Warszawa\nreprezentowana przez radcę prawnego Pawła Raka"
     );
-    for (const leaked of ["Michał", "Wiatrak", "Azot", "Raka"]) expect(result.text).not.toContain(leaked);
+    for (const leaked of ["Michał", "Kowalczyk", "Lipowa", "Raka"]) expect(result.text).not.toContain(leaked);
   });
 });

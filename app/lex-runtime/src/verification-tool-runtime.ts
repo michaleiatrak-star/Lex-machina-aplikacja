@@ -596,7 +596,7 @@ function publicCaseToolResult(
       record.sourceUrl ?? null,
     fetchedAt: record.fetchedAt,
     marker,
-    // The official text itself (RD 121/26, 2026-11-12: the model got the metadata only and wrote
+    // The official text itself (2026-11-12: the model got the metadata only and wrote
     // "the fragment holds no content" for SDI 9/12, verified on sn.pl with the user's session).
     ...(judgment.normalizedFullText ? caseTextForModel(judgment.signature, record.sourceUrl ?? "sn.pl", judgment.normalizedFullText) : {}),
     instruction:

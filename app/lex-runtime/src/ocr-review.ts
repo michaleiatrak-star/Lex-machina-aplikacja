@@ -2,7 +2,7 @@ import { ocrLineText, stampLinesInText, type IngestedPage, type OcrReviewLine } 
 
 /**
  * Lines of an OCR page a person should check against the scan: handwriting, stamps and
- * signatures come out as confident-looking nonsense ("Wire mats Mithet" for "Wiatrak
+ * signatures come out as confident-looking nonsense ("Wire mats Mithet" for "Kowalczyk
  * Michał", "Erymelean 2" for "Otrzymałem dnia"). A line is flagged when the engine was
  * unsure of it, or fairly unsure and most of its words are unknown to the dictionary
  * (SGJP, PESEL names, TERYT), or a line without words read with doubt. Measured on two real

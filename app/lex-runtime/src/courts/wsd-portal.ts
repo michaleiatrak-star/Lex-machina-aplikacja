@@ -1,7 +1,6 @@
 // Wyższy Sąd Dyscyplinarny Adwokatury: its rulings are published in the Bar's own portal
 // (wsd.adwokatura.pl, "Portal Orzecznictwa Dyscyplinarnego Adwokatury", register 19), not in
-// SN, SAOS or the courts' portals, and a web search does not index the ruling pages (RD 121/26,
-// 2026-11-12: WSD 113/22 and WSD 128/17 cited in the case file were never looked up). The
+// SN, SAOS or the courts' portals, and a web search does not index the ruling pages (// 2026-11-12: WSD 113/22 and WSD 128/17 cited in the case file were never looked up). The
 // portal's own search takes the signature (field sygAK of its register search); every hit is a
 // page …/rejestry/show/{slug}, read and accepted only when its text names the signature.
 import { plainText } from "../eli/readers.js";
@@ -27,7 +26,7 @@ export function wsdNumber(signature: string): string | null {
 /**
  * Signatures the portal's register holds: WSD rulings and the Supreme Court's judgments on the
  * bar's disciplinary cassations (SDI, DSI), published there with theses ("Sygnatura: SDI 9/12").
- * RD 121/26: sn.pl asked for its captcha and SAOS failed, while the register had SDI 9/12.
+ * a live case: sn.pl asked for its captcha and SAOS failed, while the register had SDI 9/12.
  */
 export function wsdRegisterSignature(signature: string): { prefix: "WSD" | "SDI" | "DSI"; number: string } | null {
   const match = /^\s*(WSD|SDI|DSI)\s+(\d{1,5}\/\d{2,4})\s*$/u.exec(signature.normalize("NFKC").replace(/\s+/gu, " "));
@@ -46,7 +45,7 @@ export function wsdResultLinks(html: string): string[] {
 
 /**
  * The page is the ruling with this signature: its own field "Sygnatura: …" when it has one (a
- * ruling cites others: WSD 111/22 cites SDI 87/17 and is not SDI 87/17, RD 121/26), otherwise
+ * ruling cites others: WSD 111/22 cites SDI 87/17 and is not SDI 87/17, a live case), otherwise
  * the signature named on it ("WSD 113/22", "sygn. akt WSD 113/22").
  */
 export function wsdPageNames(text: string, number: string, prefix = "WSD"): boolean {

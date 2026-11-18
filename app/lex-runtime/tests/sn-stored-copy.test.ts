@@ -17,9 +17,9 @@ describe("SAOS text of rulings the case file cites", () => {
     expect(saosCovers("XII Kp 176/20", "POWSZECHNY")).toBe(true);
   });
   it("prompt carries the text and the rank", () => {
-    const prompt = saosPrefetchPrompt([{ signature: "SDI 9/12", status: "FOUND", url: "https://www.saos.org.pl/judgments/98038", court: "Sąd Najwyższy", date: "2012-05-10", text: "nie wolno ani pisemnie ani nawet ustnie" }, { signature: "VIII W 633/25", status: "NOT_FOUND", detail: "NO_EXACT_CASE_NUMBER" }]);
+    const prompt = saosPrefetchPrompt([{ signature: "SDI 9/12", status: "FOUND", url: "https://www.saos.org.pl/judgments/98038", court: "Sąd Najwyższy", date: "2012-05-10", text: "nie wolno ani pisemnie ani nawet ustnie" }, { signature: "II W 101/25", status: "NOT_FOUND", detail: "NO_EXACT_CASE_NUMBER" }]);
     expect(prompt).toContain("RZĄD 3");
     expect(prompt).toContain("nie wolno ani pisemnie ani nawet ustnie");
-    expect(prompt).toContain("VIII W 633/25: SAOS — brak dokładnego trafienia");
+    expect(prompt).toContain("II W 101/25: SAOS — brak dokładnego trafienia");
   });
 });

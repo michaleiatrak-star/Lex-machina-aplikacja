@@ -436,7 +436,7 @@ export function plainErrorMessage(code: string, technical: string, reason?: stri
     return "Nie udało się wykonać tego etapu pracy. Spróbuj ponownie; jeśli się powtórzy, rozpocznij nowy etap.";
   }
   // The file's generation fails with the account's own code ("ACCOUNT_SESSION_CAPACITY:anthropic:1:…
-  // resets 3pm (UTC)"): the same sentence as a chat turn, not the generic error (RD 121/26).
+  // resets 3pm (UTC)"): the same sentence as a chat turn, not the generic error.
   const accountReason = /^(ACCOUNT_SESSION_[A-Z_]+)(?::|$)/.exec(code)?.[1];
   if (accountReason && PLAIN_MODEL_REASONS[accountReason]) return plainErrorMessage("PROVIDER_EXECUTION_FAILED", `${code} ${technical}`, accountReason);
   if (code === "PROVIDER_EXECUTION_FAILED" || code === "LOCAL_MODEL_EXECUTION_FAILED") {

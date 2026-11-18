@@ -22,7 +22,7 @@ function page(lines: Array<[string, number]>): IngestedPage {
 const SCAN = page([
   ["porozumienia, Pracownik naruszenie", 0.975],
   ["Wire mats Mithet", 0.779],
-  ["Human Park Global sp. z o.o.", 0.966],
+  ["Lumen Park Global sp. z o.o.", 0.966],
   ["Erymelean 2", 0.565],
   ["810.2024", 0.949],
   ["Prexese 2enoow Juneyoung Park w", 0.908],

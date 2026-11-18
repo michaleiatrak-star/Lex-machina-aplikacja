@@ -1,4 +1,4 @@
-// Strength of a pleading, checked after it is written (RD 121/26, 2026-11-16): the application
+// Strength of a pleading, checked after it is written (2026-11-16): the application
 // pointed the model at the record's passages on the issue (the attorney's statement at 01:53:35)
 // and read eight rulings of the bar's courts, yet the draft used none of the passages and two of
 // the rulings, and conceded a thesis of the decision ("the letter cites no GDPR") without checking
@@ -31,8 +31,8 @@ const signatureIn = (answer: string, signature: string) => new RegExp(signature.
 
 /**
  * Facts of the files on the person the question names (the user), found through the identity
- * legend: a verdict, a discontinuance, a notice of an offence about that person (RD 121/26: the
- * acquittal in VIII W 633/25 and the attorney's earlier notice of 6.10.2025 went unused).
+ * legend: a verdict, a discontinuance, a notice of an offence about that person (live case: the
+ * acquittal in II W 101/25 and the attorney's earlier notice of 6.10.2025 went unused).
  */
 const DECISIVE = /\b(?:uniewinni\p{L}*|umarz\p{L}*|umorz\p{L}*|skazuj\p{L}*|skazan\p{L}*|oddal\p{L}*|uwzględni\p{L}*|zawiadom\p{L}*|zawiadomieni\p{L}*|oskarż\p{L}*|wszczęt\p{L}*|wniosek\s+o\s+ukaranie)/iu;
 
@@ -57,8 +57,8 @@ export function personKeyFacts(
 }
 
 /** The passages a pleading must use or set aside by name: the strongest one and the key facts on the user. */
-// A passage about another case ("w sprawie VIII W 633/25 …") is the model's to weigh, never a duty:
-// required, it pulled the draft into a thread outside the case (XI P 27/26, 2026-11-17).
+// A passage about another case ("w sprawie II W 101/25 …") is the model's to weigh, never a duty:
+// required, it pulled the draft into a thread outside the case (V P 3/26, 2026-11-17).
 const OTHER_CASE = /\b[IVXLC]{1,6}\s+[A-Z][A-Za-z]{0,5}\s+\d{1,6}\/\d{2,4}\b/u;
 
 export function requiredPassages(passages: readonly FilePassage[], keyFacts: readonly FilePassage[]): FilePassage[] {
