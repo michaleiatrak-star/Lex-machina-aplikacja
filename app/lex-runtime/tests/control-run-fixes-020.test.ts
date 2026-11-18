@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { completeBareArticleActs, detectLegalReferences, FinalizationGate } from "../src/finalization-gate.js";
+import { completeBareArticleActs, detectLegalReferences, expectedVerificationMarker, FinalizationGate, OUTSIDE_FILES_PROCEEDING_MARKER_TEXT, refreshVerMarkerDates, softenRemainingBlockers, UNCONFIRMED_CASE_MARKER_TEXT } from "../src/finalization-gate.js";
 import { compactActAbbreviations } from "../src/legal-act-abbreviations.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 
@@ -31,6 +31,16 @@ describe("an article named with the act of its verified unit", () => {
   });
 });
 
+describe("a party's other proceeding named as a fact", () => {
+  it("is marked as outside the files, a ruling relied on stays 'not confirmed in databases'", () => {
+    const ledger = new VerificationLedger();
+    const text = ["13.11.2026 r. w V P 3/26 świadek zeznał inaczej.", "Zob. wyrok SA z 3.03.2020 r., I ACa 999/20."].join("\n");
+    const softened = softenRemainingBlockers(text, new FinalizationGate().evaluate(text, ledger)).text;
+    expect(softened).toContain(`V P 3/26 ${OUTSIDE_FILES_PROCEEDING_MARKER_TEXT}`);
+    expect(softened).toContain(`I ACa 999/20 ${UNCONFIRMED_CASE_MARKER_TEXT}`);
+  });
+});
+
 describe("the amending act named as the source of the wording", () => {
   it("'(Dz.U. 2026 poz. 1290)' of the amendment a verified provision was read with is verified", () => {
     const ledger = new VerificationLedger();
@@ -47,5 +57,16 @@ describe("the amending act named as the source of the wording", () => {
     expect(journal).toBeDefined();
     const report = new FinalizationGate().evaluate(text, ledger);
     expect(report.findings.find((finding) => finding.reference.kind === "journal")?.status).toBe("VERIFIED");
+  });
+});
+
+describe("a marker of this turn's reading carried over with an older date", () => {
+  it("gets this turn's date in place; a link the turn did not read stays", () => {
+    const ledger = new VerificationLedger();
+    ledger.add({ ...base, claim: "art. 244 § 1 KPC", toolCallId: "v1", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/468/text.pdf", evidence: "Art. 244. § 1. Dokumenty urzędowe …" });
+    const marker = expectedVerificationMarker(ledger.latest("art. 244 § 1 KPC")!)!;
+    const link = /^✅ \[VER: ([^,]+),/u.exec(marker)![1]!;
+    const old = `(art. 244 § 1 KPC ✅ [VER: ${link}, 2020-01-01]) i (art. 5 KC ✅ [VER: https://example.org/x, 2020-01-01])`;
+    expect(refreshVerMarkerDates(old, ledger)).toBe(`(art. 244 § 1 KPC ${marker}) i (art. 5 KC ✅ [VER: https://example.org/x, 2020-01-01])`);
   });
 });

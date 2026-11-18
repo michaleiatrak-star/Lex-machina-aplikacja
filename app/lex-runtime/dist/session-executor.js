@@ -11,7 +11,7 @@ import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { checkpointOwned, checkpointsReading } from "./process-checkpoint-contract.js";
-import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences, softenRemainingBlockers } from "./finalization-gate.js";
+import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences, refreshVerMarkerDates, softenRemainingBlockers } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
@@ -3554,7 +3554,8 @@ export class SafeSessionExecutor {
         }
         // Professions' statutes under the model's own abbreviations ("art. 91 PrAdw"): named, so the
         // article is matched to its act by the gates.
-        let modelOutput = legalTurn ? expandProfessionActAbbreviations(execution.output) : execution.output;
+        // A marker carried over with an older date is this turn's reading of the same link: dated anew.
+        let modelOutput = legalTurn ? refreshVerMarkerDates(expandProfessionActAbbreviations(execution.output), ledger) : execution.output;
         const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
         const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== activeJurisdictionPack());
@@ -4181,7 +4182,7 @@ export class SafeSessionExecutor {
             });
         }
         // The Dz.U. address of the text each act was read from, once per act, from the ledger.
-        const journalAddresses = addVerifiedJournalAddresses(collapseRepeatedVerMarkers(actCompletion.text), ledger);
+        const journalAddresses = addVerifiedJournalAddresses(collapseRepeatedVerMarkers(refreshVerMarkerDates(actCompletion.text, ledger)), ledger);
         if (journalAddresses.added.length > 0) {
             audit.record("gate", "VERIFIED_JOURNAL_ADDRESSES", "OK", { added: journalAddresses.added });
         }

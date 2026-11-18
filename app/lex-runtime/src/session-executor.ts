@@ -19,6 +19,7 @@ import {
   addMissingVerificationMarkers,
   verifiedLedgerMarkers,
   markUnverifiedReferences,
+  refreshVerMarkerDates,
   softenRemainingBlockers
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
@@ -4797,7 +4798,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // Professions' statutes under the model's own abbreviations ("art. 91 PrAdw"): named, so the
     // article is matched to its act by the gates.
-    let modelOutput = legalTurn ? expandProfessionActAbbreviations(execution.output) : execution.output;
+    // A marker carried over with an older date is this turn's reading of the same link: dated anew.
+    let modelOutput = legalTurn ? refreshVerMarkerDates(expandProfessionActAbbreviations(execution.output), ledger) : execution.output;
     const corrections: AnswerCorrection[] = [];
     // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
     const domainSkillRead = audit.events.some(
@@ -5494,7 +5496,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       });
     }
     // The Dz.U. address of the text each act was read from, once per act, from the ledger.
-    const journalAddresses = addVerifiedJournalAddresses(collapseRepeatedVerMarkers(actCompletion.text), ledger);
+    const journalAddresses = addVerifiedJournalAddresses(collapseRepeatedVerMarkers(refreshVerMarkerDates(actCompletion.text, ledger)), ledger);
     if (journalAddresses.added.length > 0) {
       audit.record("gate", "VERIFIED_JOURNAL_ADDRESSES", "OK", { added: journalAddresses.added });
     }
