@@ -189,7 +189,8 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
             ? `Aplikacja: ${settings.browser.addresses.join(", ")}.`
             : t("Strona aplikacji nie nasłuchuje{value}.", { value: settings.browser?.error ? ` (${settings.browser.error})` : "" })}
         </p>
-        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+        <fieldset className="server-access-group" disabled={busy || settings.browser?.state !== "LISTENING"}>
+          <legend>{t("Skąd można się łączyć")}</legend>
           {(
             [
               ["LOCAL", t("Lokalny (domyślny)"), t("Tylko z tego komputera (127.0.0.1). Połączenia z sieci są odrzucane.")],
@@ -220,7 +221,8 @@ export function ServerAdminPanel({ onModeChanged, currentUserId = "" }: { onMode
             </label>
           ))}
         </fieldset>
-        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+        <fieldset className="server-access-group" disabled={busy || settings.browser?.state !== "LISTENING"}>
+          <legend>{t("Szyfrowanie połączenia")}</legend>
           {(
             [
               ["HTTPS", t("HTTPS (domyślny)"), t("Połączenie szyfrowane. Wpisany adres http:// przechodzi na https://.")],

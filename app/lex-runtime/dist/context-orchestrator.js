@@ -512,7 +512,7 @@ export function documentCoveragePrompt(original, sent, options) {
             (missing.length ? `; NIEPRZEKAZANE s. ${pageRanges(missing)}` : "") +
             (options.inventoryDocuments?.has(document.documentId) ? " — CAŁY dokument przeczytany przez aplikację do INWENTARZA DOWODÓW" : ""));
     });
-    // Every document delivered whole: said plainly (XI P 27/26: two hearing records in the context
+    // Every document delivered whole: said plainly (V P 3/26: two hearing records in the context
     // in full, the answer told the user they had been read "partly").
     if (!lines.length) {
         return original.length

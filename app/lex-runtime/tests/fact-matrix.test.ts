@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { factDescriptionRequest, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, verifiedFacts } from "../src/fact-matrix.js";
 
-const M = "VII P 94/25, 17 marca 2026";
-const N = "XI P 27/26, 13 listopada 2026";
+const M = "IV P 12/25, 17 marca 2026";
+const N = "V P 3/26, 13 listopada 2026";
 const s = (documentId: string, heading: string, text: string) => ({ documentId, chunkIndex: 0, heading, text });
 const statements = [
   s("m", M, "Po rozwiązaniu umowy powód kontaktował się ze mną smsowo wysyłał mi wiadomości, w których straszył mnie przepisami karnymi."),
@@ -23,7 +23,7 @@ const reply = JSON.stringify([
 
 describe("the fact matrix from the model's description of the facts (quotes checked in the record)", () => {
   it("the request carries every statement by record and asks for verbatim quotes", () => {
-    const ask = factDescriptionRequest("Kast", statements);
+    const ask = factDescriptionRequest("Lenk", statements);
     expect(ask.user).toContain(`## ${M}`);
     expect(ask.user).toContain("- Trwało to może 3 miesiące.");
     expect(ask.system).toContain("DOSŁOWNY");
@@ -35,12 +35,12 @@ describe("the fact matrix from the model's description of the facts (quotes chec
     expect(facts).toHaveLength(6);
     const rows = factRows(facts);
     expect(rows.map((row) => `${row.attribute}:${row.differs}`)).toEqual(expect.arrayContaining(["okres:true", "kanał:true", "treść:true"]));
-    const prompt = factMatrixPrompt("Kast", rows, dropped);
+    const prompt = factMatrixPrompt("Lenk", rows, dropped);
     expect(prompt).toContain("## wiadomości od powoda");
     expect(prompt).toContain("okres · RÓŻNE");
     expect(prompt).toContain("odrzucono 1");
     expect(prompt).not.toContain("obrażał");
-    expect(factMatrixGoals("Kast", rows)).toEqual(["Wykazać sprzeczność lub zmianę wersji zeznań świadka Kast: wiadomości od powoda (okres, kanał, treść)"]);
+    expect(factMatrixGoals("Lenk", rows)).toEqual(["Wykazać sprzeczność lub zmianę wersji zeznań świadka Lenk: wiadomości od powoda (okres, kanał, treść)"]);
     expect(factMatrixRequired(rows).length).toBe(6);
   });
 

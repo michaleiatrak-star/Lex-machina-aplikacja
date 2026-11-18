@@ -172,10 +172,17 @@ function temporalFreshness(records, now) {
             : `missingOrStale=${invalid.length}`
     };
 }
+// A provision the answer names only to say it is repealed or not relied on ("art. 217 KPC jest
+// uchylony … nie powołano", V P 3/26): marked unverified, it is a disclosure, not a citation, and
+// does not block the answer (the finalization report still lists it).
+const DISCLOSED_NOT_CITED = /(?:uchylon\p{L}*|nie\s+(?:został\p{L}*\s+|jest\s+)?powołan\p{L}*|nie\s+powołuj\p{L}*|nie\s+ma\s+(?:tej\s+)?jednostki|brak\s+(?:tej\s+)?jednostki)/iu;
+function citedClaim(finding) {
+    return !(finding.status === "UNVERIFIED_MARKED" && finding.reference.kind === "statute" && DISCLOSED_NOT_CITED.test(finding.reference.lineText));
+}
 function citationLedger(finalization) {
     const invalid = finalization.findings
         .filter((finding) => finding.status !==
-        "VERIFIED");
+        "VERIFIED" && citedClaim(finding));
     return {
         id: "CITATION_LEDGER",
         subgate: "I-E_CITATION_LEDGER",
@@ -205,7 +212,7 @@ function documentCitations(report) {
 function citations(finalization) {
     const invalid = finalization.findings
         .filter((finding) => finding.status !==
-        "VERIFIED");
+        "VERIFIED" && citedClaim(finding));
     return {
         id: "LEGAL_CITATIONS",
         subgate: "I-E1_LEGAL_CITATIONS",
@@ -227,7 +234,7 @@ function caseSignatures(finalization) {
         "case" &&
         finding.status !==
             "VERIFIED" &&
-        // Another proceeding the case's files name ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"): a fact
+        // Another proceeding the case's files name ("II W 101/25 ⚠️ [… z materiałów sprawy]"): a fact
         // of the case, marked where it comes from, not a cited judgment to verify.
         !(finding.status === "UNVERIFIED_MARKED" &&
             finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT)));

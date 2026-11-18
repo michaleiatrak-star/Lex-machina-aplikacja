@@ -117,6 +117,50 @@ export function factMatrixGoals(witness, rows, limit = 6, scope = "witness") {
         ? `Rozstrzygnąć rozbieżność dokumentów na korzyść strony albo ją wyjaśnić: ${topic} (${attributes(topic)})`
         : `Wykazać sprzeczność lub zmianę wersji zeznań świadka ${witness}: ${topic} (${attributes(topic)})`);
 }
+/** The goals of the differing rows with the rows' own checked quotes as their evidence. */
+export function factMatrixGoalEvidence(witness, rows, limit = 6, scope = "witness") {
+    const goals = factMatrixGoals(witness, rows, limit, scope);
+    const topics = [...new Set(rows.filter((row) => row.differs).map((row) => row.topic))].slice(0, limit);
+    return goals.map((goal, index) => ({
+        goal,
+        evidence: rows
+            .filter((row) => row.topic === topics[index] && row.differs)
+            .flatMap((row) => row.cells.map((cell) => cell.facts[0]))
+            .map((fact) => ({ documentId: fact.documentId, chunkIndex: fact.chunkIndex, page: 1, text: fact.quote }))
+            .slice(0, 4)
+    }));
+}
+/**
+ * The witness's testimony against the documents on one topic: the rows of the witness matrix whose
+ * topic the documents also speak of (same name, the document matrix was seeded with it).
+ */
+export function witnessVersusDocuments(witness, witnessRows, documentRows, labels = new Map()) {
+    const byTopic = new Map();
+    for (const row of witnessRows)
+        for (const cell of row.cells)
+            for (const fact of cell.facts) {
+                const entry = byTopic.get(fold(row.topic)) ?? { said: [], documents: [] };
+                entry.said.push(fact);
+                byTopic.set(fold(row.topic), entry);
+            }
+    for (const row of documentRows)
+        for (const cell of row.cells)
+            for (const fact of cell.facts)
+                byTopic.get(fold(row.topic))?.documents.push(fact);
+    const shared = [...byTopic.entries()].filter(([, entry]) => entry.said.length && entry.documents.length);
+    if (!shared.length)
+        return "";
+    const line = (fact) => `${fact.attribute}: ${fact.value} („${fact.quote}” [[LEXDOC:${fact.documentId}:${fact.chunkIndex}]])`;
+    return [
+        `# ZEZNANIA ŚWIADKA ${witness} WOBEC DOKUMENTÓW — TEN SAM TEMAT (zestawione przez aplikację z obu macierzy)`,
+        "Co świadek zeznał i co o tym samym zdarzeniu mówią dokumenty. Sprawdź każdą cechę (czas, adresaci, nadawca, treść): niezgodność ze świadkiem wykaż cytatem obu stron; dokument z datą jest silniejszy niż ogólnikowe określenie czasu w zeznaniu.",
+        ...shared.map(([, entry]) => [
+            `## ${entry.said[0].topic}`,
+            ...entry.said.map((fact) => `- świadek [${fact.record}] ${line(fact)}`),
+            ...entry.documents.map((fact) => `- dokument [${labels.get(fact.documentId) ?? fact.record}] ${line(fact)}`)
+        ].join("\n"))
+    ].join("\n");
+}
 /** The first fact of each record in each differing row: the pleading must use them or set them aside. */
 export function factMatrixRequired(rows, limitRows = 6) {
     return rows
@@ -151,7 +195,7 @@ export function passageUnits(passages, labels) {
 function documentMatrixPrompt(rows, dropped) {
     const byTopic = new Map();
     // Every row up to 200 (shared and differing first, factRows order): a single strong fact of an official
-    // document (the opponent's statement in a protocol) is a fact of the pleading too (RD 121/26).
+    // document (the opponent's statement in a protocol) is a fact of the pleading too.
     const shown = rows.slice(0, 200);
     for (const row of shown)
         byTopic.set(row.topic, [...(byTopic.get(row.topic) ?? []), row]);
@@ -361,10 +405,16 @@ export async function fullDocumentMatrix(documents, focus, call, options = {}) {
     const records = documents.map((document) => document.record);
     const excerpts = topicExcerpts(parted.map((item) => ({ record: item.document.record, units: item.parts.flatMap((part) => part.units) })), options.topicBudget ?? 40_000);
     const first = topicRequest(excerpts, focus, "documents", options.topicLimit ?? 24);
+    const seeds = options.seedTopics ?? [];
+    if (seeds.length) {
+        first.system += `\nTematy z macierzy zeznań świadka w tej sprawie: gdy dokument mówi o tym samym zdarzeniu, użyj DOKŁADNIE tej nazwy tematu i tych cech: ${seeds.map((topic) => `„${topic.topic}” (${topic.attributes.join(", ")})`).join("; ")}.`;
+    }
     const topicReply = await call(first.system, first.user, options.topicTimeoutMs ?? 90_000);
     if (topicReply.failure)
         failures.push(`tematy: ${topicReply.failure}`);
-    const topics = parseTopics(topicReply.text, records);
+    const parsed = parseTopics(topicReply.text, records);
+    // The seeds stay on the list for every document even when the model did not repeat them.
+    const topics = [...parsed, ...seeds.filter((seed) => !parsed.some((topic) => fold(topic.topic) === fold(seed.topic))).map((seed) => ({ ...seed, records: [] }))];
     const jobs = parted.flatMap((item) => item.parts.map((part) => ({ document: item.document, ...part })));
     const results = new Map();
     let done = 0;

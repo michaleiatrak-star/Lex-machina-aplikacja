@@ -38,7 +38,7 @@ const ALLOWED_CONTENT_TYPES = [
   "text/xml",
   // An opinion, a commentary or a court's PDF on a research page: text read locally.
   "application/pdf",
-  // A bar's code of ethics or a disciplinary ruling published as a Word file (RD 121/26: the
+  // A bar's code of ethics or a disciplinary ruling published as a Word file (live case: the
   // KEA from ora-warszawa.com.pl was refused as .doc).
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

@@ -818,13 +818,22 @@ describe("wejście w życie etapami (pole comments w ELI)", () => {
       expect.objectContaining({ eli: "DU/2026/507", kind: "CHANGED", instruction: expect.stringMatching(/^w art\. 860 dodaje się § 3 i 4 w brzmieniu: „§ 3\./u) })
     ]);
     expect(result.transitionalProvisions).toEqual([
-      { eli: "DU/2026/507", text: "art. 25. do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe." }
+      { eli: "DU/2026/507", text: "Art. 25. Do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe." }
     ]);
   });
 
   it("przepisy przejściowe: tylko jednostki z formułą intertemporalną, bez części zmieniających", () => {
     const body = "art. 1. w ustawie z dnia … w art. 5 stosuje się przepisy dotychczasowe. art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych. art. 8. minister wyda rozporządzenie.";
     expect(transitionalProvisions(body)).toEqual(["art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych."]);
+  });
+
+  it("przepisy przejściowe: artykuł dodany w cudzysłowie (nowe brzmienie) nie jest przepisem noweli; wielkość liter zachowana", () => {
+    const body =
+      "Art. 1. W ustawie z dnia 26 maja 1982 r. wprowadza się następujące zmiany: 1) po art. 4b dodaje się art. 4c w brzmieniu: „Art. 4c. 1. Do postępowań o stwierdzenie niezdolności stosuje się przepisy Kodeksu postępowania karnego.”; " +
+      "Art. 4. 1. Do postępowań dyscyplinarnych wszczętych i niezakończonych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe. Art. 5. Ustawa wchodzi w życie po upływie 14 dni.";
+    expect(transitionalProvisions(body)).toEqual([
+      "Art. 4. 1. Do postępowań dyscyplinarnych wszczętych i niezakończonych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe."
+    ]);
   });
 });
 

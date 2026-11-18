@@ -152,8 +152,8 @@ function lineTokens(lineText: string): Token[] {
       })
       .filter((end) => end >= 0);
   const otherMarkers = markerSpansAfter(lineText, endsOf(["journal", "case"]));
-  // A signature's own marker ("VII P 94/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]") is no
-  // article's, wherever the line's articles stand (RD 121/26: dropped with a verified art. 17 RODO).
+  // A signature's own marker ("IV P 12/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]") is no
+  // article's, wherever the line's articles stand (live case: dropped with a verified art. 17 RODO).
   const caseMarkers = markerSpansAfter(lineText, endsOf(["case"]));
   for (const [pattern, status] of [
     [VERIFIED_MARKER, "VERIFIED"],

@@ -322,8 +322,7 @@ export function amendmentText(
   } catch {
     local = null;
   }
-  // One more try after a pause: of a dozen checks run at once one read may fail (RD 121/26:
-  // art. 190a and 245 KK unverified in the turn, verified when checked again).
+  // One more try after a pause: of a dozen checks run at once one read may fail (live case: // art. 190a and 245 KK unverified in the turn, verified when checked again).
   const body = local?.trim()
     ? Promise.resolve(normalizedAmendmentText(local))
     : fetchAmendmentBody(fetcher, pdfTextExtractor, eli).then(
@@ -343,10 +342,31 @@ export function amendmentText(
 const TRANSITIONAL =
   /dotychczasow|wszczęt\p{L}*\s+i\s+niezakończon|stosuje\s+się\s+przepisy|zachowuj\p{L}*\s+moc|przed\s+dniem\s+wejścia\s+w\s+życie\s+niniejszej\s+ustawy/u;
 
+// The amending act's own units ("Art. 4. 1. Do postępowań …"), split outside quotes: an article
+// quoted as new wording of the amended act ("„Art. 4c. …”") is part of the amending point, not a
+// unit of the amending act (live case: two added articles were given as transitional provisions).
+function ownUnits(text: string): string[] {
+  const units: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at]!;
+    if (char === "„" || char === "»") depth++;
+    else if ((char === "”" || char === "«") && depth > 0) depth--;
+    else if (depth === 0 && at > start && /\s/u.test(text[at - 1]!) && /^art\.\s*\d+[a-ząćęłńóśźż]*\.\s/iu.test(text.slice(at, at + 14))) {
+      units.push(text.slice(start, at));
+      start = at;
+    }
+  }
+  units.push(text.slice(start));
+  return units;
+}
+
+/** Transitional provisions of an amending act, in its own wording (letter case kept). */
 export function transitionalProvisions(body: string, limit = 3): string[] {
-  return body
-    .split(/(?=\bart\.\s*\d+[a-ząćęłńóśźż]*\.\s)/iu)
-    .filter((unit) => /^art\./iu.test(unit) && !/^art\.\s*\d+[a-z]*\.\s+w\s+ustawie\b/iu.test(unit) && TRANSITIONAL.test(unit))
+  return ownUnits(body)
+    .map((unit) => unit.trim())
+    .filter((unit) => /^art\./iu.test(unit) && !/^art\.\s*\d+[a-z]*\.\s+w\s+ustawie\b/iu.test(unit) && TRANSITIONAL.test(unit.toLocaleLowerCase("pl")))
     .slice(0, limit)
     .map((unit) => unit.replace(/\s+/gu, " ").trim().slice(0, 900));
 }
@@ -1089,7 +1109,8 @@ export class TemporalSourceFreshnessChecker {
   private async transitionalOf(elis: readonly string[]): Promise<Array<{ eli: string; text: string }>> {
     const found = await Promise.all(
       [...new Set(elis)].slice(0, 4).map(async (eli) => {
-        const body = await amendmentBody(this.fetcher, this.pdfTextExtractor, eli);
+        // The cased text: the provisions are given to be quoted.
+        const body = await amendmentText(this.fetcher, this.pdfTextExtractor, eli);
         return body ? transitionalProvisions(body).map((text) => ({ eli, text })) : [];
       })
     );

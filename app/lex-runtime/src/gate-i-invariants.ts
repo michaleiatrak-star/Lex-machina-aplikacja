@@ -364,7 +364,7 @@ function temporalFreshness(
 }
 
 // A provision the answer names only to say it is repealed or not relied on ("art. 217 KPC jest
-// uchylony … nie powołano", XI P 27/26): marked unverified, it is a disclosure, not a citation, and
+// uchylony … nie powołano", V P 3/26): marked unverified, it is a disclosure, not a citation, and
 // does not block the answer (the finalization report still lists it).
 const DISCLOSED_NOT_CITED = /(?:uchylon\p{L}*|nie\s+(?:został\p{L}*\s+|jest\s+)?powołan\p{L}*|nie\s+powołuj\p{L}*|nie\s+ma\s+(?:tej\s+)?jednostki|brak\s+(?:tej\s+)?jednostki)/iu;
 function citedClaim(finding: FinalizationReport["findings"][number]): boolean {
@@ -472,7 +472,7 @@ function caseSignatures(
               "case" &&
           finding.status !==
             "VERIFIED" &&
-          // Another proceeding the case's files name ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"): a fact
+          // Another proceeding the case's files name ("II W 101/25 ⚠️ [… z materiałów sprawy]"): a fact
           // of the case, marked where it comes from, not a cited judgment to verify.
           !(finding.status === "UNVERIFIED_MARKED" &&
             finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT))

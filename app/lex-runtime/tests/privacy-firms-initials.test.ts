@@ -67,9 +67,9 @@ describe("firm names: gaps found by the 5000-mention comparison corpus", () => {
   const values = (text: string) => detectFirmNames(text).map((span) => span.value);
 
   it("a letterhead firm, a firm after a place, a capitalized legal form (third scan)", () => {
-    expect(values("w Katowicach i Human Park sp. z o.o. z siedzibą")).toEqual(["Human Park"]);
-    expect(values("Kancelaria Adwokatów i Radców Prawnych\nCiecierski Rak Spółka Komandytowa")).toEqual(["Ciecierski Rak"]);
-    expect(values("Radców Prawnych\nCiecierski Rak Sp. k. Oddział Katowice")).toEqual(["Ciecierski Rak"]);
+    expect(values("w Katowicach i Lumen Park sp. z o.o. z siedzibą")).toEqual(["Lumen Park"]);
+    expect(values("Kancelaria Adwokatów i Radców Prawnych\nZawadzki Rak Spółka Komandytowa")).toEqual(["Zawadzki Rak"]);
+    expect(values("Radców Prawnych\nZawadzki Rak Sp. k. Oddział Katowice")).toEqual(["Zawadzki Rak"]);
     expect(values("umowa z Nordic Trade\nGroup sp. z o.o.")).toEqual(["Nordic Trade\nGroup"]);
     expect(values("PEŁNOMOCNICTWO\n\nZarząd Sanbud S.A. podjął uchwałę.")).toEqual(["Sanbud"]);
   });

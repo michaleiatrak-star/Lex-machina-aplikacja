@@ -34,14 +34,14 @@ import { factRows } from "../src/fact-matrix.js";
 
 describe("0.1.101: the same witness in another transliteration (A6, A8)", () => {
   it("keys Jurij / Yurii / Yuriy as one name", () => {
-    expect(transliteratedName("Yurii Kast")).toBe(transliteratedName("Jurij Kast"));
-    expect(transliteratedName("Yuriy Kast")).toBe(transliteratedName("Jurij Kast"));
+    expect(transliteratedName("Yurii Lenk")).toBe(transliteratedName("Jurij Lenk"));
+    expect(transliteratedName("Yuriy Lenk")).toBe(transliteratedName("Jurij Lenk"));
     expect(transliteratedName("Anna Nowak")).not.toBe(transliteratedName("Anna Kowal"));
   });
 
   it("a name in another transliteration is not a difference of the matrix", () => {
     const fact = (record: string, value: string) => ({ topic: "świadek", attribute: "imię i nazwisko", value, record, quote: value, documentId: record, chunkIndex: 0 });
-    const [row] = factRows([fact("D01", "Jurij Kast"), fact("D02", "Yurii Kast")]);
+    const [row] = factRows([fact("D01", "Jurij Lenk"), fact("D02", "Yurii Lenk")]);
     expect(row!.differs).toBe(false);
   });
 });

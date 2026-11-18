@@ -5,7 +5,7 @@
 // "dostarcza dowody bez pisma"), so the application has to know it.
 // In JavaScript `\b` knows only ASCII letters: after „PROTOKÓŁ” or before „Ł…” it finds no word
 // boundary, so the protocol of 16.10.2025 read as "nierozpoznany" and fell out of the fact matrix
-// (RD 121/26, 2026-11-17). Every `\b` of these patterns is the same boundary over Unicode letters.
+// (2026-11-17). Every `\b` of these patterns is the same boundary over Unicode letters.
 const WORD = "[\\p{L}\\p{N}_]";
 const UNICODE_BOUNDARY = `(?:(?<=${WORD})(?!${WORD})|(?<!${WORD})(?=${WORD}))`;
 export function unicodeWordBoundaries(pattern) {
@@ -31,7 +31,7 @@ const RULES = [
     { kind: "POZEW", label: "pozew", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*POZEW\b/u, /\bpozew\s+o\s+\p{L}+/iu, /\bwartość\s+przedmiotu\s+sporu\b/iu] },
     // A party's report of a professional or criminal wrongdoing (zawiadomienie do ORA / rzecznika
     // dyscyplinarnego / prokuratury, skarga dyscyplinarna): the starting letter of a disciplinary
-    // or criminal case, read as "nierozpoznany" (RD 121/26).
+    // or criminal case, read as "nierozpoznany".
     { kind: "ZAWIADOMIENIE", label: "zawiadomienie / skarga o przewinieniu lub przestępstwie", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*(?:ZAWIADOMIENIE|SKARGA\s+DYSCYPLINARNA)\b/iu, /\bzawiadomieni\p{L}*\s+o\s+(?:podejrzeniu\s+)?(?:popełnieni\p{L}*\s+)?(?:przewinieni\p{L}*|przestępstw\p{L}*|deliktu|naruszeni\p{L}*)/iu, /\b(?:rzecznik\p{L}*\s+dyscyplinarn\p{L}*|okręgow\p{L}*\s+rad\p{L}*\s+adwokack\p{L}*|okręgow\p{L}*\s+izb\p{L}*\s+radców|prokuratur\p{L}*)/iu, /\b(?:zawiadamiam|wnoszę\s+o\s+wszczęcie)\b/iu], minHits: 2 },
     // A party's or a professional's explanations in such a case (wyjaśnienia obwinionego / adwokata).
     { kind: "WYJASNIENIA", label: "wyjaśnienia / stanowisko strony", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*WYJAŚNIENIA\b/iu, /\b(?:składam\s+(?:następujące\s+)?wyjaśnienia|w\s+odpowiedzi\s+na\s+(?:wezwanie|zawiadomienie|skargę|pismo)|wyjaśniam,?\s+że|odnosząc\s+się\s+do\s+(?:zarzut|zawiadomieni|skarg)\p{L}*)/iu, /\b(?:rzecznik\p{L}*\s+dyscyplinarn\p{L}*|zawiadomieni\p{L}*|skarg\p{L}*|zarzut\p{L}*)/iu], minHits: 2 },
@@ -73,7 +73,7 @@ export function classifyDocument(input) {
     if ((input.images ?? 0) > 0 && words.replace(/\s+/g, "").length < 200) {
         return { kind: "ZDJECIE", label: "zdjęcie / obraz", category: "DOWOD", evidence: true, signals: [`obrazy: ${input.images}`] };
     }
-    // A court's own record of a hearing comes before the parties' letters it quotes (RD 121/26: a hearing
+    // A court's own record of a hearing comes before the parties' letters it quotes (live case: a hearing
     // protocol mentioning a prosecutor and "zawiadamiam" was read as a party's complaint).
     const record = courtRecord(head);
     if (record)

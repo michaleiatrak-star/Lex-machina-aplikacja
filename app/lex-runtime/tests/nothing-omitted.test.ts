@@ -10,7 +10,7 @@ import { factRows } from "../src/fact-matrix.js";
 
 const doc = (record: string, documentId: string, text: string) => ({ record, documentId, chunks: [{ index: 0, text }] });
 
-describe("RD 121/26: every document is read (fact-matrix fullDocumentMatrix)", () => {
+describe("a live case: every document is read (fact-matrix fullDocumentMatrix)", () => {
   it("cuts a large document into parts of about 20k characters", () => {
     const paragraph = "Akapit protokołu z rozprawy z dnia 16 października 2025 r. ".repeat(20);
     const big = doc("D01 — protokół", "d1", Array.from({ length: 50 }, () => paragraph).join("\n\n"));

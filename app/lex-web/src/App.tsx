@@ -3,6 +3,9 @@ import MatterChatApp, {
 } from "./MatterChatApp.js";
 import { LocalAiSetupPanel } from "./LocalAiSetupPanel.js";
 import { MaintenancePanel } from "./MaintenancePanel.js";
+import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
+import { WebSearchSection } from "./WebSearchSection.js";
+import "./maintenance.css";
 import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
@@ -99,6 +102,14 @@ export default function App({
           <>
             {GOOGLE_INTEGRATION_VISIBLE ? <GoogleIntegrationPanel /> : null}
             <MicrosoftIntegrationPanel />
+            {/* Sources of the answers (case-law library, web search) sit with the integrations, not
+                with the application's maintenance; on a server only the administrator sees them. */}
+            {isDesktopShell() || user.appRole === "ADMIN" ? (
+              <div className="maintenance-panel maintenance-panel-embedded">
+                <CaseLawLibrarySection />
+                <WebSearchSection admin={user.appRole === "ADMIN"} />
+              </div>
+            ) : null}
           </>
         ),
         mcp:

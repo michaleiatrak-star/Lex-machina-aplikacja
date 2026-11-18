@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifyDocument, unicodeWordBoundaries } from "../src/document-kind.js";
 
-// RD 121/26 (2026-11-17): "\b" in JavaScript knows only ASCII letters, so "PROTOKÓŁ" at the end of
+// A live case (2026-11-17): "\b" in JavaScript knows only ASCII letters, so "PROTOKÓŁ" at the end of
 // a line had no word boundary and the protocol read as "nierozpoznany"; the report to the bar
 // council and the advocate's explanations had no rule at all. All three fell out of the matrix.
 describe("document kinds with Polish letters", () => {
@@ -14,7 +14,7 @@ describe("document kinds with Polish letters", () => {
   });
 
   it("the protocol of a hearing", () => {
-    const text = "Sąd Rejonowy\nSygn. akt VII P 94/25\nPROTOKÓŁ\nrozprawy z dnia 16 października 2025 r.\nPrzewodniczący: SSR\nŚwiadek zeznał, że każda taka sytuacja będzie traktowana jako nękanie.";
+    const text = "Sąd Rejonowy\nSygn. akt IV P 12/25\nPROTOKÓŁ\nrozprawy z dnia 16 października 2025 r.\nPrzewodniczący: SSR\nŚwiadek zeznał, że każda taka sytuacja będzie traktowana jako nękanie.";
     expect(classifyDocument({ text }).kind).toMatch(/^PROTOKOL/);
   });
 

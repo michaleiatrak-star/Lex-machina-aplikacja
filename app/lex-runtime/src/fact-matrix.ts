@@ -215,7 +215,7 @@ export function passageUnits(passages: ReadonlyArray<{ documentId: string; chunk
 function documentMatrixPrompt(rows: readonly FactRow[], dropped: number): string {
   const byTopic = new Map<string, FactRow[]>();
   // Every row up to 200 (shared and differing first, factRows order): a single strong fact of an official
-  // document (the opponent's statement in a protocol) is a fact of the pleading too (RD 121/26).
+  // document (the opponent's statement in a protocol) is a fact of the pleading too.
   const shown = rows.slice(0, 200);
   for (const row of shown) byTopic.set(row.topic, [...(byTopic.get(row.topic) ?? []), row]);
   const cited = rows.filter((row) => /dokument\s+powołany|dowód\s+wskazany/iu.test(row.attribute));
@@ -239,7 +239,7 @@ function documentMatrixPrompt(rows: readonly FactRow[], dropped: number): string
 
 // The matrix built in stages (user 2026-11-16: "the matrix built by the model in stages, the
 // answers taken in a stream"): one long call describing every document timed out and left
-// nothing (RD 121/26, 0 facts after 180 s). Stage 1: one short call names the topics (events,
+// nothing (0 facts after 180 s). Stage 1: one short call names the topics (events,
 // facts, information) with their attributes and the documents that speak of them, so every
 // document is described against the same names. Stage 2: one call per document, in parallel,
 // facts as JSON lines; every line is taken as it streams in, so a call cut by the time limit
@@ -365,7 +365,7 @@ export async function stagedFactMatrix(
   return { facts: results.flatMap((result) => result.facts), dropped: results.reduce((sum, result) => sum + result.dropped, 0), topics, failures };
 }
 
-// Nothing left out (RD 121/26, 2026-11-17): the 16.10.2025 protocol and the GDPR thread were not in
+// Nothing left out (2026-11-17): the 16.10.2025 protocol and the GDPR thread were not in
 // the matrix because unrecognised documents were dropped above six, at most ten records were described
 // and documents over 60k characters fell back to passages. Now every document is read: a document over
 // ~20k characters in parts, each part one call, all in parallel and streamed; a part with no fact goes

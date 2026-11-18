@@ -1471,6 +1471,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
     match path {
         "/health" => method == "GET",
         "/api/auth/status" | "/api/auth/me" => method == "GET",
+        "/api/auth/me/profile" => method == "PATCH",
+        "/api/usage/me" => method == "GET",
         "/api/auth/bootstrap"
         | "/api/auth/login"
         | "/api/auth/recover"
@@ -1625,6 +1627,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         }
         _ if path.starts_with("/api/models/") => method == "GET",
         _ if is_execution_progress_route(path) => method == "GET",
+        _ if is_execution_cancel_route(path) => method == "POST",
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
         _ if is_mcp_route(method, path) => true,
         _ if is_invoice_route(method, path) => true,
@@ -1726,6 +1729,17 @@ struct ProxiedResponse {
 
 fn is_execution_progress_route(path: &str) -> bool {
     match path.strip_prefix("/api/sessions/progress/") {
+        Some(id) => {
+            (16..=64).contains(&id.len())
+                && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        }
+        None => false,
+    }
+}
+
+// "Zatrzymaj": the same execution id shape as the progress route.
+fn is_execution_cancel_route(path: &str) -> bool {
+    match path.strip_prefix("/api/sessions/cancel/") {
         Some(id) => {
             (16..=64).contains(&id.len())
                 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -2390,6 +2404,19 @@ mod tests {
             "/api/sessions/progress/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
         ));
         assert!(!route_allowed("GET", "/api/sessions/progress/short"));
+        assert!(route_allowed(
+            "POST",
+            "/api/sessions/cancel/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
+        ));
+        assert!(!route_allowed(
+            "GET",
+            "/api/sessions/cancel/0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
+        ));
+        assert!(!route_allowed("POST", "/api/sessions/cancel/../../auth/me"));
+        assert!(route_allowed("PATCH", "/api/auth/me/profile"));
+        assert!(route_allowed("GET", "/api/usage/me"));
+        assert!(!route_allowed("POST", "/api/usage/me"));
+        assert!(!route_allowed("POST", "/api/auth/me/profile"));
         assert!(!route_allowed("GET", "/api/sessions/progress/../../auth/me"));
         assert!(!route_allowed("GET", "/api/arbitrary"));
         assert!(!route_allowed("GET", "https://example.com/"));

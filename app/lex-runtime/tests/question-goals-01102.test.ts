@@ -4,7 +4,7 @@ import { factRows, witnessVersusDocuments, factMatrixGoalEvidence, type Describe
 import { statementPairs, type WitnessStatement } from "../src/witness-statements.js";
 
 const QUESTION =
-  "Przygotuj pismo procesowe powoda (XI P 27/26). Wykaż wzajemne sprzeczności jego zeznań (13.11.2026 i 17.03.2026) oraz to, że byłem na zwolnieniu lekarskim (L4) od 09.09.2024 do 07.10.2024, a wiadomość o zakazie kontaktu ze mną (29.09.2024) przyszła pod koniec tego okresu; odnieś to do jego zeznań na ten temat.";
+  "Przygotuj pismo procesowe powoda (V P 3/26). Wykaż wzajemne sprzeczności jego zeznań (13.11.2026 i 17.03.2026) oraz to, że byłem na zwolnieniu lekarskim (L4) od 09.09.2024 do 07.10.2024, a wiadomość o zakazie kontaktu ze mną (29.09.2024) przyszła pod koniec tego okresu; odnieś to do jego zeznań na ten temat.";
 
 describe("the question's demands are goals", () => {
   it("splits 'wykaż X oraz to, że Y; odnieś to' into goals, the back-reference joined to its demand", () => {

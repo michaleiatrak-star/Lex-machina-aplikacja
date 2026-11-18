@@ -51,7 +51,7 @@ export function caretSuperscripts(text) {
 }
 // Abbreviations of the professions' statutes a model writes after an article ("art. 91 ust. 2
 // PrAdw", "art. 64 u.r.p."): the act is not recognised under them, the article counts as bare
-// and is marked unverified (RD 121/26: art. 91 and 95n PrAdw ⚠️ next to art. 80 Prawa o
+// and is marked unverified (live case: art. 91 and 95n PrAdw ⚠️ next to art. 80 Prawa o
 // adwokaturze ✅, and a 206 s round asking the model to name the act). After an article only:
 // "(dalej: PrAdw)" stays as written.
 const PROFESSION_ACTS = [
@@ -75,9 +75,14 @@ export function expandProfessionActAbbreviations(text) {
     return PROFESSION_DOUBLED.reduce((value, pattern) => value.replace(pattern, "$1"), expanded);
 }
 const PROFESSION_DOUBLED = PROFESSION_ACTS.map(([abbreviations, title]) => new RegExp(`(${title}(?:\\s*\\(Dz\\.\\s?U\\.[^)\\n]{0,40}\\))?)\\s+(?:${abbreviations})(?![\\p{L}])`, "gu"));
+// A code written lower case without dots right after an article ("art. 190a kk", "art. 5 kc"):
+// the same code as "KK"/"KC". Only after an article, where no other word is meant (live case:
+// "art. 190a kk" was taken for a bare article, given a second "KK" and two statuses).
+const UNDOTTED_AFTER_ARTICLE = new RegExp(`(${ARTICLE_UNITS}\\s+(?:(?:✅|⚠️|🟨)\\s*\\[[^\\]\\n]{0,160}\\]\\s*)?)(kpc|kpk|kpa|kpw|kkw|kks|kro|ksh|kc|kk|kp|kw)(?![\\p{L}])`, "giu");
 export function compactActAbbreviations(text) {
     const dotted = DOTTED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), expandProfessionActAbbreviations(caretSuperscripts(text)));
-    return SPELLED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), dotted);
+    const undotted = dotted.replace(UNDOTTED_AFTER_ARTICLE, (_match, head, code) => `${head}${code.toUpperCase()}`);
+    return SPELLED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), undotted);
 }
 // Początek powołania artykułu we wszystkich modułach: "art. 415", "art.415", "art 415",
 // "artykuł 415", "artykułem 415" (wymaga flag "iu").

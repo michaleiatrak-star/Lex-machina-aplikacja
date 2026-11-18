@@ -1,5 +1,5 @@
 // Common courts' rulings on the procedural setting of the case, read before the model answers
-// (RD 121/26, 2026-11-16): the chat read SO Warszawa XII Kp 176/20 on a refusal to open
+// (2026-11-16): the chat read SO Warszawa XII Kp 176/20 on a refusal to open
 // proceedings on incomplete material; the application only listed portal links. The courts' own
 // portal ("sp" connector) is searched with the setting's phrase, the rulings it lists and the
 // common-court pages the portal search found are read, and the passages on the issue are given.

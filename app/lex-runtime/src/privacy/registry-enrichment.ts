@@ -81,7 +81,7 @@ export function firmNameForms(name: string): RegistryForm[] {
   const legalForm = legal ? legal[0].replace(/^[\s,]+/u, "") : undefined;
   if (core.length < 3 || TOO_GENERIC.has(core.toLocaleLowerCase("pl"))) return [];
   if (!/\s/u.test(core) && core.length < 4) return [];
-  // The whole name, then its parts of two or more words (one element: "Park" of "Human Park
+  // The whole name, then its parts of two or more words (one element: "Park" of "Lumen Park
   // Global" is the firm's, never a person's).
   return [core, ...firmFragments(titleCase(core))]
     .flatMap(spellings)

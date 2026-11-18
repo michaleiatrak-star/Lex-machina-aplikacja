@@ -20,7 +20,7 @@ describe("spaces dropped by OCR", () => {
   it("two known words glued, one reading only", async () => {
     expect(await fixes("ipodlega karze")).toEqual(["ipodlega→i podlega"]);
     expect(await fixes("z siedzibąw Katowicach")).toEqual(["siedzibąw→siedzibą w"]);
-    expect(await fixes("i Human Park wKatowicach")).toEqual(["wKatowicach→w Katowicach"]);
+    expect(await fixes("i Lumen Park wKatowicach")).toEqual(["wKatowicach→w Katowicach"]);
     expect(await fixes("z dniazostaje rozwiązana")).toEqual(["dniazostaje→dnia zostaje"]);
   });
 
@@ -43,7 +43,7 @@ describe("spaces dropped by OCR", () => {
   });
 
   it("a common word with one lost diacritic, not a name written without them", async () => {
-    expect(await fixes("Spólka Human Park, Członkach Zarzadu")).toEqual(["Spólka→Spółka", "Zarzadu→Zarządu"]);
+    expect(await fixes("Spólka Lumen Park, Członkach Zarzadu")).toEqual(["Spólka→Spółka", "Zarzadu→Zarządu"]);
     expect(await fixes("PELNOMOCNICTWO")).toEqual(["PELNOMOCNICTWO→PEŁNOMOCNICTWO"]);
     expect(await fixes("- pelnomocnictwo.")).toEqual(["pelnomocnictwo.→pełnomocnictwo."]);
     expect(await fixes("Jan Czaplowski, jan.czaplowski@firma.pl, tel")).toEqual([]);

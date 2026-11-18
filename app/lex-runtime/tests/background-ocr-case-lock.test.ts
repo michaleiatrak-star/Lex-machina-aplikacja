@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocalAuthStore } from "../src/auth/store.js";
 import { LocalAuthService } from "../src/auth/service.js";
 import { AuthSessionManager } from "../src/auth/session-manager.js";
@@ -132,7 +132,8 @@ describe("background OCR and the case lock", () => {
       .set("Authorization", `Bearer ${current.token}`)
       .send({ detect: false, background: true })
       .then((response) => response);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The request reaches the OCR in its own time (a loaded CI runner took over 50 ms): wait for it.
+    await vi.waitFor(() => expect(current.documents.events).toContain("ocr start"), { timeout: 2_000, interval: 10 });
     expect(current.documents.events).toEqual(["ocr start"]);
 
     const confirm = await request(current.app)
@@ -162,7 +163,8 @@ describe("background OCR and the case lock", () => {
       .set("X-Lex-Processing", "ocr-only,background")
       .send(Buffer.from("%PDF-1.7\nskan 2"))
       .then((response) => response);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The request reaches the OCR in its own time (a loaded CI runner took over 50 ms): wait for it.
+    await vi.waitFor(() => expect(current.documents.events).toContain("ocr start"), { timeout: 2_000, interval: 10 });
     expect(current.documents.events).toEqual(["ocr start"]);
 
     const confirm = await request(current.app)

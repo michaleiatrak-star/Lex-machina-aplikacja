@@ -579,22 +579,22 @@ describe("ready document with an unverified provision", () => {
     expect(draft.text).not.toContain("NIEWERYFIKOWANE]");
   });
 
-  it("a signature from the case's materials written without its marker is a draft, not a block (RD 121/26)", async () => {
+  it("a signature from the case's materials written without its marker is a draft, not a block", async () => {
     const current = fixture();
     const args = {
       caseId: current.caseId,
       createdByUserId: current.userId,
       format: "docx" as const,
-      ast: { ...ast, blocks: [{ type: "paragraph", content: [{ type: "text", text: "Sąd uniewinnił skarżącego wyrokiem z 13 lutego 2026 r., sygn. akt VIII W 633/25." }] }] },
+      ast: { ...ast, blocks: [{ type: "paragraph", content: [{ type: "text", text: "Sąd uniewinnił skarżącego wyrokiem z 13 lutego 2026 r., sygn. akt II W 101/25." }] }] },
       caseDataKey: current.caseDataKey,
       keyVersion: 1,
-      validationContext: { ...validationContext(current.documentId), caseReferences: ["VIII W 633/25"] }
+      validationContext: { ...validationContext(current.documentId), caseReferences: ["II W 101/25"] }
     };
     const blocked = await current.service.createReady(args).catch((error: unknown) => error);
     expect(blocked).toMatchObject({ reasons: ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"], draftAvailable: true });
     const draft = await current.service.createReady({ ...args, acceptUnverified: true });
     expect(draft.text).toContain("PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI.");
-    expect(draft.text).toContain("sygn. akt VIII W 633/25.");
+    expect(draft.text).toContain("sygn. akt II W 101/25.");
     // The heading names unverified sources only, not the case's own signature.
     expect(draft.text).not.toMatch(/niezweryfikowane w źródle: [^\n]*VIII W 633\/25/u);
     // Without the case's materials naming it, the same signature still blocks outright.

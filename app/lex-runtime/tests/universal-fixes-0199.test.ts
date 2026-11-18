@@ -9,7 +9,7 @@ import { statuteQuoteFindings } from "../src/quote-source-check.js";
 import { recordParties, recordPartiesPrompt } from "../src/record-parties.js";
 import { documentHeadings } from "../src/session-executor.js";
 
-const PROTOCOL = `Sygn. akt XI P 27/26
+const PROTOCOL = `Sygn. akt V P 3/26
 PROTOKÓŁ
 Dnia 13 listopada 2026 r.
 Sąd Okręgowy w Katowicach XI Wydział Pracy
@@ -23,7 +23,7 @@ describe("universal fixes 0.1.99 (user's app transcripts, 2026-11-17)", () => {
   it("a hearing protocol is a court record, its parties and case come from its heading, a witness is never a party", () => {
     expect(classifyDocument({ text: PROTOCOL }).kind.startsWith("PROTOKOL")).toBe(true);
     const parties = recordParties("d1", PROTOCOL)!;
-    expect(parties).toMatchObject({ signature: "XI P 27/26", claimant: "Jana Nowaka", respondent: "Alfa spółka z o.o. w Katowicach", witnesses: ["Adam Kowal"] });
+    expect(parties).toMatchObject({ signature: "V P 3/26", claimant: "Jana Nowaka", respondent: "Alfa spółka z o.o. w Katowicach", witnesses: ["Adam Kowal"] });
     const prompt = recordPartiesPrompt([{ ...parties, label: "protokół" }]);
     expect(prompt).toContain("świadek nigdy nie jest stroną");
     expect(prompt).toContain("najnowszego protokołu");
@@ -61,7 +61,7 @@ describe("universal fixes 0.1.99 (user's app transcripts, 2026-11-17)", () => {
 
   it("a passage about another case is never required", () => {
     const passages = [
-      { documentId: "d", chunkIndex: 0, page: 1, text: "W sprawie VIII W 633/25 świadek zeznała inaczej.", weight: 1 },
+      { documentId: "d", chunkIndex: 0, page: 1, text: "W sprawie II W 101/25 świadek zeznała inaczej.", weight: 1 },
       { documentId: "d", chunkIndex: 1, page: 1, text: "Świadek nie słyszał o zakazie kontaktu.", weight: 0.9 }
     ];
     expect(requiredPassages(passages, []).map((passage) => passage.chunkIndex)).toEqual([1]);

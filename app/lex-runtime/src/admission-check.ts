@@ -1,4 +1,4 @@
-// An admission in a pleading is checked before it stays (RD 121/26 plan, point 5): the draft wrote
+// An admission in a pleading is checked before it stays (point 5): the draft wrote
 // that the decision's GDPR thesis "jest trafna" while the persons concerned were companies (not data
 // subjects, art. 4 pkt 1 RODO) and art. 17 ust. 3 lit. e RODO did not fit the facts. When the draft
 // concedes a thesis or drops a charge, one correcting round asks whether the premises of the concept
@@ -12,7 +12,7 @@ const ADMISSION =
   /(?<![\p{L}])(?:tez\p{L}*\s+(?:\p{L}+\s+){0,6}?(?:jest\s+)?trafn\p{L}*|trafn\p{L}*\s+(?:jest\s+)?tez\p{L}*|(?:ma|mają|miał\p{L}*)\s+rację|rację\s+(?:ma|mają|należy\s+przyznać)|nie\s+podtrzymuj\p{L}*|nie\s+odpieram\p{L}*|nie\s+kwestionuj\p{L}*|przyznaj\p{L}*\s+(?:rację|że)|słusznie\s+(?:\p{L}+\s+)?(?:wskaza\p{L}*|przyj\p{L}*|uzna\p{L}*|stwierdzi\p{L}*|ustali\p{L}*)|rezygnuj\p{L}*\s+z\s+zarzut\p{L}*|wycofuj\p{L}*\s+zarzut\p{L}*)(?![\p{L}])/iu;
 
 // Notes outside the letter (the working table, "Uwagi poza pismem", the step tracker) are not the
-// party's word: a concession counts only in the letter itself (RD 121/26: a note was read as one).
+// party's word: a concession counts only in the letter itself (live case: a note was read as one).
 const NOTES_HEADING =
   /\n[ \t>*#_]*(?:uwagi\s+(?:poza\s+pismem|dla\s+(?:użytkownika|pełnomocnika|klienta))|notatk\p{L}*\s+robocz\p{L}*|===\s*KONIEC\s+PISMA\s*===|ST-FINAL|STEP-TRACKER)/iu;
 

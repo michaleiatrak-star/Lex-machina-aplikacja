@@ -1,5 +1,5 @@
 // Codes of professional ethics a case file cites ("§ 16 zd. 3 KEA"): not acts of the Journal of
-// Laws (not in ELI), published by the profession's own council. RD 121/26 (2026-11-12): the
+// Laws (not in ELI), published by the profession's own council. A live case (2026-11-12): the
 // central norm of the case, § 16 KEA, was never read by the application, while the chat read it
 // from the consolidated text of the Bar's council. The application reads the cited paragraphs
 // before the model answers.

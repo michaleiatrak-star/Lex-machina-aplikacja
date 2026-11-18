@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QUOTE_MISMATCH_MARKER, processDocumentCitationMarkers } from "../src/document-citations.js";
 
-// XI P 27/26 (2026-11-16): a faithful quote of a hearing record was marked "not in the document"
+// V P 3/26 (2026-11-16): a faithful quote of a hearing record was marked "not in the document"
 // because of an editor's "[sic]" and of the record's space before a comma.
 const record = {
   caseId: "case_" + "a".repeat(32),

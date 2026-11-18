@@ -31,11 +31,13 @@ if (!root) throw new Error("Missing #root application mount.");
 // leaves Polish. Changing the language reloads the window.
 void loadLocale(preferredLocale())
   .catch(() => undefined)
-  .then(() => Promise.all([import("./AuthApp.js"), import("./ComponentSetup.js")]))
-  .then(([{ default: App }, { ComponentSetup }]) => {
+  .then(() => Promise.all([import("./AuthApp.js"), import("./ComponentSetup.js"), import("./ViewErrorBoundary.js")]))
+  .then(([{ default: App }, { ComponentSetup }, { ViewErrorBoundary }]) => {
     createRoot(root).render(
       <StrictMode>
-        <ComponentSetup><App /></ComponentSetup>
+        <ViewErrorBoundary area="aplikacja">
+          <ComponentSetup><App /></ComponentSetup>
+        </ViewErrorBoundary>
       </StrictMode>
     );
   });

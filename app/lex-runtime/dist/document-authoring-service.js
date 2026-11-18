@@ -45,7 +45,7 @@ function exportBlocked(code, report) {
     return new ExportGateBlockedError(code, report.reasons, blockedReferences(report.finalization), report.reasons.length === 1 && report.reasons[0] === "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION");
 }
 /**
- * A signature the case's materials name (VIII W 633/25 in RD 121/26) written in the file
+ * A signature the case's materials name (II W 101/25 in a live case) written in the file
  * without its marker: marked "z materiałów sprawy" as in the chat, so it is an unverified
  * reference the user may accept in a draft, not a blocking judgment of unknown origin.
  */

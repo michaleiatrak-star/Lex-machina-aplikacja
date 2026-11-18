@@ -53,7 +53,7 @@ function fold(text) {
         else if (ch === "…")
             folded = "...";
         else if (/[,.;:!?]/u.test(ch) && out.endsWith(" ")) {
-            // "skarżyli się , że" in a hearing record is "skarżyli się, że" in a quote (XI P 27/26).
+            // "skarżyli się , że" in a hearing record is "skarżyli się, że" in a quote (V P 3/26).
             out = out.slice(0, -1);
             map.pop();
             folded = ch;
@@ -76,7 +76,7 @@ function quoteSegments(quote) {
         .map((segment) => fold(segment).text.trim().replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/gu, ""))
         .filter((segment) => segment.length >= 3);
 }
-// An editorial ending in brackets ("Członk[ów] Zarządu", "poczt[y] tradycyjn[ej]", RD 121/26):
+// An editorial ending in brackets ("Członk[ów] Zarządu", "poczt[y] tradycyjn[ej]", a live case):
 // that word may differ in its ending from the source; its stem and every other word may not.
 const ADAPTED_WORD = /(\p{L}*)\[(\p{L}{1,6})\](\p{L}*)/gu;
 function locateAdaptedQuote(contextText, quote) {
@@ -115,8 +115,8 @@ function locateQuote(contextText, quote) {
         return undefined;
     return locateSegments(contextText, segments) ?? locateWithPersonSymbols(contextText, quote);
 }
-// A quote with a person's name where the document holds the person's symbol (RD 121/26: „uniewinnia
-// obwinionego Michała Wiatraka” against „uniewinnia obwinionego [PII:PERSON:0008]”): each symbol
+// A quote with a person's name where the document holds the person's symbol (live case: „uniewinnia
+// obwinionego Michała Kowalczyka” against „uniewinnia obwinionego [PII:PERSON:0008]”): each symbol
 // stands for one run of capitalised words of the quote; every other word must still be verbatim.
 const PERSON_SYMBOL = /\[(?:LMPII:D\d{2}|PII):PERSON:\d{4}\]/gu;
 const NAME_RUN = /\p{Lu}[\p{L}'’-]*(?:\s+\p{Lu}[\p{L}'’-]*){0,3}/gu;
@@ -258,9 +258,9 @@ function attributedToDocument(text, quoteStart, quoteEnd = quoteStart) {
     // "pozwany powołuje art. 6 k.c., który stanowi: „…”": the nearer cue decides.
     return lastMatchEnd(NON_DOCUMENT_SOURCE, before) < attribution;
 }
-// "VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]": the signature is in the case's
+// "II W 101/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]": the signature is in the case's
 // documents, so the marker gets the passage that names it, shown and highlighted like a quote
-// (RD 121/26: the user saw "z materiałów sprawy" without which document or where).
+// (live case: the user saw "z materiałów sprawy" without which document or where).
 const SIGNATURE_BEFORE = /((?:sygn\.?\s*(?:akt\s*)?:?\s*)?(?:[A-ZĄĆĘŁŃÓŚŹŻ]{1,8}\s+){1,4}\d+\/\d{2,4})\s*$/u;
 function linkCaseMaterialSignatures(text, entries) {
     if (!entries.length || !text.includes(CASE_MATERIAL_MARKER_TEXT))
@@ -363,7 +363,7 @@ function linkDocumentUnits(text, entries) {
 const MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"];
 const MONEY = /(?<![\p{L}\d,.])\d{1,3}(?:[ .  ]\d{3})*(?:,\d{1,2})?\s*(?:zł|złotych|PLN)(?![\p{L}])/gu;
 // A signature or a ruling's name right before a date: the ruling's date ("SDI 9/12 z", "wyrokiem z dnia").
-// Also an act's number ("uchwały Prezydium NRA nr 174/2026 z 23 czerwca 2026 r.", RD 121/26: the
+// Also an act's number ("uchwały Prezydium NRA nr 174/2026 z 23 czerwca 2026 r.", a live case: the
 // date was linked to the rzecznik's decision that quotes the same resolution).
 const RULING_BEFORE_DATE = /(?:\b[A-Z][A-Za-z]{0,4}\s+\d{1,5}\/\d{2,4}|\bnr\.?\s*[\dIVXLC]{1,6}(?:\/[\dIVXLC]{1,6}){1,2}|\b(?:wyrok\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*|uchwał\p{L}*|decyzj\p{L}*|obwieszczeni\p{L}*|ustaw\p{L}*|rozporządzeni\p{L}*))\s*(?:\([^)]{0,40}\)\s*)?(?:z\s+dnia|z|dnia|of)?\s*$/u;
 const DATE = new RegExp(`(?<![\\d.])(\\d{1,2})(?:\\.(\\d{1,2})\\.|\\s+(${MONTHS.join("|")})\\s+)(\\d{4})(?!\\d)`, "giu");
@@ -428,14 +428,14 @@ function linkDocumentAnchors(text, entries) {
     let date;
     while ((date = dates.exec(text)) !== null) {
         // The date of a ruling ("WSD 77/22 z 21 września 2022 r.", "wyrokiem z 13 lutego 2026 r., sygn.")
-        // is the ruling's, not a fact of a case document (RD 121/26, 2026-11-12).
+        // is the ruling's, not a fact of a case document (2026-11-12).
         const before = text.slice(Math.max(0, date.index - 60), date.index);
         const after = text.slice(date.index + date[0].length, date.index + date[0].length + 30);
         if (RULING_BEFORE_DATE.test(before) || /^\s*r\.?,?\s*(?:sygn|[A-Z]{1,5}\s+\d+\/\d{2})/u.test(after))
             continue;
         const key = dateKey(date);
         // After the year's "r." ("4 maja 2026 r. [dokument]"), never between them.
-        const year = /^\s*r\.(?!\p{L})/u.exec(after);
+        const year = /^\s*[rR]\.(?!\p{L})/u.exec(after);
         add(date.index + date[0].length + (year ? year[0].length : 0), { label: date[0], key: `d${key}`, locate: firstMatching(DATE, dateKey, key) });
     }
     // A quote is linked as a quote (linkUnmarkedQuotes, the model's marker): nothing inside it twice.
@@ -468,6 +468,24 @@ function linkDocumentAnchors(text, entries) {
         const lineStart = text.lastIndexOf("\n", end) + 1;
         const line = text.slice(lineStart, end);
         if (/\[(?:VER|NIEWERYFIKOWANE)[^\]]*$|\]\([^)]*$/u.test(line))
+            continue;
+        // A heading, or a sentence the model already linked to its source, needs no link at each date
+        // (V P 3/26: "17 marca 2026 r. [link]" next to the quote's own link, in every paragraph).
+        if (/^\s*#/u.test(line))
+            continue;
+        // A pleading's title in capitals ("**ODWOŁANIE OD POSTANOWIENIA Z 14 PAŹDZIERNIKA 2026 R. …**"): no link inside.
+        const fullLine = text.slice(lineStart, (text.indexOf("\n", end) + 1 || text.length + 1) - 1);
+        if (/^\s*\*\*[^\p{Ll}]{12,}\*\*\s*$/u.test(fullLine))
+            continue;
+        // Sentence bounds: a full stop not after an abbreviation ("r.", "ust.", "art."), a semicolon, a line end.
+        const STOP = /(?<!(?:\br|\bust|\bart|\bpkt|\bnr|\bpoz|\bsygn|\bzm|\btj|\bm\.in))[.!?;](?=\s)|\n/gu;
+        let sentenceStart = lineStart;
+        for (const stop of text.slice(lineStart, end).matchAll(STOP))
+            sentenceStart = lineStart + stop.index + 1;
+        STOP.lastIndex = 0;
+        const tail = new RegExp(STOP.source, "u").exec(text.slice(end));
+        const sentenceEnd = tail ? end + tail.index : text.length;
+        if (/\[\[LEXDOC:/u.test(text.slice(sentenceStart, sentenceEnd)))
             continue;
         const entry = owner(anchor);
         if (!entry)
@@ -536,7 +554,7 @@ export function documentCitationSystemPrompt(attachments) {
         "[[LEXDOC:<documentId>:<chunkIndex>]]",
         "Use only documentId and chunkIndex values present in LOCAL_DOCUMENT_CONTEXT.",
         "Never invent a document id, page, chunk, quote, or marker.",
-        "A document only mentioned in the attached files (an annex listed in a letter, a pleading named by its date) but not itself attached: never state what it says or decides. Write that it is mentioned in the document that names it and that its content is not in the case file (RD 121/26: an opponent's letter not in the file was described as refusing payment).",
+        "A document only mentioned in the attached files (an annex listed in a letter, a pleading named by its date) but not itself attached: never state what it says or decides. Write that it is mentioned in the document that names it and that its content is not in the case file (live case: an opponent's letter not in the file was described as refusing payment).",
         "For a verbatim quotation, place the marker immediately after the closing quotation mark so the application can validate and highlight the exact passage.",
         "Quote a pleading, a letter or any case document word for word; mark omissions with [...]. A quotation not found in the document is shown to the user as not matching it.",
         "Markers are machine-readable metadata and will be replaced by clickable in-chat citations before presentation."
@@ -555,7 +573,7 @@ function documentName(attachment) {
     return name;
 }
 // One label per document across the answer ("pismo 2", not "Dokument 17" for the 17th link to
-// the same file, RD 121/26): its kind, numbered when several documents share it. No file name
+// the same file, a live case): its kind, numbered when several documents share it. No file name
 // (it may carry personal data).
 const documentLabels = new WeakMap();
 let labelAttachments = [];

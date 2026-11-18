@@ -12,7 +12,7 @@ import type { PersonCase } from "./privacy/person-morphology.js";
 // templates), and nothing of the text changes on the way. Easier for a model than JSON and
 // without its failures (a cut object, a block shape, the wrong field).
 //
-// @MIEJSCE_DATA: Jaworzno, 23 września 2026 r.
+// @MIEJSCE_DATA: Warszawa, 23 września 2026 r.
 // @NADAWCA:            (or @ADRESAT:, @STRONA: Wnioskodawca (klient):) the lines of the block below
 // @DOTYCZY: Umowy pożyczki nr 1 z dnia 16 sierpnia 2024 r.
 // @TYTUL: OŚWIADCZENIE O SPEŁNIANIU ŚWIADCZEŃ Z ZASTRZEŻENIEM ZWROTU

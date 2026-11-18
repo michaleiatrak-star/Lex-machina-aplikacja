@@ -541,7 +541,7 @@ export class PseudonymizationVault {
     /**
      * Another reading of a known person (samePerson): its key leads to the person's token, and a
      * clearer reading (a normal spelling, an unambiguous paradigm) becomes the person's paradigm,
-     * so the answer restores "Michał Wiatrak", not the OCR's "MICHAL WIATRAK". False when the
+     * so the answer restores "Michał Kowalczyk", not the OCR's "MICHAL KOWALCZYK". False when the
      * person has no token yet.
      */
     mergePerson(known, reading) {
@@ -550,7 +550,7 @@ export class PseudonymizationVault {
             return false;
         this.keyToToken.set(personEntityKey(reading, "PERSON"), token);
         this.personReadings.add(reading);
-        // Never a reading with fewer words ("MICHAŁWIATRAK" read without its space).
+        // Never a reading with fewer words ("MICHAŁKOWALCZYK" read without its space).
         const current = this.tokenEntities.get(token) ?? known;
         const wordCount = (entity) => entity.canonical.split(/\s+/u).filter(Boolean).length;
         const fuller = wordCount(reading) >= Math.max(2, wordCount(current));
@@ -652,6 +652,14 @@ export class LocalPolishPseudonymizer {
     async pseudonymize(text, directives = []) {
         const manual = normalizeDirectives(text, directives);
         const keep = manual.filter((item) => item.action === "KEEP");
+        // The whole page kept as written (a file confirmed without anonymization): nothing to
+        // recognize, so no recognizer runs - it may be unavailable on this computer (user 2026-11-17).
+        if (text.trim() &&
+            keep.length > 0 &&
+            manual.every((item) => item.action === "KEEP") &&
+            keep.some((item) => item.start <= 0 && item.end >= text.length)) {
+            return { text, findings: [], annotations: [], keptRanges: keep.map((item) => ({ start: item.start, end: item.end })), counts: {} };
+        }
         const labelDirectives = manual.filter((item) => item.action === "LABEL");
         const annotations = labelDirectives.map((item) => ({
             start: item.start,
@@ -679,7 +687,7 @@ export class LocalPolishPseudonymizer {
         // protected even where no legal form or prefix marks them ("umowę z Transkomem").
         const registryFirms = new Map();
         // A firm's name as OCR damaged it -> the register's name: one firm, one token
-        // ("Human Park Giobal" is "Human Park Global", not a second company).
+        // ("Lumen Park Giobal" is "Lumen Park Global", not a second company).
         const registryCanonical = new Map();
         let registered = [];
         try {
@@ -743,7 +751,7 @@ export class LocalPolishPseudonymizer {
                 if (form.organization)
                     registryFirms.set(match[0], form.organization.legalForm);
             }
-            // The same name or address as OCR damaged it ("uman Park Global", "Michal Wiatrak",
+            // The same name or address as OCR damaged it ("umen Park Global", "Michal Kowalczyk",
             // "Pukowca l5"): the whole of it within a letter or two, masked and marked for the user to
             // confirm. An address only with its own numbers: "Pukowca 16" is another building.
             if (form.pattern || (form.kind !== "PERSON" && form.kind !== "ADDRESS"))
@@ -851,7 +859,7 @@ export class LocalPolishPseudonymizer {
                 const heading = lineEnd > 0 && roleHeading(recognized.value.slice(0, lineEnd));
                 const below = heading ? recognized.value.slice(lineEnd + 1).split("\n")[0].trim() : "";
                 // A given name at the end of a line and the surname opening the next ("Adwokata
-                // Andrzeja⏎Ciecierskiego z Kancelarii"): one name; an address below is no part of it.
+                // Andrzeja⏎Zawadzkiego z Kancelarii"): one name; an address below is no part of it.
                 const wrapped = lineEnd > 0 &&
                     !heading &&
                     /^\p{Lu}\p{Ll}+$/u.test(recognized.value.slice(0, lineEnd).trim()) &&
@@ -876,7 +884,7 @@ export class LocalPolishPseudonymizer {
                     if (lineStart && !/\s/u.test(found.value) && /^\s*,\s*(?:dnia\s+)?\d/u.test(after))
                         continue;
                     // The name of a firm from the register is the register's span: a recognized span that
-                    // runs past it takes words of the sentence with it ("Pomiędzy Human Park Global").
+                    // runs past it takes words of the sentence with it ("Pomiędzy Lumen Park Global").
                     const firm = autoSpans.find((span) => registryFirms.has(span.value) && span.start < found.end && found.start < span.end && (found.start !== span.start || found.end !== span.end));
                     if (firm)
                         continue;
@@ -915,8 +923,8 @@ export class LocalPolishPseudonymizer {
         }
         // A firm name read after a prefix may run into its owner's name ("P.H.U. Marex Marek
         // Nowak"): the firm ends where a recognized person starts; the person keeps its own token.
-        // A name before a legal form is the firm whole: "Ciecierski Rak Spółka Komandytowa" keeps
-        // "Ciecierski Rak" as one element, though both words are also surnames.
+        // A name before a legal form is the firm whole: "Zawadzki Rak Spółka Komandytowa" keeps
+        // "Zawadzki Rak" as one element, though both words are also surnames.
         for (const firm of firms) {
             if (firm.legalForm)
                 continue;
@@ -935,7 +943,7 @@ export class LocalPolishPseudonymizer {
                 autoSpans.splice(index, 1);
         }
         // A firm read before its legal form may take the words before its name ("Pomiędzy Human
-        // Park Global Sp. z o.o.", "(dalej „Rozporządzenie”) Human Park Sp. z o.o."): a name the
+        // Park Global Sp. z o.o.", "(dalej „Rozporządzenie”) Lumen Park Sp. z o.o."): a name the
         // register or another page gave that ends the span is the firm.
         for (const firm of firms) {
             const known = autoSpans
@@ -982,7 +990,7 @@ export class LocalPolishPseudonymizer {
             ...autoAllowed
         ]);
         // A dash or hyphen at a name's edge is punctuation, not part of the name ("adw. Andrzej
-        // Ciecierski- pełnomocnictwo" in a hearing record): it came back as "Ciecierskiego-" in answers.
+        // Zawadzki- pełnomocnictwo" in a hearing record): it came back as "Zawadzkiego-" in answers.
         for (let index = 0; index < findings.length; index += 1) {
             const finding = findings[index];
             if (finding.kind !== "PERSON" || finding.source === "USER")
@@ -1060,7 +1068,7 @@ export class LocalPolishPseudonymizer {
         // A known person by surname alone or surname first ("Nowakowi", "Pan Wilk", "WILK JAN"):
         // the full name's token, so the model sees one person (surname-propagation.ts).
         {
-            // Persons only: an address's last word ("40-847 Katowice") or a firm's ("Human Park") is
+            // Persons only: an address's last word ("40-847 Katowice") or a firm's ("Lumen Park") is
             // no surname, and a person sharing it would be read as ambiguous.
             // Also persons named in full only on another page ("Park Juneyoung" here, "Juneyoung Park" there).
             const known = [
@@ -1189,7 +1197,7 @@ export class LocalPolishPseudonymizer {
             findings.sort((a, b) => a.start - b.start);
         }
         // One person, one token: a mention the morphology read as another person ("MICHAL
-        // WIATRAK" without its mark, "MICHAŁWIATRAK" without the space, "Michałem Wiatrak" with
+        // KOWALCZYK" without its mark, "MICHAŁKOWALCZYK" without the space, "Michałem Kowalczyk" with
         // the surname not inflected, "Junreyoung Park" with a letter misread) is the person known
         // from this document (person-identity.ts).
         {

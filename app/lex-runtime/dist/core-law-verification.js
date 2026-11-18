@@ -1,3 +1,4 @@
+import { articleChanges } from "./amendment-instructions.js";
 import { searchStems } from "./core-law-search.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { articleWording, futureDate, hasPendingWording } from "./core-law-footnotes.js";
@@ -82,19 +83,28 @@ export function postConsolidationImpact(index, amendments, article, actTitle) {
     }
     const affected = [];
     const unknown = [];
+    const changes = [];
     for (const eli of amendments) {
         const record = index.record(eli);
         const body = record && record.textSource !== "ocr" && record.textSource !== "none"
             ? record.text ?? record.articleOrder.map((unit) => `Art. ${unit}. ${record.articles[unit] ?? ""}`).join("\n")
             : "";
-        const touches = body.trim() ? amendmentMentionsArticle(amendmentPartFor(body, actTitle), article) : null;
-        if (touches === true)
+        const part = body.trim() ? amendmentPartFor(body, actTitle) : "";
+        let touches = part ? amendmentMentionsArticle(part, article) : null;
+        // Its own points for the article; none when it names the article only inside a new wording.
+        const own = touches === true ? articleChanges(part, article) : null;
+        if (own?.length === 0)
+            touches = false;
+        if (touches === true) {
             affected.push(eli);
+            for (const change of own ?? [])
+                changes.push({ eli, ...change });
+        }
         else if (touches === null)
             unknown.push(eli);
     }
     if (affected.length)
-        return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected };
+        return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected, ...(changes.length ? { articleChanges: changes } : {}) };
     if (unknown.length)
         return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN", amendments: unknown };
     return { status: "UNAFFECTED", checked: amendments };
@@ -139,7 +149,10 @@ export function verifyFromCoreLaw(args) {
             return {
                 decision: "DENY",
                 reason: impact.reason,
-                temporal: temporalDetails(args.index, summary.amendmentsAfter.filter((item) => touched.has(item.eli)))
+                temporal: {
+                    ...temporalDetails(args.index, summary.amendmentsAfter.filter((item) => touched.has(item.eli))),
+                    ...(impact.status === "AFFECTED" && impact.articleChanges ? { articleChanges: impact.articleChanges } : {})
+                }
             };
         }
         amendmentsChecked = impact.checked;

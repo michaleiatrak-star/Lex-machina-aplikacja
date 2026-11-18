@@ -1,6 +1,6 @@
 // Full text of a ruling the case file cites, from SAOS (RZĄD 3: an academic aggregator, the
 // text for reading and quoting; the ruling's status comes from the court's own database).
-// SAOS covers the common courts and SN up to 2016. RD 121/26 (2026-11-12): sn.pl asked for its
+// SAOS covers the common courts and SN up to 2016. A live case (2026-11-12): sn.pl asked for its
 // human check, the app answered "the fragment holds only the signature" for SDI 9/12, while
 // SAOS holds the whole judgment and the quotes of the case file match it word for word.
 import { plainText } from "../eli/readers.js";

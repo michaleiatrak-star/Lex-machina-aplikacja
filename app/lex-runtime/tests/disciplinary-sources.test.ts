@@ -10,7 +10,7 @@ import { legacyWordText } from "../src/auxiliary-source-fetcher.js";
 import { mergeThreadEvidence, validThreadEvidence } from "../src/thread-evidence.js";
 import { PublicWebSearch } from "../src/web-search.js";
 
-// RD 121/26: the bar's disciplinary case law and its code of ethics are outside the MCP
+// a live case: the bar's disciplinary case law and its code of ethics are outside the MCP
 // connectors; the reference letter cited WSD 113/22, 77/22, 128/17 and SDI 9/12.
 describe("disciplinary case law and ethics codes", () => {
   it("a WSD signature is the bar's disciplinary court, also without „sygn.”", () => {
@@ -53,18 +53,18 @@ describe("disciplinary case law and ethics codes", () => {
   });
 
   it("the thread keeps the case's signatures for the file rendered later", () => {
-    const first = mergeThreadEvidence(null, [], [], "2026-10-30T10:00:00Z", { caseReferences: ["VIII W 633/25"] });
-    const second = mergeThreadEvidence(first, [], [], "2026-10-30T11:00:00Z", { caseReferences: ["VII P 94/25", "VIII W 633/25"] });
-    expect(second.caseReferences).toEqual(["VIII W 633/25", "VII P 94/25"]);
-    expect(validThreadEvidence(JSON.parse(JSON.stringify(second)))?.caseReferences).toEqual(["VIII W 633/25", "VII P 94/25"]);
+    const first = mergeThreadEvidence(null, [], [], "2026-10-30T10:00:00Z", { caseReferences: ["II W 101/25"] });
+    const second = mergeThreadEvidence(first, [], [], "2026-10-30T11:00:00Z", { caseReferences: ["IV P 12/25", "II W 101/25"] });
+    expect(second.caseReferences).toEqual(["II W 101/25", "IV P 12/25"]);
+    expect(validThreadEvidence(JSON.parse(JSON.stringify(second)))?.caseReferences).toEqual(["II W 101/25", "IV P 12/25"]);
   });
 
   it("a stored pleading's case-material signatures are read from their markers", () => {
-    expect(caseMaterialSignatures("wyrok VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy] i sprawa VII P 94/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]; II CSK 1/20"))
-      .toEqual(["VIII W 633/25", "VII P 94/25"]);
+    expect(caseMaterialSignatures("wyrok II W 101/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy] i sprawa IV P 12/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]; II CSK 1/20"))
+      .toEqual(["II W 101/25", "IV P 12/25"]);
   });
 
-  it("a document AST is verified block by block, not as one line of JSON (RD 121/26)", () => {
+  it("a document AST is verified block by block, not as one line of JSON", () => {
     const ast = JSON.stringify({ schemaVersion: "1", blocks: [
       { type: "paragraph", content: [{ type: "text", text: "Podstawa: art. 7 KPK i art. 24 § 1 KC." }] },
       { type: "paragraph", content: [{ type: "text", text: "Zob. art. 190a § 1 KK ⚠️ [NIEWERYFIKOWANE]." }] },
@@ -100,8 +100,8 @@ describe("disciplinary case law and ethics codes", () => {
 
   it("a signature the case's files hold is a case reference; one they do not hold is not", async () => {
     const ledger = new VerificationLedger();
-    const files = { search: async (query: string) => (query === "VIII W 633/25" ? [{ caseId: "c", documentId: "d", chunkIndex: 0, pageStart: 1, pageEnd: 1, score: 1, text: "Wyrok … sygn. akt VIII W 633/25 …" }] : []) };
-    await registerCaseFileSignatures("Wyrok z 13 lutego 2026 r., sygn. akt VIII W 633/25, oraz uchwała SN, sygn. III CZP 1/99.", ledger, files);
-    expect(ledger.caseReferences()).toEqual(["VIII W 633/25"]);
+    const files = { search: async (query: string) => (query === "II W 101/25" ? [{ caseId: "c", documentId: "d", chunkIndex: 0, pageStart: 1, pageEnd: 1, score: 1, text: "Wyrok … sygn. akt II W 101/25 …" }] : []) };
+    await registerCaseFileSignatures("Wyrok z 13 lutego 2026 r., sygn. akt II W 101/25, oraz uchwała SN, sygn. III CZP 1/99.", ledger, files);
+    expect(ledger.caseReferences()).toEqual(["II W 101/25"]);
   });
 });

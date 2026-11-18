@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { reportUsage } from "./usage-meter.js";
 import { answerLanguageInstruction } from "./answer-language.js";
 import type {
@@ -12,7 +13,14 @@ export type ProviderFailureCode =
   | "TOOLS_UNSUPPORTED"
   | "REASONING_UNSUPPORTED"
   | "ACCOUNT_POLICY"
+  | "EXECUTION_CANCELLED"
   | "PROVIDER_ERROR";
+
+/**
+ * The turn the user stopped ("Zatrzymaj" in the chat): every model call made while the turn runs
+ * carries this signal, so the turn ends at the call in progress and makes no further one.
+ */
+export const executionAbort = new AsyncLocalStorage<AbortSignal>();
 
 export class ProviderGatewayError extends Error {
   constructor(
@@ -78,7 +86,14 @@ export class ProviderGateway {
     const language = answerLanguageInstruction();
     const params: ProviderStreamParams = language
       ? { ...requested, systemPrompt: requested.systemPrompt ? `${requested.systemPrompt}\n\n${language}` : language }
-      : requested;
+      : { ...requested };
+    const stopped = executionAbort.getStore();
+    if (stopped?.aborted) {
+      throw new ProviderGatewayError("EXECUTION_CANCELLED", "The user stopped the turn.", providerId);
+    }
+    if (stopped) {
+      params.abortSignal = params.abortSignal ? AbortSignal.any([params.abortSignal, stopped]) : stopped;
+    }
     const provider = this.registry.get(providerId);
     if (!provider) {
       throw new ProviderGatewayError(
@@ -128,6 +143,7 @@ export class ProviderGateway {
       return result;
     } catch (error) {
       if (error instanceof ProviderGatewayError) throw error;
+      if (stopped?.aborted) throw new ProviderGatewayError("EXECUTION_CANCELLED", "The user stopped the turn.", providerId, error);
       throw new ProviderGatewayError(
         "PROVIDER_ERROR",
         error instanceof Error ? error.message : String(error),

@@ -135,7 +135,7 @@ function collectMatches(
   return references;
 }
 
-const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
+const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/iu;
 const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
 // Another act named in words: an act-less article on such a line is not resolved.
 const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|ordynacj\p{L}*|praw[aoe]?\s+(?:budowlan|bankow|upadłościow|restrukturyzacyjn|energetyczn|autorsk|wodn|geologiczn|lotnicz|pocztow|telekomunikacyjn|przedsiębiorc|o\s+notariacie|o\s+adwokaturze|ochrony\s+środowiska|zamówień|prywatn|spółdzielcz|łowieck|atomow|farmaceutyczn|oświatow|restrukturyz)\p{L}*|pr\.?\s?(?:up|bud|bank|rest|energ|aut|ochr\.?\s?śr|zam\.?\s?publ)\.?|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
@@ -155,7 +155,7 @@ const actsIn = (value: string): Set<string> =>
 function resolveActs(references: DetectedLegalReference[], text: string): DetectedLegalReference[] {
   const actsByUnit = new Map<string, Set<string>>();
   for (const reference of references) {
-    const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase() : undefined;
     if (!act) continue;
     const unit = reference.claim.replace(ACT_SUFFIX, "").replace(/\s+/g, " ").toLocaleLowerCase("pl");
     actsByUnit.set(unit, (actsByUnit.get(unit) ?? new Set()).add(act));
@@ -225,7 +225,7 @@ export function ambiguousBareArticles(text: string, ledger: VerificationLedger):
     const acts = number ? actsByNumber.get(number) : undefined;
     if (!acts || acts.size < 2) continue;
     const written = reference.span ?? reference.claim;
-    // The act written in the citation itself ("art. 17 § 1 pkt 2 k.p.k.") names it (RD 121/26: read as
+    // The act written in the citation itself ("art. 17 § 1 pkt 2 k.p.k.") names it (live case: read as
     // bare because the claim's suffix was normalized and art. 17 RODO was verified in the same turn).
     if (actsIn(written).size > 0 || namesOtherAct(written) || euAct(written)) continue;
     const at = reference.lineText.indexOf(written);
@@ -273,7 +273,7 @@ export function addVerifiedJournalAddresses(text: string, ledger: VerificationLe
   const done = new Set<string>();
   for (const reference of detectLegalReferences(text)) {
     if (reference.kind !== "statute" || reference.span) continue;
-    const code = ACT_SUFFIX.exec(reference.claim)?.[1];
+    const code = ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase();
     const lineText = lines[reference.line - 1] ?? "";
     let act: string | undefined;
     let end = -1;
@@ -377,7 +377,7 @@ export function completeBareArticleActs(
     if (!number) continue;
     // Written with a code ("art. 35 KPA") or with an act named in words after it ("art. 35 ust. 3
     // Prawa budowlanego"): the act this number has in the answer's own words.
-    const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase() : undefined;
     // Named in words as the very act this number was verified in ("art. 6 ust. 1, 3 i 4 ustawy o
     // ochronie praw lokatorów", live C12-018): that act, not another one.
     const own = ownText(reference).replace(/^[\s,;:)(*_]+/u, "").toLocaleLowerCase("pl");
@@ -397,7 +397,7 @@ export function completeBareArticleActs(
     if (reference.kind !== "statute") continue;
     // An act the gate borrowed from the line or the answer ("art. 7 KPA …, art. 49g" read as
     // art. 49g KPA) is a guess: written as bare, unless that act has the article verified.
-    const guessed = Boolean(reference.span) && ACT_SUFFIX.exec(reference.claim)?.[1];
+    const guessed = Boolean(reference.span) && ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase();
     if (ACT_SUFFIX.test(reference.claim) && !guessed) continue;
     const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
     const acts = number ? actsByNumber.get(number) : undefined;
@@ -578,7 +578,7 @@ function namedActRecord(ledger: VerificationLedger, reference: DetectedLegalRefe
   const exact = recordsFor(comparableClaim(reference.claim) + " ");
   if (exact) return exact;
   // "art. 95n pkt 1 Prawa o adwokaturze" and the verified article "art. 95n Prawa o adwokaturze"
-  // (RD 121/26): the record of the whole article holds the unit when its fetched text has it.
+  //: the record of the whole article holds the unit when its fetched text has it.
   const match = /^(art\.?\s*\d+[a-zA-Z⁰¹²³⁴⁵⁶⁷⁸⁹^]*)\s+(?=§|ust|pkt|lit)/iu.exec(reference.claim.trim());
   if (!match) return undefined;
   const article = recordsFor(comparableClaim(match[1]!) + " ");
@@ -618,7 +618,7 @@ export function ownCaseFileNumbers(documents: string[], userText: string): strin
     // A header line ("Sygn. akt I C 900/26", "Sygn. akt I Nc 1234/26 — nakaz"), not a sentence
     // naming another proceeding ("skazany wyrokiem …, sygn. akt II K 345/24, za czyn …").
     // The signature opens the line (after line numbers or a separator); the rest of the line may be
-    // the record's heading spread by a PDF text layer ("Sygn. akt: XI P 27/26      PROTOKÓŁ", user
+    // the record's heading spread by a PDF text layer ("Sygn. akt: V P 3/26      PROTOKÓŁ", user
     // report 2026-11-17: the user's own case was marked "z materiałów sprawy" and blocked the gate).
     for (const line of head.split(/\r?\n/u)) {
       for (const match of line.matchAll(SIGNATURE)) {
@@ -698,7 +698,7 @@ function journalSourceRecord(ledger: VerificationLedger, reference: DetectedLega
     .find(
       (record) =>
         record.status === "VERIFIED" &&
-        (record.currentEli === eli || (record.sourceUrl ?? "").includes(`/eli/acts/${eli}/`))
+        (record.currentEli === eli || (record.sourceUrl ?? "").includes(`/eli/acts/${eli}/`) || Boolean(record.amendedBy?.includes(eli)))
     );
 }
 
@@ -713,6 +713,24 @@ function soleCoveringVerifiedRecord(
     .all()
     .filter((record) => record.status === "VERIFIED" && comparableClaim(record.claim).startsWith(prefix));
   return new Set(covering.map((record) => comparableClaim(record.claim))).size === 1 ? covering.at(-1) : undefined;
+}
+
+// "art. 88a Prawa o adwokaturze" with only "art. 88a ust. 4 Prawa o adwokaturze" verified: the act
+// written right after the article is the covering record's own act, not another one (a live case
+// marked the article ⚠️ in the notes under a pleading that had it ✅).
+function coveringActNamedAfter(ledger: VerificationLedger, reference: DetectedLegalReference): boolean {
+  const record = soleCoveringVerifiedRecord(ledger, reference);
+  if (!record) return false;
+  const at = reference.lineText.indexOf(reference.claim);
+  if (at < 0) return false;
+  const after = reference.lineText
+    .slice(at + reference.claim.length)
+    .replace(/^\s*(?:(?:✅|⚠️|🟨)\s*\[[^\]\n]*\]\s*)?/u, "")
+    .toLocaleLowerCase("pl");
+  const act = comparableClaim(record.claim).replace(/^art\.?\s*\d+[a-z]*(?:\^\d+)?(?:\s*(?:§|ust\.?|pkt|lit\.?)\s*\S+)*\s*/u, "");
+  if (act.length < 4) return false;
+  const stem = (words: string) => words.split(/\s+/u).filter(Boolean).slice(0, 3).map((word) => word.slice(0, 4)).join(" ");
+  return stem(after) === stem(act);
 }
 
 export class FinalizationGate {
@@ -808,7 +826,7 @@ export class FinalizationGate {
         namedActRecord(ledger, reference) ??
         articleRecord(ledger, reference) ??
         // "art. 118" bez nazwy aktu, gdy w sesji zweryfikowano ten artykuł tylko jednego aktu ("art. 118 KC").
-        (namesOtherAct(reference.lineText) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
+        (namesOtherAct(reference.lineText) && !coveringActNamedAfter(ledger, reference) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
@@ -1173,7 +1191,7 @@ const NAMED_ACT_AFTER = /^\s+(?:RODO|TFUE|TUE|EKPC|DSA|DMA|Prawa\s+o\s+\p{L}+|Pr
 // it comes from (a parallel proceeding, a ruling the firm holds).
 export const CASE_MATERIAL_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]";
 
-/** Signatures a text marks as coming from the case's materials ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"). */
+/** Signatures a text marks as coming from the case's materials ("II W 101/25 ⚠️ [… z materiałów sprawy]"). */
 export function caseMaterialSignatures(text: string): string[] {
   const found = new Set<string>();
   for (let at = text.indexOf(CASE_MATERIAL_MARKER_TEXT); at >= 0; at = text.indexOf(CASE_MATERIAL_MARKER_TEXT, at + 1)) {
@@ -1273,7 +1291,7 @@ function insertMarkersAfterClaims(text: string, byLine: Map<number, Array<{ clai
       if (done.has(claim)) continue;
       done.add(claim);
       // An occurrence another finding already marked ("XII Kp 176/20 🟨" holds "Kp 176/20"): the
-      // next one, never a second marker on the same place (RD 121/26, 2026-11-12).
+      // next one, never a second marker on the same place (2026-11-12).
       const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
       let at = lineText.indexOf(claim);
       while (
@@ -1284,7 +1302,7 @@ function insertMarkersAfterClaims(text: string, byLine: Map<number, Array<{ clai
       ) at = lineText.indexOf(claim, at + claim.length);
       if (at < 0) continue;
       // After the act's short name, not inside the citation: "art. 4 pkt 1 RODO ⚠️", not
-      // "art. 4 pkt 1 ⚠️ RODO" (RD 121/26; also "art. 95n pkt 1 Prawa o adwokaturze").
+      // "art. 4 pkt 1 ⚠️ RODO" (a live case; also "art. 95n pkt 1 Prawa o adwokaturze").
       const actName = NAMED_ACT_AFTER.exec(lineText.slice(at + claim.length))?.[0] ?? "";
       const end = at + claim.length + actName.length;
       lineText = `${lineText.slice(0, end)} ${marker}${lineText.slice(end)}`;
@@ -1429,7 +1447,7 @@ export function softenRemainingBlockers(
  */
 /**
  * One VER marker per provision where two stand next to each other ("✅ [VER: art. 460 KPK,
- * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", RD 121/26): the fuller one.
+ * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", a live case): the fuller one.
  */
 export function collapseRepeatedVerMarkers(text: string): string {
   const pair = /✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\][ \t]*✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\]/gu;

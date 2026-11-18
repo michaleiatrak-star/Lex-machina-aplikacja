@@ -1,3 +1,4 @@
+import { configureUsageLog } from "../usage-log.js";
 import { PublicWebSearch } from "../web-search.js";
 import { configurePortalSearch } from "../official-portal-search.js";
 import { firmDocumentPurposes, firmKnowledgeDocumentIds, firmKnowledgeItems } from "../firm-knowledge-scope.js";
@@ -434,6 +435,7 @@ export async function startLocalServer(options?: {
   configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
   configureLocalOfflineMode(path.join(caseFileStore.rootDir, "settings"));
   configureWebSearchSettings(path.join(caseFileStore.rootDir, "settings"));
+  configureUsageLog(path.join(caseFileStore.rootDir, "usage"));
   // Pages built by JavaScript or behind a bot check: read through the local browser (Docker, next
   // to SearXNG) when it runs; LEX_BROWSER_RENDER=0 turns it off.
   if (process.env.LEX_BROWSER_RENDER !== "0") configurePageRenderer(new CdpPageRenderer(process.env.LEX_BROWSER_URL?.trim() || undefined));

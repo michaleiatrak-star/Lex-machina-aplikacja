@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "../src/challenge-map.js";
 
-// RD 121/26: the reasons of the decision refusing to open disciplinary proceedings (abridged).
+// a live case: the reasons of the decision refusing to open disciplinary proceedings (abridged).
 const DECISION = `POSTANOWIENIE o odmowie wszczęcia dochodzenia dyscyplinarnego
 Zastępca Rzecznika Dyscyplinarnego Izby Adwokackiej w Katowicach na zasadzie art. 95n pkt 1 PrAdw w zw. z art. 305 § 1 i art. 17 § 1 pkt 2 k.p.k. postanawia odmówić wszczęcia dochodzenia.
 UZASADNIENIE
@@ -11,9 +11,9 @@ Zastrzeżenie, że dalsze kontakty będą traktowane jako działanie umyślne, s
 Pismo z dnia 4 maja 2026 roku jest wyważone, rzeczowe i pozbawione gróźb.
 Opisane zachowanie nie zawiera znamion przewinienia dyscyplinarnego, co zgodnie z art. 17 § 1 pkt 2 k.p.k. uzasadnia odmowę.
 Od niniejszego postanowienia służy zażalenie. Zażalenie należy złożyć w 3 egzemplarzach.`;
-const VERDICT = "WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Sygn. akt VIII W 633/25 Sąd Rejonowy uniewinnia obwinionego.";
+const VERDICT = "WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Sygn. akt II W 101/25 Sąd Rejonowy uniewinnia obwinionego.";
 
-describe("challenge map: the grounds answer the decision's reasons (RD 121/26)", () => {
+describe("challenge map: the grounds answer the decision's reasons", () => {
   it("a challenge of the rzecznik's decision: that decision, not the verdict in the files", () => {
     const question = "przygotuj podważenie postanowienia zastępcy rzecznika dyscyplinarnego";
     expect(isChallenge(question)).toBe(true);

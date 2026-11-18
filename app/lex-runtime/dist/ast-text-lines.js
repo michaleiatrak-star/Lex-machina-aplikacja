@@ -2,7 +2,7 @@
  * A document AST as lines for the gates: every text node of the JSON is a line of its own,
  * between invisible boundary lines. The gates read a provision's act and status from its line
  * and put markers at the claim or the line's end; on the one line of JSON they read the act from
- * the whole document and appended the markers after its closing brace (RD 121/26: ✅ outside the
+ * the whole document and appended the markers after its closing brace (live case: ✅ outside the
  * file, "art. 190a § 1" ✅ and ⚠️ "on one line" blocked the status consistency gate).
  */
 // A line holding only U+2063 INVISIBLE SEPARATOR: no reference, marker or word matches it.

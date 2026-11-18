@@ -1,5 +1,5 @@
 // The wording of a provision that decides a deadline, on the date of the event, before the pleading
-// adopts the deadline (RD 121/26 plan, point 9: art. 88a Pr. adw. gave 7 days in one wording and 14 in
+// adopts the deadline (point 9: art. 88a Pr. adw. gave 7 days in one wording and 14 in
 // another). The draft's lines that state a deadline with a provision are checked through
 // verify_legal_reference on each event date; a different wording sends the draft back once.
 import { citedProvisions } from "./admission-check.js";

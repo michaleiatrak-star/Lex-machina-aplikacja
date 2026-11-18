@@ -788,7 +788,7 @@ export function missingGateBlocks(model: MandatoryPathModel, profile: PathProfil
 /** The correcting request for one more model round (the gates the router requires, shown visibly). */
 /**
  * Only the missing gate blocks, appended by the application: the answer is not written again
- * (RD 121/26, 2026-11-12: a full rewrite took a further generation of the whole answer and
+ * (2026-11-12: a full rewrite took a further generation of the whole answer and
  * dropped 15 sentences of substance to add two blocks).
  */
 export function gateBlocksOnlyPrompt(missing: Array<{ block: string; resource: string; steps: string[] }>): string {

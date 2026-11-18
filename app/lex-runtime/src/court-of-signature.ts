@@ -37,7 +37,7 @@ export function courtOfSignature(value: string): SignatureCourt | null {
   if (!match) return null;
   const [, roman, repertory, seat] = match as unknown as [string, string | undefined, string, string | undefined];
   if (repertory === "KIO") return "KIO";
-  // Wyższy Sąd Dyscyplinarny Adwokatury ("WSD 113/22"): its own portal, not sn.pl or SAOS (RD 121/26).
+  // Wyższy Sąd Dyscyplinarny Adwokatury ("WSD 113/22"): its own portal, not sn.pl or SAOS.
   if (!roman && repertory === "WSD") return "DYSCYPLINARNY";
   if (seat) return /^SAB?$/.test(repertory) ? "NSA_WSA" : null;
   if (NSA.has(repertory)) return "NSA_WSA";

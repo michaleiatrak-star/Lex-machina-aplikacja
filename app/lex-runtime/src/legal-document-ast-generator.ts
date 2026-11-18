@@ -48,7 +48,7 @@ export type LegalDocumentAstGenerationRequest = {
   // The user chose a draft with the unverified references named (ZAKAZ-14, decision "a").
   acceptUnverified?: boolean;
   // Evidence memory of the case's thread: provisions verified in the conversation are checked
-  // again in ELI, the case's signatures stay "z materiałów sprawy" (RD 121/26).
+  // again in ELI, the case's signatures stay "z materiałów sprawy".
   threadEvidence?: ThreadEvidence;
   // The case's files, searched for the signatures the document names (its own proceedings).
   caseSignatureSearch?: Pick<CaseFileAccess, "search">;
@@ -210,8 +210,7 @@ function normalizeBlock(value: unknown, depth = 0): unknown {
       block.ordered = block.ordered === "true" || block.style === "ordered" || block.numbered === true;
     }
     if (Array.isArray(block.items)) {
-      // An item as {content|text|children|inlines} or a "list_item"/"paragraph" wrapper (RD 121/26:
-      // items {"children": […]} failed the whole file with AST_INLINE_TYPE_UNSUPPORTED).
+      // An item as {content|text|children|inlines} or a "list_item"/"paragraph" wrapper (live case: // items {"children": […]} failed the whole file with AST_INLINE_TYPE_UNSUPPORTED).
       block.items = block.items.map((item) => {
         if (!isRecord(item) || !(item.type === undefined || LIST_ITEM_WRAPPERS.has(String(item.type).toLowerCase()))) return normalizeInlines(item);
         const inner = item.content ?? item.text ?? item.children ?? item.inlines;
@@ -402,7 +401,7 @@ export function unverifiedOnlySession(result: SessionResult): boolean {
 /**
  * The references the draft's heading names as unverified in their source: provisions, Dz.U.
  * and judgments. A signature of the case's own materials and an amount or term ("7 dni") are
- * not such references (RD 121/26 listed VIII W 633/25 and "7 dni" there).
+ * not such references (a live case listed II W 101/25 and "7 dni" there).
  */
 function draftHeaderClaims(result: SessionResult): string[] {
   const caseReferences = new Set(result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []);

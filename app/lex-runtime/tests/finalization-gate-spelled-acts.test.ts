@@ -38,7 +38,7 @@ describe("a provision verified in the session is recognized however the answer w
     expect(out.split("\n")[1]).toContain("art. 12 ⚠️ [NIEWERYFIKOWANE]");
   });
 
-  it("a unit of an article verified as a whole under the act's name in words (RD 121/26)", () => {
+  it("a unit of an article verified as a whole under the act's name in words", () => {
     const ledger = new VerificationLedger();
     ledger.add({ claim: "art. 95n Prawa o adwokaturze", kind: "statute", status: "VERIFIED", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2024/1564/text.html", fetchedAt: "2026-10-29T10:00:00.000Z", sourceTier: "R1", verificationMethod: "mcp_call", evidence: "Art. 95n. W sprawach nieuregulowanych w ustawie do postępowania dyscyplinarnego stosuje się odpowiednio przepisy: 1) Kodeksu postępowania karnego; 2) rozdziałów I-III Kodeksu karnego." });
     const out = marked("Stosowany odpowiednio na podstawie art. 95n pkt 1 Prawa o adwokaturze.\nZob. art. 95n pkt 3 Prawa o adwokaturze.", ledger);
@@ -48,7 +48,7 @@ describe("a provision verified in the session is recognized however the answer w
     expect(out.split("\n")[1]).toContain("NIEWERYFIKOWANE");
   });
 
-  it("the ⚠️ goes after the act's short name, not inside the citation (RD 121/26)", () => {
+  it("the ⚠️ goes after the act's short name, not inside the citation", () => {
     const out = marked("Dane osobowe (art. 4 pkt 1 RODO). Podstawa: art. 95n pkt 1 Prawa o adwokaturze i art. 105 Prawa bankowego.", new VerificationLedger());
     expect(out).toContain("art. 4 pkt 1 RODO ⚠️ [NIEWERYFIKOWANE])");
     expect(out).toContain("art. 95n pkt 1 Prawa o adwokaturze ⚠️ [NIEWERYFIKOWANE]");

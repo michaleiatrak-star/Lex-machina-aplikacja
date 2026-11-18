@@ -1,3 +1,5 @@
+import { usageOwner, usageSummary } from "../usage-log.js";
+import { executionAbort } from "../providers/gateway.js";
 import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
 import { astLines, compareFileWithDraft, draftLines, fileCheckReason } from "../file-consistency.js";
 import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
@@ -3509,6 +3511,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   );
 
+  // The signed-in account's own display name.
+  app.patch(
+    "/api/auth/me/profile",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      try {
+        const user = options.authService.setOwnDisplayName(responseAuthContext(res), req.body?.displayName);
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
   // Role (ADMIN / USER), set by another administrator; the account's sessions end.
   app.patch(
     "/api/admin/users/:userId/role",
@@ -4149,6 +4168,31 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
   // The court and signature of a case (courts/case-court.ts), set by the user: documents do not
   // replace it. The court must be one of the common courts of the court base.
+  // The case list (Sprawy): each listed case's court signature and number of files, read with the
+  // same access check as the case's own court card; a case the account cannot open gets nulls.
+  app.post("/api/cases/overview", async (req, res) => {
+    const ids: string[] = Array.isArray(req.body?.caseIds)
+      ? [...new Set<string>(req.body.caseIds.filter((id: unknown): id is string => typeof id === "string" && /^case_[a-f0-9]{32}$/u.test(id)))].slice(0, 100)
+      : [];
+    if (!options.caseMemoryStore || !options.caseAccessService) {
+      res.json({ cases: ids.map((caseId) => ({ caseId, signature: null, files: null })) });
+      return;
+    }
+    const cases = await Promise.all(
+      ids.map(async (caseId) => {
+        try {
+          const memory = await withCaseMemory(res, caseId, "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
+          const files = options.caseFileStore?.listUploads ? (await options.caseFileStore.listUploads(caseId)).length : null;
+          return { caseId, signature: memory.court?.sygnatura ?? null, court: memory.court?.nazwa ?? null, files };
+        } catch {
+          return { caseId, signature: null, court: null, files: null };
+        }
+      })
+    );
+    res.set("Cache-Control", "no-store");
+    res.json({ cases });
+  });
+
   app.get("/api/cases/:caseId/court", async (req, res) => {
     if (!options.caseMemoryStore || !options.caseAccessService) {
       res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
@@ -8405,7 +8449,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         // The thread's evidence memory, as in the chat: provisions verified in the conversation are
         // checked again in ELI and the case's signatures stay "z materiałów sprawy". Without it the
-        // file's session started from an empty register and blocked them (RD 121/26).
+        // file's session started from an empty register and blocked them.
         const threadEvidence = options.caseMemoryStore
           ? await options.caseAccessService
               .withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) =>
@@ -10183,7 +10227,36 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   });
 
-  app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
+  // "Zatrzymaj": the running turn of an execution id, stopped by its owner only.
+  const executionStops = new Map<string, { owner: string; controller: AbortController }>();
+  app.post("/api/sessions/cancel/:executionId", (req, res) => {
+    const entry = executionStops.get(String(req.params.executionId ?? ""));
+    if (!entry || entry.owner !== draftOwner(res)) {
+      res.status(404).json({ error: "EXECUTION_NOT_FOUND" });
+      return;
+    }
+    entry.controller.abort();
+    res.json({ cancelled: true });
+  });
+  // The account of the turn, for its usage (Ustawienia > Zużycie).
+  const usageAccount = (res: Response): string => (options.authService ? responseAuthContext(res).user.userId : "local");
+  app.get("/api/usage/me", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({ months: usageSummary(usageAccount(res)) });
+  });
+  app.post("/api/sessions/execute", express.json({ limit: "32mb" }), (req, res, next) => {
+    usageOwner.run(usageAccount(res), () => next());
+  }, (req, res, next) => {
+    const executionId = String(req.get("x-lex-execution-id") ?? "");
+    if (!EXECUTION_ID_PATTERN.test(executionId)) {
+      next();
+      return;
+    }
+    const controller = new AbortController();
+    executionStops.set(executionId, { owner: draftOwner(res), controller });
+    res.on("close", () => executionStops.delete(executionId));
+    executionAbort.run(controller.signal, () => next());
+  }, async (req, res) => {
     // The interface language: every model call of this request answers in it.
     enterAnswerLanguage(parseAnswerLanguage(req.get("X-Lex-Language")));
     if (keepAliveRequested(req)) keepResponseAlive(res);
@@ -11072,7 +11145,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         (/\?\s*$/u.test(turnMessage.trim()) || asksAbout(turnMessage));
       // A pleading to a court or an authority asked for in a matter: the router puts
       // pisma-procesowe-v3 first (task-routing.ts pleadingFirst) and the turn runs its pipeline,
-      // whatever skill the keywords picked (RD 121/26: "Przygotuj podważenie postanowienia"
+      // whatever skill the keywords picked (live case: "Przygotuj podważenie postanowienia"
       // ran LEGAL_QUERY_V1 under analiza-sadowa-v6). Without a matter the pipeline has no state
       // (PROCESS_PLEADING_CASE_REQUIRED), so the chat answers under the skill as before.
       const pleadingCase =
@@ -13478,6 +13551,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
 
       if (sendAccountPolicyError(res, error)) {
+        return;
+      }
+
+      // The user stopped the turn ("Zatrzymaj"): not a model failure; the interface keeps the text
+      // written so far as a working draft.
+      if (executionAbort.getStore()?.aborted || (error instanceof ProviderGatewayError && error.code === "EXECUTION_CANCELLED")) {
+        res.status(409).json({ error: "EXECUTION_CANCELLED" });
         return;
       }
 

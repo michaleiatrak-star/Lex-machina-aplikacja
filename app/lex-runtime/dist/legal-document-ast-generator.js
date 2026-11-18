@@ -155,8 +155,7 @@ function normalizeBlock(value, depth = 0) {
             block.ordered = block.ordered === "true" || block.style === "ordered" || block.numbered === true;
         }
         if (Array.isArray(block.items)) {
-            // An item as {content|text|children|inlines} or a "list_item"/"paragraph" wrapper (RD 121/26:
-            // items {"children": […]} failed the whole file with AST_INLINE_TYPE_UNSUPPORTED).
+            // An item as {content|text|children|inlines} or a "list_item"/"paragraph" wrapper (live case: // items {"children": […]} failed the whole file with AST_INLINE_TYPE_UNSUPPORTED).
             block.items = block.items.map((item) => {
                 if (!isRecord(item) || !(item.type === undefined || LIST_ITEM_WRAPPERS.has(String(item.type).toLowerCase())))
                     return normalizeInlines(item);
@@ -324,7 +323,7 @@ export function unverifiedOnlySession(result) {
 /**
  * The references the draft's heading names as unverified in their source: provisions, Dz.U.
  * and judgments. A signature of the case's own materials and an amount or term ("7 dni") are
- * not such references (RD 121/26 listed VIII W 633/25 and "7 dni" there).
+ * not such references (a live case listed II W 101/25 and "7 dni" there).
  */
 function draftHeaderClaims(result) {
     const caseReferences = new Set(result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []);

@@ -115,7 +115,7 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
     return [left, (band?.[0] ?? y0) - 3, right, (band?.[1] ?? y1) + 3];
   };
   // Whole lines hidden: badly read ones, and lines to check against the scan (handwriting,
-  // stamps): a handwritten "Wiatrak Michał" read as "Wire mats Mithet" matches no key value.
+  // stamps): a handwritten "Kowalczyk Michał" read as "Wire mats Mithet" matches no key value.
   const review = new Set((page.review ?? []).map((item) => item.line));
   lines.forEach((line, index) => {
     if ((typeof line.score === "number" && line.score < LOW_SCORE_LINE) || review.has(index) || line.stamp) {

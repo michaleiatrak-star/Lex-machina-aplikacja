@@ -300,7 +300,7 @@ describe("LegalFederationToolRuntime on Lex MCP connectors", () => {
     const runtime = new LegalFederationToolRuntime(undefined, undefined, connectors);
     const [search, ceidg] = await runtime.runTools([
       { id: "s", name: "search_federated_legal_sources", input: { source: "cbosa", query: "II FSK 1/20" } },
-      { id: "c", name: "search_federated_legal_sources", input: { source: "ceidg", query: "5261040828" } }
+      { id: "c", name: "search_federated_legal_sources", input: { source: "ceidg", query: "9876543210" } }
     ]);
     expect(JSON.parse(search!.content)).toMatchObject({
       status: "SOURCE_UNAVAILABLE",

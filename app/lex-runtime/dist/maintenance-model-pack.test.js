@@ -274,7 +274,7 @@ describe("signed model-pack update policy", () => {
     it("blocks a correctly signed index that is incompatible with the application version", async () => {
         const maintenance = service({
             verified: verifiedIndex({
-                minAppVersion: "0.2.0"
+                minAppVersion: "0.3.0"
             })
         });
         const status = await maintenance

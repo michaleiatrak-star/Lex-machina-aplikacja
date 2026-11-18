@@ -23,7 +23,7 @@ export type ThreadEvidence = {
   // Hashes of real values restored into answers (privacy/example-data.ts).
   realValueHashes?: string[];
   // Signatures the case's materials name (another proceeding): marked "z materiałów sprawy",
-  // also in a file rendered later from the thread (RD 121/26: the export blocked them).
+  // also in a file rendered later from the thread (live case: the export blocked them).
   caseReferences?: string[];
 };
 

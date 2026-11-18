@@ -1,4 +1,4 @@
-// The step register of a pleading confirmed by the application (RD 121/26 plan, point 8): every
+// The step register of a pleading confirmed by the application (point 8): every
 // status of the STEP-TRACKER is computed from hard evidence of the turn, not taken from the model's
 // own table. ST-FINAL goes under the pleading; any step not confirmed makes it
 // "SZKIC — NIEZWERYFIKOWANY" with the list of what is missing.

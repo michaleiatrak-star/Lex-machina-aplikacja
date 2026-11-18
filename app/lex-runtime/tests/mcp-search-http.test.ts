@@ -112,7 +112,7 @@ describe("MCP search tab routes", () => {
     const ceidg = await request(app)
       .post("/api/mcp-search/query")
       .set("authorization", "Bearer user")
-      .send({ source: "ceidg", tool: "ceidg_szukaj", arguments: { nip: "5261040828" } })
+      .send({ source: "ceidg", tool: "ceidg_szukaj", arguments: { nip: "9876543210" } })
       .expect(200);
     expect(ceidg.body).toMatchObject({ ok: false, result: { status: "SOURCE_UNAVAILABLE" } });
 

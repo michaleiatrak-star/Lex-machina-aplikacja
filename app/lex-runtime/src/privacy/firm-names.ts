@@ -36,7 +36,7 @@ const NOT_A_NAME = new Set([
   "zgodnie", "według", "strona", "strony", "skarb", "sąd", "sądu", "urząd", "urzędu", "gmina", "gminy", "miasto", "powiat",
   "województwo", "zakład", "prokuratura", "ministerstwo", "minister", "prezes", "rzecznik", "agencja", "instytut", "narodowy",
   "państwowy", "państwowe", "polski", "polska", "rzeczypospolitej", "pozwanym", "pozwaną", "spółkom", "krs", "nip", "regon",
-  // The legal form itself, written with capitals ("Ciecierski Rak Spółka Komandytowa").
+  // The legal form itself, written with capitals ("Zawadzki Rak Spółka Komandytowa").
   "komandytowa", "komandytowej", "komandytową", "akcyjna", "akcyjnej", "akcyjną", "jawna", "jawnej", "jawną",
   "partnerska", "partnerskiej", "partnerską", "cywilna", "cywilnej", "cywilną",
   "zarząd", "zarządu", "zarządem", "zarządzie",
@@ -73,12 +73,12 @@ function nameBefore(text: string, end: number): { start: number; value: string }
     // for one firm and the role word gone from the request).
     if (/^[(\[]/u.test(word)) break;
   }
-  // "w Katowicach i Human Park sp. z o.o.": a place after "w" is not the first firm's name.
+  // "w Katowicach i Lumen Park sp. z o.o.": a place after "w" is not the first firm's name.
   const before = words[words.length - picked.length - 1]?.[0];
   const joinerAt = picked.findIndex((word) => /^(?:i|&)$/u.test(word[0]));
   if (joinerAt > 0 && before && /^(?:w|we)$/iu.test(before)) picked.splice(0, joinerAt + 1);
   // A name of two words or more on its own line does not take words from the line above
-  // ("Kancelaria Adwokatów i Radców Prawnych\nCiecierski Rak Spółka Komandytowa").
+  // ("Kancelaria Adwokatów i Radców Prawnych\nZawadzki Rak Spółka Komandytowa").
   const breakAt = picked.findIndex((word, index) => index > 0 && /\n/u.test(line.slice(picked[index - 1]!.index!, word.index!)));
   if (breakAt > 0 && picked.length - breakAt >= 2) picked.splice(0, breakAt);
   while (picked.length && /^(?:i|&)$/u.test(picked[0]![0])) picked.shift();
@@ -143,7 +143,7 @@ function nameAfter(text: string, start: number, requireTrade = false, abbreviati
   return { start: start + first.index! + lead, value };
 }
 
-// A law or professional office: its brand before it is the firm's own name ("LORICA IURIS
+// A law or professional office: its brand before it is the firm's own name ("AEQUITAS IURIS
 // Kancelaria Adwokatów i Radców Prawnych", a letterhead "Lex Nova⏎Kancelaria Radcy Prawnego").
 const OFFICE =
   /(?<![\p{L}])(?:Kancelari[aiąę]|KANCELARI[AIĄĘ])\s+(?:i\s+)?(?:Adwokac|Adwokat|Radc|Radcy|Prawn|Notarial|Notariusz|Komornicz|Komornik|Doradc|Podatkow|Patentow|ADWOKA|RADC|PRAWN|NOTARI|KOMORNI|DORADC|PODATKOW|PATENTOW)/gu;
@@ -155,7 +155,7 @@ function brandBefore(text: string, officeStart: number): { start: number; value:
   let segment = text.slice(lineStart, officeStart);
   let segmentStart = lineStart;
   if (!segment.trim() && lineStart > 0) {
-    // The office opens its line: the brand is the whole line above ("LORICA IURIS⏎Kancelaria ...").
+    // The office opens its line: the brand is the whole line above ("AEQUITAS IURIS⏎Kancelaria ...").
     const above = text.lastIndexOf("\n", lineStart - 2) + 1;
     segment = text.slice(above, lineStart - 1);
     segmentStart = above;
@@ -178,7 +178,7 @@ function brandBefore(text: string, officeStart: number): { start: number; value:
   return /\p{L}{3}/u.test(value) ? { start, value } : null;
 }
 
-// OCR reads a capital I as l or 1 ("Lorica luris"): a brand's later mentions allow it.
+// OCR reads a capital I as l or 1 ("Aequitas luris"): a brand's later mentions allow it.
 function ocrTolerant(value: string): string {
   return [...value]
     .map((char) => (/[iIl1]/u.test(char) ? "[iIlł1|]" : /\s/u.test(char) ? "\\s+" : char.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")))
@@ -204,8 +204,8 @@ const FRAGMENT_GENERIC = /^(?:global|group|grupa|polska|poland|international|inv
 
 /**
  * Parts of a firm's name of two or more words, as OCR or a later mention cuts it: "Park
- * Global" and "Human Park" of "Human Park Global". A name is one element: a surname or a
- * word inside it ("Park", "Rak" of "Ciecierski Rak") belongs to the firm there, not to a
+ * Global" and "Lumen Park" of "Lumen Park Global". A name is one element: a surname or a
+ * word inside it ("Park", "Rak" of "Zawadzki Rak") belongs to the firm there, not to a
  * person; outside the name it is judged on its own.
  */
 export function firmFragments(name: string): string[] {
@@ -319,7 +319,7 @@ export function detectFirmNames(text: string): FirmSpan[] {
       });
     }
   }
-  // A name of two or more words as OCR damaged it ("uman Park Global"): the whole name within a
+  // A name of two or more words as OCR damaged it ("umen Park Global"): the whole name within a
   // letter or two (fuzzy-names.ts), the same firm.
   for (const [value, legalForm] of names) {
     for (const match of findNameApproximately(text, value)) {

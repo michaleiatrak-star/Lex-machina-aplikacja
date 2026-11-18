@@ -1,5 +1,4 @@
-// The legal issue of a case, for the searches made before the model answers (RD 121/26,
-// 2026-11-16): the portals were asked with the user's own words ("przygotuj podważenie
+// The legal issue of a case, for the searches made before the model answers (// 2026-11-16): the portals were asked with the user's own words ("przygotuj podważenie
 // postanowienia…"), so the rulings on the issue itself (§ 16 KEA: the threat of criminal
 // prosecution; a refusal to open proceedings on incomplete material) were never found, while the
 // chat searched by the norm and by the procedural setting. The issue is taken from the clause of
@@ -73,7 +72,7 @@ export function caseIssue(clauses, fileText, question) {
  * The words in which this case's files speak of the issue, taken from the files themselves (no
  * word list per kind of case): the sentences that name the issue are read, and the words they
  * use far more often than the rest of the record become its vocabulary, as a lawyer who has read
- * the key passages then searches the record for the same words. RD 121/26: a statement on the
+ * the key passages then searches the record for the same words. a live case: a statement on the
  * issue at the end of a long hearing record shares those words, not the rule's.
  */
 export function caseVocabulary(issue, fileText, limit = 16) {
@@ -128,7 +127,7 @@ const FOCUS_STOP = new Set("ktore ktory ktora jest oraz przez przy jako tego tyc
 /**
  * The sentences of the files that speak most of the issue (rare issue words weigh more), each
  * with its document, chunk and page: the model is pointed at them, as a lawyer marks the record
- * (RD 121/26: the attorney's statement at 01:53:35 of the hearing record went unused).
+ * (live case: the attorney's statement at 01:53:35 of the hearing record went unused).
  */
 /** How much a document's kind weighs as a source of facts (document-kind.ts categories). */
 const SOURCE_WEIGHT = {
@@ -141,7 +140,7 @@ const SOURCE_WEIGHT = {
     INNE: 1
 };
 /**
- * The record's information on the issue, each sentence weighed (RD 121/26, user 2026-11-16: score
+ * The record's information on the issue, each sentence weighed (user 2026-11-16: score
  * the information of the files and give it by its weight, without a fixed share per document):
  * relevance (the issue's words, a rare one more than a common one) × the kind of the document it
  * comes from × novelty (each further sentence of the same document weighs a little less, never

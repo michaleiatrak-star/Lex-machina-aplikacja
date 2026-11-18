@@ -1,5 +1,4 @@
-// Rulings of the Bar's disciplinary courts by the legal issue, not by a signature (RD 121/26,
-// 2026-11-16): the chat found WSD 113/22, 77/22, 128/17 and SDI 9/12 on the threat of criminal
+// Rulings of the Bar's disciplinary courts by the legal issue, not by a signature (// 2026-11-16): the chat found WSD 113/22, 77/22, 128/17 and SDI 9/12 on the threat of criminal
 // prosecution (§ 16 KEA), while the application only checked signatures already in the file.
 // The register of wsd.adwokatura.pl files every ruling under the issues it decides ("Tagi",
 // /rejestry/listHasla, e.g. "groźba spowodowania postępowania karnego lub dyscyplinarnego"):
@@ -153,7 +152,7 @@ export function citedDisciplinarySignatures(text: string): string[] {
 }
 
 /**
- * The second round, as a lawyer reads on (RD 121/26): the rulings the first ones cite, looked up in
+ * The second round, as a lawyer reads on: the rulings the first ones cite, looked up in
  * the register, and, when the first round found little, the register's own wording of the issue
  * (its tags) asked of the portal search.
  */

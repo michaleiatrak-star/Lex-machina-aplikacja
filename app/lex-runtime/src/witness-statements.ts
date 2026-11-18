@@ -25,7 +25,7 @@ const stemsOf = (text: string) => [...new Set((fold(text).match(/\p{L}{4,}/gu) ?
 // Numbers, years, months and lengths of time: what a witness most often says differently.
 const QUANTITY = /\b\d{1,4}(?:[.,]\d+)?\b|\b(?:styczni|lut|marc|kwietni|maj|czerwc|lipc|sierpni|wrzesni|pazdziernik|listopad|grudni)\p{L}*|\b(?:raz|dwa|trzy|kilka|kilkanascie|ponad|okolo|moze)\s+(?:na\s+)?(?:dzien|tydzien|miesiac|miesiace|miesiecy|rok|lata|lat)\b|\b(?:wczoraj|zeszl\p{L}*\s+rok\p{L}*|w\s+tym\s+roku|na\s+poczatku|pozniej|potem|wczesniej)\b/gu;
 
-/** The heading of a record: its signature and date ("Sygn. akt XI P 27/26", "Dnia 13 listopada 2026 r."). */
+/** The heading of a record: its signature and date ("Sygn. akt V P 3/26", "Dnia 13 listopada 2026 r."). */
 export function recordHeading(text: string): string {
   const signature = /Sygn\.?\s*akt:?\s*([^\n]{3,30}?)(?:\s{2,}|\n|$)/u.exec(text)?.[1]?.trim();
   const date = /Dnia[,\s]*(\d{1,2}\s+\p{L}+\s+\d{4})/u.exec(text)?.[1];
@@ -96,7 +96,7 @@ export function statementPairs(byWitness: ReadonlyMap<string, WitnessStatement[]
         const qb = quantities(second.text);
         const quantityDiffers = qa.length > 0 && qb.length > 0 && qa.join("|") !== qb.join("|");
         // Two shared words make a topic only with a differing quantity ("ostatnią wiadomość … w marcu
-        // 2026" / "… w zeszłym roku"); otherwise three (XI P 27/26: "pracowników" and "związany" paired
+        // 2026" / "… w zeszłym roku"); otherwise three (V P 3/26: "pracowników" and "związany" paired
         // the witness's job with documents he never saw).
         if (shared.length < 3 && (sameRecord || !quantityDiffers)) continue;
         if (quantityDiffers) differences.push(`liczby i czas: „${qa.join(", ")}” wobec „${qb.join(", ")}”`);
@@ -285,8 +285,8 @@ export function matrixGoals(witness: string, rows: readonly TopicRow[], limit = 
 }
 
 /**
- * A name's key across transliterations ("Jurij Kast" / "Yurii Kast", "Mychajło" / "Mykhailo"): the same
- * witness in two records written differently (XI P 27/26 and VII P 94/25). Not for symbols ([PII…]).
+ * A name's key across transliterations ("Jurij Lenk" / "Yurii Lenk", "Mychajło" / "Mykhailo"): the same
+ * witness in two records written differently (V P 3/26 and IV P 12/25). Not for symbols ([PII…]).
  */
 export function transliteratedName(name: string): string {
   return name

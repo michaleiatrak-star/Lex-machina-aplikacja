@@ -18,7 +18,7 @@ const WL = {
 };
 const registry = () =>
   new RegistryEnrichment((async ({ arguments: args }) =>
-    String(args.nip) === "5261040828" ? { ok: true, result: WL } : { ok: true, result: { status: "NOT_FOUND" } }) as RegistryCall);
+    String(args.nip) === "9876543210" ? { ok: true, result: WL } : { ok: true, result: { status: "NOT_FOUND" } }) as RegistryCall);
 
 // A recognizer that returns fixed spans, as Stanza does on these pages.
 function named(spans: Array<{ value: string; kind?: PiiSpan["kind"] }>) {
@@ -61,8 +61,8 @@ async function pages(texts: string[], recognizer?: ReturnType<typeof named>) {
 describe("numbers and codes protected on one page are protected on every page", () => {
   it("KRS without its label, REGON with a wrong check digit after its label, the postal code apart from the address", async () => {
     const [first, second] = await pages([
-      "Kolor Park sp. z o.o., NIP: 526-104-08-28, KRS: 0000123456, REGON: 384106330, ul. Kolorowa 15, 40-001 Katowice.",
-      "Spółka (NIP 5261040828) wpisana do rejestru przedsiębiorców pod numerem 0000123456, REGON: 284106330.\nz siedzibą w Katowicach 40-001 przy ul. Kolorowa 15"
+      "Kolor Park sp. z o.o., NIP: 987-654-32-10, KRS: 0000123456, REGON: 384106330, ul. Kolorowa 15, 40-001 Katowice.",
+      "Spółka (NIP 9876543210) wpisana do rejestru przedsiębiorców pod numerem 0000123456, REGON: 284106330.\nz siedzibą w Katowicach 40-001 przy ul. Kolorowa 15"
     ]);
     for (const leak of ["0000123456", "384106330", "40-001"]) expect(first!.text).not.toContain(leak);
     for (const leak of ["0000123456", "284106330", "40-001", "Kolorowa 15"]) expect(second!.text).not.toContain(leak);
@@ -72,7 +72,7 @@ describe("numbers and codes protected on one page are protected on every page", 
   });
 
   it("a REGON one digit off without its label is left alone (another number)", async () => {
-    const [page] = await pages(["NIP 526-104-08-28. Numer sprawy 284106330 w rejestrze pism."]);
+    const [page] = await pages(["NIP 987-654-32-10. Numer sprawy 284106330 w rejestrze pism."]);
     expect(page!.text).toContain("284106330");
   });
 });
@@ -80,7 +80,7 @@ describe("numbers and codes protected on one page are protected on every page", 
 describe("names across pages and lines", () => {
   it("the firm of the register on a page without its NIP: one token, the sentence's words stay", async () => {
     const [first, second] = await pages(
-      ["Kolor Park sp. z o.o., NIP 526-104-08-28.", "Pomiędzy Kolor Park sp. z o.o. a pracownikiem."],
+      ["Kolor Park sp. z o.o., NIP 987-654-32-10.", "Pomiędzy Kolor Park sp. z o.o. a pracownikiem."],
       named([{ value: "Pomiędzy Kolor Park" }])
     );
     const token = first!.findings.find((finding) => finding.firm)!.token;
@@ -123,20 +123,20 @@ describe("one person, one token, however OCR or the writer spelled the name", ()
     forms: Object.fromEntries(PERSON_CASES.map((personCase) => [personCase, { text: cases[personCase] ?? canonical, source: "sgjp", confidence: 1 }])) as PersonEntity["forms"],
     warnings: []
   });
-  const known = forms({ GEN: "Michała Wiatraka", DAT: "Michałowi Wiatrakowi", INS: "Michałem Wiatrakiem", LOC: "Michale Wiatraku" }, "Michał Wiatrak");
+  const known = forms({ GEN: "Michała Kowalczyka", DAT: "Michałowi Kowalczykowi", INS: "Michałem Kowalczykiem", LOC: "Michale Kowalczyku" }, "Michał Kowalczyk");
 
   it("a lost mark or space, a given name inflected with the surname not, a letter misread in a long name", async () => {
     const { samePerson } = await import("../src/privacy/person-identity.js");
-    expect(samePerson("MICHAL WIATRAK", undefined, [known])?.entity).toBe(known);
-    expect(samePerson("MICHAŁWIATRAK", undefined, [known])?.entity).toBe(known);
-    expect(samePerson("Michałem Wiatrak", undefined, [known])?.entity).toBe(known);
+    expect(samePerson("MICHAL KOWALCZYK", undefined, [known])?.entity).toBe(known);
+    expect(samePerson("MICHAŁKOWALCZYK", undefined, [known])?.entity).toBe(known);
+    expect(samePerson("Michałem Kowalczyk", undefined, [known])?.entity).toBe(known);
     const park = forms({}, "Juneyoung Park");
     expect(samePerson("Junreyoung Park", undefined, [park])).toMatchObject({ entity: park, uncertain: expect.stringMatching(/OCR/u) });
   });
 
   it("another person with a similar name stays another person", async () => {
     const { samePerson } = await import("../src/privacy/person-identity.js");
-    expect(samePerson("Michalina Wiatrak", undefined, [known])).toBeNull();
+    expect(samePerson("Michalina Kowalczyk", undefined, [known])).toBeNull();
     expect(samePerson("Michał Wiatrowski", undefined, [known])).toBeNull();
     expect(samePerson("Jan Nowak", undefined, [forms({}, "Jan Nowik")])).toBeNull();
   });

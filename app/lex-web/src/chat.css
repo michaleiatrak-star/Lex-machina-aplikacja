@@ -1976,6 +1976,22 @@
   gap: 8px;
 }
 
+.chat-pipeline-group {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lm-t3);
+}
+
+.lex-case-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lm-t3);
+}
+
 .chat-work-mode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5012,4 +5028,319 @@ mark.restored {
 
 .chat-case-file-picker {
   align-content: start;
+}
+
+/* "Sprawy" page: one block of filters, sortable table (Patron's case list adapted). */
+.case-list-page {
+  display: grid;
+  gap: 10px;
+}
+
+.case-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: end;
+}
+
+.case-list-filters input[type="search"] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.case-list-filters label {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--lm-t3);
+}
+
+.case-list-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-basis: 100%;
+}
+
+.case-list-scopes .chat-pipeline-option {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.case-list-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  min-height: 30px;
+}
+
+.case-list-bulk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.case-list-table {
+  width: 100%;
+}
+
+.case-list-table .case-list-check {
+  width: 32px;
+}
+
+.case-list-sort {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+}
+
+.case-list-sort:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.case-list-current td {
+  font-weight: 600;
+}
+
+.case-list-archived {
+  margin-left: 6px;
+  color: var(--lm-t3);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.case-list-page,
+.case-list-filters > *,
+.case-list-scopes .chat-pipeline-option {
+  min-width: 0;
+}
+
+.case-list-scroll {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .case-list-filters label,
+  .case-list-filters input[type="search"] {
+    flex: 1 1 100%;
+  }
+
+  /* Narrow: name, signature and open; files, role and dates go. */
+  .case-list-table th:nth-child(n + 4):not(:last-child),
+  .case-list-table td:nth-child(n + 4):not(:last-child) {
+    display: none;
+  }
+}
+
+.case-list-scopes .chat-pipeline-option {
+  min-height: 0;
+}
+
+/* Settings: controls left without a class of their own (server mode, keys, plans) look like the
+   rest of the application instead of the browser's defaults. */
+.chat-settings-content input[type="checkbox"],
+.chat-settings-content input[type="radio"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--lm-s12);
+}
+
+.chat-settings-content .chat-settings-channel-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: normal;
+  line-height: 1.4;
+}
+
+.chat-settings-content .admin-user-create label.chat-settings-channel-option {
+  display: flex;
+  align-self: center;
+}
+
+.chat-settings-content button:not([class]) {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 9px;
+  background: var(--lm-s2);
+  color: var(--lm-t7);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-settings-content button:not([class]):disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chat-settings-content .admin-user-actions input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.chat-settings-content fieldset.server-access-group {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 11px;
+}
+
+.chat-settings-content fieldset.server-access-group legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lm-t8);
+}
+
+/* Connectors as one compact list (Patron's connector page): rows divided by a line, small actions. */
+.mcp-connector-list {
+  gap: 0;
+  border: 1px solid var(--lm-l3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mcp-connector-list li {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 0;
+  font-size: 13px;
+}
+
+.mcp-connector-list li + li {
+  border-top: 1px solid var(--lm-l3);
+}
+
+.mcp-connector-list button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.mcp-connector-list .chat-form-row.compact {
+  gap: 6px;
+}
+
+.mcp-connector-list .chat-form-row.compact,
+.mcp-connector-list li > button {
+  margin: 0;
+}
+
+/* Sidebar case list: one line per case, the name and the pencil only (user 2026-11-18). */
+.case-switcher .matter-thread-items {
+  gap: 2px;
+  min-height: 32px;
+}
+
+.case-switcher .matter-thread {
+  padding: 6px 10px;
+}
+
+.case-switcher .matter-thread strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-profile-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 8px 0 0;
+}
+
+.account-profile-list dt {
+  color: var(--lm-t3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-profile-list dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.account-profile .matter-thread-edit {
+  opacity: 1;
+}
+
+/* Calendar on a narrow screen: the header wraps and the days shrink instead of a sideways scroll. */
+.lex-calendar-head {
+  flex-wrap: wrap;
+}
+
+.lex-calendar-day {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .lex-calendar-head h2 {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: 17px;
+  }
+
+  .lex-calendar-day {
+    min-height: 38px;
+    padding: 2px;
+  }
+
+  .lex-calendar-weekday {
+    padding: 2px 0;
+    font-size: 11px;
+  }
+}
+
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.usage-summary div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 11px;
+}
+
+.usage-summary small,
+.usage-unmetered {
+  color: var(--lm-t3);
+  font-size: 11px;
+}
+
+.usage-summary strong {
+  font-size: 20px;
+}
+
+.usage-table td:nth-child(n + 3),
+.usage-table th:nth-child(n + 3) {
+  text-align: right;
 }

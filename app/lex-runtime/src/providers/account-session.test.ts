@@ -704,7 +704,7 @@ describe("provider account-session transport", () => {
 });
 
 describe("Claude account plan limit", () => {
-  it("is the account's capacity, not an unknown CLI failure (RD 121/26)", async () => {
+  it("is the account's capacity, not an unknown CLI failure", async () => {
     const { classifyAccountCliFailureDetail, isTransientRateLimit } = await import("./account-session.js");
     expect(classifyAccountCliFailureDetail("You've hit your 5-hour limit · resets 12:30am (UTC)")).toBe("ACCOUNT_SESSION_CAPACITY");
     expect(classifyAccountCliFailureDetail("You've hit your weekly limit · resets Mon 9am")).toBe("ACCOUNT_SESSION_CAPACITY");

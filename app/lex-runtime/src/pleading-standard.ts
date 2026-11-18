@@ -1,5 +1,5 @@
 // A pleading to a court is built as pisma-procesowe-v3 prescribes, whatever skill leads the matter
-// (XI P 27/26, 2026-11-16: the witness skill led, the draft had no anticipation nor fallback):
+// (V P 3/26, 2026-11-16: the witness skill led, the draft had no anticipation nor fallback):
 // facts with their sources, the dependencies between them and the goals, and only then the text,
 // each argument FAKT → DOWÓD → PRAWO → SKUTEK → ANTYCYPACJA → ZAMKNIĘCIE FURTKI → WNIOSEK
 // (pisma-procesowe-v3/modules/MOD-BUDOWA-ARGUMENTU.md). After the text, the application checks
@@ -56,7 +56,7 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
   if (!/(?:może\s+(?:podnieść|twierdzić|argumentować|zarzucić)|można\s+(?:by\s+)?(?:zarzucić|podnieść)|Argument\s+ten\s+(?:jest\s+)?(?:chybiony|nietrafny)|antycypac)/iu.test(body)) {
     gaps.push({ element: "ANTYCYPACJA", detail: "brak przewidzianego zarzutu przeciwnika i jego obalenia przy najsilniejszej tezie" });
   }
-  // "Gdyby sąd uznał …, i tak …" and a heading "Podstawa alternatywna" close the gap as well (XI P 27/26 run).
+  // "Gdyby sąd uznał …, i tak …" and a heading "Podstawa alternatywna" close the gap as well (V P 3/26 run).
   if (!/(?:Nawet\s+(?:gdyby|jeżeli|jeśli|w\s+razie)|niezależnie\s+od\s+powyższego|z\s+ostrożności|ewentualnie|podstaw\p{L}*\s+alternatywn\p{L}*|(?:Gdyby|Jeżeli|Jeśli)\s+(?:\p{L}+\s+){0,3}(?:uzna\p{L}*|przyj\p{L}*|nie\s+podzieli\p{L}*)[^.]{0,200}?\bi\s+tak\b|w\s+przeciwnym\s+razie)/iu.test(body)) {
     gaps.push({ element: "ZAMKNIĘCIE FURTKI", detail: "brak podstawy alternatywnej na wypadek nieuwzględnienia tezy głównej" });
   }
@@ -65,7 +65,7 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
   const unproven = blocks.filter((block) => block.length > 300 && !/\[\[LEXDOC|„[^”]{15,}”|\(?Dowód|dowodem|protok[oó]ł|załącznik/iu.test(block));
   if (unproven.length) gaps.push({ element: "DOWÓD", detail: `${unproven.length} bloków uzasadnienia bez dowodu przy fakcie` });
   if (!/(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(answer)) gaps.push({ element: "WNIOSEK", detail: "brak wniosków (petitum)" });
-  // A fact outside the material needs its evidence motion (RD 121/26 plan, point 7).
+  // A fact outside the material needs its evidence motion (point 7).
   const outside = body.split(/\n\s*\n/u).filter((paragraph) => OUTSIDE_MATERIAL.test(paragraph));
   if ((outside.length || unproven.length) && !EVIDENCE_MOTION.test(answer)) {
     gaps.push({
@@ -80,7 +80,7 @@ export function argumentSchemaGaps(answer: string, options: { refusalOnExplanati
     });
   }
   // A conclusion that depends on a fact still to be filled in ("⬛ [UZUPEŁNIJ: data]") is stated as
-  // certain (XI P 27/26: "Jedno z tych zeznań jest nieprawdziwe" before the date was known).
+  // certain (V P 3/26: "Jedno z tych zeznań jest nieprawdziwe" before the date was known).
   const conditional = body
     .split(/\n\s*\n/u)
     // The sentence with the open fact and the one after it: the categorical conclusion drawn from it
