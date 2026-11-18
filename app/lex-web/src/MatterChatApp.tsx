@@ -79,6 +79,7 @@ import {
   getSkills,
   addCaseScheduleEvent,
   archiveCase,
+  cancelExecution,
   clearClaudeOAuthToken,
   clearProviderApiKey,
   createCase,
@@ -2016,6 +2017,10 @@ export default function MatterChatApp({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // The model's text so far in the running turn: kept when the turn fails or is interrupted.
   const lastDraftRef = useRef("");
+  // The execution id of the turn running now ("Zatrzymaj" stops it on the server).
+  const runningExecutionRef = useRef<string | null>(null);
+  const [runningExecution, setRunningExecution] = useState<string | null>(null);
+  const [stopRequested, setStopRequested] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
   const activeCaseIdRef =
@@ -4623,6 +4628,9 @@ export default function MatterChatApp({
       setLastDelivery(null);
       const executionId =
         newExecutionId();
+      runningExecutionRef.current = executionId;
+      setRunningExecution(executionId);
+      setStopRequested(false);
       lastDraftRef.current = "";
       const stopDraftPolling =
         startDraftPolling(
@@ -4847,7 +4855,9 @@ export default function MatterChatApp({
         );
       }
       const friendly =
-        exportBlockedMessage(error) ??
+        code === "EXECUTION_CANCELLED"
+          ? t("Odpowiedź zatrzymana.")
+          : exportBlockedMessage(error) ??
         (code ===
           "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
           ? t("Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API.")
@@ -5006,6 +5016,9 @@ export default function MatterChatApp({
         }
       ]);
     } finally {
+      runningExecutionRef.current = null;
+      setRunningExecution(null);
+      setStopRequested(false);
       // Restore the persistent DR bridge after a zero-selection turn.
       if (
         allowedDomains !== null &&
@@ -6887,6 +6900,23 @@ export default function MatterChatApp({
                   </button>
                 ) : null}
                 <span className="chat-composer-spacer" />
+                {/* A running answer can be stopped (a turn may take minutes); what the model wrote
+                    so far stays in the chat as a working draft. */}
+                {executing && runningExecution ? (
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={stopRequested}
+                    onClick={() => {
+                      const running = runningExecutionRef.current;
+                      if (!running) return;
+                      setStopRequested(true);
+                      void cancelExecution(running).catch(() => setStopRequested(false));
+                    }}
+                  >
+                    {stopRequested ? t("Zatrzymywanie…") : t("Zatrzymaj")}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="chat-primary-action"
@@ -8135,7 +8165,7 @@ export default function MatterChatApp({
               aria-label={t("Sekcje ustawień")}
             >
               {([
-                [t("Konto"), "security", t("Hasło i bezpieczeństwo")],
+                [t("Konto"), "security", t("Profil i bezpieczeństwo")],
                 [t("Konto"), "display", t("Wygląd i czytelność")],
                 ...(settingsPanels?.account ? [[t("Konto"), "account", t("Plan i klucze API")]] : []),
                 [t("Asystent AI"), "models", t("Modele i AI")],

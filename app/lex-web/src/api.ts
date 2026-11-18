@@ -1836,6 +1836,14 @@ export async function recoverAccount(input: {
   return result;
 }
 
+// The signed-in account's own display name (Ustawienia > Profil).
+export function setMyDisplayName(displayName: string): Promise<{ user: AuthenticatedUser }> {
+  return json<{ user: AuthenticatedUser }>("/api/auth/me/profile", {
+    method: "PATCH",
+    body: JSON.stringify({ displayName })
+  });
+}
+
 export function getAuthMe():
   Promise<AuthMeResponse> {
   return json<AuthMeResponse>(
@@ -3286,6 +3294,11 @@ export function reviseProcessPleadingCheckpoint(
     method: "POST",
     body: JSON.stringify({ checkpoint, remarks })
   });
+}
+
+// "Zatrzymaj": stops the running turn of this execution id (its owner only).
+export function cancelExecution(executionId: string): Promise<{ cancelled: true }> {
+  return json<{ cancelled: true }>(`/api/sessions/cancel/${encodeURIComponent(executionId)}`, { method: "POST" });
 }
 
 export function executeSession(input: {

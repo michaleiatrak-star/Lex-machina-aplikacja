@@ -379,6 +379,9 @@ describe("registration and password reset by e-mail", () => {
     expect(profile.body.user).toMatchObject({ displayName: "Klient Nowak", email: "kontakt@example.pl" });
     await request(current.app).patch(`/api/admin/users/${userId}/profile`).set("Authorization", `Bearer ${adminToken}`).send({ email: "nie-adres" }).expect(400);
     await request(current.app).patch(`/api/admin/users/${userId}/profile`).set("Authorization", `Bearer ${oldToken}`).send({ displayName: "X" }).expect(403);
+    // Own display name only, through its own endpoint (Ustawienia > Profil).
+    const ownName = await request(current.app).patch("/api/auth/me/profile").set("Authorization", `Bearer ${oldToken}`).send({ displayName: "Jan Nowak" }).expect(200);
+    expect(ownName.body.user).toMatchObject({ userId, displayName: "Jan Nowak", email: "kontakt@example.pl" });
 
     // Reset link sent by the admin to the login e-mail.
     const sent = await request(current.app).post(`/api/server-mode/accounts/${userId}/password-reset`).set("Authorization", `Bearer ${adminToken}`).expect(200);

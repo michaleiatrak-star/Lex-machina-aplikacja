@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { InlineEdit } from "./InlineEdit";
 import {
   useState
 } from "react";
@@ -6,6 +7,8 @@ import {
   ApiError,
   changePassword,
   createRecoveryCode,
+  getAuthMe,
+  setMyDisplayName,
   type AuthMeResponse,
   type AuthenticatedUser
 } from "./api.js";
@@ -19,6 +22,7 @@ export function AccountSecurityPanel({
     value: AuthMeResponse
   ) => void;
 }) {
+  const [editingName, setEditingName] = useState(false);
   const [setupPassword, setSetupPassword] =
     useState("");
   const [currentPassword, setCurrentPassword] =
@@ -135,6 +139,59 @@ export function AccountSecurityPanel({
   }
 
   return (
+    <>
+    {/* Profile first, as in Patron's settings: who is signed in, the name shown in the app. */}
+    <section className="account-security-panel account-profile">
+      <p className="eyebrow">{t("Profil")}</p>
+      <dl className="account-profile-list">
+        <dt>{t("Nazwa wyświetlana")}</dt>
+        <dd>
+          {editingName ? (
+            <InlineEdit
+              value={user.displayName}
+              label={t("Nazwa wyświetlana")}
+              onCancel={() => setEditingName(false)}
+              onSave={async (next) => {
+                try {
+                  await setMyDisplayName(next);
+                  onAuthUpdated(await getAuthMe());
+                  setEditingName(false);
+                  return true;
+                } catch {
+                  setError(t("Nie udało się zmienić nazwy (od 1 do 120 znaków)."));
+                  return false;
+                }
+              }}
+            />
+          ) : (
+            <>
+              {user.displayName}{" "}
+              <button
+                type="button"
+                className="matter-thread-edit"
+                title={t("Zmień nazwę wyświetlaną")}
+                aria-label={t("Zmień nazwę wyświetlaną")}
+                onClick={() => setEditingName(true)}
+              >
+                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                  <path d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>
+          )}
+        </dd>
+        <dt>{t("Login")}</dt>
+        <dd>{user.loginName}</dd>
+        <dt>{t("Rola")}</dt>
+        <dd>{user.appRole === "ADMIN" ? t("Administrator") : t("Użytkownik")}</dd>
+        {user.email ? (
+          <>
+            <dt>{t("E-mail")}</dt>
+            <dd>{user.email}</dd>
+          </>
+        ) : null}
+      </dl>
+    </section>
     <section className="account-security-panel">
       <div>
         <p className="eyebrow">
@@ -287,5 +344,6 @@ export function AccountSecurityPanel({
         </div>
       )}
     </section>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { executionAbort } from "../providers/gateway.js";
 import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
 import { astLines, compareFileWithDraft, draftLines, fileCheckReason } from "../file-consistency.js";
 import { enterAnswerLanguage, parseAnswerLanguage } from "../providers/answer-language.js";
@@ -3502,6 +3503,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           ...(req.body?.displayName !== undefined ? { displayName: req.body.displayName } : {}),
           ...(req.body?.email !== undefined ? { email: req.body.email } : {})
         });
+        res.json({ user });
+      } catch (error) {
+        if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
+      }
+    }
+  );
+
+  // The signed-in account's own display name.
+  app.patch(
+    "/api/auth/me/profile",
+    (req, res) => {
+      if (!options.authService) {
+        res.status(503).json({ error: "AUTH_SERVICE_UNAVAILABLE" });
+        return;
+      }
+      try {
+        const user = options.authService.setOwnDisplayName(responseAuthContext(res), req.body?.displayName);
         res.json({ user });
       } catch (error) {
         if (!sendAuthError(res, error)) res.status(500).json({ error: "USER_UPDATE_FAILED" });
@@ -10183,7 +10201,28 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   });
 
-  app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
+  // "Zatrzymaj": the running turn of an execution id, stopped by its owner only.
+  const executionStops = new Map<string, { owner: string; controller: AbortController }>();
+  app.post("/api/sessions/cancel/:executionId", (req, res) => {
+    const entry = executionStops.get(String(req.params.executionId ?? ""));
+    if (!entry || entry.owner !== draftOwner(res)) {
+      res.status(404).json({ error: "EXECUTION_NOT_FOUND" });
+      return;
+    }
+    entry.controller.abort();
+    res.json({ cancelled: true });
+  });
+  app.post("/api/sessions/execute", express.json({ limit: "32mb" }), (req, res, next) => {
+    const executionId = String(req.get("x-lex-execution-id") ?? "");
+    if (!EXECUTION_ID_PATTERN.test(executionId)) {
+      next();
+      return;
+    }
+    const controller = new AbortController();
+    executionStops.set(executionId, { owner: draftOwner(res), controller });
+    res.on("close", () => executionStops.delete(executionId));
+    executionAbort.run(controller.signal, () => next());
+  }, async (req, res) => {
     // The interface language: every model call of this request answers in it.
     enterAnswerLanguage(parseAnswerLanguage(req.get("X-Lex-Language")));
     if (keepAliveRequested(req)) keepResponseAlive(res);
@@ -13478,6 +13517,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
 
       if (sendAccountPolicyError(res, error)) {
+        return;
+      }
+
+      // The user stopped the turn ("Zatrzymaj"): not a model failure; the interface keeps the text
+      // written so far as a working draft.
+      if (executionAbort.getStore()?.aborted || (error instanceof ProviderGatewayError && error.code === "EXECUTION_CANCELLED")) {
+        res.status(409).json({ error: "EXECUTION_CANCELLED" });
         return;
       }
 

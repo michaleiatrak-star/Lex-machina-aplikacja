@@ -479,3 +479,21 @@ describe("account role (ADMIN / USER)", () => {
     service.close();
   });
 });
+
+describe("own profile", () => {
+  it("an account changes its own display name, not its e-mail and not another account's", async () => {
+    const root = tempRoot();
+    const { service } = serviceAt(root);
+    const admin = await service.bootstrap({ loginName: "ewa", displayName: "Ewa", password: "Ewa ma bezpieczne dlugie haslo 2026" });
+    const adminContext = service.authenticateAuthorization(`Bearer ${admin.sessionToken}`);
+    const jan = await service.createUser(adminContext, { loginName: "jan", displayName: "Jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    const janLogged = await service.login({ loginName: "jan", password: "Jan ma bezpieczne dlugie haslo 2026" });
+    const janContext = service.authenticateAuthorization(`Bearer ${janLogged.sessionToken}`);
+    expect(service.setOwnDisplayName(janContext, "Jan Kowalski").displayName).toBe("Jan Kowalski");
+    expect(() => service.setOwnDisplayName(janContext, "   ")).toThrow("INVALID_USER_REQUEST");
+    // The administrator's profile dialog stays the administrator's.
+    expect(() => service.setProfile(janContext, jan.userId, { displayName: "X" })).toThrow("AUTHORIZATION_DENIED");
+    expect(() => service.setProfile(janContext, admin.user.userId, { displayName: "X" })).toThrow("AUTHORIZATION_DENIED");
+    service.close();
+  });
+});

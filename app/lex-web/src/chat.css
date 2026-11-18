@@ -5264,3 +5264,27 @@ mark.restored {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.account-profile-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 8px 0 0;
+}
+
+.account-profile-list dt {
+  color: var(--lm-t3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-profile-list dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.account-profile .matter-thread-edit {
+  opacity: 1;
+}
