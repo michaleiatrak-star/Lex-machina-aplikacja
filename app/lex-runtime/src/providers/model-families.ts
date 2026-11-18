@@ -131,17 +131,35 @@ export function newestModelFamilies(
  * the choice to the client. IDs verified against the provider documentation
  * on 2026-09-25; update together with the pinned clients.
  */
+// The seed when no model list can be read (no key, the account's list unreachable); the list itself is
+// built from the provider's models, the two newest of each line (accountModelList).
 export const ACCOUNT_SESSION_MODELS: Partial<Record<ProviderId, Array<{ id: string; label: string }>>> = {
   anthropic: [
+    { id: "claude-fable-5-2", label: "Claude Fable 5.2" },
     { id: "claude-fable-5-1", label: "Claude Fable 5.1" },
-    { id: "claude-fable-5", label: "Claude Fable 5" },
     { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
     { id: "claude-opus-5", label: "Claude Opus 5" },
-    { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
-    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" }
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { id: "claude-sonnet-5", label: "Claude Sonnet 5" }
   ],
   openai: [
     { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
     { id: "gpt-5.5", label: "GPT-5.5" }
   ]
 };
+
+/** A model id of a main line (the account session accepts any such id, not only the seed). */
+export function mainLineModel(provider: ProviderId, id: string): boolean {
+  return parseModelFamily(provider, id) !== null && !/(?:^|[-.])(?:haiku|mini|nano|lite|small)(?:[-.]|$)/i.test(id);
+}
+
+/**
+ * The account session's choice: the provider's models (its list, read with an API key or the
+ * account's token) reduced to the two newest of each main line; the seed when no list is read.
+ */
+export function accountModelList(provider: ProviderId, listed: ModelDescriptor[] | null): Array<{ id: string; label: string }> {
+  const seed = ACCOUNT_SESSION_MODELS[provider] ?? [];
+  if (!listed?.length) return seed;
+  const newest = newestModelFamilies(listed.filter((model) => mainLineModel(provider, model.id)));
+  return newest.length ? newest.map((model) => ({ id: model.id, label: model.displayName || model.id })) : seed;
+}

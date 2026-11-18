@@ -59,6 +59,12 @@ export function documentFailure(cause: unknown): DocumentFailure {
       : cause instanceof Error
         ? cause.message
         : String(cause || "DOCUMENT_REVIEW_FAILED");
+  const privacyDescription = cause instanceof ApiError ? `${cause.reason ?? ""} ${cause.description ?? ""}` : "";
+  // The local personal-data recognizer (Morfeusz, Stanza) did not start: anonymization is refused
+  // rather than done badly; reading without anonymization still works.
+  if (privacyDescription.includes("PRIVACY_RECOGNIZER_UNAVAILABLE") || code === "PRIVACY_RECOGNIZER_UNAVAILABLE") {
+    return { code, message: "Rozpoznawanie danych osobowych na tym komputerze nie działa (brakuje jego składników), więc anonimizacja nie ruszyła. Uruchom instalator Lex Machina ponownie; do tego czasu plik możesz odczytać bez anonimizacji.", retryable: false };
+  }
   const known = MESSAGES[code];
   if (known) return { code, ...known };
   if (code === "DOCUMENT_PASSWORD_REQUIRED") {

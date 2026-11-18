@@ -487,9 +487,10 @@ describe("TemporalSourceFreshnessChecker", () => {
   });
 
   it("fails closed when a post-t.j. amendment repeals a range containing the requested article", async () => {
-    for (const text of [
-      "<html><body>Art. 1. Uchyla się art. 188–192.</body></html>",
-      "<html><body>Art. 1. Art. 189, 190a i 191 otrzymują brzmienie:</body></html>"
+    for (const [text, reason] of <Array<[string, string]>>[
+      ["<html><body>Art. 1. Uchyla się art. 188–192.</body></html>", "POST_TJ_AMENDMENT_REPEALS_REQUESTED_ARTICLE"],
+      // A new wording whose text is not there: not readable, fails closed as before.
+      ["<html><body>Art. 1. Art. 189, 190a i 191 otrzymują brzmienie:</body></html>", "POST_TJ_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"]
     ]) {
       const result = await new TemporalSourceFreshnessChecker(
         fixtureFetcher({
@@ -506,7 +507,7 @@ describe("TemporalSourceFreshnessChecker", () => {
 
       expect(result).toMatchObject({
         status: "POST_TJ_AMENDMENTS",
-        reason: "POST_TJ_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"
+        reason
       });
     }
   });
@@ -799,7 +800,7 @@ describe("wejście w życie etapami (pole comments w ELI)", () => {
     expect(result.pendingWordingAmendments).toBeUndefined();
   });
 
-  it("bez terminów w comments ta sama nowela blokuje artykuł jak dotąd, z jej przepisami przejściowymi", async () => {
+  it("bez terminów w comments zmiana art. 860 obowiązuje: brzmienie z noweli, z jej przepisami przejściowymi", async () => {
     const withTransitional = omnibus.replace(
       " Art. 31.",
       " Art. 25. Do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe. Art. 31."
@@ -811,7 +812,11 @@ describe("wejście w życie etapami (pole comments w ELI)", () => {
       }),
       today
     ).check(kc, { claim: "art. 860 § 3 KC" });
-    expect(result.status).toBe("POST_TJ_AMENDMENTS");
+    // User, 2026-11-17: the amendment in force is read, its points for the article given, not a refusal.
+    expect(result).toMatchObject({ status: "CURRENT", reason: "POST_TJ_AMENDMENT_WORDING_FROM_AMENDMENT" });
+    expect(result.articleChanges).toEqual([
+      expect.objectContaining({ eli: "DU/2026/507", kind: "CHANGED", instruction: expect.stringMatching(/^w art\. 860 dodaje się § 3 i 4 w brzmieniu: „§ 3\./u) })
+    ]);
     expect(result.transitionalProvisions).toEqual([
       { eli: "DU/2026/507", text: "art. 25. do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe." }
     ]);

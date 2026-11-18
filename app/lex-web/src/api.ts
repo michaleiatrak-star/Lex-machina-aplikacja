@@ -1085,6 +1085,8 @@ export type SessionExecutionResponse = {
   chronologySaved?: { updatedAt: string };
   // Pages of the case's documents read this turn; documentAnalysis: the turn analysed them.
   documentCoverage?: DocumentCoverageEntry[];
+  // The register D01..DN of a pleading's turn: each document's read state.
+  documentRegister?: DocumentRegisterEntry[];
   documentAnalysis?: boolean;
   // What the application's correcting rounds removed from the answer, and why.
   corrections?: AnswerCorrection[];
@@ -1128,6 +1130,7 @@ export type SessionExecutionResponse = {
     documentBudgetTokens?: number;
     estimatedDocumentTokens: number;
     instructionChars?: number;
+    instructionsTrimmedFrom?: number;
     instructionSections?: Array<{ label: string; chars: number }>;
     charsPerTokenEstimate?: number;
     selectedChunks: number;
@@ -1176,7 +1179,8 @@ export type SessionExecutionResponse = {
       | "FINAL"
       | "LIMIT_REACHED"
       | "NODE_BLOCKED"
-      | "WAITING_FOR_USER";
+      | "WAITING_FOR_USER"
+      | "STAGE_STOP";
     limitReached: boolean;
     steps: Array<{
       stage:
@@ -3072,6 +3076,11 @@ export function validateRoute(
   });
 }
 
+/** The account session's models: the provider's newest of each line (the seed when unreadable). */
+export function getAccountModels(provider: ProviderId): Promise<{ provider: ProviderId; models: Array<{ id: string; label: string }>; source: "PROVIDER" | "SEED" | "CLIENT_DEFAULT" }> {
+  return json(`/api/models/${provider}/account`);
+}
+
 export function getModels(
   provider: ProviderId
 ): Promise<ModelsResponse> {
@@ -3329,6 +3338,8 @@ export type ExecutionStepsSnapshot = {
   }>;
 };
 
+export type DocumentRegisterEntry = { id: string; documentId: string; label: string; kind: string; state: "READ" | "NO_FACTS" | "GAP" | "UNREAD"; parts: number; facts: number; reasons?: string[] };
+
 export type SessionExecutionProgress = {
   text: string;
   updatedAt: string;
@@ -3389,6 +3400,7 @@ function uploadMediaType(file: File): string {
   // Browsers name these differently (text/rtf, application/msword, empty); the runtime takes one name.
   if (lowerName.endsWith(".eml")) return "message/rfc822";
   if (lowerName.endsWith(".rtf")) return "application/rtf";
+  if (lowerName.endsWith(".doc")) return "application/msword";
   if (file.type) return file.type;
   const lower =
     file.name.toLowerCase();

@@ -57,9 +57,14 @@ export function personKeyFacts(
 }
 
 /** The passages a pleading must use or set aside by name: the strongest one and the key facts on the user. */
+// A passage about another case ("w sprawie VIII W 633/25 …") is the model's to weigh, never a duty:
+// required, it pulled the draft into a thread outside the case (XI P 27/26, 2026-11-17).
+const OTHER_CASE = /\b[IVXLC]{1,6}\s+[A-Z][A-Za-z]{0,5}\s+\d{1,6}\/\d{2,4}\b/u;
+
 export function requiredPassages(passages: readonly FilePassage[], keyFacts: readonly FilePassage[]): FilePassage[] {
   const seen = new Set<string>();
-  return [...keyFacts, ...passages.slice(0, 2)].filter((item) => !seen.has(item.text) && Boolean(seen.add(item.text)));
+  const strongest = passages.slice(0, 2).filter((passage) => !OTHER_CASE.test(passage.text) && (passage.weight ?? 1) >= 0.5);
+  return [...keyFacts, ...strongest].filter((item) => !seen.has(item.text) && Boolean(seen.add(item.text)));
 }
 
 // "W materiale brak danych o…", "w aktach nie ma…", "nie ma w odczytanych materiałach".

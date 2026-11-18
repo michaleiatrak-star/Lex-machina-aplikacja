@@ -1,4 +1,5 @@
 import { CORE_LEGAL_RESOURCES } from "./legal-session.js";
+import { CASE_MATERIAL_MARKER_TEXT } from "./finalization-gate.js";
 import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 function routerFirst(events) {
     const firstSkill = events.find((event) => event.type ===
@@ -225,7 +226,11 @@ function caseSignatures(finalization) {
         .kind ===
         "case" &&
         finding.status !==
-            "VERIFIED");
+            "VERIFIED" &&
+        // Another proceeding the case's files name ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"): a fact
+        // of the case, marked where it comes from, not a cited judgment to verify.
+        !(finding.status === "UNVERIFIED_MARKED" &&
+            finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT)));
     const invalidQuotes = finalization
         .caseQuoteFindings
         .filter((finding) => finding.status !==

@@ -60,8 +60,8 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export const INTEGRITY_TEXT: Record<McpPackageInfo["integrity"], string> = {
-  MATCH: t("zgodny z sumą kontrolną skilla (najnowsza instalacja)"),
-  MISMATCH: t("NIEZGODNY z sumą kontrolną skilla — zaktualizuj skille"),
+  MATCH: t("aktualne (zgodne z instrukcjami prawnymi)"),
+  MISMATCH: t("niezgodne z instrukcjami prawnymi — zaktualizuj je w Ustawieniach"),
   UNVERIFIED: t("brak sumy kontrolnej w skillu — nie da się potwierdzić wersji"),
   MISSING: t("brak pakietu serwerów MCP")
 };
@@ -427,7 +427,7 @@ export function McpSearchPanel() {
     <section className="chat-card-stack">
       <article className="chat-card">
         <p className="eyebrow">
-          {t("Konektory MCP · wywołanie bezpośrednie")}
+          {t("Źródła prawa i orzecznictwa · zapytanie bezpośrednie")}
         </p>
         <h2>
           {t("Wyszukiwanie w źródłach")}
@@ -441,7 +441,7 @@ export function McpSearchPanel() {
 
         {packageInfo ? (
           <p className="field-help">
-            {t("Pakiet serwerów")}{packageInfo.version ? ` ${packageInfo.version}` : ""}
+            {t("Wersja źródeł")}{packageInfo.version ? ` ${packageInfo.version}` : ""}
             {packageInfo.skillVersion ? ` (pakiet jurysdykcji ${packageInfo.skillVersion})` : ""}: {INTEGRITY_TEXT[packageInfo.integrity]}.
           </p>
         ) : null}

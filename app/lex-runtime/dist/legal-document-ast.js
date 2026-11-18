@@ -71,6 +71,17 @@ function parseInline(value, aliases, used) {
         };
     }
     if (record.type === "xref") {
+        // A cross-reference the model wrote with a target the file cannot link ("zał. 1", a sentence, an
+        // empty id) is kept as its words, not a refused file (user report 2026-11-17: AST_XREF_TARGET_INVALID
+        // stopped "wygeneruj dokument" at the end of the pleading pipeline).
+        const rawTarget = typeof record.targetId === "string" ? record.targetId.trim() : "";
+        if (!/^[A-Za-z0-9_-]{1,120}$/.test(rawTarget)) {
+            const words = typeof record.label === "string" && record.label.trim() ? record.label : rawTarget;
+            return {
+                type: "text",
+                text: safeText(words.slice(0, 500), 500, "AST_XREF_LABEL_INVALID")
+            };
+        }
         const targetId = safeText(record.targetId, 120, "AST_XREF_TARGET_INVALID");
         const label = safeText(record.label, 500, "AST_XREF_LABEL_INVALID");
         if (!/^[A-Za-z0-9_-]{1,120}$/

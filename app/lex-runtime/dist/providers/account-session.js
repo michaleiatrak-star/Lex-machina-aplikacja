@@ -34,7 +34,7 @@ function replaceAnthropicOAuthToken(token) {
             ? Buffer.from(token, "utf8")
             : null;
 }
-import { ACCOUNT_SESSION_MODELS } from "./model-families.js";
+import { ACCOUNT_SESSION_MODELS, mainLineModel } from "./model-families.js";
 const ACCOUNT_MODEL_IDS = {
     openai: "account/openai/default",
     anthropic: "account/anthropic/default",
@@ -2235,7 +2235,8 @@ export function accountSessionClientModel(provider, model) {
     if (!model.startsWith(prefix))
         return null;
     const id = model.slice(prefix.length);
-    return (ACCOUNT_SESSION_MODELS[provider] ?? []).some((item) => item.id === id)
+    // Any model of a main line: the list is built from the provider's models, not fixed in the code.
+    return (ACCOUNT_SESSION_MODELS[provider] ?? []).some((item) => item.id === id) || mainLineModel(provider, id)
         ? id
         : null;
 }
@@ -3302,4 +3303,32 @@ export async function streamAccountSession(manager, provider, params) {
         }
     }
     throw new Error("ACCOUNT_SESSION_MAX_TOOL_ITERATIONS");
+}
+/**
+ * The Claude account's model list (the Models API with the account's OAuth token); null when the
+ * account is not connected or the list is unreachable (the seed is used then).
+ */
+export async function anthropicAccountModels(fetcher = globalThis.fetch.bind(globalThis)) {
+    const token = currentAnthropicOAuthToken();
+    if (!token)
+        return null;
+    try {
+        const response = await fetcher("https://api.anthropic.com/v1/models?limit=1000", {
+            headers: { Authorization: `Bearer ${token}`, "anthropic-version": "2023-06-01", "anthropic-beta": "oauth-2025-04-20", Accept: "application/json" }
+        });
+        if (!response.ok)
+            return null;
+        const payload = (await response.json());
+        return (payload.data ?? []).flatMap((item) => typeof item.id === "string"
+            ? [{
+                    id: item.id,
+                    displayName: typeof item.display_name === "string" ? item.display_name : item.id,
+                    ...(typeof item.max_input_tokens === "number" ? { contextWindow: item.max_input_tokens } : {}),
+                    ...(typeof item.created_at === "string" ? { createdAt: item.created_at } : {})
+                }]
+            : []);
+    }
+    catch {
+        return null;
+    }
 }

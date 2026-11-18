@@ -4,8 +4,9 @@ import {
 import type {
   ExecutionEvent
 } from "./execution-engine.js";
-import type {
-  FinalizationReport
+import {
+  CASE_MATERIAL_MARKER_TEXT,
+  type FinalizationReport
 } from "./finalization-gate.js";
 import type {
   DeterministicWorkflowReadReport
@@ -362,6 +363,14 @@ function temporalFreshness(
   };
 }
 
+// A provision the answer names only to say it is repealed or not relied on ("art. 217 KPC jest
+// uchylony … nie powołano", XI P 27/26): marked unverified, it is a disclosure, not a citation, and
+// does not block the answer (the finalization report still lists it).
+const DISCLOSED_NOT_CITED = /(?:uchylon\p{L}*|nie\s+(?:został\p{L}*\s+|jest\s+)?powołan\p{L}*|nie\s+powołuj\p{L}*|nie\s+ma\s+(?:tej\s+)?jednostki|brak\s+(?:tej\s+)?jednostki)/iu;
+function citedClaim(finding: FinalizationReport["findings"][number]): boolean {
+  return !(finding.status === "UNVERIFIED_MARKED" && finding.reference.kind === "statute" && DISCLOSED_NOT_CITED.test(finding.reference.lineText));
+}
+
 function citationLedger(
   finalization:
     FinalizationReport
@@ -371,7 +380,7 @@ function citationLedger(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" && citedClaim(finding)
       );
   return {
     id:
@@ -425,7 +434,7 @@ function citations(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" && citedClaim(finding)
       );
   return {
     id:
@@ -462,7 +471,11 @@ function caseSignatures(
             .kind ===
               "case" &&
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" &&
+          // Another proceeding the case's files name ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"): a fact
+          // of the case, marked where it comes from, not a cited judgment to verify.
+          !(finding.status === "UNVERIFIED_MARKED" &&
+            finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT))
       );
   const invalidQuotes =
     finalization

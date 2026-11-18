@@ -50,7 +50,7 @@ const decide = (question: string, docs: Doc[] = []) => {
     executor.redactionTest(),
     { skill: "pisma-proste-v2", entries: schemaCatalog(registry, "pisma-proste-v2") }
   );
-  return decision ? { skills: [decision.primary, ...(decision.then ? [decision.then] : [])], redaction: (decision.modules ?? []).some((module) => /MOD-REDAKCJA/u.test(module)) } : null;
+  return decision ? { skills: [decision.primary, ...(decision.then ? [decision.then] : []), ...(decision.auxiliary ?? [])], redaction: (decision.modules ?? []).some((module) => /MOD-REDAKCJA/u.test(module)) } : null;
 };
 
 describe("kind of a delivered document", () => {
@@ -71,14 +71,14 @@ describe("kind of a delivered document", () => {
 describe("the task with a delivered document", () => {
   it.each<[string, Doc[], string[]]>([
     // A new reply to the delivered pleading, not the redaction of that pleading (Test A).
-    ["Zredaguj odpowiedź na ten pozew.", ["pozew"], ["analiza-sadowa-v6", "pisma-procesowe-v3"]],
-    ["Wzmocnij ton i napisz odpowiedź na pozew.", ["pozew"], ["analiza-sadowa-v6", "pisma-procesowe-v3"]],
+    ["Zredaguj odpowiedź na ten pozew.", ["pozew"], ["pisma-procesowe-v3", "analiza-sadowa-v6"]],
+    ["Wzmocnij ton i napisz odpowiedź na pozew.", ["pozew"], ["pisma-procesowe-v3", "analiza-sadowa-v6"]],
     // A question about the pleading is an analysis, not the pleading pipeline.
     ["Dostałem pozew, co mam zrobić?", ["pozew"], ["analiza-sadowa-v6"]],
     ["Wyjaśnij mi ten pozew.", ["pozew"], ["analiza-sadowa-v6"]],
     ["Ile mam czasu na odpowiedź na pozew?", ["pozew"], ["analiza-sadowa-v6"]],
     // The analysis row first, the letter the user asked for as its next stage.
-    ["Przeanalizuj pozew i przygotuj odpowiedź na pozew z wnioskami dowodowymi.", ["pozew", "umowa"], ["analiza-sadowa-v6", "pisma-procesowe-v3"]],
+    ["Przeanalizuj pozew i przygotuj odpowiedź na pozew z wnioskami dowodowymi.", ["pozew", "umowa"], ["pisma-procesowe-v3", "analiza-sadowa-v6"]],
     ["Przygotuj odpowiedź na akt oskarżenia.", ["aktOskarzenia"], ["analiza-sadowa-v6", "pisma-procesowe-v3"]],
     ["Odpowiedz na pismo przygotowawcze powoda.", ["pismoPrzygotowawcze"], ["analiza-sadowa-v6", "pisma-procesowe-v3"]],
     ["Wykorzystaj te dokumenty jako dowody w pozwie o zapłatę.", ["faktura", "umowa"], ["analizator-dowodow-v3", "pisma-procesowe-v3"]],

@@ -1,4 +1,4 @@
-import { EML_MEDIA_TYPE, RTF_MEDIA_TYPE } from "./office-document-extractor.js";
+import { DOC_MEDIA_TYPE, EML_MEDIA_TYPE, RTF_MEDIA_TYPE } from "./office-document-extractor.js";
 import { isRecordingMediaType, transcriptPages, type RecordingMediaType, type RecordingTranscriber } from "./transcription.js";
 import { alignProtected, protectedPageText, type DocxAnonymizationPlan } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
@@ -177,6 +177,7 @@ export type SupportedDocumentMediaType =
   | typeof TSV_MEDIA_TYPE
   | typeof EML_MEDIA_TYPE
   | typeof RTF_MEDIA_TYPE
+  | typeof DOC_MEDIA_TYPE
   | RecordingMediaType;
 
 export type PublicDocumentChunk = {
@@ -791,22 +792,35 @@ implements DocumentService {
       mediaType ===
         ODT_MEDIA_TYPE ||
       mediaType === EML_MEDIA_TYPE ||
-      mediaType === RTF_MEDIA_TYPE
+      mediaType === RTF_MEDIA_TYPE ||
+      mediaType === DOC_MEDIA_TYPE
     ) {
       if (!this.officeExtractor) {
         throw new Error(
           "OFFICE_DOCUMENT_EXTRACTOR_UNAVAILABLE"
         );
       }
-      return this.digitalTextResult(
-        data,
-        await this.officeExtractor
-          .extract(
-            data,
-            mediaType as
-              OfficeDocumentMediaType
-          )
-      );
+      const text = await this.officeExtractor.extract(data, mediaType as OfficeDocumentMediaType);
+      // The document's own text needs no OCR; only pictures pasted into it (a scan in a Word file)
+      // are read by OCR, and their text follows the document's (user 2026-11-17).
+      const pictures = this.imageIngestor && this.officeExtractor.images
+        ? await this.officeExtractor.images(data, mediaType as OfficeDocumentMediaType).catch(() => [])
+        : [];
+      if (!pictures.length) return this.digitalTextResult(data, text);
+      const read: string[] = [];
+      for (const [index, picture] of pictures.entries()) {
+        onProgress?.({ stage: "OCR", done: index, total: pictures.length, page: index + 1 });
+        try {
+          const image = await this.imageIngestor!.ingest(picture.data, picture.mediaType);
+          const pictureText = image.pages.map((page) => page.text).join("\n").trim();
+          if (pictureText) read.push(`[Obraz osadzony ${index + 1} - tekst odczytany OCR]\n${pictureText}`);
+        } catch {
+          // A picture that cannot be read leaves the document's text as it is.
+        }
+      }
+      onProgress?.({ stage: "OCR", done: pictures.length, total: pictures.length });
+      const result = this.digitalTextResult(data, read.length ? `${text}\n\n${read.join("\n\n")}` : text);
+      return read.length ? { ...result, ocrPages: read.length } : result;
     }
     if (!this.imageIngestor) {
       throw new Error("IMAGE_OCR_UNAVAILABLE");

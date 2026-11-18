@@ -23,7 +23,11 @@ describe("stored document processing media", () => {
       expect(storedDocumentMediaType(type)).toBe(type);
     }
     expect(storedDocumentMediaType("text/plain; charset=utf-8")).toBe("text/plain");
-    expect(storedDocumentMediaType("application/msword")).toBeNull();
+    // Word 97-2003 (.doc): read from the compound file (0.1.100); its header is checked.
+    expect(storedDocumentMediaType("application/msword")).toBe("application/msword");
+    expect(hasStoredDocumentSignature(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0]), "application/msword")).toBe(true);
+    expect(hasStoredDocumentSignature(Buffer.from("PK\u0003\u0004rest"), "application/msword")).toBe(false);
+    expect(storedDocumentMediaType("application/vnd.ms-powerpoint")).toBeNull();
   });
 
   it("checks the ZIP signature of office files and rejects binary text", () => {

@@ -74,6 +74,7 @@ export async function runBoundedProcessAutoSequence(args) {
                 next.pendingCheckpoint) {
             throw new Error("PROCESS_PLEADING_AUTO_STATE_CONFLICT");
         }
+        const stagePassed = state.stage;
         state = persisted;
         steps.push({
             permit,
@@ -86,6 +87,14 @@ export async function runBoundedProcessAutoSequence(args) {
                 state,
                 steps,
                 stopped: "FINAL",
+                limitReached: false
+            };
+        }
+        if (stagePassed === "W2" && state.stage !== "W2") {
+            return {
+                state,
+                steps,
+                stopped: "STAGE_STOP",
                 limitReached: false
             };
         }

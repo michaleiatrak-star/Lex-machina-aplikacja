@@ -53,6 +53,8 @@ const PIPELINE_CONTINUATION = /(?<![\p{L}])(?:kontynuuj\p{L}*|dalej|następn\p{L
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { accountPolicyResponse } from "../server-mode/service.js";
+import { anthropicAccountModels } from "../providers/account-session.js";
+import { accountModelList } from "../providers/model-families.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
 import { caseMaterialSignatures } from "../finalization-gate.js";
@@ -103,6 +105,7 @@ import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
+import { isCourtPleading } from "../pleading-standard.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
 const LOCAL_CASE_MEMORY_CHARS = 4_000;
@@ -138,6 +141,7 @@ const DOCUMENT_MEDIA_TYPES = new Set([
     // E-mail and RTF: read as text by the office worker.
     "message/rfc822",
     "application/rtf",
+    "application/msword",
     // Recordings: the local speech-to-text model writes the text (transcription.ts).
     ...Object.keys(RECORDING_MEDIA_TYPES)
 ]);
@@ -4228,6 +4232,30 @@ export function createLexHttpApp(options) {
             providers
         });
     });
+    // The account session's models: the provider's list (API key, or the Claude account's token)
+    // reduced to the two newest of each main line; the seed when no list is read.
+    app.get("/api/models/:provider/account", async (req, res) => {
+        const provider = String(req.params.provider ?? "");
+        if (!isProviderId(provider)) {
+            res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+            return;
+        }
+        let listed = null;
+        try {
+            listed = await options.modelCatalog.list(provider);
+        }
+        catch {
+            listed = null;
+        }
+        if (!listed?.length && provider === "anthropic") {
+            const account = await anthropicAccountModels();
+            if (account?.length) {
+                options.modelCatalog.rememberWindows?.(provider, account);
+                listed = account.map((model) => ({ provider, id: model.id, displayName: model.displayName, selectable: true, ...(model.createdAt ? { createdAt: model.createdAt } : {}), ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}) }));
+            }
+        }
+        res.json({ provider, models: accountModelList(provider, listed), source: listed?.length ? "PROVIDER" : "SEED" });
+    });
     app.get("/api/models/:provider", async (req, res) => {
         const provider = String(req.params.provider ?? "");
         if (!isProviderId(provider)) {
@@ -4290,6 +4318,7 @@ export function createLexHttpApp(options) {
             "application/vnd.ms-excel.sheet.macroenabled.12",
             "message/rfc822",
             "application/rtf",
+            "application/msword",
             ...Object.keys(RECORDING_MEDIA_TYPES)
         ],
         // A recording too: the body is held in memory, so the same bound as a scan (an hour of
@@ -6468,7 +6497,7 @@ export function createLexHttpApp(options) {
                 count,
                 estimate: estimateDocumentFit({
                     attachments: picked,
-                    modelContextTokens: localWindow ?? HOSTED_CONTEXT_TOKENS[provider] ?? 128_000,
+                    modelContextTokens: localWindow ?? options.modelCatalog.hostedContextWindow?.(provider, model) ?? HOSTED_CONTEXT_TOKENS[provider] ?? 128_000,
                     ...(charsPerToken ? { tokenCharsPerToken: charsPerToken } : {})
                 })
             });
@@ -7027,9 +7056,10 @@ export function createLexHttpApp(options) {
             }
             const localContextWindow = options.modelCatalog
                 .localContextWindow?.(request.model);
-            if (!localContextWindow && sessionAttachments.length > 0) {
+            // The window is known for every turn: the instructions fit it even without documents (instruction-budget.ts).
+            if (!localContextWindow) {
                 request.modelContextTokens =
-                    HOSTED_CONTEXT_TOKENS[request.provider] ?? 128_000;
+                    options.modelCatalog.hostedContextWindow?.(request.provider, request.model) ?? HOSTED_CONTEXT_TOKENS[request.provider] ?? 128_000;
             }
             if (localContextWindow) {
                 request.modelContextTokens =
@@ -7051,7 +7081,6 @@ export function createLexHttpApp(options) {
             const routerExecutive = request.modelSelectsSkills &&
                 sessionAttachments.length === 0 &&
                 !(knowledge.caseId && knowledge.includeCase) &&
-                keywordPlan.executionSkill &&
                 options.sessionExecutor?.executiveSkillFor
                 ? options.sessionExecutor.executiveSkillFor(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query))
                 : undefined;
@@ -7067,7 +7096,6 @@ export function createLexHttpApp(options) {
             // pleading pipeline that one word ("pozew") would start (409 *_STATE_REQUIRED).
             const materialSkills = request.modelSelectsSkills &&
                 sessionAttachments.length > 0 &&
-                keywordPlan.executionSkill &&
                 options.sessionExecutor?.executiveSkillsWithMaterials
                 ? options.sessionExecutor.executiveSkillsWithMaterials(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query), sessionAttachments)
                 : [];
@@ -7079,19 +7107,34 @@ export function createLexHttpApp(options) {
                 !(knowledge.caseId && knowledge.includeCase) &&
                 !asksToDraft(turnMessage) &&
                 (/\?\s*$/u.test(turnMessage.trim()) || asksAbout(turnMessage));
-            const previewPlan = contractQuestion ||
-                pleadingRedaction ||
-                (routerExecutive !== undefined &&
-                    routerExecutive !== keywordPlan.executionSkill) ||
-                (materialSkills.length > 0 &&
-                    (!materialSkills.includes(keywordPlan.executionSkill) ||
-                        // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
-                        // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
-                        // to draft, the turn is the analysis, not the pleading pipeline (409).
-                        (materialSkills[0] !== keywordPlan.executionSkill &&
-                            !asksToDraft(turnMessage))))
-                ? createDeterministicWorkflowPlan(options.registry, null)
-                : keywordPlan;
+            // A pleading to a court or an authority asked for in a matter: the router puts
+            // pisma-procesowe-v3 first (task-routing.ts pleadingFirst) and the turn runs its pipeline,
+            // whatever skill the keywords picked (RD 121/26: "Przygotuj podważenie postanowienia"
+            // ran LEGAL_QUERY_V1 under analiza-sadowa-v6). Without a matter the pipeline has no state
+            // (PROCESS_PLEADING_CASE_REQUIRED), so the chat answers under the skill as before.
+            const pleadingCase = Boolean(knowledge.caseId) ||
+                new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean)).size === 1;
+            const pleadingRouted = keywordPlan.id !== "PROCESS_PLEADING_V1" &&
+                !pleadingRedaction &&
+                pleadingCase &&
+                Boolean(options.registry.get("pisma-procesowe-v3")) &&
+                (materialSkills[0] ?? routerExecutive) === "pisma-procesowe-v3" &&
+                isCourtPleading(turnMessage);
+            const previewPlan = pleadingRouted
+                ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
+                : contractQuestion ||
+                    pleadingRedaction ||
+                    (routerExecutive !== undefined &&
+                        routerExecutive !== keywordPlan.executionSkill) ||
+                    (materialSkills.length > 0 &&
+                        (!materialSkills.includes(keywordPlan.executionSkill) ||
+                            // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
+                            // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
+                            // to draft, the turn is the analysis, not the pleading pipeline (409).
+                            (materialSkills[0] !== keywordPlan.executionSkill &&
+                                !asksToDraft(turnMessage))))
+                    ? createDeterministicWorkflowPlan(options.registry, null)
+                    : keywordPlan;
             let processContext = null;
             // What the user's chat reply did to the pleading pipeline (accepted start, confirmed step, AUTO).
             let pleadingReplyNote = null;

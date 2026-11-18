@@ -221,5 +221,23 @@ const VERIFYING_CHECKPOINTS = new Set(["CP-QUALITY", "CP-AUDYT", "CP-PEER"]);
 export function processStepDone(workflow, checkpoint) {
     if (workflow?.result === "PASS")
         return true;
-    return workflow?.markedDraftOnly === true && !VERIFYING_CHECKPOINTS.has(checkpoint);
+    // A step presentable with warnings closes too, the verifying ones included: the warnings stay in the
+    // answer and the step register, the pleading stays a draft (ST-FINAL), and the sequence reaches the
+    // pleading the skill prescribes instead of stopping the AUTO mode on a soft gate.
+    void checkpoint;
+    return workflow?.markedDraftOnly === true;
+}
+/** The module names (file stems) each checkpoint reads: where a section of the skill text belongs. */
+export function checkpointModuleNames() {
+    const names = new Map();
+    for (const [checkpoint, resources] of [...Object.entries(CHECKPOINT_RESOURCES), ...Object.entries(LATER_STEP_RESOURCES)]) {
+        for (const resource of resources ?? []) {
+            if (resource.startsWith("JUR:"))
+                continue;
+            const stem = resource.split("/").pop().replace(/\.md$/u, "").replace(/_v[\d.]+$/u, "");
+            if (!names.has(stem))
+                names.set(stem, checkpoint);
+        }
+    }
+    return names;
 }

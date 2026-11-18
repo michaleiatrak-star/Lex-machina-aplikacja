@@ -71,9 +71,10 @@ export function buildWorkflowAuditArtifact(args) {
         result.audit.eventCount ||
         internal.auditEvents.at(-1)
             ?.type !==
-            "session_closed" ||
-        internal.auditEvents.some((event) => event.status ===
-            "BLOCKED")) {
+            "session_closed") {
+        // A blocked event inside a passing turn (a refused tool call, a gate softened to a warning) is
+        // part of the trace, kept in the artifact; it no longer fails the whole turn with HTTP 500
+        // (user report 2026-11-17: WORKFLOW_AUDIT_EVENTS_INCONSISTENT on the first AUTO turn).
         throw new Error("WORKFLOW_AUDIT_EVENTS_INCONSISTENT");
     }
     const events = internal.auditEvents.map((event, index) => {

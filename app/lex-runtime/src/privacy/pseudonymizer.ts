@@ -987,6 +987,16 @@ export class LocalPolishPseudonymizer {
     const keep = manual.filter(
       (item) => item.action === "KEEP"
     );
+    // The whole page kept as written (a file confirmed without anonymization): nothing to
+    // recognize, so no recognizer runs - it may be unavailable on this computer (user 2026-11-17).
+    if (
+      text.trim() &&
+      keep.length > 0 &&
+      manual.every((item) => item.action === "KEEP") &&
+      keep.some((item) => item.start <= 0 && item.end >= text.length)
+    ) {
+      return { text, findings: [], annotations: [], keptRanges: keep.map((item) => ({ start: item.start, end: item.end })), counts: {} };
+    }
     const labelDirectives = manual.filter(
       (item) => item.action === "LABEL"
     );

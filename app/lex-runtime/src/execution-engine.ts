@@ -1,3 +1,4 @@
+import { fitInstructions } from "./instruction-budget.js";
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
 import type { ProviderStreamResult } from "./providers/types.js";
@@ -24,7 +25,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
-import { checkpointCorrectionPrompt, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
+import { checkpointCorrectionPrompt, checkpointModuleNames, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -2352,13 +2353,18 @@ export class LexExecutionEngine {
           .join("\n")
       : fullSystemPrompt;
     const turnInstructions = [...perTurnSections, ...turnTail].join("\n\n");
-    const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : cachedSystemPrompt;
+    // The instructions fit the model's window first (instruction-budget.ts), then the documents fit what is left.
+    const instructionFit = localModel ? null : fitInstructions(cachedSystemPrompt, args.modelContextTokens, args.tokenCharsPerToken, 0.6, args.processWorkflowContext ? { current: args.processWorkflowContext.checkpoint, owner: checkpointModuleNames() } : undefined);
+    const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : instructionFit!.text;
+    if (instructionFit?.trimmed) {
+      emit("gate", "INSTRUCTION_BUDGET", "OK", `trimmed;window=${args.modelContextTokens};from=${instructionFit.originalChars};to=${systemPrompt.length};dropped=${instructionFit.dropped.length};shortened=${instructionFit.shortened.length}`);
+    }
     // The documents fit what the window leaves after the system prompt (2026-11-13: 553k characters of skills plus
     // 127k tokens of documents went to a model with a 200k-token window).
     const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length, args.modelContextTokens, args.tokenCharsPerToken);
     const promptCache = {
       ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
-      ...(cacheable
+      ...(cacheable && !instructionFit?.trimmed
         ? { systemPromptCachePrefix: stableText.length + 2, promptCacheKey: promptCacheKeyFor(workflowPlan.executionSkill ?? "auto", stableText) }
         : {})
     };
@@ -2729,7 +2735,13 @@ export class LexExecutionEngine {
       promptParts.push(args.toolSystemPromptTurn);
     }
     if (!cachePrefix) cachePrefix = sharedPrefix.length + 2;
-    const systemPrompt = promptParts.join("\n\n");
+    const instructionFit = args.model.startsWith("local/") ? null : fitInstructions(promptParts.join("\n\n"), args.modelContextTokens, args.tokenCharsPerToken);
+    const systemPrompt = instructionFit ? instructionFit.text : promptParts.join("\n\n");
+    if (instructionFit?.trimmed) {
+      // A shortened prompt has no stable prefix to cache.
+      cachePrefix = 0;
+      emit("gate", "INSTRUCTION_BUDGET", "OK", `trimmed;window=${args.modelContextTokens};from=${instructionFit.originalChars};to=${systemPrompt.length};dropped=${instructionFit.dropped.length};shortened=${instructionFit.shortened.length}`);
+    }
     // The documents fit what the window leaves after the system prompt (2026-11-13: 553k characters of skills plus
     // 127k tokens of documents went to a model with a 200k-token window).
     const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length, args.modelContextTokens, args.tokenCharsPerToken);

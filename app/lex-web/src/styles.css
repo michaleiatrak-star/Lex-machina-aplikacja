@@ -2867,3 +2867,40 @@ textarea:focus {
   vertical-align: top;
   border-bottom: 1px solid var(--lm-l3);
 }
+
+/* Wygląd i czytelność: every field the same width, its help right under it. */
+.display-settings .language-picker,
+.display-settings .display-setting {
+  display: grid;
+  gap: 6px;
+  max-width: 440px;
+}
+.display-settings .language-picker select,
+.display-settings .display-setting select {
+  width: 100%;
+}
+.display-settings .display-setting .field-help {
+  margin: 0;
+}
+
+/* The case's file manager takes files dropped on it (the separate drop row is shown only without a case). */
+.chat-file-drop-zone {
+  display: contents;
+}
+
+/* The way of processing a file is a short choice next to its buttons, not a full-width field. */
+.chat-file-actions select {
+  width: auto;
+  max-width: 320px;
+}
+
+/* The firm knowledge search field: the same height and frame as the list and button next to it. */
+.knowledge-search-controls input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 10px;
+  background: var(--lm-s1);
+  font: inherit;
+}

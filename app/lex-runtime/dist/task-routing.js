@@ -3,6 +3,7 @@ import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { COURT_FORMAL, COURT_POSITION } from "./document-kind.js";
 import { activeJurisdictionPack } from "./jurisdiction.js";
+import { isCourtPleading } from "./pleading-standard.js";
 const ROW = /^###\s+\[(\d{1,2})\]\s+(.+)$/u;
 export function parseRoutingTable(router) {
     const section = /## KROK 2 — ROUTING \[1\]–\[11\][\s\S]*?(?=\n## )/u.exec(router)?.[0] ?? "";
@@ -184,6 +185,36 @@ function deliveryWords(material) {
             return material.evidence ? ["dowody", material.label] : [material.label];
     }
 }
+const PLEADING_SKILL = "pisma-procesowe-v3";
+// Outputs the user names themselves: a report, a chronology, questions for a witness.
+const OWN_OUTPUTS = new Set(["raport-sytuacyjny-v2", "raport-klienta-v1", "chronologia-sprawy-v1"]);
+const WITNESS_QUESTIONS = /(?<![\p{L}])pyta\p{L}*/iu;
+/**
+ * A pleading to a court or an authority asked for ("przygotuj podważenie postanowienia",
+ * "napisz zażalenie"): pisma-procesowe-v3 leads; the skill the material pointed to (analiza-sadowa-v6,
+ * the witness or evidence skill) serves it. RD 121/26 (2026-11-16): the court-analysis skill led and the
+ * pleading had no register, no matrix of goals and no validation of pisma-procesowe-v3.
+ * A simple letter of the catalogue (pisma-proste-v2) and an explicit pipeline step keep their decision.
+ */
+export function pleadingFirst(decision, question, known) {
+    if (!known(PLEADING_SKILL) || !isCourtPleading(question) || asksAbout(question))
+        return decision;
+    if (decision && (decision.primary === PLEADING_SKILL || decision.primary === "pisma-proste-v2" || OWN_OUTPUTS.has(decision.primary)))
+        return decision;
+    if (decision?.primary === "przesluchanie-swiadkow-v2-min90" && WITNESS_QUESTIONS.test(question))
+        return decision;
+    if (decision?.then === "pisma-proste-v2")
+        return decision;
+    const auxiliary = decision ? [decision.primary, decision.then].filter((skill) => Boolean(skill) && skill !== PLEADING_SKILL) : [];
+    return {
+        source: decision?.source ?? "ROUTER",
+        primary: PLEADING_SKILL,
+        then: null,
+        reason: `pismo do sądu lub organu: prowadzi ${PLEADING_SKILL}${auxiliary.length ? `, pomocniczo ${auxiliary.join(", ")} (${decision.reason})` : ""}`,
+        ...(decision?.modules ? { modules: decision.modules } : {}),
+        ...(auxiliary.length ? { auxiliary } : {})
+    };
+}
 export function parseRedactionTest(skillMarkdown, skill = "pisma-procesowe-v3") {
     const section = /### Test A[\s\S]*?(?=\n### )/u.exec(skillMarkdown)?.[0] ?? "";
     const signalsText = /Sygnały:([\s\S]*?)(?:\n\s*\n|→)/u.exec(section)?.[1] ?? "";
@@ -305,6 +336,13 @@ const NAMED_OUTPUTS = new Set([
     "przesluchanie-swiadkow-v2-min90"
 ]);
 export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
+    const decision = decideTaskByRows(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+    if (explicitHandoff(rawQuestion, () => true))
+        return decision;
+    const known = (skill) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
+    return pleadingFirst(decision, requestOf(withoutRoutingMarkers(rawQuestion)), known);
+}
+function decideTaskByRows(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
     // A full case description: the closing request decides, without pasted routing markers.
     let intent = null;
     if (!explicitHandoff(rawQuestion, () => true)) {

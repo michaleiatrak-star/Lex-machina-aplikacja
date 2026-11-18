@@ -39,6 +39,7 @@ const SUPPORTED =
     ...([...ZIP_TYPES, ...TEXT_TYPES] as SupportedDocumentMediaType[]),
     "message/rfc822",
     "application/rtf",
+    "application/msword",
     ...(Object.keys(RECORDING_MEDIA_TYPES) as SupportedDocumentMediaType[])
   ]);
 
@@ -170,6 +171,11 @@ export function hasStoredDocumentSignature(
 
   if (isRecordingMediaType(mediaType)) {
     return hasRecordingSignature(data);
+  }
+
+  if (mediaType === "application/msword") {
+    // A compound file (CFB) header: D0 CF 11 E0 A1 B1 1A E1.
+    return Buffer.from(data.subarray(0, 8)).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
   }
 
   if (mediaType === "application/rtf") {

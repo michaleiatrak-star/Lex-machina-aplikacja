@@ -72,14 +72,20 @@ import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal
 import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
 import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case-issue.js";
-import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, schemaCorrection } from "./pleading-standard.js";
+import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
-import { documentUnits, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, passageUnits, stagedFactMatrix } from "./fact-matrix.js";
-import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, witnessStatements } from "./witness-statements.js";
+import { factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix } from "./fact-matrix.js";
+import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable } from "./document-register.js";
+import { confirmedSteps, stFinal, verified } from "./step-register.js";
+import { deadlineCorrection, deadlineProvisions, deadlineWordings } from "./deadline-wording.js";
+import { admissionCorrection, admissions, citedProvisions, ethicsWordings, provisionWordings } from "./admission-check.js";
+import { chargeCorrection, chargeGoal, officialFactGoals, officialKind, ownLetter, partyCharges, unaddressedCharges } from "./pleading-goals.js";
+import { credibilityGoals, matrixGoals, statementPairs, statementPairsPrompt, testimonyMatrix, testimonyMatrixPrompt, transliteratedName, witnessStatements } from "./witness-statements.js";
 import { challengeMapPrompt, challengedDecision, decisionTheses, isChallenge } from "./challenge-map.js";
 import { saosCovers, saosPrefetchPrompt, saosText } from "./courts/saos-text.js";
 import { citedEthicsParagraphs, ethicsPrompt, readEthicsParagraphs } from "./courts/ethics-codes.js";
+import { recordParties, recordPartiesPrompt } from "./record-parties.js";
 import { CASE_TEXT_BUDGET, LOCAL_CASE_TEXT_BUDGET, quotesForSignature } from "./case-law-texts.js";
 import { addVerifiedJournalAddresses, ambiguousBareArticles, collapseRepeatedVerMarkers, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
@@ -494,6 +500,14 @@ export function astBlockLines(text) {
     for (const block of blocks)
         walk(block);
     return lines.filter((line) => line.trim()).join("\n");
+}
+/** The headings of the case's documents (court, division, parties, subject): where the matter is named. */
+export function documentHeadings(attachments) {
+    return attachments
+        .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+        .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 900))
+        .join("\n")
+        .trim();
 }
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");
 /** CHAT_PRIVACY_GATE_FAILED with the cause (recognizer codes, never the text) for diagnostics. */
@@ -923,7 +937,7 @@ export class SafeSessionExecutor {
             skill: "pisma-proste-v2",
             entries: schemaCatalog(this.registry, "pisma-proste-v2")
         });
-        return decision ? [decision.primary, ...(decision.then ? [decision.then] : [])] : [];
+        return decision ? [...new Set([decision.primary, ...(decision.then ? [decision.then] : []), ...(decision.auxiliary ?? [])])] : [];
     }
     /**
      * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
@@ -1817,6 +1831,10 @@ export class SafeSessionExecutor {
         // For the strength check after the answer (answer-strength.ts).
         let strengthPassages = [];
         let strengthKeyFacts = [];
+        // The register of the documents of a pleading (document-register.ts): shown under it, a gap makes it a draft.
+        let documentRegister = [];
+        // The charges of the party's earlier letter (pleading-goals.ts): each upheld or dropped with a reason.
+        let pleadingCharges = [];
         const strengthRulings = [];
         const ethicsResults = await ethicsFound;
         // The sentences of the files on the issue, pointed out to the model (as a lawyer marks the record).
@@ -1824,6 +1842,21 @@ export class SafeSessionExecutor {
             const kinds = new Map(attachments.map((attachment) => [attachment.documentId, classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n").slice(0, 8_000) }).category]));
             const passages = issuePassages(attachments, contextFocus, 12, kinds);
             strengthPassages = passages;
+            // The parties and the case of each court record, from its heading (record-parties.ts).
+            const records = attachments
+                .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                .flatMap((attachment) => {
+                const text = attachment.chunks.map((chunk) => chunk.text).join("\n");
+                if (!classifyDocument({ text: text.slice(0, 8_000) }).kind.startsWith("PROTOKOL"))
+                    return [];
+                const found = recordParties(attachment.documentId, text);
+                return found ? [{ ...found, label: attachment.title ?? `dokument ${attachment.documentId}` }] : [];
+            });
+            const partiesPrompt = recordPartiesPrompt(records);
+            if (partiesPrompt) {
+                pathSections.push(partiesPrompt);
+                audit.record("gate", "RECORD_PARTIES", "OK", { records: records.map((record) => `${record.documentId}:${record.signature ?? "?"}:${record.date ?? "?"}`) });
+            }
             const prompt = issuePassagesPrompt(passages);
             if (prompt) {
                 pathSections.push(prompt);
@@ -1992,7 +2025,8 @@ export class SafeSessionExecutor {
                 for (const attachment of attachments) {
                     const text = attachment.chunks.map((chunk) => chunk.text).join("\n");
                     for (const [witness, statements] of witnessStatements(attachment.documentId, attachment.chunks[0]?.index ?? 0, text)) {
-                        const key = groupOf.get(witness) ?? witness;
+                        // The same witness under a symbol group, or the same name written in another transliteration.
+                        const key = groupOf.get(witness) ?? (/^\[/u.test(witness) ? witness : transliteratedName(witness));
                         byWitness.set(key, [...(byWitness.get(key) ?? []), ...statements]);
                     }
                 }
@@ -2002,6 +2036,12 @@ export class SafeSessionExecutor {
                 // The matrix of each witness heard in two records or more: topics × records, every statement
                 // of the topic in its cell; the facts of the pleading come from it (user 2026-11-16).
                 const matrixGoalList = [];
+                // Goals the pleading must take up besides the contradictions: official facts, the party's charges.
+                const mandatoryGoalList = [];
+                // The charges of the party's own letters: never cut by the goal limit after the official facts.
+                const chargeGoalList = [];
+                // Documents the witness matrix has read (its facts by document): the document matrix reads the rest.
+                const witnessFactsByDocument = new Map();
                 // A model call taken in a stream: the text received so far stays when the time is up.
                 const streamedCall = async (system, user, timeoutMs) => {
                     let text = "";
@@ -2057,6 +2097,8 @@ export class SafeSessionExecutor {
                         dumpMatrix("fact-matrix", { witness, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
                         const factRowList = factRows(described.facts);
                         if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
+                            for (const fact of described.facts)
+                                witnessFactsByDocument.set(fact.documentId, (witnessFactsByDocument.get(fact.documentId) ?? 0) + 1);
                             pathSections.push(factMatrixPrompt(witness, factRowList, described.dropped));
                             matrixGoalList.push(...factMatrixGoals(witness, factRowList));
                             strengthKeyFacts.push(...factMatrixRequired(factRowList));
@@ -2080,29 +2122,85 @@ export class SafeSessionExecutor {
                     }
                     audit.record("gate", "WITNESS_TESTIMONY_MATRIX", "OK", { witness, topics: rows.length, crossRecord: rows.filter((item) => item.byRecord.length >= 2).length });
                 }
-                // The same matrix for a pleading built from several documents, when no witness matrix was
-                // built: what each document states on the same topic, every quote checked in its document.
+                // Every document of a pleading is read (RD 121/26, 2026-11-17: "nic nie pomijamy"): the documents
+                // the witness matrix did not read go to the document matrix whole, the large ones in parts, each
+                // part with no fact back to the model once (fact-matrix.ts fullDocumentMatrix). The register
+                // D01..DN records the kind, size, column and read state of each; a gap makes the pleading a draft.
                 const matrixQuestion = latestUserTurn(request.query);
-                const matrixDocuments = recognisedDocuments.filter((document) => document.category !== "INNE" || recognisedDocuments.length <= 6);
-                if (!matrixGoalList.length && !request.model.startsWith("local/") && matrixDocuments.length >= 2 && (isCourtPleading(matrixQuestion) || isChallenge(matrixQuestion))) {
-                    const labels = new Map(recognisedDocuments.map((document) => [document.documentId, document.label]));
-                    const texts = matrixDocuments.map((document) => ({ documentId: document.documentId, label: document.label, chunks: attachments.find((attachment) => attachment.documentId === document.documentId).chunks }));
-                    const units = documentUnits(texts) ?? passageUnits(issuePassages(attachments, contextFocus, 40, new Map(recognisedDocuments.map((document) => [document.documentId, document.category]))), labels);
-                    if (new Set(units.map((unit) => unit.documentId)).size >= 2) {
-                        step("PREPARE", `macierz faktów z dokumentów etapami (${new Set(units.map((unit) => unit.documentId)).size} dokumenty)`);
-                        const started = Date.now();
-                        const described = await stagedFactMatrix(units, contextFocus || matrixQuestion, "documents", streamedCall, { concurrency: 4, maxRecords: 10 });
-                        dumpMatrix("document-matrix", { units: units.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
-                        const rowList = factRows(described.facts);
-                        if (described.facts.length >= 4 && rowList.some((row) => row.cells.length >= 2)) {
-                            pathSections.push(factMatrixPrompt("", rowList, described.dropped, "documents"));
+                // One document is sent to the model whole: the register and the matrix start at two.
+                if (!request.model.startsWith("local/") && recognisedDocuments.length >= 2 && (isCourtPleading(matrixQuestion) || isChallenge(matrixQuestion))) {
+                    const textOf = (documentId) => attachments.find((attachment) => attachment.documentId === documentId).chunks;
+                    const registerDocuments = recognisedDocuments.map((document) => ({
+                        documentId: document.documentId,
+                        label: document.label,
+                        kind: document.kind,
+                        category: document.category,
+                        chars: textOf(document.documentId).reduce((sum, chunk) => sum + chunk.text.length, 0),
+                        firstChunk: textOf(document.documentId)[0]?.index ?? 0
+                    }));
+                    const challenged = isChallenge(matrixQuestion)
+                        ? challengedDecision(recognisedDocuments
+                            .filter((document) => document.category === "ORZECZENIE")
+                            .map((document) => ({ documentId: document.documentId, text: textOf(document.documentId).map((chunk) => chunk.text).join("\n") })), matrixQuestion)?.documentId ?? null
+                        : null;
+                    const ids = registerIds(registerDocuments);
+                    const witnessCoverage = registerDocuments
+                        .filter((document) => witnessFactsByDocument.has(document.documentId))
+                        .map((document) => ({ record: ids.get(document.documentId).record, documentId: document.documentId, parts: 1, facts: witnessFactsByDocument.get(document.documentId), state: "READ", reasons: [] }));
+                    const toRead = registerDocuments
+                        .filter((document) => !witnessFactsByDocument.has(document.documentId))
+                        .map((document) => ({ record: ids.get(document.documentId).record, documentId: document.documentId, chunks: textOf(document.documentId) }));
+                    const started = Date.now();
+                    if (toRead.length)
+                        step("PREPARE", `macierz faktów: odczyt wszystkich dokumentów (${toRead.length}), duże w częściach, równolegle`);
+                    const described = toRead.length
+                        ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
+                            concurrency: 6,
+                            onPart: (progress) => step("PREPARE", progress.retry
+                                ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
+                                : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`)
+                        })
+                        : { facts: [], dropped: 0, topics: [], failures: [], coverage: [] };
+                    dumpMatrix("document-matrix", { documents: toRead.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped, coverage: described.coverage });
+                    documentRegister = buildRegister(registerDocuments, [...witnessCoverage, ...described.coverage], challenged);
+                    const gaps = registerGaps(documentRegister);
+                    pathSections.push(registerPrompt(documentRegister));
+                    audit.record("gate", "DOCUMENT_REGISTER", gaps.length ? "DEGRADED" : "OK", {
+                        documents: documentRegister.length,
+                        read: documentRegister.length - gaps.length,
+                        seconds: Math.round((Date.now() - started) / 1000),
+                        entries: documentRegister.map((entry) => `${entry.id}:${entry.kind}:${entry.chars}:${entry.state}:${entry.facts}:${entry.column}`),
+                        ...(gaps.length ? { gaps: gaps.map((entry) => `${entry.id}: ${entry.reasons.join("; ")}`) } : {})
+                    });
+                    const rowList = factRows(described.facts);
+                    // A single strong fact of an official document on the matter (the opponent's statement in a
+                    // protocol) and every charge of the party's earlier letter are goals (RD 121/26 plan, point 4).
+                    const official = new Set(documentRegister.filter((entry) => officialKind(entry.kind, entry.category)).map((entry) => entry.record));
+                    const officialGoals = officialFactGoals(rowList, official, contextFocus || matrixQuestion, 4);
+                    mandatoryGoalList.push(...officialGoals.map((item) => item.goal));
+                    strengthKeyFacts.push(...officialGoals.map((item) => ({ documentId: item.fact.documentId, chunkIndex: item.fact.chunkIndex, page: 1, text: item.fact.quote })));
+                    // The party's own earlier letters only (ownLetter): a complaint the opponent's counsel filed against
+                    // the party is the other side's material, and a court record is nobody's letter.
+                    for (const entry of documentRegister.filter((item) => item.kind === "ZAWIADOMIENIE" || item.kind === "SKARGA")) {
+                        const text = textOf(entry.documentId).map((chunk) => chunk.text).join("\n");
+                        if (!ownLetter(text))
+                            continue;
+                        const charges = partyCharges(text);
+                        pleadingCharges.push(...charges);
+                        chargeGoalList.push(...charges.map((charge) => chargeGoal(entry.id, charge)));
+                    }
+                    if (officialGoals.length || pleadingCharges.length) {
+                        audit.record("gate", "MANDATORY_GOALS", "OK", { officialFacts: officialGoals.length, charges: pleadingCharges.length });
+                    }
+                    if (described.facts.length) {
+                        pathSections.push(factMatrixPrompt("", rowList, described.dropped, "documents"));
+                        if (!matrixGoalList.length)
                             matrixGoalList.push(...factMatrixGoals("", rowList, 4, "documents"));
-                            strengthKeyFacts.push(...factMatrixRequired(rowList, 4));
-                            audit.record("gate", "DOCUMENT_FACT_MATRIX", "OK", { units: units.length, topics: described.topics.length, failures: described.failures, facts: described.facts.length, dropped: described.dropped, shared: rowList.filter((row) => row.cells.length >= 2).length, differing: rowList.filter((row) => row.differs).length });
-                        }
-                        else {
-                            audit.record("gate", "DOCUMENT_FACT_MATRIX", "DEGRADED", { units: units.length, facts: described.facts.length, dropped: described.dropped, failures: described.failures });
-                        }
+                        strengthKeyFacts.push(...factMatrixRequired(rowList, 4));
+                        audit.record("gate", "DOCUMENT_FACT_MATRIX", "OK", { documents: toRead.length, topics: described.topics.length, failures: described.failures, facts: described.facts.length, dropped: described.dropped, shared: rowList.filter((row) => row.cells.length >= 2).length, differing: rowList.filter((row) => row.differs).length });
+                    }
+                    else if (toRead.length) {
+                        audit.record("gate", "DOCUMENT_FACT_MATRIX", "DEGRADED", { documents: toRead.length, facts: 0, dropped: described.dropped, failures: described.failures });
                     }
                 }
                 if (pairs.length) {
@@ -2118,9 +2216,12 @@ export class SafeSessionExecutor {
                 const goalDecision = isChallenge(goalQuestion) ? challengedDecision(goalDecisions, goalQuestion) : null;
                 const goals = [
                     ...(goalDecision ? decisionTheses(goalDecision.text, 6).map((thesis) => `Odeprzeć tezę: „${thesis.text}”`) : []),
+                    // The party's own charges right after the theses: each is upheld or dropped with a reason.
+                    ...chargeGoalList.slice(0, 8),
                     // One goal per topic of the matrix; the pairs' goals only without a matrix.
-                    ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs))
-                ].slice(0, 8);
+                    ...(matrixGoalList.length ? matrixGoalList : credibilityGoals(pairs)).slice(0, 4),
+                    ...mandatoryGoalList.slice(0, 4)
+                ].slice(0, 22);
                 if (goals.length) {
                     const kinds = new Map(recognisedDocuments.map((document) => [document.documentId, document.category]));
                     const sections = [];
@@ -2297,9 +2398,15 @@ export class SafeSessionExecutor {
                 .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
                 .join("\n")
                 .slice(0, 30_000);
-            const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
+            // The act the question cites names the domain; an act a document merely mentions ("art. 158 § 1
+            // k.p.c." in a hearing protocol) does not outrank the matter its heading states (user report
+            // 2026-11-17: a labour-court case routed to DR-02 through the protocol's procedural article).
+            const citedIn = (text) => resolveActModulesWithChecks(this.registry, text)
                 .modules.map((item) => item.skill)
                 .find((skill) => isDomainSkill(skill));
+            const cited = citedIn(caseText);
+            const citedInDocuments = documentText.trim() ? citedIn(documentText) : undefined;
+            const headings = documentHeadings(attachments);
             const phrased = (text) => {
                 const ranked = rankDomains(this.registry, this.flashRoutes(), text);
                 return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
@@ -2319,9 +2426,15 @@ export class SafeSessionExecutor {
                 };
                 // The documents of a workflow (a witness to question, an evidence file) name the
                 // matter when the question does not ("Przygotuj przesłuchanie świadka Jana Nowaka").
-                return allowed(cited) ?? allowed(ofMatter(caseText)) ?? allowed(ofMatter(threadUserText(request.query))) ?? allowed(documentText.trim() ? ofMatter(documentText) : undefined) ?? request.primarySkill;
+                return (allowed(cited) ??
+                    allowed(ofMatter(caseText)) ??
+                    allowed(ofMatter(threadUserText(request.query))) ??
+                    allowed(headings ? ofMatter(headings) : undefined) ??
+                    allowed(citedInDocuments) ??
+                    allowed(documentText.trim() ? ofMatter(documentText) : undefined) ??
+                    request.primarySkill);
             }
-            return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
+            return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? (headings ? phrased(headings) : undefined) ?? citedInDocuments ?? procedural ?? request.primarySkill;
         };
         // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
         // named): those modules are loaded and required; the hint below covers the rest.
@@ -2368,7 +2481,12 @@ export class SafeSessionExecutor {
         }
         if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
             // A follow-up naming no domain of its own keeps the domain of the thread.
-            const ownDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            // The question's domains, and the matter the documents' headings state (court, division, subject
+            // of the case: "Wydział Pracy … o wynagrodzenie" is labour law whatever the question's words).
+            const headingText = documentHeadings(attachments);
+            const headingDomains = headingText ? rankDomains(this.registry, this.flashRoutes(), headingText).filter((domain) => domain.strong) : [];
+            const questionDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            const ownDomains = [...headingDomains, ...questionDomains.filter((domain) => !headingDomains.some((other) => other.skill === domain.skill))];
             let domains = ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
                 ? ownDomains
                 : rankDomains(this.registry, this.flashRoutes(), [threadUserText(request.query), caseText].join("\n"));
@@ -2594,6 +2712,9 @@ export class SafeSessionExecutor {
                     `# SKILL WYKONAWCZY WG ROUTERA: ${skill} (wczytany przez aplikację w całości; nie czytaj go ponownie)`,
                     `Rozpoznanie aplikacji — ${taskRoute.reason}. To jest PRIMARY tej sprawy${taskRoute.route?.secondary.length ? `; SECONDARY: ${taskRoute.route.secondary.join(", ")}` : ""}.` +
                         (taskRoute.then ? ` Dalszy etap pipeline'u według macierzy: ${taskRoute.then} (po wyniku tego skilla).` : "") +
+                        (taskRoute.auxiliary?.length
+                            ? ` Skill pomocniczy: ${taskRoute.auxiliary.join(", ")} — tylko do odczytu akt i faktów na potrzeby pisma; strukturę pisma, cele, macierz i walidację prowadzi ${skill}.`
+                            : "") +
                         " Gdy treść sprawy wskazuje inny wiersz routingu, powiedz to wprost i wczytaj właściwy skill.",
                     ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2" || taskRoute.then === "pisma-procesowe-v3"
                         ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
@@ -2646,10 +2767,12 @@ export class SafeSessionExecutor {
                     audit.record("resource_read", resource, "OK", { detail: "runtime-preload;task-decision" });
                     pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
                 }
-                // The pleading's construction standard of pisma-procesowe-v3 (facts → dependencies → text,
-                // each argument in seven elements), when another skill leads the matter.
+                // The pleading's construction standard (facts → dependencies → text, each argument in seven
+                // elements): the module pisma-procesowe-v3 makes mandatory before W2.2. A pleading to a court is
+                // routed to that skill (task-routing.ts pleadingFirst), so the module comes with it, not
+                // appended to another skill's answer as in 0.1.95.
                 const standardResource = `pisma-procesowe-v3/${PLEADING_STANDARD_RESOURCE}`;
-                if (courtPleading && skill !== "pisma-procesowe-v3" && !contextResources.has(standardResource)) {
+                if (courtPleading && skill === "pisma-procesowe-v3" && !contextResources.has(standardResource)) {
                     const file = this.registry.resolveResource("pisma-procesowe-v3", PLEADING_STANDARD_RESOURCE);
                     let content = "";
                     try {
@@ -3563,17 +3686,33 @@ export class SafeSessionExecutor {
         // rulings read before the answer must be used or consciously set aside, and a thesis of the
         // decision is not conceded before the substantive law is checked. One correcting round.
         const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query));
+        // What the strength and schema checks left (ST-PRE-W2 of the step register, step-register.ts).
+        let pleadingPreW2 = null;
+        // The refusal in the files rests on the opponent's explanations: a motion for access to the files is due.
+        const schemaOptions = {
+            refusalOnExplanations: pleadingAsked &&
+                refusalOnExplanations(recognisedDocuments.map((document) => ({
+                    kind: document.kind,
+                    category: document.category,
+                    text: attachments.find((attachment) => attachment.documentId === document.documentId)?.chunks.map((chunk) => chunk.text).join("\n") ?? ""
+                })))
+        };
         if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length || pleadingAsked)) {
             const required = requiredPassages(strengthPassages, strengthKeyFacts);
             const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required);
-            const schema = pleadingAsked ? argumentSchemaGaps(modelOutput) : [];
-            if (gaps.length || schema.length) {
+            const schema = pleadingAsked ? argumentSchemaGaps(modelOutput, schemaOptions) : [];
+            const charges = pleadingAsked ? unaddressedCharges(modelOutput, pleadingCharges) : [];
+            if (gaps.length || schema.length || charges.length) {
                 step("MODEL", `siła pisma: ${gaps.length + schema.length} braków, runda poprawcza`);
                 let text = "";
                 try {
                     const corrected = await this.providers.stream(request.provider, {
                         model: request.model,
-                        ...correctingRound(modelOutput, [gaps.length ? strengthCorrection(gaps) : "KONTROLA APLIKACJI — siła pisma. Popraw projekt i oddaj go w całości:", ...(schema.length ? [schemaCorrection(schema)] : [])].join("\n\n")),
+                        ...correctingRound(modelOutput, [
+                            gaps.length ? strengthCorrection(gaps) : "KONTROLA APLIKACJI — siła pisma. Popraw projekt i oddaj go w całości:",
+                            ...(schema.length ? [schemaCorrection(schema)] : []),
+                            ...(charges.length ? [chargeCorrection(charges)] : [])
+                        ].join("\n\n")),
                         accountContinuity: "none",
                         reasoning: "none"
                     });
@@ -3585,19 +3724,109 @@ export class SafeSessionExecutor {
                 // Accepted when it fixes something and loses no required passage the first draft had.
                 const after = strengthGaps(text, strengthPassages, [...new Set(strengthRulings)], required);
                 const lost = required.some((passage) => passageUsed(modelOutput, passage) && !passageUsed(text, passage));
-                const schemaAfter = pleadingAsked ? argumentSchemaGaps(text) : [];
-                const accepted = text.length > modelOutput.length * 0.6 && !lost && after.length <= gaps.length && schemaAfter.length <= schema.length && (JSON.stringify(after) !== JSON.stringify(gaps) || schemaAfter.length < schema.length);
-                audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: [...gaps.map((gap) => gap.kind), ...schema.map((gap) => gap.element)], corrected: accepted });
+                const schemaAfter = pleadingAsked ? argumentSchemaGaps(text, schemaOptions) : [];
+                const chargesAfter = pleadingAsked ? unaddressedCharges(text, pleadingCharges) : [];
+                const accepted = text.length > modelOutput.length * 0.6 &&
+                    !lost &&
+                    after.length <= gaps.length &&
+                    schemaAfter.length <= schema.length &&
+                    chargesAfter.length <= charges.length &&
+                    (JSON.stringify(after) !== JSON.stringify(gaps) || schemaAfter.length < schema.length || chargesAfter.length < charges.length);
+                audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: [...gaps.map((gap) => gap.kind), ...schema.map((gap) => gap.element), ...charges.map(() => "CHARGE_UNADDRESSED")], corrected: accepted });
                 if (accepted) {
-                    corrections.push(answerCorrection("STRENGTH", [...gaps.map((gap) => gap.label), ...schema.map((gap) => `schemat argumentu: ${gap.element}`)], modelOutput, text));
+                    corrections.push(answerCorrection("STRENGTH", [...gaps.map((gap) => gap.label), ...schema.map((gap) => `schemat argumentu: ${gap.element}`), ...charges.map((charge) => `zarzut strony bez odpowiedzi: ${charge.slice(0, 80)}`)], modelOutput, text));
                     modelOutput = text;
                 }
+            }
+            if (pleadingAsked) {
+                pleadingPreW2 = {
+                    schemaLeft: argumentSchemaGaps(modelOutput, schemaOptions).map((gap) => gap.element),
+                    gapsLeft: [
+                        ...strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required).map((gap) => gap.label),
+                        ...unaddressedCharges(modelOutput, pleadingCharges).map((charge) => `zarzut strony bez odpowiedzi „${charge.slice(0, 60)}”`)
+                    ],
+                    requiredMissing: required.filter((passage) => !passageUsed(modelOutput, passage)).length
+                };
             }
             // What still stays unused is shown under the pleading, quoted from the files.
             const note = requiredPassagesNote(modelOutput, required);
             if (note) {
                 modelOutput = `${modelOutput.trimEnd()}\n${note}`;
                 audit.record("gate", "REQUIRED_PASSAGES_NOTE", "DEGRADED", { missing: required.filter((passage) => !passageUsed(modelOutput, passage)).length });
+            }
+        }
+        // An admission (a thesis conceded, a charge dropped) is checked on the wording of the provisions
+        // before it stays (admission-check.ts; RD 121/26: the GDPR thesis conceded for companies).
+        if (pleadingAsked && !waitsForUser(modelOutput)) {
+            const conceded = admissions(modelOutput);
+            if (conceded.length) {
+                step("MODEL", `przyznanie w piśmie (${conceded.length}): sprawdzenie przesłanek na brzmieniu przepisów`);
+                const cited = citedProvisions([...conceded, modelOutput].join("\n"));
+                const wordings = this.verificationToolFactory
+                    ? await provisionWordings(cited, (calls) => this.verificationToolFactory(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => [])
+                    : [];
+                const ethics = offline ? [] : await ethicsWordings([...conceded, modelOutput].join("\n")).catch(() => []);
+                let text = "";
+                try {
+                    const corrected = await this.providers.stream(request.provider, {
+                        model: request.model,
+                        ...correctingRound(modelOutput, admissionCorrection(conceded, wordings, ethics)),
+                        accountContinuity: "none",
+                        reasoning: "none"
+                    });
+                    text = corrected.fullText.trim();
+                }
+                catch {
+                    text = "";
+                }
+                const accepted = text.length > modelOutput.length * 0.6;
+                audit.record("gate", "ADMISSION_CHECK", accepted ? "OK" : "DEGRADED", {
+                    admissions: conceded.length,
+                    provisions: wordings.map((item) => `${item.claim}:${item.status}`),
+                    ethics: ethics.length,
+                    remaining: accepted ? admissions(text).length : conceded.length
+                });
+                if (accepted) {
+                    corrections.push(answerCorrection("STRENGTH", conceded.map((item) => `przyznanie sprawdzone na brzmieniu przepisów: ${item.slice(0, 80)}`), modelOutput, text));
+                    modelOutput = text;
+                }
+            }
+        }
+        // A deadline the pleading adopts from a provision: its wording on the event date first (RD 121/26
+        // plan, point 9: art. 88a Pr. adw., 7 or 14 days). Event dates from the question and the decisions.
+        if (pleadingAsked && !offline && this.verificationToolFactory && !waitsForUser(modelOutput)) {
+            const provisions = deadlineProvisions(modelOutput);
+            const eventText = [
+                pathFacts.query,
+                ...recognisedDocuments
+                    .filter((document) => document.category === "ORZECZENIE")
+                    .map((document) => attachments.find((attachment) => attachment.documentId === document.documentId)?.chunks.map((chunk) => chunk.text).join("\n").slice(0, 3_000) ?? "")
+            ].join("\n");
+            const dates = provisions.length ? eventDates(eventText, todayWarsaw()).slice(-2) : [];
+            if (provisions.length && dates.length) {
+                step("MODEL", `termin w piśmie: brzmienie ${provisions.map((item) => item.claim).join(", ")} na dzień zdarzenia`);
+                const wordings = await deadlineWordings(provisions, dates, (calls) => this.verificationToolFactory(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => []);
+                const changed = wordings.filter((item) => item.result !== "SAME");
+                audit.record("gate", "DEADLINE_WORDING", changed.length ? "DEGRADED" : "OK", { items: wordings.map((item) => `${item.claim}@${item.asOf}:${item.result}`) });
+                if (changed.length) {
+                    let text = "";
+                    try {
+                        const corrected = await this.providers.stream(request.provider, {
+                            model: request.model,
+                            ...correctingRound(modelOutput, deadlineCorrection(wordings)),
+                            accountContinuity: "none",
+                            reasoning: "none"
+                        });
+                        text = corrected.fullText.trim();
+                    }
+                    catch {
+                        text = "";
+                    }
+                    if (text.length > modelOutput.length * 0.6) {
+                        corrections.push(answerCorrection("STRENGTH", changed.map((item) => `termin według brzmienia ${item.claim} na ${item.asOf}`), modelOutput, text));
+                        modelOutput = text;
+                    }
+                }
             }
         }
         // The model's own ⚠️ at a statute does not stop the application from
@@ -4375,6 +4604,12 @@ export class SafeSessionExecutor {
                     `nie wszystkie powołania potwierdzono w źródłach${softenedClaims.length ? ` (${softenedClaims.slice(0, 6).join(", ")}${softenedClaims.length > 6 ? " i inne" : ""})` : ""} — miejsca oznaczone ⚠️ sprawdź przed użyciem odpowiedzi`
                 ]
                 : []),
+            // A blocked citation gate named at the top (RD 121/26 plan, point 9), not only in the audit.
+            ...(() => {
+                const names = { LEGAL_CITATIONS: "przepisów", CASE_SIGNATURES: "sygnatur orzeczeń", DOCUMENT_CITATIONS: "cytatów z dokumentów" };
+                const blocked = gateI.checks.filter((item) => item.id in names && item.result === "BLOCKED").map((item) => names[item.id]);
+                return blocked.length ? [`kontrola ${blocked.join(", ")} nie przeszła — nie składaj pisma przed sprawdzeniem oznaczonych miejsc`] : [];
+            })(),
             ...(statusConsistencyBlocked ? ["ten sam przepis ma w odpowiedzi różne oznaczenia weryfikacji — przyjmij ostrożniejsze (⚠️)"] : []),
             ...(workflowResourcesBlocked ? ["nie wszystkie materiały tego rodzaju pracy zostały wczytane"] : []),
             ...(workflowOutputBlocked ? ["odpowiedź może nie mieć wszystkich części wymaganych dla tego rodzaju pracy"] : []),
@@ -4429,8 +4664,27 @@ export class SafeSessionExecutor {
             const marker = expectedVerificationMarker(record);
             return marker ? [{ warning: statuteWarnings.get(record.claim), marker }] : [];
         }));
+        // ST-FINAL under a pleading (step-register.ts): each step from the turn's evidence, the register
+        // of the documents with it; a step not confirmed makes the pleading a draft, said over it too.
+        const pleadingSteps = pleadingAsked && freeText && !waitsForUser(demotedText)
+            ? confirmedSteps({
+                register: documentRegister,
+                documentsDelivered: recognisedDocuments.length > 0,
+                preW2: pleadingPreW2,
+                ...(request.processWorkflowContext?.register ? { checkpoints: request.processWorkflowContext.register } : {}),
+                gates: gateI.checks.map((item) => ({ id: item.id, result: item.result })),
+                answer: demotedText
+            })
+            : null;
+        if (pleadingSteps) {
+            audit.record("gate", "ST_FINAL", verified(pleadingSteps) ? "OK" : "DEGRADED", { steps: pleadingSteps.map((item) => `${item.id}:${item.status}`) });
+        }
+        const stepNote = pleadingSteps
+            ? [documentRegister.length ? registerTable(documentRegister, false) : "", stFinal(pleadingSteps)].filter(Boolean).join("\n\n")
+            : "";
+        const withSteps = stepNote ? `${demotedText.trimEnd()}\n\n---\n\n${stepNote}` : demotedText;
         // Offline: the answer says what it rests on (the local copy, no ELI check), before the disclaimer.
-        const closingText = offline && freeText && legalAnswer(demotedText) ? `${demotedText.trimEnd()}\n\n_${OFFLINE_ANSWER_NOTE}_` : demotedText;
+        const closingText = offline && freeText && legalAnswer(withSteps) ? `${withSteps.trimEnd()}\n\n_${OFFLINE_ANSWER_NOTE}_` : withSteps;
         const disclaimerTexts = 
         // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
         (legalAnswer(closingText) || Boolean(modelDisclaimer.disclaimer)) && freeText ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
@@ -4501,6 +4755,9 @@ export class SafeSessionExecutor {
             : [];
         // The user reads what to watch for; the gate names and step ids stay in the audit.
         const userWarnings = [
+            ...(pleadingSteps && !verified(pleadingSteps)
+                ? [`pismo jest SZKICEM — NIEZWERYFIKOWANYM (niepotwierdzone kroki: ${pleadingSteps.filter((item) => item.status !== "DONE").map((item) => item.label).join("; ")}; lista pod pismem)`]
+                : []),
             ...(degradedReasons.length && legalAnswer(processedDocumentCitations.text) ? ["nie wszystkie kroki kontroli zostały wykonane — sprawdź kluczowe przepisy przed użyciem odpowiedzi"] : []),
             ...(structuredOutput ? [] : softGateWarnings)
         ];
@@ -4671,7 +4928,11 @@ export class SafeSessionExecutor {
             if (appeal)
                 known.add(appeal);
         }
-        const courtCheck = addressee && !known.has(addressee) ? { unverified: [addressee] } : null;
+        // A court named in the case's own documents (a protocol's or a ruling's heading) comes from the
+        // files: no warning (XI P 27/26: the court stood in the protocol's heading, yet was flagged).
+        const foldCourt = (text) => text.toLowerCase().replace(/\s+/gu, " ");
+        const inFiles = addressee ? foldCourt(fileText).includes(foldCourt(addressee)) : false;
+        const courtCheck = addressee && !known.has(addressee) && !inFiles ? { unverified: [addressee] } : null;
         if (courtCheck) {
             restoredAnswer.text += `\n\n[SĄD DO SPRAWDZENIA: „${addressee}” nie pochodzi z ustalenia aplikacji (court_for_address) ani z akt sprawy. Sprawdź właściwość dla adresu strony.]`;
         }
@@ -4761,6 +5022,21 @@ export class SafeSessionExecutor {
                     COVERAGE_SKILLS.has(taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "");
                 return coverage.length ? { documentCoverage: coverage, ...(analysing ? { documentAnalysis: true } : {}) } : {};
             })(),
+            // The register D01..DN of this turn: each document's read state, as the pleading monitor shows its steps.
+            ...(documentRegister.length
+                ? {
+                    documentRegister: documentRegister.map((entry) => ({
+                        id: entry.id,
+                        documentId: entry.documentId,
+                        label: entry.label,
+                        kind: entry.kind,
+                        state: entry.state,
+                        parts: entry.parts,
+                        facts: entry.facts,
+                        ...(entry.reasons.length ? { reasons: entry.reasons.slice(0, 3) } : {})
+                    }))
+                }
+                : {}),
             // Shown with the user's data restored, as the answer is.
             ...(corrections.length
                 ? {
@@ -4776,6 +5052,12 @@ export class SafeSessionExecutor {
                 ...(() => {
                     const budget = decodePromptBudget(String([...execution.events].reverse().find((event) => event.target === "PROMPT_BUDGET")?.detail ?? ""));
                     return budget ? { instructionChars: budget.chars, instructionSections: budget.sections } : {};
+                })(),
+                ...(() => {
+                    // The instructions were fitted to the model's window (instruction-budget.ts): shown, never silent.
+                    const fit = [...execution.events].reverse().find((event) => event.target === "INSTRUCTION_BUDGET")?.detail;
+                    const from = fit ? /from=(\d+)/u.exec(String(fit))?.[1] : undefined;
+                    return from ? { instructionsTrimmedFrom: Number(from) } : {};
                 })()
             },
             audit: {
@@ -4805,12 +5087,16 @@ export class SafeSessionExecutor {
                     : "PASS",
                 requiredResources: workflowReads.required,
                 missingResources: workflowReads.missing,
+                // Presentable with warnings (user 2026-11-17: "blokady zdejmować, dać tylko ostrzeżenia, a na koniec
+                // sekwencji generować pismo"): a soft gate (citations, finalization, a missing part of the output,
+                // the guide's step) closes the step with its warnings shown; only a structural block stops it —
+                // the workflow's own files not read, no corpus, a report without its blueprint, a critical Gate I
+                // check (router first, core resources, required modules, workflow resources, output contract).
                 ...(!workflowResourcesBlocked &&
-                    !workflowOutputBlocked &&
-                    !guideOutputBlocked &&
                     !reportBlueprintBlocked &&
-                    finalization.result === "DEGRADED" &&
-                    gateI.checks.every((item) => item.result === "PASS" || MARKED_DRAFT_CHECKS.has(item.id))
+                    !corpusBlocked &&
+                    !criticalGateIBlocked &&
+                    (workflowOutputBlocked || guideOutputBlocked || finalization.result !== "PASS" || gateIBlocked)
                     ? { markedDraftOnly: true }
                     : {})
             },

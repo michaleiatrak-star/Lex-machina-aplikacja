@@ -124,7 +124,8 @@ describe("materials the user delivers (documents and evidence)", () => {
 
   it("chooses the skill by what is delivered, as the activation matrix says", () => {
     expect(decideTask(routes, matrix, "Co mam zrobić?", [judgment])?.primary).toBe("analiza-sadowa-v6");
-    expect(decideTask(routes, matrix, "Napisz apelację", [judgment])).toMatchObject({ primary: "analiza-sadowa-v6", then: "pisma-procesowe-v3" });
+    // A pleading asked for: pisma-procesowe-v3 leads, the analysis of the judgment serves it (RD 121/26).
+    expect(decideTask(routes, matrix, "Napisz apelację", [judgment])).toMatchObject({ primary: "pisma-procesowe-v3", then: null, auxiliary: ["analiza-sadowa-v6"] });
     expect(decideTask(routes, matrix, "Oceń te materiały", [invoice, photo, protocol])?.primary).toBe("analizator-dowodow-v3");
     expect(decideTask(routes, matrix, "Proszę o analizę", [contract])?.primary).toBe("analizator-umow-v1");
     // Evidence next to a judgment is not "evidence without a pleading".
@@ -184,8 +185,9 @@ describe("coverage of executive skills (documents and tasks)", () => {
     expect(pick("Popraw mój pozew, dodaj zarzut przedawnienia", [claim])).toBe("analiza-sadowa-v6 -> pisma-procesowe-v3");
   });
 
-  it("an appeal from a delivered judgment starts with its analysis", () => {
-    expect(pick("Napisz apelację", [judgment])).toBe("analiza-sadowa-v6 -> pisma-procesowe-v3");
+  it("an appeal from a delivered judgment is led by the pleading skill, the analysis serves it", () => {
+    expect(pick("Napisz apelację", [judgment])).toBe("pisma-procesowe-v3");
+    expect(decideTask(routes, matrix, "Napisz apelację", [judgment])?.auxiliary).toEqual(["analiza-sadowa-v6"]);
     expect(pick("Napisz apelację")).toBe("pisma-procesowe-v3");
   });
 

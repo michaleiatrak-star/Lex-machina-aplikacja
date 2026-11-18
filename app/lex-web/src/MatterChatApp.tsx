@@ -42,6 +42,11 @@ import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 // Kept in Polish: the same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
+import { CompactSettingRow } from "./CompactSettingRow";
+import { CaseDocumentPreview } from "./CaseDocumentPreview";
+import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
+import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
+import { caseFileListing, type CaseFileSort } from "./case-file-listing.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -85,6 +90,7 @@ import {
   checkDocumentFit,
   getFirmKnowledgeWorkspace,
   getSessionProgress,
+  getAccountModels,
   finalizeDeanonymization,
   generateLegalDocument,
   getHealth,
@@ -150,7 +156,7 @@ import { conversationTitle } from "./conversation-title.js";
 import { modelAvailable, noModelAvailable } from "./model-availability.js";
 import { markWebSearchPromptShown, requestWebSearchSetup, shouldPromptWebSearch, webSearchPromptShown } from "./web-search-setup-prompt.js";
 import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
-import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
+import { CoverageLine, RegisterLine, UnfinishedAnalysis, finishAnalysisMessage, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
@@ -246,7 +252,7 @@ import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
-import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
+import { AUTO_ADVANCE_MAX_STEPS, autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 import {
   DeveloperModeContext,
@@ -452,6 +458,8 @@ const CASE_OVERVIEW_REQUEST =
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
+// Drag data of a case document moved from the files panel to the message box.
+const CASE_DOCUMENT_DRAG = "application/x-lex-case-document";
 // How long "Konto połączone." stays after the account connects.
 const ACCOUNT_CONNECTED_NOTICE_MS = 4000;
 const KNOWN_EXECUTION_SKILLS = new Set([
@@ -610,7 +618,7 @@ export function looksLikeLetter(answer: string): boolean {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument" | "answerDocument"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument" | "answerDocument" | "processAuto"
   >
 ): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" | "ANSWER"; answerSessionId?: string; longDocumentId?: string } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
@@ -643,8 +651,16 @@ export function letterDocumentPlan(
     return { documentType: "pleading", stage: ready ? "FINAL" : "DRAFT", source: "REDACTION" };
   }
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
+    // STOP 3 (W3 closed): the final file. STOP 2 (W2 closed, the turn ended at the stage
+    // boundary): the draft's file, whichever W2 step wrote the last version (in AUTO a later
+    // step of the same turn used to hide CP-ATAK, so no file was made).
     if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
-    return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
+    const workflow = result.processWorkflow;
+    const w2Closed =
+      workflow?.checkpoints?.["CP-ATAK"] === "CLOSED" &&
+      workflow.stage === "W3" &&
+      workflow.checkpoints["CP-QUALITY"] !== "CLOSED";
+    return workflow?.draftWritten?.checkpoint === "CP-ATAK" || (w2Closed && (result.processAuto?.stopped === "STAGE_STOP" || Boolean(workflow?.draftWritten)))
       ? { documentType: "pleading", stage: "DRAFT" }
       : null;
   }
@@ -1137,7 +1153,12 @@ function executionMessage(
           : "";
     // Instruction text of the turn (measure for moving skill procedure into the app).
     const instructionMeta = execution.context?.instructionChars
-      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())} tok.`
+      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())} tok.` +
+        (execution.context.instructionsTrimmedFrom
+          ? t(" (dopasowane do okna modelu z ~{from} tok.; pominięte moduły model doczytuje sam)", {
+              from: Math.round(execution.context.instructionsTrimmedFrom / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString(currentLocale())
+            })
+          : "")
       : "";
     const citationMeta =
       execution.documentCitationFreshness
@@ -1183,6 +1204,7 @@ function executionMessage(
       ...(execution.documentCoverage?.length
         ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
         : {}),
+      ...(execution.documentRegister?.length ? { documentRegister: execution.documentRegister } : {}),
       ...(execution.corrections?.length ? { corrections: execution.corrections } : {}),
       ...(execution.auxiliarySources?.length
         ? {
@@ -1652,6 +1674,10 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // The side panel's list: search by name and order (by kind keeps the case's file types).
+  const [caseFileQuery, setCaseFileQuery] = useState("");
+  const [caseFileSort, setCaseFileSort] = useState<CaseFileSort>("kind");
+  useEffect(() => setCaseFileQuery(""), [caseId]);
   // Load state of the list (failed is unknown, not empty), manual/automatic reloads,
   // automatic retries done since the last success, and processing errors per upload.
   const [caseFilesLoad, setCaseFilesLoad] = useState<CaseFileListLoad | null>(null);
@@ -1693,7 +1719,15 @@ export default function MatterChatApp({
     }
   }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
-    useState(false);
+    useState(readFilesPanelOpen);
+  // A read case document shown next to the conversation (the docked files panel).
+  const [filePreview, setFilePreview] = useState<{ documentId: string; title: string } | null>(null);
+  // The files panel is hidden or shown by the user and stays so (user 2026-11-17).
+  useEffect(() => {
+    saveFilesPanelOpen(caseFilePickerOpen);
+    document.body.classList.toggle("lex-side-open", caseFilePickerOpen && activeTab === "chat");
+    return () => document.body.classList.remove("lex-side-open");
+  }, [caseFilePickerOpen, activeTab]);
   const [generatedDocumentMessage, setGeneratedDocumentMessage] =
     useState("");
   const [pendingFinalDocument, setPendingFinalDocument] =
@@ -1905,6 +1939,8 @@ export default function MatterChatApp({
   // case (progress check) and the user's "Zatrzymaj".
   const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
   const workflowClosedRef = useRef<Record<string, number>>({});
+  // Pages still unread per case while the chat sends documents in stages.
+  const pagesLeftRef = useRef<Record<string, number>>({});
   const autoStopRef = useRef(false);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
@@ -1974,12 +2010,17 @@ export default function MatterChatApp({
   );
   // Mode of each file handed to the privacy review (anonymization modes).
   const reviewModes = useRef(new WeakMap<File, DocumentProcessingMode>());
+  // Files added in the conversation: stored and read in the background at once; the choice about
+  // anonymization stays with the user, next to the message box (user 2026-11-17).
+  const [chatAddedFiles, setChatAddedFiles] = useState<Array<{ caseId: string; uploadId: string; filename: string }>>([]);
   const [documentDropQueue, setDocumentDropQueue] = useState(
     createDocumentDropQueueState
   );
   const [dropActive, setDropActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The model's text so far in the running turn: kept when the turn fails or is interrupted.
+  const lastDraftRef = useRef("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
   const activeCaseIdRef =
@@ -2521,6 +2562,23 @@ export default function MatterChatApp({
               runtimeProvider
             ]
           );
+        // The provider's newest models replace the seed once the runtime has read them.
+        void getAccountModels(runtimeProvider)
+          .then((listed) => {
+            if (cancelled || !listed.models.length) return;
+            const dynamic = accountModelChoices(provider, ACCOUNT_MODEL_LABELS[runtimeProvider], listed.models);
+            setModels(dynamic.map((choice) => ({
+              provider: runtimeProvider,
+              id: choice.id,
+              displayName: choice.label,
+              selectable: authenticated,
+              ownedBy: "account-session",
+              capabilities: ["account-session", "lex-runtime-tools"]
+            })));
+          })
+          .catch(() => {
+            // The seed stays: the list could not be read.
+          });
         setModels(
           choices.map((choice) => ({
             provider:
@@ -3048,13 +3106,35 @@ export default function MatterChatApp({
     const incoming = Array.from(files);
     if (incoming.length === 0) return;
     try {
+      let target = caseId;
       if (!selectedCase || selectedCase.archivedAt) {
-        await createLocalCase(newCaseName.trim() || "Nowa sprawa");
+        target = await createLocalCase(newCaseName.trim() || "Nowa sprawa");
       }
-      setDocumentStaging((current) =>
-        stageDocuments(current, incoming)
-      );
-      setActiveTab("chat");
+      // Documents go to the case files at once and are read there automatically (text files and
+      // PDFs with a text layer without OCR, scans with OCR); only a photo waits for the choice
+      // between reading it and sending it to the model as an image (user 2026-11-17).
+      const images = incoming.filter((file) => directImageType(file));
+      const documents = incoming.filter((file) => !directImageType(file) && file.size > 0);
+      if (images.length) setDocumentStaging((current) => stageDocuments(current, images));
+      if (documents.length) {
+        setPickerNotice(t("Dodaję {count} plik(ów) do akt sprawy; odczyt rusza sam (OCR tylko dla skanów).", { count: documents.length }));
+        const failed: string[] = [];
+        for (const file of documents) {
+          try {
+            const stored = await uploadCaseFile(target, file);
+            setChatAddedFiles((current) => [...current, { caseId: target, uploadId: stored.uploadId, filename: file.name }]);
+          } catch (error) {
+            failed.push(`„${file.name}”: ${documentFailure(error).message}`);
+          }
+        }
+        setWorkspaceRefresh((value) => value + 1);
+        setPickerNotice(
+          failed.length
+            ? t("Nie dodano: {value}", { value: failed.join("; ") })
+            : t("Dodano {count} plik(ów) do akt sprawy; odczyt trwa w tle (OCR tylko dla skanów). Zdecyduj o anonimizacji nad polem wiadomości.", { count: documents.length })
+        );
+      }
+      if (activeTab !== "chat" && activeTab !== "case") setActiveTab(images.length ? "chat" : "case");
     } catch {
       setExecutionError(
         t("Nie udało się utworzyć aktywnej sprawy dla dodawanych plików.")
@@ -3099,7 +3179,7 @@ export default function MatterChatApp({
     if (items.some((item) => processingModeOptions(item.mode)?.ocrFix)) {
       const vision = await getVisionOcrStatus().catch(() => null);
       if (!vision?.installed || !vision.engineInstalled) {
-        setExecutionError(t("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”."));
+        setExecutionError(t("„Tylko odczyt z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”."));
         return;
       }
     }
@@ -3130,7 +3210,7 @@ export default function MatterChatApp({
     try {
       const stored = await uploadCaseFile(targetCase, file);
       return await withDocumentProgress(id, targetCase, (progressId) =>
-        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, processingModeOptions(mode))
+        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, { ...processingModeOptions(mode), detect: false })
       );
     } catch (error) {
       setDocumentStaging((current) =>
@@ -3274,6 +3354,17 @@ export default function MatterChatApp({
     event.preventDefault();
     dragDepth.current = 0;
     setDropActive(false);
+    // A case document dragged from the files panel: attached to the message, nothing uploaded.
+    const dragged = event.dataTransfer.getData(CASE_DOCUMENT_DRAG);
+    if (dragged) {
+      try {
+        const pick = JSON.parse(dragged) as { documentId: string; chunkIndices: number[] };
+        if (caseId) pickFiles([{ kind: "document", documentId: pick.documentId, chunkIndices: pick.chunkIndices }], true, caseId);
+      } catch {
+        // not a document of this application
+      }
+      return;
+    }
     void acceptFiles(event.dataTransfer.files);
   }
 
@@ -4109,6 +4200,32 @@ export default function MatterChatApp({
         ]);
         setWorkspaceRefresh((value) => value + 1);
       }
+      // A file with personal-data symbols gets its copy with the data restored at once, with the
+      // signed-in session's grant (as the chat shows them); the file with symbols stays as it is.
+      if (generated.readyForDownload !== true && canWriteCase(selectedCase)) {
+        try {
+          const intent = await createDeanonymizationIntent(executionCaseId, generated.artifact.artifactId);
+          const authorized = await reauthorizeDeanonymization(intent.intent.intentId);
+          const restoredName = generated.artifact.filename.replace(/\.(docx|odt|pdf)$/iu, " (z danymi).$1");
+          const final = await finalizeDeanonymization(authorized.grant.grantId, restoredName, {});
+          const toCheck = (final.restorations ?? []).filter((item) => item.status !== "ok").length;
+          if (activeCaseIdRef.current === executionCaseId) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "system",
+                content:
+                  t("Wersja z przywróconymi danymi „{filename}” jest w aktach sprawy ({replacements} podstawień).", { filename: final.artifact.filename, replacements: final.replacements }) +
+                  (toCheck ? t(" Formy do sprawdzenia: {toCheck} — użyj „Deanonimizuj” z podglądem na karcie pliku.", { toCheck }) : "")
+              }
+            ]);
+            setWorkspaceRefresh((value) => value + 1);
+          }
+        } catch {
+          // The file with symbols stays; "Deanonimizuj" on its card restores the data by hand.
+        }
+      }
       if (download) {
         const blob = await downloadGeneratedArtifact(executionCaseId, generated.artifact.artifactId);
         await downloadBlob(blob, generated.artifact.filename);
@@ -4540,10 +4657,14 @@ export default function MatterChatApp({
       setLastDelivery(null);
       const executionId =
         newExecutionId();
+      lastDraftRef.current = "";
       const stopDraftPolling =
         startDraftPolling(
           executionId,
-          setDraftText,
+          (text) => {
+            if (text) lastDraftRef.current = text;
+            setDraftText(text);
+          },
           DRAFT_POLL_MS,
           getSessionProgress,
           setExecutionSteps
@@ -4648,6 +4769,31 @@ export default function MatterChatApp({
       }
       if (autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId) {
         setAutoNext({ caseId: executionCaseId, text: autoDecision.message, meta: autoDecision.meta, step: (options.autoStep ?? 0) + 1 });
+      }
+      // Data in stages: the pages the model's window left out this turn are sent in the next turn by
+      // the chat itself (user, 2026-11-17: "rozdzielana informacją o dosłaniu w kolejnym etapie"),
+      // while each turn reads more of them; it stops when a turn read nothing new.
+      if (!autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId && answerMessage.documentAnalysis) {
+        const left = unfinishedDocuments([...priorMessages, answerMessage]);
+        const leftPages = left.reduce((sum, item) => sum + item.missing.reduce((pages, [start, end]) => pages + end - start + 1, 0), 0);
+        const before = pagesLeftRef.current[executionCaseId];
+        const step = (options.autoStep ?? 0) + 1;
+        if (left.length && step <= AUTO_ADVANCE_MAX_STEPS && (before === undefined || leftPages < before)) {
+          pagesLeftRef.current[executionCaseId] = leftPages;
+          const first = left[0]!;
+          setMessages((current) => [
+            ...current,
+            { id: messageId(), role: "system", content: t("Dane w etapach: zostało {pages} stron do przeczytania; dosyłam kolejną porcję automatycznie.", { pages: leftPages }) }
+          ]);
+          setAutoNext({
+            caseId: executionCaseId,
+            text: finishAnalysisMessage(fileLabel(first.documentId, first.title), first),
+            meta: `automatycznie · dosłanie stron · ${fileLabel(first.documentId, first.title)}`,
+            step
+          });
+        } else {
+          delete pagesLeftRef.current[executionCaseId];
+        }
       }
 
       // Letter workflows end with a file, like a document artifact: after each
@@ -4870,8 +5016,21 @@ export default function MatterChatApp({
                   : String(error)
             })
       });
+      // What the model had written before the failure or the interruption stays in the chat as
+      // a working draft (user, 2026-11-17: the text was lost on an interruption).
+      const keptDraft = lastDraftRef.current.trim();
+      lastDraftRef.current = "";
       setMessages((current) => [
         ...current,
+        ...(keptDraft
+          ? [
+              {
+                id: messageId(),
+                role: "assistant" as const,
+                content: `${t("Tura przerwana przed zakończeniem: poniżej tekst, który model zdążył napisać (roboczy, bez kontroli końcowej).")}\n\n${keptDraft}`
+              }
+            ]
+          : []),
         {
           id: messageId(),
           role: "system",
@@ -5217,6 +5376,162 @@ export default function MatterChatApp({
     selectedFileCount <= documentLimit &&
     documentFit?.estimate?.fits !== false;
 
+  // A stored file of the case processed for the conversation: anonymized (preview) or, after a
+  // confirmation, in clear; then attached to the next message.
+  function processCaseFileForChat(item: { uploadId: string; filename: string }, keepClear: boolean): void {
+    if (keepClear && !window.confirm(t("„{filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?", { filename: item.filename }))) return;
+    setPickerAnonymizing(item.uploadId);
+    setCaseFileErrors(({ [item.uploadId]: _cleared, ...rest }) => rest);
+    // Without anonymization only the text is read: no personal-data recognizer runs.
+    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+      processStoredCaseFile(caseId, item.uploadId, undefined, progressId, keepClear ? { detect: false } : undefined)
+    )
+      .then((review) => previewThenFinalize(caseId, review, item.filename, keepClear))
+      .then((result) => {
+        if (!result) return;
+        pickFiles([{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }], true, caseId);
+        setChatAddedFiles((current) => current.filter((entry) => entry.uploadId !== item.uploadId));
+        setWorkspaceRefresh((value) => value + 1);
+      })
+      .catch((error) => setCaseFileErrors((current) => ({ ...current, [item.uploadId]: documentFailure(error).message })))
+      .finally(() => setPickerAnonymizing(null));
+  }
+
+  // Files of this conversation still waiting for the decision about anonymization.
+  const renderChatFileDecisions = () => {
+    const waiting = chatAddedFiles.filter(
+      (entry) => entry.caseId === caseId && !caseFiles.find((file) => file.uploadId === entry.uploadId)?.processing
+    );
+    if (!waiting.length) return null;
+    return (
+      <section className="chat-file-decisions" aria-label={t("Pliki do decyzji o anonimizacji")}>
+        <p className="chat-file-decisions-head">
+          <strong>{t("Dodane pliki: zdecyduj o anonimizacji")}</strong>
+          <small>{t("Odczyt (OCR tylko dla skanów) trwa w tle; plik trafi do rozmowy po Twoim wyborze.")}</small>
+        </p>
+        <ul>
+          {waiting.map((entry) => {
+            const progress = documentProgress[entry.uploadId];
+            return (
+              <li key={entry.uploadId}>
+                <span className="chat-file-decisions-name" title={entry.filename}>{entry.filename}</span>
+                {progress ? <small>{t("przetwarzanie…")}</small> : null}
+                {caseFileErrors[entry.uploadId] ? <small className="chat-inline-error">{caseFileErrors[entry.uploadId]}</small> : null}
+                <button type="button" className="chat-primary-action" disabled={pickerAnonymizing !== null} onClick={() => processCaseFileForChat(entry, false)}>
+                  {pickerAnonymizing === entry.uploadId ? t("Przetwarzam…") : t("Anonimizuj i dołącz")}
+                </button>
+                <button type="button" className="chat-secondary-action" disabled={pickerAnonymizing !== null} title={t("Tylko odczyt tekstu, bez anonimizacji - plik trafi do modelu z jawnymi danymi")} onClick={() => processCaseFileForChat(entry, true)}>
+                  {t("Bez anonimizacji")}
+                </button>
+                <button type="button" className="chat-link-button" title={t("Plik zostaje w aktach sprawy; decyzję podejmiesz tam")} onClick={() => setChatAddedFiles((current) => current.filter((other) => other.uploadId !== entry.uploadId))}>
+                  {t("Później")}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  };
+
+  // Files waiting for a decision (images: read them or send as an image): shown where the user
+  // works - above the message box in the conversation, above the documents in the case files -
+  // not at the top of the page, where it went unseen (user 2026-11-17).
+  const renderStagingPanel = () =>
+    documentStaging.items.length > 0 ? (
+
+          <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
+            <article className="chat-card">
+              <p className="eyebrow">{t("Dodane pliki")}</p>
+              <h2>
+                {documentStaging.items.length} {t("do decyzji")}
+                <InfoTip>
+                  {t("OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików. Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.")}
+                </InfoTip>
+              </h2>
+              {documentStaging.rejected > 0 ? (
+                <p className="chat-inline-error">
+                  {t("Pominięto")} {documentStaging.rejected} {t("plików (puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE}).
+                </p>
+              ) : null}
+              <ul className="chat-file-list">
+                {documentStaging.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.file.name}</strong>
+                    <small>
+                      {describeDocumentFile(item.file)}
+                      {item.status === "SAVING"
+                        ? documentProgress[item.id]
+                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
+                          : t(" · zapisuję i przetwarzam…")
+                        : ""}
+                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
+                    </small>
+                    <span className="chat-file-actions">
+                      <select
+                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
+                        value={item.mode}
+                        disabled={item.status === "SAVING"}
+                        title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
+                        onChange={(event) =>
+                          setDocumentStaging((current) =>
+                            setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
+                          )
+                        }
+                      >
+                        {processingModesFor(item.file).map((entry) => (
+                          <option key={entry.mode} value={entry.mode} title={entry.title}>
+                            {t(entry.label)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => processStagedDocuments([item.id])}
+                      >
+                        {t("Przetwórz")}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => void saveStagedDocuments([item.id])}
+                      >
+                        {t("Zapisz bez przetwarzania")}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING"}
+                        onClick={() => removeStagedDocuments([item.id])}
+                      >
+                        {t("Usuń")}
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {documentStaging.items.length > 1 ? (
+                <span className="chat-file-actions">
+                  <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
+                    {t("Przetwórz wszystkie (wybrane sposoby)")}
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={!caseId}
+                    onClick={() => void saveStagedDocuments()}
+                  >
+                    {t("Zapisz wszystkie bez przetwarzania")}
+                  </button>
+                </span>
+              ) : null}
+            </article>
+          </section>
+    ) : null;
+
   return (
     <DeveloperModeContext.Provider value={developerMode}>
     <div className="chat-app-shell matter-chat-app">
@@ -5291,7 +5606,7 @@ export default function MatterChatApp({
         ) : (
         <div className="case-switcher" ref={switcherRef}>
           <div className="matter-thread-heading">
-            <strong>{t("Sprawa")}</strong>
+            <strong>{t("Sprawy")}</strong>
             <button
               type="button"
               disabled={caseBusy || executing}
@@ -5300,50 +5615,24 @@ export default function MatterChatApp({
               {t("+ Nowa sprawa")}
             </button>
           </div>
-          <button
-            type="button"
-            className="case-switcher-current"
-            aria-expanded={switcherOpen}
-            aria-controls="case-switcher-panel"
-            disabled={caseBusy || executing}
-            title={executing ? t("Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu") : t("Zmień sprawę")}
-            onClick={() => setSwitcherOpen((open) => !open)}
-          >
-            <span>
-              <strong>
-                {/* The case at work stays visible with the panel folded (the list is inside it). */}
-                {executingCaseId && executingCaseId === caseId ? (
-                  <span className="matter-thread-spinner" role="status" aria-label={t("Trwa przygotowanie odpowiedzi")} />
-                ) : null}
-                {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : t("Wybierz albo utwórz sprawę")}
-              </strong>
-              {executingCaseId && executingCaseId !== caseId && !switcherOpen ? (
-                <small role="status" aria-label={t("Trwa przygotowanie odpowiedzi")}>{t("inna sprawa przygotowuje odpowiedź")}</small>
-              ) : null}
-              {selectedCase ? (
-                <small>{selectedCase.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[selectedCase.role]}</small>
-              ) : null}
-            </span>
-            <span aria-hidden="true" className="case-switcher-chevron">▾</span>
-          </button>
-          {switcherOpen ? (
+          {/* One list of cases in the sidebar, always visible (Patron-style; the dropdown and a
+              second "recent cases" list showed the same cases twice, user 2026-11-17). */}
+          {matterCases.length > 0 ? (
             <div
               id="case-switcher-panel"
               className="case-switcher-panel"
-              role="dialog"
-              aria-label={t("Wybór sprawy")}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setSwitcherOpen(false);
-              }}
+              role="group"
+              aria-label={t("Sprawy")}
             >
-              <input
-                type="search"
-                autoFocus
-                value={switcherQuery}
-                placeholder={t("Szukaj sprawy…")}
-                aria-label={t("Szukaj sprawy")}
-                onChange={(event) => setSwitcherQuery(event.target.value)}
-              />
+              {matterCases.length > SWITCHER_CASES ? (
+                <input
+                  type="search"
+                  value={switcherQuery}
+                  placeholder={t("Szukaj sprawy…")}
+                  aria-label={t("Szukaj sprawy")}
+                  onChange={(event) => setSwitcherQuery(event.target.value)}
+                />
+              ) : null}
               <small className="case-switcher-caption">
                 {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : t("Ostatnio zmieniane")}
               </small>
@@ -5440,6 +5729,7 @@ export default function MatterChatApp({
                 )}
               </div>
               {switcherCases.length === 0 ? <small className="case-switcher-caption">{t("Brak pasujących spraw.")}</small> : null}
+              {matterCases.length > SWITCHER_CASES ? (
               <button
                 type="button"
                 className="case-switcher-all"
@@ -5450,22 +5740,7 @@ export default function MatterChatApp({
               >
                 {t("Wszystkie sprawy (")}{matterCases.length}) →
               </button>
-              <form
-                className="case-switcher-create"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setSwitcherOpen(false);
-                  void createLocalCase(newCaseName.trim() || "Nowa sprawa");
-                }}
-              >
-                <input
-                  value={newCaseName}
-                  maxLength={160}
-                  placeholder={t("Nazwa nowej sprawy")}
-                  onChange={(event) => setNewCaseName(event.target.value)}
-                />
-                <button type="submit" disabled={caseBusy || executing}>{t("Utwórz")}</button>
-              </form>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -5776,15 +6051,16 @@ export default function MatterChatApp({
                     : activeTab === "firm"
                       ? t("Wzory i wiedza kancelarii")
                       : activeTab === "search"
-                        ? t("Wyszukiwanie w źródłach MCP")
+                        ? t("Wyszukiwanie w źródłach prawa")
                         : activeTab === "invoices"
                           ? t("Faktury")
                           : t("Ustawienia")}
             </h1>
           </div>
           <div className="chat-header-actions">
-            {/* Case filters belong to the list of cases (Start), not to every view. */}
-            {activeTab === "home" ? (
+            {/* Case filters belong to the list of cases (Start), not to every view; with no case
+                there is nothing to filter (an empty "Sprawa" list read as a broken field). */}
+            {activeTab === "home" && matterCases.length > 0 ? (
             <div className="chat-case-switcher">
               <label className="chat-case-search">
                 <span>{t("Szukaj spraw")}</span>
@@ -5890,6 +6166,11 @@ export default function MatterChatApp({
                     )
                   }
                 >
+                  {!caseId ? (
+                    <option value="" disabled>
+                      {t("Wybierz sprawę ({count})", { count: filteredMatterCases.length })}
+                    </option>
+                  ) : null}
                   {filteredMatterCases.map(
                     (item) => (
                       <option
@@ -5945,16 +6226,7 @@ export default function MatterChatApp({
               ) : null}
             </div>
             ) : null}
-            {activeTab === "case" ? (
-              <button
-                type="button"
-                className="chat-secondary-action"
-                disabled={Boolean(selectedCase?.archivedAt)}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {t("+ Dodaj pliki")}
-              </button>
-            ) : null}
+            {/* Files are added from the "Dokumenty sprawy" row of the case card (one button, not two). */}
             <input
               ref={fileInputRef}
               className="chat-hidden-file-input"
@@ -5982,98 +6254,6 @@ export default function MatterChatApp({
           </div>
         ))}
 
-        {documentStaging.items.length > 0 ? (
-          <section className="chat-card-stack chat-document-flow" aria-label={t("Pliki do decyzji")}>
-            <article className="chat-card">
-              <p className="eyebrow">{t("Dodane pliki")}</p>
-              <h2>
-                {documentStaging.items.length} {t("do decyzji")}
-                <InfoTip>
-                  {t("OCR nie startuje sam: wybierz sposób dla każdego pliku. AI oznacza model lokalny, tylko do plików. Plik zapisany bez przetwarzania przetworzysz później w zakładce Sprawa.")}
-                </InfoTip>
-              </h2>
-              {documentStaging.rejected > 0 ? (
-                <p className="chat-inline-error">
-                  {t("Pominięto")} {documentStaging.rejected} {t("plików (puste albo ponad limit")} {MAX_DOCUMENT_DROP_QUEUE}).
-                </p>
-              ) : null}
-              <ul className="chat-file-list">
-                {documentStaging.items.map((item) => (
-                  <li key={item.id}>
-                    <strong>{item.file.name}</strong>
-                    <small>
-                      {describeDocumentFile(item.file)}
-                      {item.status === "SAVING"
-                        ? documentProgress[item.id]
-                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
-                          : t(" · zapisuję i przetwarzam…")
-                        : ""}
-                      {item.status === "FAILED" ? t(" · nie zapisano: {value}", { value: item.error ?? t("spróbuj ponownie") }) : ""}
-                    </small>
-                    <span className="chat-file-actions">
-                      <select
-                        aria-label={t("Sposób przetwarzania: {name}", { name: item.file.name })}
-                        value={item.mode}
-                        disabled={item.status === "SAVING"}
-                        title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
-                        onChange={(event) =>
-                          setDocumentStaging((current) =>
-                            setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
-                          )
-                        }
-                      >
-                        {processingModesFor(item.file).map((entry) => (
-                          <option key={entry.mode} value={entry.mode} title={entry.title}>
-                            {t(entry.label)}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING" || !caseId}
-                        onClick={() => processStagedDocuments([item.id])}
-                      >
-                        {t("Przetwórz")}
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING" || !caseId}
-                        onClick={() => void saveStagedDocuments([item.id])}
-                      >
-                        {t("Zapisz bez przetwarzania")}
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={item.status === "SAVING"}
-                        onClick={() => removeStagedDocuments([item.id])}
-                      >
-                        {t("Usuń")}
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {documentStaging.items.length > 1 ? (
-                <span className="chat-file-actions">
-                  <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
-                    {t("Przetwórz wszystkie (wybrane sposoby)")}
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={!caseId}
-                    onClick={() => void saveStagedDocuments()}
-                  >
-                    {t("Zapisz wszystkie bez przetwarzania")}
-                  </button>
-                </span>
-              ) : null}
-            </article>
-          </section>
-        ) : null}
 
         {documentDropQueue.total > 0 ? (
           <section ref={documentFlowRef} className="chat-card-stack chat-document-flow" aria-label={t("Odczyt plików i ochrona danych")}>
@@ -6129,14 +6309,14 @@ export default function MatterChatApp({
           <section
             className={dropActive ? "chat-panel chat-drop-active" : "chat-panel"}
             onDragEnter={(event) => {
-              if (event.dataTransfer.types.includes("Files")) {
+              if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(CASE_DOCUMENT_DRAG)) {
                 event.preventDefault();
                 dragDepth.current += 1;
                 setDropActive(true);
               }
             }}
             onDragOver={(event) => {
-              if (event.dataTransfer.types.includes("Files")) {
+              if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(CASE_DOCUMENT_DRAG)) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
                 setDropActive(true);
@@ -6148,6 +6328,22 @@ export default function MatterChatApp({
             }}
             onDrop={handleDrop}
           >
+            {!caseFilePickerOpen && caseId ? (
+              <button
+                type="button"
+                className="chat-files-tab"
+                title={t("Pokaż panel plików sprawy")}
+                onClick={() => openFilePicker("case")}
+              >
+                {t("◂ Pliki sprawy")}
+              </button>
+            ) : null}
+            {/* The whole conversation window takes the dropped files (user 2026-11-17), not only the message box. */}
+            {dropActive ? (
+              <div className="chat-drop-overlay chat-drop-overlay-window">
+                {t("Upuść pliki, aby dodać je do tej sprawy")}
+              </div>
+            ) : null}
             <ProcessPleadingWorkflowPanel
               caseId={caseId}
               forceVisible={processWorkflowVisible}
@@ -6209,6 +6405,7 @@ export default function MatterChatApp({
                         ? "chat-pipeline-option selected"
                         : "chat-pipeline-option"
                     }
+                    title={developerMode ? t("Program sam dobiera skille i moduły.") : t("Aplikacja sama dobiera sposób pracy.")}
                     onClick={() => {
                       selectDeterministicAction("");
                       setWorkMode("AUTO");
@@ -6227,6 +6424,7 @@ export default function MatterChatApp({
                         ? "chat-pipeline-option selected"
                         : "chat-pipeline-option"
                     }
+                    title={t("Ty wybierasz rodzaj pracy (np. pismo, analiza umowy).")}
                     onClick={() => setWorkMode("MECHANICAL")}
                   >
                     <strong>{t("Mechaniczny")}</strong>
@@ -6473,6 +6671,7 @@ export default function MatterChatApp({
                   ) : null}
                   {developerMode && message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
                   {developerMode && message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
+                  {message.documentRegister?.length ? <RegisterLine entries={message.documentRegister} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
                   ) : null}
@@ -6706,12 +6905,9 @@ export default function MatterChatApp({
               <div ref={chatEndRef} />
             </div>
 
+            {renderStagingPanel()}
+            {renderChatFileDecisions()}
             <div className="chat-composer">
-              {dropActive ? (
-                <div className="chat-drop-overlay">
-                  {t("Upuść pliki, aby dodać je do tej sprawy")}
-                </div>
-              ) : null}
               <div className="chat-composer-meta">
                 <span>{individual ? t("Rozmowa") : t("Sprawa")}: {selectedCase?.displayName || (individual ? t("nazwa z pierwszego pytania") : t("utworzy się przy pierwszej wiadomości"))}</span>
                 {individual ? null : (
@@ -6902,7 +7098,7 @@ export default function MatterChatApp({
               </div>
               {caseFilePickerOpen ? (
                 <div
-                  className="chat-case-file-picker"
+                  className={filePreview ? "chat-case-file-picker previewing" : "chat-case-file-picker"}
                   aria-label={t("Pliki do dołączenia")}
                 >
                   <div className="chat-file-picker-tabs" role="tablist">
@@ -6927,10 +7123,25 @@ export default function MatterChatApp({
                     <span className="chat-file-picker-count">
                       {selectedFileCount} z {documentLimit} {t("plików")}
                     </span>
-                    <button type="button" className="chat-secondary-action" onClick={() => setCaseFilePickerOpen(false)}>
-                      {t("Zamknij")}
+                    <button type="button" className="chat-secondary-action" title={t("Schowaj panel plików")} onClick={() => setCaseFilePickerOpen(false)}>
+                      {t("Schowaj ▸")}
                     </button>
                   </div>
+                  {filePreview && caseId ? (
+                    <CaseDocumentPreview
+                      caseId={caseId}
+                      documentId={filePreview.documentId}
+                      title={filePreview.title}
+                      onClose={() => setFilePreview(null)}
+                      attached={documentAttachments.some((attachment) => attachment.documentId === filePreview.documentId)}
+                      onAttach={() => {
+                        const file = caseFiles.find((item) => item.processing?.documentId === filePreview.documentId);
+                        if (!file?.processing) return;
+                        const attached = documentAttachments.some((attachment) => attachment.documentId === filePreview.documentId);
+                        pickFiles([{ kind: "document", documentId: file.processing.documentId, chunkIndices: file.processing.chunkIndices }], !attached, caseId);
+                      }}
+                    />
+                  ) : null}
                   {pickerNotice ? <p className="chat-inline-error" role="status">{pickerNotice}</p> : null}
                   {documentFit?.estimate ? (
                     <div
@@ -7006,10 +7217,43 @@ export default function MatterChatApp({
                     if (view.kind === "empty") return <small>{view.text}</small>;
                     return null;
                   })()}
+                  {caseFiles.length > 1 ? (
+                    <div className="chat-case-file-filters">
+                      <input
+                        type="search"
+                        value={caseFileQuery}
+                        placeholder={t("Szukaj w plikach sprawy")}
+                        aria-label={t("Szukaj w plikach sprawy")}
+                        onChange={(event) => setCaseFileQuery(event.target.value)}
+                      />
+                      <select
+                        value={caseFileSort}
+                        aria-label={t("Kolejność plików")}
+                        onChange={(event) => setCaseFileSort(event.target.value as CaseFileSort)}
+                      >
+                        <option value="kind">{t("Według rodzaju")}</option>
+                        <option value="name">{t("Nazwa A-Z")}</option>
+                        <option value="newest">{t("Najnowsze")}</option>
+                        <option value="oldest">{t("Najstarsze")}</option>
+                      </select>
+                      <small role="status">
+                        {caseFileQuery.trim()
+                          ? t("Pokazano {shown} z {all}", { shown: String(caseFileListing(caseFiles, caseFileQuery, caseFileSort).length), all: String(caseFiles.length) })
+                          : t("Plików: {count}", { count: String(caseFiles.length) })}
+                      </small>
+                    </div>
+                  ) : null}
+                  {caseFiles.length > 0 && caseFileQuery.trim() && caseFileListing(caseFiles, caseFileQuery, caseFileSort).length === 0 ? (
+                    <small>{t("Żaden plik sprawy nie pasuje do wyszukiwania.")}</small>
+                  ) : null}
                   {caseFiles.length === 0 ? null : (
                     <ul className="chat-case-file-picker-list">
-                      {caseFiles.map(
-                        (item) => {
+                      {/* Grouped by kind of file, as in the case files (types kept, not flattened). */}
+                      {caseFileListing(caseFiles, caseFileQuery, caseFileSort)
+                        .map(
+                        (item, position, sorted) => {
+                          const category = caseFileCategory({ kind: "", filename: item.filename, mediaType: item.mediaType, archive: item.archive });
+                          const firstOfKind = caseFileSort === "kind" && (position === 0 || caseFileCategory({ kind: "", filename: sorted[position - 1]!.filename, mediaType: sorted[position - 1]!.mediaType, archive: sorted[position - 1]!.archive }) !== category);
                           const ready =
                             Boolean(
                               item.processing &&
@@ -7025,10 +7269,21 @@ export default function MatterChatApp({
                               )
                             );
                           return (
+                            <Fragment key={item.uploadId}>
+                            {firstOfKind ? (
+                              <li className="chat-case-file-group" aria-hidden="true">
+                                {t(CASE_FILE_CATEGORIES.find((entry) => entry.category === category)?.label ?? "Inne")}
+                              </li>
+                            ) : null}
                             <li
-                              key={
-                                item.uploadId
-                              }
+                              draggable={ready}
+                              title={ready ? t("Przeciągnij do pola wiadomości, aby dołączyć") : undefined}
+                              onDragStart={(event) => {
+                                const processing = item.processing;
+                                if (!processing) return;
+                                event.dataTransfer.setData(CASE_DOCUMENT_DRAG, JSON.stringify({ documentId: processing.documentId, chunkIndices: processing.chunkIndices }));
+                                event.dataTransfer.effectAllowed = "copy";
+                              }}
                             >
                               <label>
                                 <input
@@ -7105,7 +7360,7 @@ export default function MatterChatApp({
                                   type="button"
                                   className="chat-secondary-action"
                                   disabled={pickerAnonymizing !== null}
-                                  title={t("Tylko OCR/tekst, bez anonimizacji - plik trafi do modelu z jawnymi danymi")}
+                                  title={t("Tylko odczyt tekstu, bez anonimizacji - plik trafi do modelu z jawnymi danymi")}
                                   onClick={() => {
                                     if (
                                       !window.confirm(
@@ -7117,7 +7372,7 @@ export default function MatterChatApp({
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFileErrors(({ [item.uploadId]: _cleared, ...rest }) => rest);
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
-                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId, { detect: false })
                                     )
                                       .then((review) => previewThenFinalize(caseId, review, item.filename, true))
                                       .then((result) => {
@@ -7138,11 +7393,21 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {t("Tylko OCR i zaznacz")}
+                                  {t("Tylko odczyt i zaznacz")}
                                 </button>
                                 </>
                               ) : null}
+                              {ready ? (
+                                <button
+                                  type="button"
+                                  className="chat-link-button"
+                                  onClick={() => setFilePreview({ documentId: item.processing!.documentId, title: item.filename })}
+                                >
+                                  {t("Podgląd")}
+                                </button>
+                              ) : null}
                             </li>
+                            </Fragment>
                           );
                         }
                       )}
@@ -7644,6 +7909,27 @@ export default function MatterChatApp({
               </div>
             </article>
 
+            {activeTab === "case" ? renderStagingPanel() : null}
+            {/* The case's documents right under its overview (Patron: documents first in a case). */}
+            {selectedCase ? (
+              <div
+                className="chat-file-drop-zone"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                }}
+                onDrop={handleDrop}
+              >
+              <WorkspaceManager
+                caseId={caseId}
+                title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
+                canWrite={canWriteCase(selectedCase)}
+                refreshToken={workspaceRefresh}
+                onArtifactRenamed={rememberArtifactName}
+              />
+              </div>
+            ) : null}
+
             <CollapsibleCaseSection
               eyebrow={N_("Terminarz sprawy")}
               title={t("Spotkania, posiedzenia i terminy")}
@@ -7831,6 +8117,8 @@ export default function MatterChatApp({
               canWrite={canWriteCase(selectedCase)}
             />
 
+            {/* With a case, its file manager below is the one place files are added and dropped. */}
+            {!selectedCase ? (
             <article
               className="chat-card matter-compact-row chat-file-drop-card"
               onDragOver={(event) => {
@@ -7850,17 +8138,21 @@ export default function MatterChatApp({
                 <button
                   type="button"
                   className="chat-secondary-action"
-                  disabled={Boolean(selectedCase?.archivedAt)}
+                  disabled={false}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {t("+ Dodaj pliki")}
                 </button>
               </span>
             </article>
+            ) : null}
 
-            <article className="chat-card">
-              <p className="eyebrow">{t("Wiedza w sesji")}</p>
-              <h2>{t("Co model dostaje w rozmowie")}</h2>
+            <CompactSettingRow
+              title={t("Co model dostaje w rozmowie")}
+              summary={t("włączone: {on} z 3", {
+                on: [includeCaseKnowledge && Boolean(selectedCase) && !selectedCase?.archivedAt, includeFirmKnowledge && Boolean(firmKnowledgeWorkspace), imagesWithText].filter(Boolean).length
+              })}
+            >
               <div className="session-knowledge">
                 <label className="session-knowledge-option">
                   <input
@@ -7918,7 +8210,7 @@ export default function MatterChatApp({
                   </span>
                 </label>
               </div>
-            </article>
+            </CompactSettingRow>
 
             {selectedCase ? (
               <CaseCourtCard
@@ -7937,16 +8229,6 @@ export default function MatterChatApp({
                 onRequestOverview={() => {
                   if (!executing) void executeMessage(CASE_OVERVIEW_REQUEST);
                 }}
-              />
-            ) : null}
-
-            {selectedCase ? (
-              <WorkspaceManager
-                caseId={caseId}
-                title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
-                canWrite={canWriteCase(selectedCase)}
-                refreshToken={workspaceRefresh}
-                onArtifactRenamed={rememberArtifactName}
               />
             ) : null}
 
@@ -8585,11 +8867,11 @@ export default function MatterChatApp({
                 </div>
               ) : settingsSection === "display" ? (
                 <div className="chat-settings-section-stack">
-                  <article className="chat-card">
+                  <article className="chat-card display-settings">
                     <h2>{t("Wygląd i czytelność")}</h2>
                     <LanguagePicker />
                     <TranslationStatus />
-                    <label>
+                    <label className="display-setting">
                       {t("Rozmiar tekstu rozmowy")}
                       <select
                         value={chatTextSize}
@@ -8603,8 +8885,9 @@ export default function MatterChatApp({
                           <option key={option.size} value={option.size}>{t(option.label)}</option>
                         ))}
                       </select>
+                      <small className="field-help">{t("Zmienia tekst wiadomości i pola pisania.")}</small>
                     </label>
-                    <label>
+                    <label className="display-setting">
                       {t("Motyw kolorów")}
                       <select
                         value={theme}
@@ -8619,7 +8902,7 @@ export default function MatterChatApp({
                         ))}
                       </select>
                     </label>
-                    <p className="field-help">{t("Rozmiar zmienia tekst wiadomości i pola pisania. Ustawienia zostają w tej przeglądarce.")}</p>
+                    <p className="field-help">{t("Ustawienia wyglądu zostają w tej przeglądarce.")}</p>
                   </article>
                 </div>
               ) : settingsSection === "security" ? (

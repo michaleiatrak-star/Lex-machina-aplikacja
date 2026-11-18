@@ -320,7 +320,7 @@ export function FirmKnowledgePanel({
           </h3>
         </div>
         <span className="security-pill">
-          {t("ENCRYPTED + ACL")}
+          {t("Szyfrowane · dostęp według uprawnień")}
         </span>
       </div>
 
@@ -405,7 +405,7 @@ export function FirmKnowledgePanel({
       <div className="knowledge-search-box">
         <div>
           <p className="eyebrow">
-            {t("Retrieval lokalny")}
+            {t("Wyszukiwanie na tym komputerze")}
           </p>
           <h4>
             {t("Przeszukaj wiedzę i akta")}

@@ -1,4 +1,4 @@
-import type { AnswerCorrection, DocumentCoverageEntry } from "./api.js";
+import type { AnswerCorrection, DocumentCoverageEntry, DocumentRegisterEntry } from "./api.js";
 import {
   useCallback,
   useEffect,
@@ -30,6 +30,7 @@ export type CaseChatMessage = {
   mandatoryPath?: MandatoryPathView;
   pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] }; longDocumentId?: string }> };
   documentCoverage?: DocumentCoverageEntry[];
+  documentRegister?: DocumentRegisterEntry[];
   documentAnalysis?: boolean;
   corrections?: AnswerCorrection[];
   auxiliarySources?:
@@ -78,6 +79,7 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
+    ...(message.documentRegister?.length ? { documentRegister: message.documentRegister } : {}),
     ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
     ...(message.answerDocument ? { answerDocument: message.answerDocument } : {}),
     ...(message.corrections?.length ? { corrections: message.corrections } : {})
@@ -106,6 +108,7 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
+    ...(message.documentRegister?.length ? { documentRegister: message.documentRegister } : {}),
     ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
     ...(message.answerDocument ? { answerDocument: message.answerDocument } : {}),
     ...(message.corrections?.length ? { corrections: message.corrections } : {})

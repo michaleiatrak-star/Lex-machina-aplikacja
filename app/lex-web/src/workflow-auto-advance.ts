@@ -158,7 +158,8 @@ export function autoAdvanceDecision(
     return { advance: false, reason: "WAITING_FOR_USER" };
   }
   if (!progress.next) return { advance: false, reason: "COMPLETE" };
-  if (progress.serverBatch && result.processAuto?.stopped !== "LIMIT_REACHED") return { advance: false, reason: "BLOCKED" };
+  // STOP 2 (W2 closed): the draft's file is made from this turn, the chain goes on to W3.
+  if (progress.serverBatch && result.processAuto?.stopped !== "LIMIT_REACHED" && result.processAuto?.stopped !== "STAGE_STOP") return { advance: false, reason: "BLOCKED" };
   if (closedBefore !== null ? progress.closed <= closedBefore : progress.closed === 0) return { advance: false, reason: "NO_PROGRESS" };
   if (stepsSoFar >= AUTO_ADVANCE_MAX_STEPS) return { advance: false, reason: "LIMIT" };
   const label = stepLabel(progress.next);

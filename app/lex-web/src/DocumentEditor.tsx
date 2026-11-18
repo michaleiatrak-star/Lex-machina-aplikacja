@@ -5,9 +5,19 @@ import { editedFilename } from "./text-editing.js";
 import type { EditableBlock, EditableRun } from "./workspace-client.js";
 import { InfoTip } from "./InfoTip";
 
-function appendRuns(parent: HTMLElement, runs: EditableRun[]): void {
+// A personal-data symbol of a file not yet deanonymized ("[LMPII:D00:PERSON:0001|NOM]"), shown in the
+// preview as a readable note; the edit view keeps the symbol itself (saving must not lose it).
+const DATA_SYMBOL = /\[(?:LMPII:D\d{2}|PII):([A-Z_]+):(\d{4})(?:\|[A-Z]{3})?\]/gu;
+const SYMBOL_KIND: Record<string, string> = { PERSON: N_("osoba"), FIRM: N_("firma"), ADDRESS: N_("adres") };
+export function readableDataSymbols(text: string): string {
+  return text.replace(DATA_SYMBOL, (_symbol, kind: string, number: string) =>
+    t("[{kind} {number} — dane po „Deanonimizuj”]", { kind: t(SYMBOL_KIND[kind] ?? N_("dane osobowe")), number: String(Number(number)) })
+  );
+}
+
+function appendRuns(parent: HTMLElement, runs: EditableRun[], readable = false): void {
   for (const run of runs) {
-    let node: Node = document.createTextNode(run.text);
+    let node: Node = document.createTextNode(readable ? readableDataSymbols(run.text) : run.text);
     // Nested tags, never markup from the file: text always goes in as text.
     if (run.u) node = wrap("u", node);
     if (run.i) node = wrap("i", node);
@@ -23,22 +33,22 @@ function wrap(tag: string, child: Node): HTMLElement {
   return element;
 }
 
-function renderBlocks(root: HTMLElement, blocks: EditableBlock[]): void {
+function renderBlocks(root: HTMLElement, blocks: EditableBlock[], readable = false): void {
   root.replaceChildren();
   for (const block of blocks) {
     if (block.type === "heading") {
       const heading = document.createElement(`h${Math.min(Math.max(block.level, 1), 3)}`);
-      appendRuns(heading, block.runs);
+      appendRuns(heading, block.runs, readable);
       root.appendChild(heading);
     } else if (block.type === "paragraph") {
       const paragraph = document.createElement("p");
-      appendRuns(paragraph, block.runs);
+      appendRuns(paragraph, block.runs, readable);
       root.appendChild(paragraph);
     } else if (block.type === "list") {
       const list = document.createElement(block.ordered ? "ol" : "ul");
       for (const item of block.items) {
         const li = document.createElement("li");
-        appendRuns(li, item);
+        appendRuns(li, item, readable);
         list.appendChild(li);
       }
       root.appendChild(list);
@@ -49,7 +59,7 @@ function renderBlocks(root: HTMLElement, blocks: EditableBlock[]): void {
         const tr = document.createElement("tr");
         for (const cell of row) {
           const td = document.createElement("td");
-          td.textContent = cell;
+          td.textContent = readable ? readableDataSymbols(cell) : cell;
           tr.appendChild(td);
         }
         body.appendChild(tr);
@@ -102,9 +112,12 @@ export function DocumentEditor(props: {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
+  // The preview shows personal-data symbols as readable notes; the edit view the symbols themselves.
+  // Unsaved edits are never re-rendered away.
   useEffect(() => {
-    if (root.current) renderBlocks(root.current, props.blocks);
-  }, [props.blocks]);
+    if (root.current && !dirty) renderBlocks(root.current, props.blocks, mode === "view");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.blocks, mode]);
 
   function run(command: Command): void {
     if (props.readOnly || mode !== "edit") return;

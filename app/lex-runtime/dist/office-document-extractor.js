@@ -6,6 +6,8 @@ export const ODT_MEDIA_TYPE = "application/vnd.oasis.opendocument.text";
 // An e-mail (.eml) and an RTF document are read by the same worker (text, no layout).
 export const EML_MEDIA_TYPE = "message/rfc822";
 export const RTF_MEDIA_TYPE = "application/rtf";
+// Word 97-2003 (.doc): read by the same worker from the compound file, text only.
+export const DOC_MEDIA_TYPE = "application/msword";
 function defaultWorkerPath() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     return path.resolve(here, "../../storage/office_extract_worker.py");

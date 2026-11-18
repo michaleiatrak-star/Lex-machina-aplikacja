@@ -41,6 +41,14 @@ function HighlightedContext({
 
 // Cały dokument z akt: wszystkie fragmenty po kolei, cytowane miejsca podświetlone,
 // wybrane przewinięte do widoku.
+/** The state of a quote from the files: verbatim, not verbatim (paraphrase), not matching, not checked. */
+export function citationFidelity(citation: WorkspaceDocumentCitation): { className: string; label: string } {
+  if (citation.quoteFidelity === "NOT_FOUND") return { className: "fidelity-mismatch", label: t("cytat niezgodny z dokumentem") };
+  if (citation.quoteFidelity === "DIGEST_UNCHECKED") return { className: "fidelity-unchecked", label: t("cytat niesprawdzony") };
+  if (citation.quote && citation.highlightStart !== undefined) return { className: "fidelity-exact", label: t("cytat dosłowny") };
+  return { className: "fidelity-paraphrase", label: t("bez cytatu (omówienie)") };
+}
+
 function FullDocument({
   caseId,
   selected,
@@ -175,19 +183,29 @@ export function DocumentCitationContent({
           />
         );
       }
+      // A footnote number (Patron-style) with the quote's state; the document and page in the title.
+      const fidelity = citationFidelity(citation);
+      const number = citations.indexOf(citation) + 1;
       return (
         <button
           key={`${key}-${citation.citationId}-${index}`}
           type="button"
-          className="document-citation-link"
-          title={t("Przejdź do cytowanego fragmentu: {label}", { label: citation.label })}
+          className={`document-citation-link document-citation-note ${fidelity.className}`}
+          title={`${citation.label} · ${fidelity.label}`}
+          aria-label={t("Przypis {number}: {label}, {state}", { number, label: citation.label, state: fidelity.label })}
           aria-controls={`citation-${citation.citationId}`}
           onClick={() => { setSelected(citation); setWhole(false); }}
         >
-          [{citation.label}]
+          {number}
         </button>
       );
     });
+
+  // A wide screen shows the cited passage next to the conversation (the chat makes room for it).
+  useEffect(() => {
+    document.body.classList.toggle("lex-citation-open", Boolean(selected));
+    return () => document.body.classList.remove("lex-citation-open");
+  }, [selected]);
 
   useEffect(() => {
     if (!selected) return;
@@ -210,7 +228,9 @@ export function DocumentCitationContent({
           <ul>
             {citations.map((citation) => (
               <li key={citation.citationId}>
+                <span className={`document-citation-note ${citationFidelity(citation).className}`} aria-hidden="true">{citations.indexOf(citation) + 1}</span>
                 <strong>{citation.label}</strong>
+                <small className={`document-citation-state ${citationFidelity(citation).className}`}>{citationFidelity(citation).label}</small>
                 {citation.quoteFidelity === "NOT_FOUND" ? <em className="document-citation-mismatch">{t("cytat niezgodny z dokumentem")}</em> : null}
                 {citation.quote ? <span>„{citation.quote.length > 160 ? `${citation.quote.slice(0, 160)}…` : citation.quote}”</span> : null}
                 <button type="button" className="chat-secondary-action" onClick={() => { setSelected(citation); setWhole(false); }}>

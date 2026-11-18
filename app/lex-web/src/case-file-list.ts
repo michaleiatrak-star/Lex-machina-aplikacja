@@ -63,7 +63,7 @@ export function caseFileStatusText(
   if (state.busy) return "Przetwarzanie w toku…";
   if (state.error) return `Błąd przetwarzania: ${state.error}`;
   const processing = item.processing;
-  if (!processing) return "Nieprzetworzony – wybierz anonimizację albo samo OCR";
+  if (!processing) return "Nieprzetworzony – wybierz: odczyt z anonimizacją albo sam odczyt";
   if (processing.chunkIndices.length === 0) return "Przetworzony, ale bez tekstu do wysłania";
   const version = processing.anonymized === false ? "tekst jawny (bez anonimizacji)" : "wersja zanonimizowana";
   return (

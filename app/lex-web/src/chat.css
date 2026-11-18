@@ -1042,6 +1042,27 @@
   font-size: 11px;
 }
 
+.chat-case-file-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.chat-case-file-filters input,
+.chat-case-file-filters select {
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.chat-case-file-filters small {
+  grid-column: 1 / -1;
+  color: var(--lm-t3);
+  font-size: 11px;
+}
+
 .chat-case-file-picker-list {
   display: grid;
   gap: 8px;
@@ -4594,4 +4615,401 @@ mark.restored {
 .case-access-pager span {
   color: var(--muted, inherit);
   font-size: 0.9em;
+}
+
+/* Recent cases in the sidebar (Patron-style): one click to the case's conversation. */
+.chat-recent-cases {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.chat-recent-case {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lm-t36);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-recent-case:hover,
+.chat-recent-case.active {
+  background: rgb(var(--lm-o1-rgb) / 0.07);
+  color: var(--lm-t1);
+}
+
+.chat-recent-case.active {
+  border-left-color: currentColor;
+}
+
+@media (max-width: 920px) {
+  .chat-recent-cases {
+    display: none;
+  }
+}
+
+/* Case list on Start as a table (Patron-style): name, state, last change. */
+.lex-case-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lex-case-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(var(--lm-o1-rgb) / 0.12);
+  color: var(--lm-t11);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.lex-case-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(var(--lm-o1-rgb) / 0.07);
+  color: inherit;
+  vertical-align: middle;
+}
+
+.lex-case-row:hover td {
+  background: rgb(var(--lm-o1-rgb) / 0.04);
+}
+
+.lex-case-table td:first-child {
+  color: inherit;
+}
+
+.lex-case-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lex-case-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  /* The card's own text colour (--lm-t1 is the dark sidebar's white). */
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lex-case-open:hover,
+.lex-case-open:focus-visible {
+  text-decoration: underline;
+}
+
+/* Patron-style compact chat header: the model in one slim line, the work mode as two pills
+   next to its label; descriptions stay in the tooltip ("i") and the buttons' titles. */
+.chat-model-dock {
+  gap: 6px 14px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.chat-model-dock-controls select {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.chat-model-dock-controls button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.chat-pipeline-picker {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+
+.chat-pipeline-picker > div:first-child h3 {
+  margin: 0;
+}
+
+.chat-pipeline-picker > :not(:first-child):not(.chat-work-mode) {
+  grid-column: 1 / -1;
+}
+
+.chat-work-mode {
+  display: inline-flex;
+  justify-self: end;
+  gap: 4px;
+}
+
+.chat-work-mode .chat-pipeline-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.chat-work-mode .chat-pipeline-option small {
+  display: none;
+}
+
+/* Files added in the conversation: the decision about anonymization right above the message box. */
+.chat-file-decisions {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--lm-l33, rgb(var(--lm-o1-rgb) / 0.2));
+  border-radius: 12px;
+  background: var(--lm-s3, rgb(var(--lm-o1-rgb) / 0.05));
+}
+
+.chat-file-decisions-head {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.chat-file-decisions-head small {
+  color: var(--lm-t8);
+}
+
+.chat-file-decisions ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-file-decisions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-file-decisions-name {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dropping files: the whole conversation window is the target. */
+.chat-panel {
+  position: relative;
+}
+
+.chat-drop-overlay-window {
+  position: fixed;
+  inset: var(--lex-top-inset, 0px) 0 0 240px;
+  z-index: 60;
+  border-radius: 0;
+  font-size: 20px;
+  pointer-events: none;
+}
+
+@media (max-width: 920px) {
+  .chat-drop-overlay-window {
+    inset: 0;
+  }
+}
+
+/* Files panel docked next to the conversation on a wide screen (Patron-style explorer + preview). */
+@media (min-width: 1280px) {
+  .chat-case-file-picker {
+    position: fixed;
+    top: var(--lex-top-inset, 0px);
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(420px, 32vw);
+    margin: 0;
+    overflow-y: auto;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+    box-shadow: -8px 0 24px rgb(var(--lm-o18-rgb, 0 0 0) / 0.08);
+  }
+
+  .chat-case-file-picker .chat-case-file-picker-list {
+    max-height: none;
+  }
+
+  body.lex-side-open .chat-main {
+    margin-right: min(420px, 32vw);
+  }
+
+  /* A cited passage opens in the same place, next to the conversation. */
+  .document-citation-viewer {
+    position: fixed;
+    top: var(--lex-top-inset, 0px);
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    width: min(460px, 36vw);
+    margin: 0;
+    overflow-y: auto;
+    border-radius: 0;
+    box-shadow: -8px 0 24px rgb(var(--lm-o18-rgb, 0 0 0) / 0.1);
+  }
+
+  body.lex-citation-open .chat-main {
+    margin-right: min(460px, 36vw);
+  }
+}
+
+.chat-case-file-picker.previewing .chat-case-file-picker-list,
+.chat-case-file-picker.previewing .chat-case-file-picker-head,
+.chat-case-file-picker.previewing .chat-case-file-filters,
+.chat-case-file-picker.previewing .chat-file-fit {
+  display: none;
+}
+
+.chat-case-file-group {
+  padding: 8px 4px 2px;
+  border: 0 !important;
+  background: none !important;
+  color: var(--lm-t11);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-case-file-picker-list li[draggable="true"] {
+  cursor: grab;
+}
+
+.case-document-preview header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.case-document-preview header strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-document-preview-body article {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--lm-l2);
+}
+
+.case-document-preview-body small {
+  color: var(--lm-t11);
+}
+
+.case-document-preview-body p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The hidden files panel: a narrow tab on the right edge of the conversation. */
+.chat-files-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 35;
+  padding: 12px 6px;
+  border: 1px solid var(--lm-l5);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: var(--lm-s2);
+  color: var(--lm-t2);
+  font-size: 12px;
+  font-weight: 600;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%) rotate(180deg);
+  cursor: pointer;
+}
+
+.chat-files-tab:hover {
+  background: var(--lm-s1);
+}
+
+/* Citations as footnote numbers with the quote's state (green verbatim, grey paraphrase,
+   red not matching the document, dashed not checked). */
+.document-citation-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin: 0 1px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.document-citation-note.fidelity-exact {
+  background: #dcefe2;
+  color: #1f5c34;
+}
+
+.document-citation-note.fidelity-paraphrase {
+  background: #e9ebe8;
+  color: #3d4540;
+}
+
+.document-citation-note.fidelity-mismatch {
+  background: #f8dcdc;
+  color: #8a1f1f;
+}
+
+.document-citation-note.fidelity-unchecked {
+  border-style: dashed;
+  border-color: #9aa39d;
+  color: #3d4540;
+}
+
+.document-citation-state {
+  font-size: 11px;
+}
+
+.document-citation-state.fidelity-mismatch {
+  color: #8a1f1f;
+}
+
+.document-citation-state.fidelity-exact {
+  color: #1f5c34;
+}
+
+@media (prefers-color-scheme: dark) {
+  .document-citation-note.fidelity-exact { background: #1f3b2a; color: #bfe6cb; }
+  .document-citation-note.fidelity-paraphrase { background: #2d3330; color: #d5dbd7; }
+  .document-citation-note.fidelity-mismatch { background: #4a2020; color: #f3c4c4; }
+  .document-citation-note.fidelity-unchecked { color: #d5dbd7; }
+}
+
+.chat-case-file-picker {
+  align-content: start;
 }

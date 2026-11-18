@@ -183,71 +183,82 @@ export function HomeDashboard({
           {recent.length === 0 ? (
             <p>{t("Brak spraw.")}</p>
           ) : (
-            <div className="matter-schedule-list">
-              {recent.map((item) =>
-                rename?.caseId === item.caseId ? (
-                  <div key={item.caseId} className="matter-thread-rename">
-                    <InlineEdit
-                      value={item.displayName ?? ""}
-                      label={t("Nowa nazwa sprawy")}
-                      onCancel={() => setRename(null)}
-                      onSave={async (next) => {
-                        if (!onRenameCase) return false;
-                        setRenaming(true);
-                        try {
-                          await onRenameCase(item.caseId, next);
-                          setRename(null);
-                          return true;
-                        } catch (failure) {
-                          setRename({ caseId: item.caseId, value: next, error: failure instanceof Error ? failure.message : String(failure) });
-                          return false;
-                        } finally {
-                          setRenaming(false);
-                        }
-                      }}
-                    />
-                    {rename.error ? <small className="matter-thread-rename-error">{rename.error}</small> : null}
-                  </div>
-                ) : (
-                  <div key={item.caseId} className="matter-thread-row">
-                    <button
-                      type="button"
-                      className="matter-schedule-item lex-home-item"
-                      onClick={() => onOpenCase(item.caseId)}
-                    >
-                      <span className="matter-schedule-item-main">
-                        <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
-                        <small>
-                          {t("zmieniona")} {new Date(item.updatedAt || item.createdAt).toLocaleString(currentLocale())}
-                          {" · "}
-                          {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
-                        </small>
-                      </span>
-                    </button>
-                    {onRenameCase && item.role === "OWNER" ? (
-                      <button
-                        type="button"
-                        className="matter-thread-edit"
-                        disabled={renaming}
-                        title={t("Zmień nazwę sprawy")}
-                        aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
-                        onClick={() => setRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })}
-                      >
-                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                          <path
-                            d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinejoin="round"
+            // A table as in Patron's case list: name, state, last change; the row opens the case.
+            <table className="lex-case-table">
+              <thead>
+                <tr>
+                  <th scope="col">{t("Nazwa")}</th>
+                  <th scope="col">{t("Stan")}</th>
+                  <th scope="col">{t("Zmieniona")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((item) =>
+                  rename?.caseId === item.caseId ? (
+                    <tr key={item.caseId}>
+                      <td colSpan={3}>
+                        <div className="matter-thread-rename">
+                          <InlineEdit
+                            value={item.displayName ?? ""}
+                            label={t("Nowa nazwa sprawy")}
+                            onCancel={() => setRename(null)}
+                            onSave={async (next) => {
+                              if (!onRenameCase) return false;
+                              setRenaming(true);
+                              try {
+                                await onRenameCase(item.caseId, next);
+                                setRename(null);
+                                return true;
+                              } catch (failure) {
+                                setRename({ caseId: item.caseId, value: next, error: failure instanceof Error ? failure.message : String(failure) });
+                                return false;
+                              } finally {
+                                setRenaming(false);
+                              }
+                            }}
                           />
-                        </svg>
-                      </button>
-                    ) : null}
-                  </div>
-                )
-              )}
-            </div>
+                          {rename.error ? <small className="matter-thread-rename-error">{rename.error}</small> : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={item.caseId} className="lex-case-row">
+                      <td>
+                        <div className="lex-case-name">
+                          <button type="button" className="lex-case-open" onClick={() => onOpenCase(item.caseId)}>
+                            {item.displayName || t("Sprawa bez nazwy")}
+                          </button>
+                          {onRenameCase && item.role === "OWNER" ? (
+                            <button
+                              type="button"
+                              className="matter-thread-edit"
+                              disabled={renaming}
+                              title={t("Zmień nazwę sprawy")}
+                              aria-label={t("Zmień nazwę sprawy {value}", { value: item.displayName || "bez nazwy" })}
+                              onClick={() => setRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })}
+                            >
+                              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                                <path
+                                  d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.3"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>{item.archivedAt ? t("archiwalna") : CASE_ROLE_LABEL[item.role]}</td>
+                      <td>
+                        {new Date(item.updatedAt || item.createdAt).toLocaleDateString(currentLocale(), { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
           )}
         </article>
       </div>
