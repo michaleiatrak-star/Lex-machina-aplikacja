@@ -368,6 +368,8 @@ export function visibleContent(
 
 // Errors with a step the lawyer can take, in their words (the rest: one plain sentence).
 const PLAIN_ERRORS: Readonly<Record<string, string>> = {
+  // The user stopped the answer: not a failure.
+  EXECUTION_CANCELLED: "Odpowiedź zatrzymana. Tekst napisany do tej chwili jest powyżej jako roboczy.",
   ACCOUNT_SESSION_CLI_NOT_INSTALLED:
     "Wybrane konto modelu nie jest gotowe. Otwórz Ustawienia → Modele i AI i połącz konto albo wybierz klucz API.",
   ACCOUNT_SESSION_LOGIN_NOT_CONFIRMED: "Nie udało się potwierdzić logowania do konta modelu. Zaloguj się ponownie i spróbuj jeszcze raz.",
@@ -410,6 +412,23 @@ const PLAIN_MODEL_REASONS: Readonly<Record<string, string>> = {
  * The error the lawyer sees for a failed turn: the technical message stays for
  * developer mode; otherwise a plain sentence (and what to do, where there is something).
  */
+export function providerCause(technical: string): string | null {
+  const text = technical.toLowerCase();
+  if (/\b429\b|rate.?limit|too many requests|quota|insufficient_quota|limit zapyta/u.test(text)) {
+    return "Dostawca modelu odrzucił zapytanie z powodu limitu (zbyt wiele zapytań albo wyczerpany limit konta lub klucza). Odczekaj kilka minut albo wybierz inny model.";
+  }
+  if (/\b401\b|\b403\b|invalid.?api.?key|incorrect api key|unauthori[sz]ed|authentication/u.test(text)) {
+    return "Dostawca modelu odrzucił klucz API albo logowanie. Sprawdź klucz w Ustawieniach → Modele i AI.";
+  }
+  if (/\b(?:500|502|503|529)\b|overloaded|service unavailable|bad gateway/u.test(text)) {
+    return "Usługa dostawcy modelu jest chwilowo przeciążona albo niedostępna. Spróbuj ponownie za chwilę albo wybierz inny model.";
+  }
+  if (/timed?.?out|timeout|etimedout|econnreset|socket hang up/u.test(text)) {
+    return "Połączenie z dostawcą modelu zostało przerwane albo przekroczyło czas. Sprawdź połączenie z internetem i spróbuj ponownie.";
+  }
+  return null;
+}
+
 export function plainErrorMessage(code: string, technical: string, reason?: string): string {
   const mapped = PLAIN_ERRORS[code];
   if (mapped) return mapped;
@@ -425,6 +444,10 @@ export function plainErrorMessage(code: string, technical: string, reason?: stri
     const resets = reason === "ACCOUNT_SESSION_CAPACITY" ? /resets?\s+(?:at\s+)?([^·\n]{1,40}?)\s*(?:$|·|\n)/iu.exec(technical)?.[1] : undefined;
     if (resets) return `Wyczerpany limit konta modelu. Odnowi się: ${resets.trim()}. Do tego czasu wybierz inny model albo klucz API.`;
     if (reason && PLAIN_MODEL_REASONS[reason]) return PLAIN_MODEL_REASONS[reason];
+    // The provider's own error names the cause (HTTP status, "rate limit", "invalid api key"): the
+    // lawyer gets what to do instead of a bare "no answer" (inspection 0.2.0).
+    const provider = providerCause(technical);
+    if (provider) return provider;
     return reason?.startsWith("LOCAL_MODEL_")
       ? "Lokalny model nie przygotował odpowiedzi. Spróbuj ponownie; aplikacja uruchomi go od nowa."
       : "Model nie przygotował odpowiedzi. Spróbuj ponownie albo wybierz inny model.";

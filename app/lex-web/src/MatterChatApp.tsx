@@ -48,6 +48,7 @@ import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
 import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
 import { caseFileListing, type CaseFileSort } from "./case-file-listing.js";
 import { CaseListPage } from "./CaseListPage";
+import { ViewErrorBoundary } from "./ViewErrorBoundary";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -1055,7 +1056,8 @@ export function startDraftPolling(
         if (!stopped && progress?.text) {
           onDraft(progress.text);
         }
-        if (!stopped && progress?.steps) {
+        // Only a progress of the expected shape reaches the view (a malformed one blanked the window).
+        if (!stopped && progress?.steps && Array.isArray(progress.steps.phases)) {
           onSteps?.(progress.steps);
         }
       })
@@ -1258,8 +1260,11 @@ function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      t("Nie udało się pokazać odpowiedzi z powodu blokady wykonania lub wymaganego procesu. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.") +
-      blockedReasonText(execution),
+      // An empty answer is not a blocked one: the model wrote nothing (inspection 0.2.0).
+      execution.status === "DRAFT_PRESENTABLE"
+        ? t("Model zwrócił pustą odpowiedź. Wyślij wiadomość ponownie albo wybierz inny model.")
+        : t("Nie udało się pokazać odpowiedzi z powodu blokady wykonania lub wymaganego procesu. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.") +
+          blockedReasonText(execution),
     evidence: execution.evidence,
     ...(execution.auxiliarySources?.length
       ? {
@@ -4952,7 +4957,8 @@ export default function MatterChatApp({
                                   )
                                   ? code
                                   : `Nie udało się wykonać sesji: ${code}`);
-      setExecutionError(friendly);
+      // A stop the user asked for is no error to show in red.
+      if (code !== "EXECUTION_CANCELLED") setExecutionError(friendly);
       setExecutionDiagnostic({
         friendly,
         code,
@@ -6288,6 +6294,7 @@ export default function MatterChatApp({
               </section>
             ) : null}
 
+            <ViewErrorBoundary area={t("rozmowa")}>
             <div className="chat-message-list" aria-live="polite">
               {threadLoading ? (
                 <article className="chat-message chat-message-system">
@@ -6717,6 +6724,7 @@ export default function MatterChatApp({
               ) : null}
               <div ref={chatEndRef} />
             </div>
+            </ViewErrorBoundary>
 
             {renderStagingPanel()}
             {renderChatFileDecisions()}
