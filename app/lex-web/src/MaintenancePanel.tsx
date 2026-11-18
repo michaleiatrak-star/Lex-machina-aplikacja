@@ -26,9 +26,7 @@ import {
 import {
   useFloatingPanelDrag
 } from "./use-floating-panel.js";
-import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
-import { WebSearchSection } from "./WebSearchSection.js";
 import { JurisdictionSection } from "./JurisdictionSection.js";
 import { LegiIndexSection } from "./LegiIndexSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
@@ -420,15 +418,8 @@ export function MaintenancePanel({
 
   // Przeglądarka (także dostęp do serwera): bez aktualizacji programu; administrator
   // zarządza tu bazą orzeczeń i wyszukiwarką, które działają po stronie serwera.
-  if (!desktop) {
-    if (!embedded || user.appRole !== "ADMIN") return null;
-    return (
-      <div className="maintenance-panel maintenance-panel-embedded">
-        <CaseLawLibrarySection />
-        <WebSearchSection admin />
-      </div>
-    );
-  }
+  // The case-law library and the web search are in Ustawienia > Integracje i konektory.
+  if (!desktop) return null;
 
   if (minimized && !embedded) {
     return (
@@ -689,11 +680,9 @@ export function MaintenancePanel({
 
         <CoreLawUpdatesSection user={user} />
 
-        <CaseLawLibrarySection />
         <JurisdictionSection />
         <LegiIndexSection />
         <DomainFallbackSection />
-        <WebSearchSection admin={user.appRole === "ADMIN"} />
 
         {developer ? <AnomalyJournalSection user={user} /> : null}
 

@@ -1826,7 +1826,7 @@ export default function MatterChatApp({
         // The "connected" notice of the model step stays readable for a moment first.
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
         setActiveTab("settings");
-        setSettingsSection("maintenance");
+        setSettingsSection("mcp");
         requestWebSearchSetup();
       })
       .catch(() => undefined);

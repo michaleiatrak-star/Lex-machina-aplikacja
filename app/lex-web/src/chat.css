@@ -5145,3 +5145,106 @@ mark.restored {
 .case-list-scopes .chat-pipeline-option {
   min-height: 0;
 }
+
+/* Settings: controls left without a class of their own (server mode, keys, plans) look like the
+   rest of the application instead of the browser's defaults. */
+.chat-settings-content input[type="checkbox"],
+.chat-settings-content input[type="radio"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--lm-s12);
+}
+
+.chat-settings-content .chat-settings-channel-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: normal;
+  line-height: 1.4;
+}
+
+.chat-settings-content .admin-user-create label.chat-settings-channel-option {
+  display: flex;
+  align-self: center;
+}
+
+.chat-settings-content button:not([class]) {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 9px;
+  background: var(--lm-s2);
+  color: var(--lm-t7);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-settings-content button:not([class]):disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chat-settings-content .admin-user-actions input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.chat-settings-content fieldset.server-access-group {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 11px;
+}
+
+.chat-settings-content fieldset.server-access-group legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lm-t8);
+}
+
+/* Connectors as one compact list (Patron's connector page): rows divided by a line, small actions. */
+.mcp-connector-list {
+  gap: 0;
+  border: 1px solid var(--lm-l3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mcp-connector-list li {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 0;
+  font-size: 13px;
+}
+
+.mcp-connector-list li + li {
+  border-top: 1px solid var(--lm-l3);
+}
+
+.mcp-connector-list button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.mcp-connector-list .chat-form-row.compact {
+  gap: 6px;
+}
+
+.mcp-connector-list .chat-form-row.compact,
+.mcp-connector-list li > button {
+  margin: 0;
+}
