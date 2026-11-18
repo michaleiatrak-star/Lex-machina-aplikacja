@@ -47,6 +47,7 @@ import { CaseDocumentPreview } from "./CaseDocumentPreview";
 import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
 import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
 import { caseFileListing, type CaseFileSort } from "./case-file-listing.js";
+import { CaseListPage } from "./CaseListPage";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -213,12 +214,6 @@ import {
   conversationForProvider
 } from "./conversation-context.js";
 import {
-  filterMatterCases,
-  type MatterRoleFilter,
-  type MatterSort,
-  type MatterStatusFilter
-} from "./search-filters.js";
-import {
   accountModelChoices,
   accountModelIdForPrimarySource,
   canExecutePrimaryModel,
@@ -269,6 +264,7 @@ import {
 
 type TabId =
   | "home"
+  | "cases"
   | "calendar"
   | "chat"
   | "case"
@@ -460,6 +456,12 @@ const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
 // Drag data of a case document moved from the files panel to the message box.
 const CASE_DOCUMENT_DRAG = "application/x-lex-case-document";
+// Work kinds kept together by their area, the areas in the order they first appear.
+function groupedByFirstAppearance<T extends { group: string }>(items: readonly T[]): T[] {
+  const order = [...new Set(items.map((item) => item.group))];
+  return [...items].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+}
+
 // How long "Konto połączone." stays after the account connects.
 const ACCOUNT_CONNECTED_NOTICE_MS = 4000;
 const KNOWN_EXECUTION_SKILLS = new Set([
@@ -1629,13 +1631,6 @@ export default function MatterChatApp({
 
   const [cases, setCases] = useState<CaseListItem[]>([]);
   const [caseId, setCaseId] = useState("");
-  const [caseSearch, setCaseSearch] = useState("");
-  const [caseStatusFilter, setCaseStatusFilter] =
-    useState<MatterStatusFilter>("ALL");
-  const [caseRoleFilter, setCaseRoleFilter] =
-    useState<MatterRoleFilter>("ALL");
-  const [caseSort, setCaseSort] =
-    useState<MatterSort>("UPDATED_DESC");
   const [newCaseName, setNewCaseName] = useState("");
   const [caseNameDraft, setCaseNameDraft] = useState("");
   const [caseBusy, setCaseBusy] = useState(false);
@@ -2056,37 +2051,6 @@ export default function MatterChatApp({
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [switcherOpen]);
-  const matterSearchResult =
-    useMemo(
-      () =>
-        filterMatterCases(
-          cases,
-          {
-            query:
-              caseSearch,
-            status:
-              caseStatusFilter,
-            role:
-              caseRoleFilter,
-            sort:
-              caseSort,
-            currentCaseId:
-              caseId
-          }
-        ),
-      [
-        cases,
-        caseSearch,
-        caseStatusFilter,
-        caseRoleFilter,
-        caseSort,
-        caseId
-      ]
-    );
-  const filteredMatterCases =
-    matterSearchResult.items;
-  const caseSearchMatchCount =
-    matterSearchResult.matchCount;
   const selectedCase = useMemo(
     () => matterCases.find((item) => item.caseId === caseId),
     [matterCases, caseId]
@@ -2276,7 +2240,7 @@ export default function MatterChatApp({
   );
   const availableActions = useMemo(
     () =>
-      DETERMINISTIC_ACTIONS.filter(
+      groupedByFirstAppearance(DETERMINISTIC_ACTIONS.filter(
         (action) =>
           action.skills.every(
             (name) =>
@@ -2285,7 +2249,7 @@ export default function MatterChatApp({
                   skill.name === name
               )
           )
-      ),
+      )),
     [skills]
   );
   const selectedDeterministicAction =
@@ -5735,7 +5699,7 @@ export default function MatterChatApp({
                 className="case-switcher-all"
                 onClick={() => {
                   setSwitcherOpen(false);
-                  setActiveTab("home");
+                  setActiveTab("cases");
                 }}
               >
                 {t("Wszystkie sprawy (")}{matterCases.length}) →
@@ -5751,7 +5715,7 @@ export default function MatterChatApp({
             ? [["", [["chat", N_("Rozmowa")], ["settings", N_("Ustawienia")]]]]
             : [
                 [N_("Ta sprawa"), [["chat", N_("Rozmowa")], ["case", N_("Akta i dokumenty")]]],
-                [N_("Kancelaria"), [["home", N_("Start")], ["calendar", N_("Kalendarz")], ["firm", N_("Wzory i wiedza")], ["search", N_("Wyszukiwanie")], ["invoices", N_("Faktury")]]],
+                [N_("Kancelaria"), [["home", N_("Start")], ["cases", N_("Sprawy")], ["calendar", N_("Kalendarz")], ["firm", N_("Wzory i wiedza")], ["search", N_("Wyszukiwanie")], ["invoices", N_("Faktury")]]],
                 ["", [["settings", N_("Ustawienia")]]]
               ]) as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
             <div key={group || "app"} className="chat-tab-group" role="group" aria-label={t(group || N_("Aplikacja"))}>
@@ -6042,6 +6006,8 @@ export default function MatterChatApp({
             <h1>
               {activeTab === "home"
                 ? t("Start")
+                : activeTab === "cases"
+                ? t("Sprawy")
                 : activeTab === "calendar"
                 ? t("Kalendarz spraw")
                 : activeTab === "chat"
@@ -6058,174 +6024,7 @@ export default function MatterChatApp({
             </h1>
           </div>
           <div className="chat-header-actions">
-            {/* Case filters belong to the list of cases (Start), not to every view; with no case
-                there is nothing to filter (an empty "Sprawa" list read as a broken field). */}
-            {activeTab === "home" && matterCases.length > 0 ? (
-            <div className="chat-case-switcher">
-              <label className="chat-case-search">
-                <span>{t("Szukaj spraw")}</span>
-                <input
-                  type="search"
-                  value={caseSearch}
-                  placeholder={t("Nazwa lub ID sprawy")}
-                  aria-label={t("Szukaj spraw")}
-                  onChange={(event) =>
-                    setCaseSearch(
-                      event.target.value
-                    )
-                  }
-                />
-              </label>
-              <label className="chat-case-filter">
-                <span>{t("Stan")}</span>
-                <select
-                  aria-label={t("Filtr statusu spraw")}
-                  value={caseStatusFilter}
-                  onChange={(event) =>
-                    setCaseStatusFilter(
-                      event.target
-                        .value as MatterStatusFilter
-                    )
-                  }
-                >
-                  <option value="ALL">
-                    {t("Wszystkie")}
-                  </option>
-                  <option value="ACTIVE">
-                    {t("Aktywne")}
-                  </option>
-                  <option value="ARCHIVED">
-                    {t("Archiwalne")}
-                  </option>
-                </select>
-              </label>
-              <label className="chat-case-filter">
-                <span>{t("Rola")}</span>
-                <select
-                  aria-label={t("Filtr roli w sprawie")}
-                  value={caseRoleFilter}
-                  onChange={(event) =>
-                    setCaseRoleFilter(
-                      event.target
-                        .value as MatterRoleFilter
-                    )
-                  }
-                >
-                  <option value="ALL">
-                    {t("Wszystkie")}
-                  </option>
-                  <option value="OWNER">
-                    {t("Właściciel")}
-                  </option>
-                  <option value="EDITOR">
-                    {t("Edycja")}
-                  </option>
-                  <option value="ANALYST">
-                    {t("Analiza")}
-                  </option>
-                  <option value="VIEWER">
-                    {t("Podgląd")}
-                  </option>
-                </select>
-              </label>
-              <label className="chat-case-filter">
-                <span>{t("Sortuj")}</span>
-                <select
-                  aria-label={t("Sortowanie spraw")}
-                  value={caseSort}
-                  onChange={(event) =>
-                    setCaseSort(
-                      event.target
-                        .value as MatterSort
-                    )
-                  }
-                >
-                  <option value="UPDATED_DESC">
-                    {t("Ostatnio zmieniane")}
-                  </option>
-                  <option value="CREATED_DESC">
-                    {t("Najnowsze")}
-                  </option>
-                  <option value="NAME_ASC">
-                    {t("Nazwa A–Z")}
-                  </option>
-                </select>
-              </label>
-              <label>
-                <span>{t("Sprawa")}</span>
-                <select
-                  aria-label={t("Wybierz sprawę")}
-                  value={caseId}
-                  disabled={
-                    caseBusy
-                  }
-                  onChange={(event) =>
-                    switchToCase(
-                      event.target
-                        .value
-                    )
-                  }
-                >
-                  {!caseId ? (
-                    <option value="" disabled>
-                      {t("Wybierz sprawę ({count})", { count: filteredMatterCases.length })}
-                    </option>
-                  ) : null}
-                  {filteredMatterCases.map(
-                    (item) => (
-                      <option
-                        key={
-                          item.caseId
-                        }
-                        value={
-                          item.caseId
-                        }
-                      >
-                        {item.displayName ||
-                          "Sprawa bez nazwy"}
-                        {item.archivedAt
-                          ? " · archiwalna"
-                          : ""}
-                      </option>
-                    )
-                  )}
-                </select>
-                {caseSearch.trim() ||
-                caseStatusFilter !== "ALL" ||
-                caseRoleFilter !== "ALL" ? (
-                  <small className="chat-case-search-count">
-                    {caseSearchMatchCount} {t("wyników")}
-                    {matterSearchResult.currentPreserved
-                      ? t(" · bieżąca sprawa pokazana dodatkowo")
-                      : ""}
-                  </small>
-                ) : null}
-              </label>
-              {caseSearch.trim() ||
-              caseStatusFilter !== "ALL" ||
-              caseRoleFilter !== "ALL" ||
-              caseSort !== "UPDATED_DESC" ? (
-                <button
-                  type="button"
-                  className="chat-secondary-action chat-case-filter-reset"
-                  onClick={() => {
-                    setCaseSearch("");
-                    setCaseStatusFilter(
-                      "ALL"
-                    );
-                    setCaseRoleFilter(
-                      "ALL"
-                    );
-                    setCaseSort(
-                      "UPDATED_DESC"
-                    );
-                  }}
-                >
-                  {t("Wyczyść filtry")}
-                </button>
-              ) : null}
-            </div>
-            ) : null}
+
             {/* Files are added from the "Dokumenty sprawy" row of the case card (one button, not two). */}
             <input
               ref={fileInputRef}
@@ -6441,13 +6240,16 @@ export default function MatterChatApp({
                 </div>
                 {workMode === "MECHANICAL" ? (
                   <div className="chat-pipeline-options">
-                    {availableActions.map((action) => {
+                    {/* Grouped by area of work (as Patron's workflow list by practice): heading, then its kinds. */}
+                    {availableActions.map((action, position) => {
+                      const heading = position === 0 || availableActions[position - 1]!.group !== action.group ? action.group : null;
                       const checked =
                         deterministicAction ===
                         action.id;
                       return (
+                        <Fragment key={action.id}>
+                        {heading ? <p className="chat-pipeline-group">{t(heading)}</p> : null}
                         <button
-                          key={action.id}
                           type="button"
                           className={
                             checked
@@ -6468,6 +6270,7 @@ export default function MatterChatApp({
                             {t(action.description)}
                           </small>
                         </button>
+                        </Fragment>
                       );
                     })}
                   </div>
@@ -7765,6 +7568,7 @@ export default function MatterChatApp({
           <HomeDashboard
             user={user}
             cases={cases}
+            onOpenAllCases={() => setActiveTab("cases")}
             modelLabel={
               selectedModel?.displayName ??
               (model ? model : "")
@@ -7799,6 +7603,28 @@ export default function MatterChatApp({
               await refreshCases(caseId || renamedCaseId);
               if (renamedCaseId === caseId) setCaseNameDraft(value);
               setWorkspaceRefresh((count) => count + 1);
+            }}
+          />
+        ) : null}
+
+        {activeTab === "cases" ? (
+          <CaseListPage
+            cases={cases}
+            currentCaseId={caseId}
+            onOpenCase={(nextCaseId) => {
+              switchToCase(nextCaseId);
+              setActiveTab("chat");
+            }}
+            onNewCase={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa").catch(() => undefined)}
+            onRenameCase={async (renamedCaseId, value) => {
+              await renameCase(renamedCaseId, value);
+              await refreshCases(caseId || renamedCaseId);
+              if (renamedCaseId === caseId) setCaseNameDraft(value);
+              setWorkspaceRefresh((count) => count + 1);
+            }}
+            onArchive={async (ids, archive) => {
+              for (const id of ids) await (archive ? archiveCase(id) : unarchiveCase(id));
+              await refreshCases(caseId || undefined);
             }}
           />
         ) : null}

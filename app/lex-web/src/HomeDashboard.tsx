@@ -19,7 +19,7 @@ import {
 } from "./case-calendar.js";
 
 const UPCOMING_LIMIT = 8;
-const RECENT_CASES = 8;
+const RECENT_CASES = 6;
 
 /** Start screen: who is signed in, the model, the nearest events and cases. */
 export function HomeDashboard({
@@ -34,10 +34,13 @@ export function HomeDashboard({
   onOpenModels,
   onOpenInvoices,
   onNewCase,
-  onRenameCase
+  onRenameCase,
+  onOpenAllCases
 }: {
   user: AuthenticatedUser;
   cases: readonly CaseListItem[];
+  // The full list with its filters is the "Sprawy" tab; Start shows the most recent ones.
+  onOpenAllCases?: () => void;
   modelLabel: string;
   modelStatus: string;
   refreshToken: number;
@@ -88,7 +91,8 @@ export function HomeDashboard({
     };
   }, [refreshToken]);
 
-  const recent = casesNewestFirst(cases).slice(0, RECENT_CASES);
+  const all = casesNewestFirst(cases.filter((item) => !item.archivedAt));
+  const recent = all.slice(0, RECENT_CASES);
 
   return (
     <section className="chat-card-stack lex-home">
@@ -175,7 +179,7 @@ export function HomeDashboard({
 
         <article className="chat-card">
           <div className="lex-home-card-head">
-            <h2>{t("Sprawy od najnowszych")}</h2>
+            <h2>{t("Ostatnio zmieniane sprawy")}</h2>
             <button type="button" className="chat-secondary-action" onClick={onNewCase}>
               {t("+ Nowa sprawa")}
             </button>
@@ -188,7 +192,7 @@ export function HomeDashboard({
               <thead>
                 <tr>
                   <th scope="col">{t("Nazwa")}</th>
-                  <th scope="col">{t("Stan")}</th>
+                  <th scope="col">{t("Rola")}</th>
                   <th scope="col">{t("Zmieniona")}</th>
                 </tr>
               </thead>
@@ -260,6 +264,11 @@ export function HomeDashboard({
               </tbody>
             </table>
           )}
+          {onOpenAllCases ? (
+            <button type="button" className="chat-link-button" onClick={onOpenAllCases}>
+              {t("Wszystkie sprawy ({count}) →", { count: String(cases.filter((item) => item.caseKind === "MATTER").length) })}
+            </button>
+          ) : null}
         </article>
       </div>
 
