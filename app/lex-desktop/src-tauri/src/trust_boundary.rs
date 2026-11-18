@@ -1472,6 +1472,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/health" => method == "GET",
         "/api/auth/status" | "/api/auth/me" => method == "GET",
         "/api/auth/me/profile" => method == "PATCH",
+        "/api/usage/me" => method == "GET",
         "/api/auth/bootstrap"
         | "/api/auth/login"
         | "/api/auth/recover"
@@ -2413,6 +2414,8 @@ mod tests {
         ));
         assert!(!route_allowed("POST", "/api/sessions/cancel/../../auth/me"));
         assert!(route_allowed("PATCH", "/api/auth/me/profile"));
+        assert!(route_allowed("GET", "/api/usage/me"));
+        assert!(!route_allowed("POST", "/api/usage/me"));
         assert!(!route_allowed("POST", "/api/auth/me/profile"));
         assert!(!route_allowed("GET", "/api/sessions/progress/../../auth/me"));
         assert!(!route_allowed("GET", "/api/arbitrary"));

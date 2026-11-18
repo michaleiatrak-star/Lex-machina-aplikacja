@@ -49,6 +49,7 @@ import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.j
 import { caseFileListing, type CaseFileSort } from "./case-file-listing.js";
 import { CaseListPage } from "./CaseListPage";
 import { ViewErrorBoundary } from "./ViewErrorBoundary";
+import { UsagePanel } from "./UsagePanel";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -286,6 +287,7 @@ export type SettingsSection =
   | "server"
   | "account"
   | "display"
+  | "usage"
   | "courts";
 
 export type SettingsRequest = {
@@ -8175,6 +8177,7 @@ export default function MatterChatApp({
               {([
                 [t("Konto"), "security", t("Profil i bezpieczeństwo")],
                 [t("Konto"), "display", t("Wygląd i czytelność")],
+                [t("Konto"), "usage", t("Zużycie")],
                 ...(settingsPanels?.account ? [[t("Konto"), "account", t("Plan i klucze API")]] : []),
                 [t("Asystent AI"), "models", t("Modele i AI")],
                 [t("Asystent AI"), "skills", t("Skille i routing")],
@@ -8765,6 +8768,10 @@ export default function MatterChatApp({
                     </label>
                     <p className="field-help">{t("Ustawienia wyglądu zostają w tej przeglądarce.")}</p>
                   </article>
+                </div>
+              ) : settingsSection === "usage" ? (
+                <div className="chat-settings-section-stack">
+                  <UsagePanel />
                 </div>
               ) : settingsSection === "security" ? (
                 <div className="chat-settings-section-stack">

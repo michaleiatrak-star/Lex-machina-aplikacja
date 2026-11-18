@@ -1,3 +1,4 @@
+import { recordTurnUsage } from "./usage-log.js";
 import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
 import { ChatTurnJournal, errorCode, modelKindOf, PhaseClock, type ChatTurnRecord } from "./chat-turn-journal.js";
@@ -2101,6 +2102,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       // Tokens of every model call in this turn (benchmark and cost display).
       const { result, usage } = await meterUsage(() => this.executeTurn(request));
       result.usage = usage;
+      // Ustawienia > Zużycie: the turn's tokens under the account that sent it.
+      void recordTurnUsage(request.provider, request.model, usage);
       record(result.status === "BLOCKED" ? "BLOCKED" : "OK", result.taskSkill ?? basePath);
       return result;
     } catch (error) {

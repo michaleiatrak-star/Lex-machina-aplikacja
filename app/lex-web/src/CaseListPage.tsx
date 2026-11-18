@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CASE_ROLE_LABEL, type CaseListItem } from "./api.js";
+import { CASE_ROLE_LABEL, getCasesOverview, type CaseListItem, type CaseOverviewEntry } from "./api.js";
 import { caseListView, visibleSelection, type CaseListFilters, type CaseListPeriod, type CaseListScope, type CaseListSortKey } from "./case-list-view.js";
 import { currentLocale, t, N_ } from "./i18n";
 import { InlineEdit } from "./InlineEdit";
@@ -47,6 +47,23 @@ export function CaseListPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const shown = useMemo(() => caseListView(cases, filters), [cases, filters]);
+  // Signature and number of files of the shown cases (Patron's columns), read once per case.
+  const [overview, setOverview] = useState<Record<string, CaseOverviewEntry>>({});
+  const missing = shown.filter((item) => !overview[item.caseId]).slice(0, 100).map((item) => item.caseId);
+  const missingKey = missing.join(",");
+  useEffect(() => {
+    if (!missingKey) return;
+    let cancelled = false;
+    getCasesOverview(missingKey.split(","))
+      .then((result) => {
+        if (cancelled) return;
+        setOverview((current) => ({ ...current, ...Object.fromEntries(result.cases.map((entry) => [entry.caseId, entry])) }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [missingKey]);
   // The selection never holds a case the filters hide.
   useEffect(() => setSelected((current) => visibleSelection(current, shown)), [shown]);
   const allBox = useRef<HTMLInputElement>(null);
@@ -175,6 +192,8 @@ export function CaseListPage({
                 />
               </th>
               {header("name", N_("Nazwa"))}
+              <th scope="col">{t("Sygnatura")}</th>
+              <th scope="col">{t("Pliki")}</th>
               {header("role", N_("Rola"))}
               {header("created", N_("Utworzona"))}
               {header("updated", N_("Zmieniona"))}
@@ -240,6 +259,8 @@ export function CaseListPage({
                     </div>
                   )}
                 </td>
+                <td title={overview[item.caseId]?.court ?? undefined}>{overview[item.caseId]?.signature ?? "—"}</td>
+                <td>{overview[item.caseId]?.files ?? "—"}</td>
                 <td>{CASE_ROLE_LABEL[item.role]}</td>
                 <td>{date(item.createdAt)}</td>
                 <td>{date(item.updatedAt || item.createdAt)}</td>

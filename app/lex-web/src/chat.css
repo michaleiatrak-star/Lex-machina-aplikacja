@@ -5134,10 +5134,9 @@ mark.restored {
     flex: 1 1 100%;
   }
 
-  .case-list-table th:nth-child(3),
-  .case-list-table td:nth-child(3),
-  .case-list-table th:nth-child(4),
-  .case-list-table td:nth-child(4) {
+  /* Narrow: name, signature and open; files, role and dates go. */
+  .case-list-table th:nth-child(n + 4):not(:last-child),
+  .case-list-table td:nth-child(n + 4):not(:last-child) {
     display: none;
   }
 }
@@ -5287,4 +5286,61 @@ mark.restored {
 
 .account-profile .matter-thread-edit {
   opacity: 1;
+}
+
+/* Calendar on a narrow screen: the header wraps and the days shrink instead of a sideways scroll. */
+.lex-calendar-head {
+  flex-wrap: wrap;
+}
+
+.lex-calendar-day {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .lex-calendar-head h2 {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: 17px;
+  }
+
+  .lex-calendar-day {
+    min-height: 38px;
+    padding: 2px;
+  }
+
+  .lex-calendar-weekday {
+    padding: 2px 0;
+    font-size: 11px;
+  }
+}
+
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.usage-summary div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--lm-l3);
+  border-radius: 11px;
+}
+
+.usage-summary small,
+.usage-unmetered {
+  color: var(--lm-t3);
+  font-size: 11px;
+}
+
+.usage-summary strong {
+  font-size: 20px;
+}
+
+.usage-table td:nth-child(n + 3),
+.usage-table th:nth-child(n + 3) {
+  text-align: right;
 }

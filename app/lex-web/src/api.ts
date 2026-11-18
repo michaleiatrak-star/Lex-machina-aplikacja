@@ -3296,6 +3296,21 @@ export function reviseProcessPleadingCheckpoint(
   });
 }
 
+export type CaseOverviewEntry = { caseId: string; signature: string | null; court?: string | null; files: number | null };
+
+// Sprawy: the listed cases' court signature and number of files.
+export function getCasesOverview(caseIds: string[]): Promise<{ cases: CaseOverviewEntry[] }> {
+  return json<{ cases: CaseOverviewEntry[] }>("/api/cases/overview", { method: "POST", body: JSON.stringify({ caseIds }) });
+}
+
+export type UsageRow = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; modelCalls: number; unmeteredCalls: number; turns: number };
+export type UsageMonth = { month: string; total: UsageRow; models: Array<{ model: string } & UsageRow> };
+
+// Ustawienia > Zużycie: the account's tokens per month and model.
+export function getMyUsage(): Promise<{ months: UsageMonth[] }> {
+  return json<{ months: UsageMonth[] }>("/api/usage/me");
+}
+
 // "Zatrzymaj": stops the running turn of this execution id (its owner only).
 export function cancelExecution(executionId: string): Promise<{ cancelled: true }> {
   return json<{ cancelled: true }>(`/api/sessions/cancel/${encodeURIComponent(executionId)}`, { method: "POST" });
