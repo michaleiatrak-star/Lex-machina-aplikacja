@@ -1,3 +1,4 @@
+import { articleChanges, type ArticleChange } from "./amendment-instructions.js";
 import type { CoreLawIndex } from "./core-law-index.js";
 import { searchStems } from "./core-law-search.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
@@ -41,6 +42,8 @@ export type CoreLawVerificationIndex = Pick<
 export type CoreLawTemporalDetails = {
   amendments: Array<{ eli: string; title: string | null; from?: string; promulgation?: string | null }>;
   transitionalProvisions: Array<{ eli: string; text: string }>;
+  // The amendments' own points for the article (a new wording, units changed, a repeal).
+  articleChanges?: Array<ArticleChange & { eli: string }>;
 };
 
 export type CoreLawVerificationOutcome =
@@ -150,23 +153,30 @@ export function postConsolidationImpact(
   actTitle?: string
 ):
   | { status: "UNAFFECTED"; checked: string[] }
-  | { status: "AFFECTED" | "UNKNOWN"; reason: string; amendments: string[] } {
+  | { status: "AFFECTED" | "UNKNOWN"; reason: string; amendments: string[]; articleChanges?: Array<ArticleChange & { eli: string }> } {
   if (!article || !index.record) {
     return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENTS", amendments };
   }
   const affected: string[] = [];
   const unknown: string[] = [];
+  const changes: Array<ArticleChange & { eli: string }> = [];
   for (const eli of amendments) {
     const record = index.record(eli);
     const body =
       record && record.textSource !== "ocr" && record.textSource !== "none"
         ? record.text ?? record.articleOrder.map((unit) => `Art. ${unit}. ${record.articles[unit] ?? ""}`).join("\n")
         : "";
-    const touches = body.trim() ? amendmentMentionsArticle(amendmentPartFor(body, actTitle), article) : null;
-    if (touches === true) affected.push(eli);
-    else if (touches === null) unknown.push(eli);
+    const part = body.trim() ? amendmentPartFor(body, actTitle) : "";
+    let touches = part ? amendmentMentionsArticle(part, article) : null;
+    // Its own points for the article; none when it names the article only inside a new wording.
+    const own = touches === true ? articleChanges(part, article) : null;
+    if (own?.length === 0) touches = false;
+    if (touches === true) {
+      affected.push(eli);
+      for (const change of own ?? []) changes.push({ eli, ...change });
+    } else if (touches === null) unknown.push(eli);
   }
-  if (affected.length) return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected };
+  if (affected.length) return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected, ...(changes.length ? { articleChanges: changes } : {}) };
   if (unknown.length) return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN", amendments: unknown };
   return { status: "UNAFFECTED", checked: amendments };
 }
@@ -222,7 +232,10 @@ export function verifyFromCoreLaw(args: {
       return {
         decision: "DENY",
         reason: impact.reason,
-        temporal: temporalDetails(args.index, summary.amendmentsAfter.filter((item) => touched.has(item.eli)))
+        temporal: {
+          ...temporalDetails(args.index, summary.amendmentsAfter.filter((item) => touched.has(item.eli))),
+          ...(impact.status === "AFFECTED" && impact.articleChanges ? { articleChanges: impact.articleChanges } : {})
+        }
       };
     }
     amendmentsChecked = impact.checked;

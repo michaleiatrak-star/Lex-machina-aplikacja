@@ -100,7 +100,7 @@ import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "..
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
-import { TemporalSourceFreshnessChecker } from "../temporal-source-freshness.js";
+import { TemporalSourceFreshnessChecker, setLocalAmendmentText } from "../temporal-source-freshness.js";
 import { OfficialLegalSourceVerifier } from "../legal-source-verifier.js";
 import { LocalPdfTextExtractor } from "../pdf-text-extractor.js";
 import { CompleteDocumentIngestor } from "../document-ingestion.js";
@@ -778,6 +778,12 @@ export async function startLocalServer(options?: {
     new AnomalyJournal(caseFileStore.rootDir);
   // Pamięć dowodowa wątku: przepis z poprzedniej wiadomości tylko przy tym samym t.j. w ELI.
   const actFreshness = new TemporalSourceFreshnessChecker();
+  // An amending act after the t.j. is read from the local ELI copy when it holds its text layer
+  // (not OCR); otherwise ELI is asked.
+  setLocalAmendmentText((eli) => {
+    const record = coreLawIndex.record(eli);
+    return record && (record.textSource === "html" || record.textSource === "pdf") && record.text?.trim() ? record.text : null;
+  });
   const sessionExecutor = withAnomalyJournal(
     new SafeSessionExecutor(
       registry,

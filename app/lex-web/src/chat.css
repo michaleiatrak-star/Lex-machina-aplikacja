@@ -1042,6 +1042,27 @@
   font-size: 11px;
 }
 
+.chat-case-file-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.chat-case-file-filters input,
+.chat-case-file-filters select {
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.chat-case-file-filters small {
+  grid-column: 1 / -1;
+  color: var(--lm-t3);
+  font-size: 11px;
+}
+
 .chat-case-file-picker-list {
   display: grid;
   gap: 8px;
@@ -4854,6 +4875,7 @@ mark.restored {
 
 .chat-case-file-picker.previewing .chat-case-file-picker-list,
 .chat-case-file-picker.previewing .chat-case-file-picker-head,
+.chat-case-file-picker.previewing .chat-case-file-filters,
 .chat-case-file-picker.previewing .chat-file-fit {
   display: none;
 }

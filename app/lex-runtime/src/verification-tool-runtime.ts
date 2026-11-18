@@ -73,8 +73,11 @@ function temporalDenialPayload(details: CoreLawTemporalDetails): Record<string, 
       ...(item.promulgation ? { promulgation: item.promulgation } : {})
     })),
     ...(details.transitionalProvisions.length ? { transitionalProvisions: details.transitionalProvisions } : {}),
+    ...(details.articleChanges?.length
+      ? { articleChanges: details.articleChanges.slice(0, 8).map((change) => ({ eli: change.eli, kind: change.kind, instruction: change.instruction.slice(0, 2_000) })) }
+      : {}),
     instruction:
-      "The local consolidated text does not give this provision's wording in force: the listed amendments change it (or their impact is unknown). Name the amendment (Dz.U.) and its date; do not present the consolidated-text wording as current. transitionalProvisions are the amendment's own rules for matters begun before it: apply them from this text, not from memory. Mark the provision ⚠️ [NIEWERYFIKOWANE] unless verified in ELI."
+      "The local consolidated text does not give this provision's wording in force: the listed amendments change it (or their impact is unknown). Name the amendment (Dz.U.) and its date; do not present the consolidated-text wording as current. articleChanges are the amendment's own points for this article (new wording, units changed, repeal): state the wording from them. transitionalProvisions are the amendment's own rules for matters begun before it: apply them from this text, not from memory. Mark the provision ⚠️ [NIEWERYFIKOWANE] unless verified in ELI."
   };
 }
 
@@ -638,6 +641,18 @@ function amendmentList(freshness: TemporalFreshnessResult): Array<Record<string,
   });
 }
 
+// The amendments' own points for the article, with the Dz.U. address the model cites.
+function articleChangeList(freshness: TemporalFreshnessResult): Array<Record<string, string>> {
+  const addresses = new Map(freshness.amendmentsAfter.map((amendment) => [amendment.eli, amendment.displayAddress]));
+  return (freshness.articleChanges ?? []).slice(0, 8).map((change) => ({
+    eli: change.eli,
+    ...(addresses.get(change.eli) ? { dzU: addresses.get(change.eli)! } : {}),
+    ...(change.from ? { from: change.from } : {}),
+    kind: change.kind === "REPEALED" ? "UCHYLENIE" : change.kind === "REPLACED" ? "NOWE_BRZMIENIE" : "ZMIANA_JEDNOSTEK",
+    instruction: change.instruction.slice(0, 2_000)
+  }));
+}
+
 function publicToolResult(
   record: {
     claim: string;
@@ -684,9 +699,16 @@ function publicToolResult(
           amendmentsAfter: freshness.amendmentsAfter.length,
           amendments: amendmentList(freshness),
           ...(freshness.pendingWordingAmendments?.length ? { pendingWordingAmendments: freshness.pendingWordingAmendments } : {}),
+          ...(freshness.articleChanges?.length ? { articleChanges: articleChangeList(freshness) } : {}),
           ...(freshness.transitionalProvisions?.length ? { transitionalProvisions: freshness.transitionalProvisions } : {})
         }
       : null,
+    ...(freshness?.articleChanges?.length && record.status === "VERIFIED"
+      ? {
+          amendmentInstruction:
+            "The consolidated text predates amendments in force that change this article (freshness.articleChanges, from the amending acts' own text). The evidence is the wording after them. Cite the provision 'w brzmieniu nadanym ustawą z … (Dz.U. … poz. …)' naming that amendment, quote only the amended wording, and apply its transitionalProvisions to matters begun before the change."
+        }
+      : {}),
     sourceUrl: record.sourceUrl ?? null,
     sourceLink: verificationSourceLink(record) ?? null,
     sourceFormat: record.sourceFormat ?? null,
@@ -1357,6 +1379,7 @@ export class LegalVerificationToolRuntime {
           expectedTitle,
           toolCallId,
           ...(freshness?.pendingWordingAmendments?.length ? { requireFootnoteWording: true } : {}),
+          ...(freshness?.articleChanges?.length && temporalMode === "CURRENT" ? { articleChanges: freshness.articleChanges } : {}),
           ...(temporalMode === "HISTORICAL" && asOf ? { asOf } : {})
         });
 
@@ -2450,6 +2473,7 @@ export class LegalVerificationToolRuntime {
                   freshness.amendmentsAfter
                     .length,
                 amendments: amendmentList(freshness),
+                ...(freshness.articleChanges?.length ? { articleChanges: articleChangeList(freshness) } : {}),
                 ...(freshness.transitionalProvisions?.length
                   ? {
                       // From the amending act itself (normalized to lower case): the rule for

@@ -40,7 +40,7 @@ describe("case-file list state", () => {
   });
 
   it("per-file status", () => {
-    expect(caseFileStatusText({})).toBe("Nieprzetworzony – wybierz anonimizację albo samo OCR");
+    expect(caseFileStatusText({})).toBe("Nieprzetworzony – wybierz: odczyt z anonimizacją albo sam odczyt");
     expect(caseFileStatusText({ processing })).toBe("Gotowy · wersja zanonimizowana · 4 stron · OCR 2");
     expect(caseFileStatusText({ processing: { ...processing, anonymized: false } })).toContain("tekst jawny");
     expect(caseFileStatusText({}, { progress: { stage: "OCR", done: 0, total: 3, updatedAt: "" } })).toMatch(

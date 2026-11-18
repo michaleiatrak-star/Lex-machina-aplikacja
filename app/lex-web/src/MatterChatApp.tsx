@@ -46,6 +46,7 @@ import { CompactSettingRow } from "./CompactSettingRow";
 import { CaseDocumentPreview } from "./CaseDocumentPreview";
 import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
 import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
+import { caseFileListing, type CaseFileSort } from "./case-file-listing.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -459,8 +460,6 @@ const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const SWITCHER_CASES = 8;
 // Drag data of a case document moved from the files panel to the message box.
 const CASE_DOCUMENT_DRAG = "application/x-lex-case-document";
-const categoryOrder = (item: { filename: string; mediaType: string; archive: boolean }) =>
-  CASE_FILE_CATEGORIES.findIndex((entry) => entry.category === caseFileCategory({ kind: "", filename: item.filename, mediaType: item.mediaType, archive: item.archive }));
 // How long "Konto połączone." stays after the account connects.
 const ACCOUNT_CONNECTED_NOTICE_MS = 4000;
 const KNOWN_EXECUTION_SKILLS = new Set([
@@ -1675,6 +1674,10 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // The side panel's list: search by name and order (by kind keeps the case's file types).
+  const [caseFileQuery, setCaseFileQuery] = useState("");
+  const [caseFileSort, setCaseFileSort] = useState<CaseFileSort>("kind");
+  useEffect(() => setCaseFileQuery(""), [caseId]);
   // Load state of the list (failed is unknown, not empty), manual/automatic reloads,
   // automatic retries done since the last success, and processing errors per upload.
   const [caseFilesLoad, setCaseFilesLoad] = useState<CaseFileListLoad | null>(null);
@@ -7214,15 +7217,43 @@ export default function MatterChatApp({
                     if (view.kind === "empty") return <small>{view.text}</small>;
                     return null;
                   })()}
+                  {caseFiles.length > 1 ? (
+                    <div className="chat-case-file-filters">
+                      <input
+                        type="search"
+                        value={caseFileQuery}
+                        placeholder={t("Szukaj w plikach sprawy")}
+                        aria-label={t("Szukaj w plikach sprawy")}
+                        onChange={(event) => setCaseFileQuery(event.target.value)}
+                      />
+                      <select
+                        value={caseFileSort}
+                        aria-label={t("Kolejność plików")}
+                        onChange={(event) => setCaseFileSort(event.target.value as CaseFileSort)}
+                      >
+                        <option value="kind">{t("Według rodzaju")}</option>
+                        <option value="name">{t("Nazwa A-Z")}</option>
+                        <option value="newest">{t("Najnowsze")}</option>
+                        <option value="oldest">{t("Najstarsze")}</option>
+                      </select>
+                      <small role="status">
+                        {caseFileQuery.trim()
+                          ? t("Pokazano {shown} z {all}", { shown: String(caseFileListing(caseFiles, caseFileQuery, caseFileSort).length), all: String(caseFiles.length) })
+                          : t("Plików: {count}", { count: String(caseFiles.length) })}
+                      </small>
+                    </div>
+                  ) : null}
+                  {caseFiles.length > 0 && caseFileQuery.trim() && caseFileListing(caseFiles, caseFileQuery, caseFileSort).length === 0 ? (
+                    <small>{t("Żaden plik sprawy nie pasuje do wyszukiwania.")}</small>
+                  ) : null}
                   {caseFiles.length === 0 ? null : (
                     <ul className="chat-case-file-picker-list">
                       {/* Grouped by kind of file, as in the case files (types kept, not flattened). */}
-                      {[...caseFiles]
-                        .sort((left, right) => categoryOrder(left) - categoryOrder(right) || left.filename.localeCompare(right.filename, "pl"))
+                      {caseFileListing(caseFiles, caseFileQuery, caseFileSort)
                         .map(
                         (item, position, sorted) => {
                           const category = caseFileCategory({ kind: "", filename: item.filename, mediaType: item.mediaType, archive: item.archive });
-                          const firstOfKind = position === 0 || caseFileCategory({ kind: "", filename: sorted[position - 1]!.filename, mediaType: sorted[position - 1]!.mediaType, archive: sorted[position - 1]!.archive }) !== category;
+                          const firstOfKind = caseFileSort === "kind" && (position === 0 || caseFileCategory({ kind: "", filename: sorted[position - 1]!.filename, mediaType: sorted[position - 1]!.mediaType, archive: sorted[position - 1]!.archive }) !== category);
                           const ready =
                             Boolean(
                               item.processing &&

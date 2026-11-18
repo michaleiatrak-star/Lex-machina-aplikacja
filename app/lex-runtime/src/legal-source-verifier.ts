@@ -1,3 +1,4 @@
+import { applyArticleChanges, type ArticleChange } from "./amendment-instructions.js";
 import {
   DEFAULT_PDF_MAX_BYTES,
   LocalPdfTextExtractor,
@@ -33,6 +34,9 @@ export type LegalSourceVerificationRequest = {
   requireFootnoteWording?: boolean;
   // The date the wording is chosen for (historical mode); today by default.
   asOf?: string;
+  // Amendments in force after the consolidated text that change this article (their own text):
+  // the evidence is the wording after them, not the consolidated text's.
+  articleChanges?: ReadonlyArray<ArticleChange & { eli: string; from?: string }>;
 };
 
 export type LegalSourceVerificationResult = {
@@ -484,6 +488,40 @@ export function claimedUnitState(claim: string, evidence: string, pending: Reado
   return para || anyOfKind.test(evidence) || noUnitsAtAll ? { state: "MISSING" } : { state: "NOT_CHECKED" };
 }
 
+/**
+ * The article's wording after the amendments in force that the consolidated text does not hold
+ * yet: a new wording or word substitutions applied; a unit replaced or added is read from the
+ * amendment's quoted text (the unit check sees it); the amendment's points go with the evidence
+ * when they could not be applied, so the wording is never the old one alone.
+ */
+function amendedWording(
+  consolidated: string,
+  changes: ReadonlyArray<ArticleChange & { eli: string; from?: string }>,
+  claim: string
+): { evidence: string; unitText: string; repealedUnit?: string } {
+  const result = applyArticleChanges(consolidated, changes);
+  const quoted = changes.flatMap((change) => [...change.instruction.matchAll(/„([^]*?)”/gu)].map((match) => match[1]!.trim()));
+  const unit = /§\s*(\d+[a-z]{0,2})(?![a-z\d])|\bust\.?\s*(\d+[a-z]{0,2})(?![a-z\d])/u.exec(superscriptsAsCaret(claim));
+  const label = unit?.[1] ? `§ ${unit[1]}` : unit?.[2] ? `ust. ${unit[2]}` : null;
+  const repealed = label
+    ? changes.find((change) =>
+        // "uchyla się § 2", "uchyla się § 1 i 2", "§ 2 uchyla się" - not "w § 2 uchyla się pkt 3".
+        new RegExp(
+          `uchyla\\s+się\\s+(?:(?:§|ust\\.)?\\s*\\d+[a-z]*\\s*(?:,|\\si\\s|\\soraz\\s)\\s*)*(?:${escapeUnit(label)}|(?<=(?:§|ust\\.)\\s*\\d+[a-z]*\\s*(?:,|\\si|\\soraz)\\s*)${escapeUnit(label.replace(/^\\S+\\s/u, ""))})(?![\\d\\p{L}])|(?<!w\\s)${escapeUnit(label)}\\s+uchyla\\s+się(?!\\s+(?:pkt|lit|zdani|zd\\.|ust|wyraz|część))`,
+          "u"
+        ).test(change.instruction.replace(/„[^]*?”/gu, "„…”"))
+      )
+    : undefined;
+  const notes = result.applied
+    ? ""
+    : `\n\n[Zmiany artykułu wprowadzone po tekście jednolitym, obowiązujące:]\n${changes.map((change) => `${change.from ? `od ${change.from} ` : ""}(ELI ${change.eli}): ${change.instruction}`).join("\n")}`;
+  return {
+    evidence: `${result.text}${notes}`,
+    unitText: `${result.text}\n${quoted.join("\n")}`,
+    ...(repealed ? { repealedUnit: `ELI ${repealed.eli}${repealed.from ? `, od ${repealed.from}` : ""}` } : {})
+  };
+}
+
 export class OfficialLegalSourceVerifier {
   constructor(
     private readonly fetcher: LegalSourceFetch =
@@ -682,13 +720,16 @@ export class OfficialLegalSourceVerifier {
       request.kind === "statute" && snippet
         ? statuteWording(snippet, footnotes, request.asOf ?? todayWarsaw(Date.parse(fetchedAt) || Date.now()))
         : null;
-    const evidence = wording?.evidence ?? snippet;
+    const amended = request.articleChanges?.length && wording ? amendedWording(wording.evidence, request.articleChanges, request.claim) : null;
+    const evidence = amended?.evidence ?? wording?.evidence ?? snippet;
     // Not verified: two wordings without a readable date, a repealed article, or a change not
     // in force printed in the text that its footnotes do not settle.
-    const unit = wording ? claimedUnitState(request.claim, wording.evidence, wording.pending) : null;
+    const unit = wording ? claimedUnitState(request.claim, amended?.unitText ?? wording.evidence, wording.pending) : null;
     const wordingProblem = !wording
       ? null
-      : unit?.state === "PENDING"
+      : amended?.repealedUnit
+        ? `Ta jednostka została uchylona nowelą po tekście jednolitym (${amended.repealedUnit}).`
+        : unit?.state === "PENDING"
         ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
         : unit?.state === "REPEALED"
           ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
