@@ -435,7 +435,7 @@ function linkDocumentAnchors(text, entries) {
             continue;
         const key = dateKey(date);
         // After the year's "r." ("4 maja 2026 r. [dokument]"), never between them.
-        const year = /^\s*r\.(?!\p{L})/u.exec(after);
+        const year = /^\s*[rR]\.(?!\p{L})/u.exec(after);
         add(date.index + date[0].length + (year ? year[0].length : 0), { label: date[0], key: `d${key}`, locate: firstMatching(DATE, dateKey, key) });
     }
     // A quote is linked as a quote (linkUnmarkedQuotes, the model's marker): nothing inside it twice.
@@ -472,6 +472,10 @@ function linkDocumentAnchors(text, entries) {
         // A heading, or a sentence the model already linked to its source, needs no link at each date
         // (V P 3/26: "17 marca 2026 r. [link]" next to the quote's own link, in every paragraph).
         if (/^\s*#/u.test(line))
+            continue;
+        // A pleading's title in capitals ("**ODWOŁANIE OD POSTANOWIENIA Z 14 PAŹDZIERNIKA 2026 R. …**"): no link inside.
+        const fullLine = text.slice(lineStart, (text.indexOf("\n", end) + 1 || text.length + 1) - 1);
+        if (/^\s*\*\*[^\p{Ll}]{12,}\*\*\s*$/u.test(fullLine))
             continue;
         // Sentence bounds: a full stop not after an abbreviation ("r.", "ust.", "art."), a semicolon, a line end.
         const STOP = /(?<!(?:\br|\bust|\bart|\bpkt|\bnr|\bpoz|\bsygn|\bzm|\btj|\bm\.in))[.!?;](?=\s)|\n/gu;

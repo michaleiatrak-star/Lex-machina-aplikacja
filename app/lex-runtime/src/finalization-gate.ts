@@ -135,7 +135,7 @@ function collectMatches(
   return references;
 }
 
-const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
+const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/iu;
 const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
 // Another act named in words: an act-less article on such a line is not resolved.
 const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|ordynacj\p{L}*|praw[aoe]?\s+(?:budowlan|bankow|upadłościow|restrukturyzacyjn|energetyczn|autorsk|wodn|geologiczn|lotnicz|pocztow|telekomunikacyjn|przedsiębiorc|o\s+notariacie|o\s+adwokaturze|ochrony\s+środowiska|zamówień|prywatn|spółdzielcz|łowieck|atomow|farmaceutyczn|oświatow|restrukturyz)\p{L}*|pr\.?\s?(?:up|bud|bank|rest|energ|aut|ochr\.?\s?śr|zam\.?\s?publ)\.?|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
@@ -155,7 +155,7 @@ const actsIn = (value: string): Set<string> =>
 function resolveActs(references: DetectedLegalReference[], text: string): DetectedLegalReference[] {
   const actsByUnit = new Map<string, Set<string>>();
   for (const reference of references) {
-    const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase() : undefined;
     if (!act) continue;
     const unit = reference.claim.replace(ACT_SUFFIX, "").replace(/\s+/g, " ").toLocaleLowerCase("pl");
     actsByUnit.set(unit, (actsByUnit.get(unit) ?? new Set()).add(act));
@@ -273,7 +273,7 @@ export function addVerifiedJournalAddresses(text: string, ledger: VerificationLe
   const done = new Set<string>();
   for (const reference of detectLegalReferences(text)) {
     if (reference.kind !== "statute" || reference.span) continue;
-    const code = ACT_SUFFIX.exec(reference.claim)?.[1];
+    const code = ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase();
     const lineText = lines[reference.line - 1] ?? "";
     let act: string | undefined;
     let end = -1;
@@ -377,7 +377,7 @@ export function completeBareArticleActs(
     if (!number) continue;
     // Written with a code ("art. 35 KPA") or with an act named in words after it ("art. 35 ust. 3
     // Prawa budowlanego"): the act this number has in the answer's own words.
-    const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase() : undefined;
     // Named in words as the very act this number was verified in ("art. 6 ust. 1, 3 i 4 ustawy o
     // ochronie praw lokatorów", live C12-018): that act, not another one.
     const own = ownText(reference).replace(/^[\s,;:)(*_]+/u, "").toLocaleLowerCase("pl");
@@ -397,7 +397,7 @@ export function completeBareArticleActs(
     if (reference.kind !== "statute") continue;
     // An act the gate borrowed from the line or the answer ("art. 7 KPA …, art. 49g" read as
     // art. 49g KPA) is a guess: written as bare, unless that act has the article verified.
-    const guessed = Boolean(reference.span) && ACT_SUFFIX.exec(reference.claim)?.[1];
+    const guessed = Boolean(reference.span) && ACT_SUFFIX.exec(reference.claim)?.[1]?.toUpperCase();
     if (ACT_SUFFIX.test(reference.claim) && !guessed) continue;
     const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
     const acts = number ? actsByNumber.get(number) : undefined;
@@ -698,7 +698,7 @@ function journalSourceRecord(ledger: VerificationLedger, reference: DetectedLega
     .find(
       (record) =>
         record.status === "VERIFIED" &&
-        (record.currentEli === eli || (record.sourceUrl ?? "").includes(`/eli/acts/${eli}/`))
+        (record.currentEli === eli || (record.sourceUrl ?? "").includes(`/eli/acts/${eli}/`) || Boolean(record.amendedBy?.includes(eli)))
     );
 }
 
@@ -713,6 +713,24 @@ function soleCoveringVerifiedRecord(
     .all()
     .filter((record) => record.status === "VERIFIED" && comparableClaim(record.claim).startsWith(prefix));
   return new Set(covering.map((record) => comparableClaim(record.claim))).size === 1 ? covering.at(-1) : undefined;
+}
+
+// "art. 88a Prawa o adwokaturze" with only "art. 88a ust. 4 Prawa o adwokaturze" verified: the act
+// written right after the article is the covering record's own act, not another one (a live case
+// marked the article ⚠️ in the notes under a pleading that had it ✅).
+function coveringActNamedAfter(ledger: VerificationLedger, reference: DetectedLegalReference): boolean {
+  const record = soleCoveringVerifiedRecord(ledger, reference);
+  if (!record) return false;
+  const at = reference.lineText.indexOf(reference.claim);
+  if (at < 0) return false;
+  const after = reference.lineText
+    .slice(at + reference.claim.length)
+    .replace(/^\s*(?:(?:✅|⚠️|🟨)\s*\[[^\]\n]*\]\s*)?/u, "")
+    .toLocaleLowerCase("pl");
+  const act = comparableClaim(record.claim).replace(/^art\.?\s*\d+[a-z]*(?:\^\d+)?(?:\s*(?:§|ust\.?|pkt|lit\.?)\s*\S+)*\s*/u, "");
+  if (act.length < 4) return false;
+  const stem = (words: string) => words.split(/\s+/u).filter(Boolean).slice(0, 3).map((word) => word.slice(0, 4)).join(" ");
+  return stem(after) === stem(act);
 }
 
 export class FinalizationGate {
@@ -808,7 +826,7 @@ export class FinalizationGate {
         namedActRecord(ledger, reference) ??
         articleRecord(ledger, reference) ??
         // "art. 118" bez nazwy aktu, gdy w sesji zweryfikowano ten artykuł tylko jednego aktu ("art. 118 KC").
-        (namesOtherAct(reference.lineText) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
+        (namesOtherAct(reference.lineText) && !coveringActNamedAfter(ledger, reference) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));

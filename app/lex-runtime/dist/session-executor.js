@@ -3759,7 +3759,13 @@ export class SafeSessionExecutor {
                             gaps.length ? strengthCorrection(gaps) : "KONTROLA APLIKACJI — siła pisma. Popraw projekt i oddaj go w całości:",
                             ...(schema.length ? [schemaCorrection(schema)] : []),
                             ...(charges.length ? [chargeCorrection(charges)] : [])
-                        ].join("\n\n")),
+                        ]
+                            .join("\n\n")
+                            // The sections the round holds, numbered 1, 2, 3 (each block has its own fixed number).
+                            .replace(/^\d\) (?=\p{Lu})/gmu, (() => {
+                            let section = 0;
+                            return () => `${++section}) `;
+                        })())),
                         accountContinuity: "none",
                         reasoning: "none"
                     });
@@ -3970,10 +3976,13 @@ export class SafeSessionExecutor {
                 ...ledger.all().filter((record) => (record.kind === "statute" || record.kind === "journal") && record.evidence).map((record) => ({ claim: record.claim, evidence: record.evidence })),
                 ...(this.legalFederationTools?.nationalReadings?.() ?? [])
             ];
-            const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)];
+            // The case law read in this turn is a source of quotes too (a ruling's text in context).
+            const caseLawRead = [...officialCaseLawTexts, ...leadCaseLawTexts, ...caseSourceTexts];
+            const otherTexts = [request.query, ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean), ...caseLawRead];
+            const documentTexts = citationSources.flatMap((source) => source.chunks.map((chunk) => chunk.text));
             const checkQuotes = (answer) => quoteCheckOn
                 ? [
-                    ...statuteQuoteFindings(answer, statutesRead),
+                    ...statuteQuoteFindings(answer, statutesRead, [...documentTexts, ...caseLawRead]),
                     ...(citationSources.length ? documentQuoteFindings(processDocumentCitationMarkers(answer, citationSources, { otherTexts }).text) : [])
                 ]
                 : [];

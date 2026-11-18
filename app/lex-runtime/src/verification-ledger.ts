@@ -51,6 +51,9 @@ export type VerificationRecord = {
   temporalFreshnessStatus?: "CURRENT" | "HISTORICAL";
   freshnessCheckedAt?: string;
   currentEli?: string;
+  // Amending acts in force after the consolidated text whose changes of this article the evidence
+  // carries ("w brzmieniu nadanym ustawą … (Dz.U. 2026 poz. 1290)" names a source of this reading).
+  amendedBy?: string[];
   asOf?: string;
   sourceFormat?: "TEXT" | "PDF";
   caseScope?:

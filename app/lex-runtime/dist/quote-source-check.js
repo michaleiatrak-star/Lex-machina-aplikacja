@@ -7,6 +7,7 @@
 import { QUOTE_UNSOURCED_MARKER } from "./document-citations.js";
 const QUOTE = /„([^„”\r\n]{12,1500})”|“([^“”\r\n]{12,1500})”/gu;
 const PROVISION = /\bart\.\s*(\d+[a-z]?(?:\^\d+|[¹²³⁴⁵⁶⁷⁸⁹⁰]+)?)(?:\s*§\s*(\d+[a-z]?))?(?:\s*ust\.\s*(\d+[a-z]?))?(?:\s*pkt\s*(\d+[a-z]?))?/giu;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 export function normalizedWords(value) {
     return value
         .normalize("NFKC")
@@ -17,14 +18,73 @@ export function normalizedWords(value) {
         .replace(/\s+/gu, " ")
         .trim();
 }
-function provisionOf(text) {
+// Codes and acts named after a provision: "art. 17 ust. 3 RODO" and "art. 17 § 1 k.p.k." are two
+// provisions, not one (live case: a GDPR quote was compared with the Code of Criminal Procedure).
+const ACT_ALIASES = [
+    [/^(?:rodo|rozporządzeni\p{L}*\s+2016\/679|ogólnego\s+rozporządzenia\s+o\s+ochronie\s+danych)/iu, "rodo"],
+    [/^(?:k\.?\s*p\.?\s*k\b\.?|kodeksu\s+postępowania\s+karnego|kodeks\s+postępowania\s+karnego)/iu, "kpk"],
+    [/^(?:k\.?\s*p\.?\s*c\b\.?|kodeksu\s+postępowania\s+cywilnego|kodeks\s+postępowania\s+cywilnego)/iu, "kpc"],
+    [/^(?:k\.?\s*p\.?\s*a\b\.?|kodeksu\s+postępowania\s+administracyjnego)/iu, "kpa"],
+    [/^(?:k\.?\s*k\.?\s*w\b\.?|kodeksu\s+karnego\s+wykonawczego)/iu, "kkw"],
+    [/^(?:k\.?\s*k\.?\s*s\b\.?|kodeksu\s+karnego\s+skarbowego)/iu, "kks"],
+    [/^(?:k\.?\s*k\b\.?|kodeksu\s+karnego|kodeks\s+karny)/iu, "kk"],
+    [/^(?:k\.?\s*c\b\.?|kodeksu\s+cywilnego|kodeks\s+cywilny)/iu, "kc"],
+    [/^(?:k\.?\s*p\b\.?|kodeksu\s+pracy|kodeks\s+pracy)/iu, "kp"],
+    [/^(?:k\.?\s*r\.?\s*o\b\.?|kodeksu\s+rodzinnego)/iu, "kro"],
+    [/^(?:k\.?\s*w\b\.?|kodeksu\s+wykroczeń)/iu, "kw"],
+    [/^(?:konstytucji|konstytucja)/iu, "konstytucja"]
+];
+/** The act named right after a provision, as a comparable key; null when none is named. */
+export function actKey(rest) {
+    const text = rest.replace(/^(?:\s*(?:lit\.\s*[a-z]+|zd(?:anie|\.)\s*\S+|in\s+fine|⚠️\s*\[[^\]]*\]|✅\s*\[[^\]]*\]))*[\s,]*/u, "");
+    for (const [pattern, key] of ACT_ALIASES)
+        if (pattern.test(text))
+            return key;
+    // "tej ustawy", "niniejszej ustawy", "ustawy z 4 września 2026 r.": an act other than any code.
+    if (/^(?:tej|niniejszej|tejże|powołanej|zmieniającej|nowelizującej)\s+ustaw/iu.test(text) || /^ustaw\p{L}*\s+(?:z\s|zmieniaj|o\s)/iu.test(text)) {
+        const named = /^ustaw\p{L}*\s+o\s+((?:\p{L}+\s*){1,3})/iu.exec(text);
+        return named ? `ustawa o ${stems(named[1])}` : "inna ustawa";
+    }
+    // "Prawa o adwokaturze", "Prawo budowlane": compared by the stems of the first words.
+    const named = /^(Praw\p{L}*(?:\s+(?:o\s+)?\p{L}+){1,2})/u.exec(text);
+    return named ? stems(named[1]) : null;
+}
+const stems = (words) => words.toLocaleLowerCase("pl").split(/\s+/u).filter(Boolean).map((word) => word.slice(0, 4)).join(" ");
+function provisionOf(text, which = "last") {
     let last = null;
     PROVISION.lastIndex = 0;
-    for (let match = PROVISION.exec(text); match; match = PROVISION.exec(text))
+    for (let match = PROVISION.exec(text); match; match = PROVISION.exec(text)) {
         last = match;
+        if (which === "first")
+            break;
+    }
     if (!last)
         return null;
-    return { article: last[1].toLowerCase(), ...(last[2] ? { paragraph: last[2] } : {}), ...(last[3] ? { section: last[3] } : {}) };
+    const act = actKey(text.slice(last.index + last[0].length, last.index + last[0].length + 80));
+    return {
+        article: last[1].toLowerCase(),
+        ...(last[2] ? { paragraph: last[2] } : {}),
+        ...(last[3] ? { section: last[3] } : {}),
+        ...(last[4] ? { point: last[4] } : {}),
+        ...(act ? { act } : {})
+    };
+}
+// The closest record: the same act, then the same units ("ust. 3" is not "§ 1": another act's shape).
+function matchScore(provision, own) {
+    if (!own)
+        return 0;
+    let score = 0;
+    if (provision.act && own.act === provision.act)
+        score += 8;
+    if (provision.section && own.section === provision.section)
+        score += 4;
+    if (provision.paragraph && own.paragraph === provision.paragraph)
+        score += 4;
+    if (provision.point && own.point === provision.point)
+        score += 1;
+    if ((provision.section && own.paragraph && !own.section) || (provision.paragraph && own.section && !own.paragraph))
+        score -= 4;
+    return score;
 }
 function sameProvision(claim, provision) {
     const own = provisionOf(claim);
@@ -34,11 +94,23 @@ function sameProvision(claim, provision) {
         return false;
     if (provision.section && own.section && own.section !== provision.section)
         return false;
+    if (provision.point && own.point && own.point !== provision.point)
+        return false;
+    // Two different acts named: not the same provision. An act named only on one side is unknown.
+    if (provision.act && own.act && provision.act !== own.act)
+        return false;
+    // "art. 4 ust. 1 tej ustawy" names an act that is no code: never a code's article of that number.
+    if (provision.act === "inna ustawa" && own.act && ACT_ALIASES.some(([, key]) => key === own.act))
+        return false;
     return true;
 }
 /** Quotations of provisions that are not the verified wording of that provision. */
-export function statuteQuoteFindings(answer, statutes) {
+export function statuteQuoteFindings(answer, statutes, 
+// Texts a quote may come from besides the provisions: the case documents and the case law read
+// in this turn. A quote found there is that source's words, not a misquoted provision.
+otherSources = []) {
     const findings = [];
+    const others = otherSources.map(normalizedWords);
     QUOTE.lastIndex = 0;
     for (let match = QUOTE.exec(answer); match; match = QUOTE.exec(answer)) {
         const quote = (match[1] ?? match[2] ?? "").trim();
@@ -50,19 +122,30 @@ export function statuteQuoteFindings(answer, statutes) {
         if (/^[\s*_)]*\[\[LEXDOC/u.test(answer.slice(end, end + 40)))
             continue;
         // The provision right after the quote ("…”, art. 41 ust. 2") or the last one before it in the sentence.
-        const after = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*\(?\s*(art\.[^\n.;]{0,60})/u.exec(answer.slice(end, end + 120))?.[1];
+        const after = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*\(?\s*(art\.[^\n;)]{0,80})/u.exec(answer.slice(end, end + 120))?.[1];
         // The sentence before the quote: a full stop followed by a capital ends a sentence ("art. 483" does not).
         const windowStart = Math.max(answer.lastIndexOf("\n", match.index) + 1, match.index - 240, 0);
         const before = answer.slice(windowStart, match.index);
         const ends = [...before.matchAll(/[.!?]\s+(?=[\p{Lu}„])(?<!\b(?:art|ust|pkt|lit|nr|poz|Dz|U|r|zm|t\.j|k\.c|k\.p)\.\s+)/gu)];
         const sentenceStart = windowStart + (ends.length ? ends.at(-1).index + ends.at(-1)[0].length : 0);
-        const provision = (after ? provisionOf(after) : null) ?? provisionOf(answer.slice(sentenceStart, match.index));
+        const provision = (after ? provisionOf(after, "first") : null) ?? provisionOf(answer.slice(sentenceStart, match.index));
         if (!provision)
             continue;
-        const record = statutes.find((item) => item.evidence && sameProvision(item.claim, provision));
+        const candidates = statutes.filter((item) => item.evidence && sameProvision(item.claim, provision));
+        // The record naming the same act first, then the most specific one.
+        const record = candidates
+            .map((item) => ({ item, score: matchScore(provision, provisionOf(item.claim)) }))
+            .sort((a, b) => b.score - a.score)[0]?.item;
         if (!record?.evidence)
             continue;
-        if (normalizedWords(record.evidence).includes(normalizedWords(quote)))
+        const words = normalizedWords(quote);
+        if (normalizedWords(record.evidence).includes(words))
+            continue;
+        // The quote is the words of another source the model read (a letter in the file, a ruling).
+        if (others.some((other) => other.includes(words)))
+            continue;
+        // The same quote elsewhere in the answer with its case document's marker.
+        if (new RegExp(`[„“]${escapeRegExp(quote)}[”"]\\s*[*_]*\\s*\\[\\[LEXDOC`, "u").test(answer))
             continue;
         findings.push({ kind: "STATUTE", quote, claim: record.claim, wording: record.evidence.replace(/\s+/gu, " ").trim().slice(0, 900) });
     }

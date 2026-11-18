@@ -77,14 +77,19 @@ function uniqueActAlias(reference) {
     const after = found ? reference.lineText.slice(found.index + found[0].length) : "";
     // Up to the next article and the end of its sentence or brackets: "(art. 8 ust. 1 Prawa o
     // adwokaturze). Te granice wyznaczają … przepisy RODO" is not RODO.
-    const own = after.split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].split(/\)|;|\.\s+(?=\p{Lu})/u)[0].slice(0, 160);
+    // Status markers are no part of the act's name ("Prawa o adwokaturze ✅ [VER: …]" became a claim).
+    const own = after
+        .replace(/\s*(?:✅|⚠️|🟨)\s*\[[^\]\n]*\]/gu, "")
+        .split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]
+        .split(/\)|;|\.\s+(?=\p{Lu})/u)[0]
+        .slice(0, 160);
     const eu = euAct(own);
     if (eu)
         return eu.celex;
     // The act named in words right after the article ("art. 8 ust. 1 Prawa o adwokaturze", "art. 11
     // ustawy o zwalczaniu nieuczciwej konkurencji") goes by its title: verify_legal_reference resolves
     // a title in the act index and denies an unknown or ambiguous one (a live case skipped these).
-    const named = NAMED_ACT_LEAD.exec(own)?.[1]?.split(/,|\s(?:i|oraz|lub|albo|w\s+zw\.?|w\s+związku|w\s+brzmieniu|któr\p{L}+|stanowi\p{L}*|nakład\p{L}*|przewiduj\p{L}*)(?![\p{L}])/u)[0]?.replace(/[\s.:]+$/u, "").trim();
+    const named = NAMED_ACT_LEAD.exec(own)?.[1]?.split(/,|\s(?:i|oraz|lub|albo|w\s+zw\.?|w\s+związku|w\s+brzmieniu|któr\p{L}+|stanowi\p{L}*|nakład\p{L}*|przewiduj\p{L}*|obowiązuj\p{L}*|stanowi\p{L}*|daje|dotycz\p{L}*|wymaga\p{L}*)(?![\p{L}])/u)[0]?.replace(/[\s.:]+$/u, "").trim();
     // "ustawy z dnia 26 maja 1982 r. – Prawo o adwokaturze" is the act "Prawo o adwokaturze";
     // "ustawy z dnia 16 kwietnia 1993 r. o zwalczaniu …" is "ustawy o zwalczaniu …".
     const title = named
@@ -99,8 +104,11 @@ function uniqueActAlias(reference) {
     // is taken only in an enumeration ("art. 5 i art. 6 KC") or when it stands before the article.
     const enumeration = /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own);
     const before = found ? reference.lineText.slice(0, found.index) : "";
+    // The act right after the article ("art. 95n KPK"), not one the sentence names later as the
+    // act it refers to ("art. 95n odsyła do kpk": a live case verified art. 95n as KPK).
+    const leading = /^[\s,]*(?:(?:✅|⚠️|🟨)\s*\[[^\]\n]*\]\s*)?(\S+)/u.exec(compactActAbbreviations(own))?.[1] ?? "";
     if (!enumeration &&
-        aliases(compactActAbbreviations(own)).length === 0 &&
+        aliases(leading).length === 0 &&
         aliases(compactActAbbreviations(before)).length === 0)
         return null;
     const lineAliases = aliases(compactActAbbreviations(reference.lineText));

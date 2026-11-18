@@ -705,8 +705,9 @@ function publicToolResult(
       : null,
     ...(freshness?.articleChanges?.length && record.status === "VERIFIED"
       ? {
-          amendmentInstruction:
-            "The consolidated text predates amendments in force that change this article (freshness.articleChanges, from the amending acts' own text). The evidence is the wording after them. Cite the provision 'w brzmieniu nadanym ustawą z … (Dz.U. … poz. …)' naming that amendment, quote only the amended wording, and apply its transitionalProvisions to matters begun before the change."
+          amendmentInstruction: (record.evidence ?? "").includes("[Zmiany artykułu wprowadzone po tekście jednolitym")
+            ? "The consolidated text predates amendments in force that change this article (freshness.articleChanges, from the amending acts' own text). The evidence is the consolidated wording followed by the amending points, which the application could not apply word for word: the article now reads as those points say. Quote a changed unit only from the point's quoted new wording, never the consolidated wording of that unit. Cite the provision 'w brzmieniu nadanym ustawą z … (Dz.U. … poz. …)' naming that amendment, and apply its transitionalProvisions to matters begun before the change."
+            : "The consolidated text predates amendments in force that change this article (freshness.articleChanges, from the amending acts' own text). The evidence is the wording after them. Cite the provision 'w brzmieniu nadanym ustawą z … (Dz.U. … poz. …)' naming that amendment, quote only the amended wording, and apply its transitionalProvisions to matters begun before the change."
         }
       : {}),
     sourceUrl: record.sourceUrl ?? null,
@@ -1449,7 +1450,8 @@ export class LegalVerificationToolRuntime {
                         currentEli:
                           freshness.currentEli
                       }
-                    : {})
+                    : {}),
+                  ...(freshness.articleChanges?.length ? { amendedBy: [...new Set(freshness.articleChanges.map((change) => change.eli))] } : {})
                 }
               : {}),
             ...(asOf ? { asOf } : {}),
@@ -2476,7 +2478,7 @@ export class LegalVerificationToolRuntime {
                 ...(freshness.articleChanges?.length ? { articleChanges: articleChangeList(freshness) } : {}),
                 ...(freshness.transitionalProvisions?.length
                   ? {
-                      // From the amending act itself (normalized to lower case): the rule for
+                      // From the amending act itself: the rule for
                       // matters begun before the change, to apply instead of a memory of it.
                       transitionalProvisions: freshness.transitionalProvisions
                     }

@@ -177,10 +177,32 @@ export function amendmentText(fetcher, pdfTextExtractor, eli) {
 // Przepisy przejściowe noweli (czynności i sprawy sprzed jej wejścia w życie): jednostki
 // "Art. M." poza częściami zmieniającymi ustawy, z formułą intertemporalną.
 const TRANSITIONAL = /dotychczasow|wszczęt\p{L}*\s+i\s+niezakończon|stosuje\s+się\s+przepisy|zachowuj\p{L}*\s+moc|przed\s+dniem\s+wejścia\s+w\s+życie\s+niniejszej\s+ustawy/u;
+// The amending act's own units ("Art. 4. 1. Do postępowań …"), split outside quotes: an article
+// quoted as new wording of the amended act ("„Art. 4c. …”") is part of the amending point, not a
+// unit of the amending act (live case: two added articles were given as transitional provisions).
+function ownUnits(text) {
+    const units = [];
+    let depth = 0;
+    let start = 0;
+    for (let at = 0; at < text.length; at++) {
+        const char = text[at];
+        if (char === "„" || char === "»")
+            depth++;
+        else if ((char === "”" || char === "«") && depth > 0)
+            depth--;
+        else if (depth === 0 && at > start && /\s/u.test(text[at - 1]) && /^art\.\s*\d+[a-ząćęłńóśźż]*\.\s/iu.test(text.slice(at, at + 14))) {
+            units.push(text.slice(start, at));
+            start = at;
+        }
+    }
+    units.push(text.slice(start));
+    return units;
+}
+/** Transitional provisions of an amending act, in its own wording (letter case kept). */
 export function transitionalProvisions(body, limit = 3) {
-    return body
-        .split(/(?=\bart\.\s*\d+[a-ząćęłńóśźż]*\.\s)/iu)
-        .filter((unit) => /^art\./iu.test(unit) && !/^art\.\s*\d+[a-z]*\.\s+w\s+ustawie\b/iu.test(unit) && TRANSITIONAL.test(unit))
+    return ownUnits(body)
+        .map((unit) => unit.trim())
+        .filter((unit) => /^art\./iu.test(unit) && !/^art\.\s*\d+[a-z]*\.\s+w\s+ustawie\b/iu.test(unit) && TRANSITIONAL.test(unit.toLocaleLowerCase("pl")))
         .slice(0, limit)
         .map((unit) => unit.replace(/\s+/gu, " ").trim().slice(0, 900));
 }
@@ -648,7 +670,8 @@ export class TemporalSourceFreshnessChecker {
     // Transitional provisions of the amendments that touch the article, for the model to apply.
     async transitionalOf(elis) {
         const found = await Promise.all([...new Set(elis)].slice(0, 4).map(async (eli) => {
-            const body = await amendmentBody(this.fetcher, this.pdfTextExtractor, eli);
+            // The cased text: the provisions are given to be quoted.
+            const body = await amendmentText(this.fetcher, this.pdfTextExtractor, eli);
             return body ? transitionalProvisions(body).map((text) => ({ eli, text })) : [];
         }));
         return found.flat().slice(0, 6);
