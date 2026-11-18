@@ -439,6 +439,15 @@ function phrase(pattern: RegExp) {
 // "§ 4" of a contract or rules, "załącznik nr 3", "dowód nr 2", an amount ("60 000 zł") and a
 // date ("3 grudnia 2024 r."). Linked when exactly one case document has it; a statute's "§"
 // and values no document holds stay as they are.
+// A pleading's title: one bold line written mostly in capitals ("**ODWOŁANIE (z ostrożności — ZAŻALENIE) OD …**").
+function capitalTitle(line: string): boolean {
+  const bold = /^\s*\*\*(.{12,})\*\*\s*$/u.exec(line)?.[1];
+  if (!bold) return false;
+  const letters = bold.replace(/[^\p{L}]/gu, "");
+  const upper = letters.replace(/[^\p{Lu}]/gu, "").length;
+  return letters.length >= 12 && upper / letters.length >= 0.8;
+}
+
 function linkDocumentAnchors(text: string, entries: ChunkEntry[]): { text: string; list: Anchor[] } {
   const list: Anchor[] = [];
   if (!entries.length || /^\s*[{[]/u.test(text)) return { text, list };
@@ -506,7 +515,7 @@ function linkDocumentAnchors(text: string, entries: ChunkEntry[]): { text: strin
     if (/^\s*#/u.test(line)) continue;
     // A pleading's title in capitals ("**ODWOŁANIE OD POSTANOWIENIA Z 14 PAŹDZIERNIKA 2026 R. …**"): no link inside.
     const fullLine = text.slice(lineStart, (text.indexOf("\n", end) + 1 || text.length + 1) - 1);
-    if (/^\s*\*\*[^\p{Ll}]{12,}\*\*\s*$/u.test(fullLine)) continue;
+    if (capitalTitle(fullLine)) continue;
     // Sentence bounds: a full stop not after an abbreviation ("r.", "ust.", "art."), a semicolon, a line end.
     const STOP = /(?<!(?:\br|\bust|\bart|\bpkt|\bnr|\bpoz|\bsygn|\bzm|\btj|\bm\.in))[.!?;](?=\s)|\n/gu;
     let sentenceStart = lineStart;

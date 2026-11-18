@@ -1128,6 +1128,20 @@ ledgerMarkers = new Set(report.findings.flatMap((finding) => (finding.record?.st
     return lines.join("\n");
 }
 export const UNCONFIRMED_CASE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: sygnatury nie potwierdzono w bazach orzeczeń]";
+export const OUTSIDE_FILES_PROCEEDING_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: sprawa spoza akt]";
+// A first-instance proceeding named as a fact ("13.11.2026 r. w V P 3/26 świadek zeznał …"), not as a
+// ruling relied on: no case-law database confirms it, the files do not hold it (a live case labelled
+// a party's other case "not confirmed in case-law databases").
+const FIRST_INSTANCE_REPERTORY = /^(?:sygn\.?\s*(?:akt\s*)?)?[IVXLC]{1,6}\s+(?:P|C|K|W|U|Ns|Nc|GC|GNc|RC|Kp|Ko|Nsm)\s+\d+\/\d{2,4}$/u;
+const RULING_WORDS = /(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*|orzecz\p{L}*|teza|tezie|sygn\.)/iu;
+function caseMarkerFor(reference) {
+    const claim = reference.claim.trim();
+    if (!FIRST_INSTANCE_REPERTORY.test(claim))
+        return UNCONFIRMED_CASE_MARKER_TEXT;
+    const at = reference.lineText.indexOf(claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, ""));
+    const before = at >= 0 ? reference.lineText.slice(Math.max(0, at - 60), at) : "";
+    return RULING_WORDS.test(before) ? UNCONFIRMED_CASE_MARKER_TEXT : OUTSIDE_FILES_PROCEEDING_MARKER_TEXT;
+}
 export const UNCONFIRMED_CASE_EVIDENCE_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: brak potwierdzenia w tekście orzeczenia]";
 export const UNSUPPORTED_CASE_PROPOSITION_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: teza nie wynika z tekstu orzeczenia]";
 const BLOCKING_FINDINGS = new Set([
@@ -1180,7 +1194,7 @@ export function softenRemainingBlockers(text, report) {
         const claim = finding.reference.span ?? finding.reference.claim;
         byLine.set(line, [
             ...(byLine.get(line) ?? []),
-            { claim, marker: finding.reference.kind === "case" ? UNCONFIRMED_CASE_MARKER_TEXT : UNVERIFIED_MARKER_TEXT }
+            { claim, marker: finding.reference.kind === "case" ? caseMarkerFor(finding.reference) : UNVERIFIED_MARKER_TEXT }
         ]);
         marked.add(finding.reference.claim);
     }
@@ -1194,6 +1208,26 @@ export function softenRemainingBlockers(text, report) {
  * One VER marker per provision where two stand next to each other ("✅ [VER: art. 460 KPK,
  * 2026-11-15] ✅ [VER: art. 460 KPK, 2026-11-15, STAN NA 2026-10-14]", a live case): the fuller one.
  */
+/**
+ * A marker of a provision verified in this turn, written with the same source link and an older
+ * date (a pleading carried over from an earlier turn or day): the same reading, so the date is
+ * brought up to this turn's instead of the marker being dropped and the provision marked ⚠️.
+ * Only a link the turn's ledger holds is touched; any other marker stays for the gate.
+ */
+export function refreshVerMarkerDates(text, ledger) {
+    const current = new Map();
+    for (const record of ledger.all()) {
+        if (record.status !== "VERIFIED")
+            continue;
+        const marker = expectedVerificationMarker(record);
+        const link = marker ? /^✅ \[VER: ([^,\]\n]+),/u.exec(marker)?.[1]?.trim() : undefined;
+        if (marker && link)
+            current.set(link, marker);
+    }
+    if (current.size === 0)
+        return text;
+    return text.replace(/✅ \[VER: ([^,\]\n]+), (\d{4}-\d{2}-\d{2})\]/gu, (match, link) => current.get(link.trim()) ?? match);
+}
 export function collapseRepeatedVerMarkers(text) {
     const pair = /✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\][ \t]*✅ \[VER: ([^,\]\n]+)((?:, [^\]\n]*)?)\]/gu;
     let previous = "";
