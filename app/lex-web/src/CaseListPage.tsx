@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CASE_ROLE_LABEL, getCasesOverview, type CaseListItem, type CaseOverviewEntry } from "./api.js";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  ApiError,
+  CASE_ROLE_LABEL,
+  getCasesOverview,
+  grantCaseAccess,
+  listCaseAccessCandidates,
+  type AuthenticatedUser,
+  type CaseListItem,
+  type CaseOverviewEntry,
+  type CaseRole
+} from "./api.js";
 import { caseListView, visibleSelection, type CaseListFilters, type CaseListPeriod, type CaseListScope, type CaseListSortKey } from "./case-list-view.js";
 import { currentLocale, t, N_ } from "./i18n";
 import { InlineEdit } from "./InlineEdit";
@@ -18,6 +28,159 @@ const PERIODS: Array<[CaseListPeriod, string]> = [
   ["365", N_("Ostatni rok")],
   ["CUSTOM", N_("Własny zakres")]
 ];
+
+type GrantableRole = Exclude<CaseRole, "OWNER">;
+const GRANTABLE: Array<[GrantableRole, string]> = [
+  ["EDITOR", N_("Edytor: dokumenty i analiza")],
+  ["ANALYST", N_("Analityk: odczyt i analiza")],
+  ["VIEWER", N_("Odczyt")]
+];
+
+function grantErrorText(failure: unknown): string {
+  if (failure instanceof ApiError) {
+    if (failure.code === "TARGET_CRYPTO_NOT_READY") return t("użytkownik nie ma jeszcze kluczy (musi zalogować się co najmniej raz)");
+    if (failure.code === "TARGET_USER_NOT_FOUND") return t("użytkownik nie istnieje albo jest wyłączony");
+    if (failure.code === "CASE_ACCESS_DENIED") return t("nie jesteś właścicielem");
+    return failure.code;
+  }
+  return failure instanceof Error ? failure.message : String(failure);
+}
+
+/**
+ * Assigning the selected cases to one person in a window: the person is picked from the users
+ * who can still be added to at least one of the cases, with the role and re-identification.
+ */
+function AssignCasesDialog({ cases, onClose, onDone }: { cases: CaseListItem[]; onClose: () => void; onDone: (message: string) => void }) {
+  const titleId = useId();
+  const owned = cases.filter((item) => item.role === "OWNER");
+  const [users, setUsers] = useState<AuthenticatedUser[] | null>(null);
+  const [userId, setUserId] = useState("");
+  const [role, setRole] = useState<GrantableRole>("EDITOR");
+  const [canReidentify, setCanReidentify] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [candidatesByCase, setCandidatesByCase] = useState<Map<string, Set<string>>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    Promise.all(owned.map((item) => listCaseAccessCandidates(item.caseId).then((result) => [item.caseId, result.users] as const, () => [item.caseId, []] as const)))
+      .then((results) => {
+        if (!alive) return;
+        const all = new Map<string, AuthenticatedUser>();
+        const byCase = new Map<string, Set<string>>();
+        for (const [caseId, list] of results) {
+          byCase.set(caseId, new Set(list.map((user) => user.userId)));
+          for (const user of list) all.set(user.userId, user);
+        }
+        const sorted = [...all.values()].sort((a, b) => a.displayName.localeCompare(b.displayName, "pl"));
+        setUsers(sorted);
+        setCandidatesByCase(byCase);
+        setUserId(sorted[0]?.userId ?? "");
+      })
+      .catch((failure) => alive && setError(grantErrorText(failure)));
+    return () => {
+      alive = false;
+    };
+    // The selection is fixed while the window is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  const targets = owned.filter((item) => candidatesByCase.get(item.caseId)?.has(userId));
+  const skippedRole = cases.length - owned.length;
+  const already = owned.length - targets.length;
+
+  const assign = async () => {
+    if (!userId || !targets.length) return;
+    setBusy(true);
+    setError("");
+    const failed: string[] = [];
+    let done = 0;
+    for (const item of targets) {
+      try {
+        await grantCaseAccess(item.caseId, { userId, role, canReidentify });
+        done += 1;
+      } catch (failure) {
+        failed.push(`${item.displayName || t("Sprawa bez nazwy")}: ${grantErrorText(failure)}`);
+      }
+    }
+    setBusy(false);
+    const person = users?.find((user) => user.userId === userId);
+    const summary = t("Nadano dostęp ({person}) w sprawach: {count}.", { person: person ? person.displayName : "", count: String(done) });
+    if (failed.length) setError(`${summary} ${t("Nie udało się:")} ${failed.join("; ")}`);
+    else onDone(summary);
+  };
+
+  return (
+    <div
+      className="privacy-preview-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <section className="chat-card matter-section-dialog">
+        <div className="matter-section-dialog-head">
+          <div>
+            <p className="eyebrow">{t("Zaznaczone sprawy: {count}", { count: String(cases.length) })}</p>
+            <h2 id={titleId}>{t("Przydziel sprawy użytkownikowi")}</h2>
+          </div>
+          <button type="button" className="chat-secondary-action" disabled={busy} onClick={onClose}>
+            {t("Zamknij")}
+          </button>
+        </div>
+        {users === null && !error ? <p>{t("ładowanie…")}</p> : null}
+        {users && users.length === 0 ? <p className="field-help">{t("Wszyscy aktywni użytkownicy mają już dostęp do zaznaczonych spraw albo nie jesteś ich właścicielem.")}</p> : null}
+        {users && users.length > 0 ? (
+          <div className="case-assign-form">
+            <label>
+              <span>{t("Użytkownik")}</span>
+              <select value={userId} disabled={busy} onChange={(event) => setUserId(event.target.value)}>
+                {users.map((user) => (
+                  <option key={user.userId} value={user.userId}>
+                    {user.displayName} · @{user.loginName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t("Rola")}</span>
+              <select value={role} disabled={busy} onChange={(event) => setRole(event.target.value as GrantableRole)}>
+                {GRANTABLE.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {t(label)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="case-reidentify-toggle">
+              <input type="checkbox" checked={canReidentify} disabled={busy} onChange={(event) => setCanReidentify(event.target.checked)} />
+              {t("Może reidentyfikować")}
+            </label>
+            <p className="field-help">
+              {t("Dostęp zostanie nadany w sprawach: {count}.", { count: String(targets.length) })}
+              {already > 0 ? ` ${t("Pominięte, bo osoba już ma dostęp: {count}.", { count: String(already) })}` : ""}
+              {skippedRole > 0 ? ` ${t("Pominięte, bo nie jesteś właścicielem: {count}.", { count: String(skippedRole) })}` : ""}
+            </p>
+            <div className="case-assign-actions">
+              <button type="button" className="primary-button" disabled={busy || !targets.length} onClick={() => void assign()}>
+                {busy ? t("Przydzielanie…") : t("Przydziel ({count})", { count: String(targets.length) })}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {error ? <p className="chat-inline-error">{error}</p> : null}
+      </section>
+    </div>
+  );
+}
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(currentLocale(), { day: "numeric", month: "short", year: "numeric" });
 
@@ -46,6 +209,8 @@ export function CaseListPage({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [assigning, setAssigning] = useState(false);
   const shown = useMemo(() => caseListView(cases, filters), [cases, filters]);
   // Signature and number of files of the shown cases (Patron's columns), read once per case.
   const [overview, setOverview] = useState<Record<string, CaseOverviewEntry>>({});
@@ -167,6 +332,18 @@ export function CaseListPage({
                 {t("Archiwizuj")}
               </button>
             )}
+            <button
+              type="button"
+              className="chat-secondary-action"
+              disabled={busy || !chosen.some((item) => item.role === "OWNER")}
+              title={chosen.some((item) => item.role === "OWNER") ? undefined : t("Przydziela właściciel sprawy.")}
+              onClick={() => {
+                setNotice("");
+                setAssigning(true);
+              }}
+            >
+              {t("Przydziel użytkownikowi…")}
+            </button>
             <button type="button" className="chat-link-button" onClick={() => setSelected(new Set())}>
               {t("Odznacz")}
             </button>
@@ -174,6 +351,18 @@ export function CaseListPage({
         ) : null}
       </div>
       {error ? <p className="chat-inline-error">{error}</p> : null}
+      {notice ? <p className="alert" role="status">{notice}</p> : null}
+      {assigning ? (
+        <AssignCasesDialog
+          cases={chosen}
+          onClose={() => setAssigning(false)}
+          onDone={(message) => {
+            setAssigning(false);
+            setNotice(message);
+            setSelected(new Set());
+          }}
+        />
+      ) : null}
 
       {shown.length === 0 ? (
         <p>{cases.some((item) => item.caseKind === "MATTER") ? t("Żadna sprawa nie pasuje do filtrów.") : t("Brak spraw.")}</p>

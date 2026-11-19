@@ -5077,6 +5077,7 @@ mark.restored {
 
 .case-list-bulk {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -5343,4 +5344,35 @@ mark.restored {
 .usage-table td:nth-child(n + 3),
 .usage-table th:nth-child(n + 3) {
   text-align: right;
+}
+
+/* Sprawy: assigning the selected cases to one person, in a window. */
+.case-assign-form {
+  display: grid;
+  gap: 10px;
+}
+
+.case-assign-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.case-assign-form .case-reidentify-toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.case-assign-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.matter-section-dialog.case-collaboration-panel {
+  width: min(820px, calc(100vw - 32px));
+  margin: 32px auto;
+}
+
+.case-collaboration-row {
+  margin-top: 12px;
 }

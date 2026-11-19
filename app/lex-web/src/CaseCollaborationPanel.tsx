@@ -4,6 +4,7 @@ import { groupErrorText, groupShareSummary } from "./UserGroupsPanel.js";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
+  useId,
   useState
 } from "react";
 import {
@@ -269,6 +270,19 @@ export function CaseCollaborationPanel({
 
   const canManage =
     caseRole === "OWNER";
+  // The team is one compact row (name, number of people, "Pokaż", "+ Dodaj"); the list and the
+  // add form open in a window above the page, like the other case-card sections.
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+  useEffect(() => setOpen(false), [caseId]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy]);
 
   async function refresh():
     Promise<void> {
@@ -464,21 +478,47 @@ export function CaseCollaborationPanel({
     return null;
   }
 
+  const others = access.filter((entry) => entry.role !== "OWNER").length;
   return (
-    <section className="case-collaboration-panel">
+    <div className="chat-card matter-compact-row case-collaboration-row">
+      <span className="matter-compact-heading" title={t("Uczestnicy i dostęp do akt")}>
+        <strong>{t("Zespół sprawy")}</strong>
+        <span className={others ? "matter-compact-count has-entries" : "matter-compact-count"}>
+          {others ? t("osoby z dostępem: {count}", { count: String(others) }) : t("tylko właściciel")}
+        </span>
+      </span>
+      <span className="matter-compact-actions">
+        <button type="button" className="chat-secondary-action" onClick={() => setOpen(true)}>
+          {t("Pokaż")}
+        </button>
+        <button type="button" className="chat-secondary-action" title={t("Przydziel sprawę użytkownikowi")} onClick={() => setOpen(true)}>
+          {t("+ Dodaj")}
+        </button>
+      </span>
+      {open ? (
+        <div
+          className="privacy-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={(event) => {
+            if (event.target === event.currentTarget && !busy) setOpen(false);
+          }}
+        >
+    <section className="chat-card matter-section-dialog case-collaboration-panel">
       <div className="case-collaboration-head">
         <div>
           <p className="eyebrow">
             {t("Zespół sprawy")}
           </p>
-          <h3>
+          <h3 id={titleId}>
             {t("Uczestnicy i dostęp do akt")}
             <InfoTip>{t("Każdy uczestnik ma własną kopię klucza sprawy. Odebranie dostępu zmienia klucz i odcina osobę od zaszyfrowanych dokumentów.")}</InfoTip>
           </h3>
         </div>
-        <span className="security-pill">
-          {t("Dostępem zarządza właściciel")}
-        </span>
+        <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setOpen(false)}>
+          {t("Zamknij")}
+        </button>
       </div>
 
       <div className="case-collaboration-add">
@@ -771,5 +811,8 @@ export function CaseCollaborationPanel({
         )}
       </div>
     </section>
+        </div>
+      ) : null}
+    </div>
   );
 }

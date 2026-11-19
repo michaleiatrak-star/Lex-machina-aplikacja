@@ -4182,7 +4182,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       ids.map(async (caseId) => {
         try {
           const memory = await withCaseMemory(res, caseId, "ANALYZE", (key) => options.caseMemoryStore!.getCaseMemory(key));
-          const files = options.caseFileStore?.listUploads ? (await options.caseFileStore.listUploads(caseId)).length : null;
+          // The case's files where the case keeps them: the encrypted store (with the case's data key,
+          // read like the case's own file list) or the legacy plain store (a list showed 0 for every case).
+          let files: number | null = null;
+          if (options.secureCaseUploadStore) {
+            const context = responseAuthContext(res);
+            const caseView = options.caseAccessService!.openCase(context, caseId);
+            const service = options.caseAccessService!;
+            const list = (caseDataKey: Buffer) => options.secureCaseUploadStore!.listUploads({ caseId, caseDataKey, keyVersion: caseView.keyVersion });
+            files = (service.withCaseDataKeyForRead ? await service.withCaseDataKeyForRead(context, caseId, list) : await service.withCaseDataKey(context, caseId, "READ", list)).length;
+          } else if (options.caseFileStore?.listUploads) {
+            files = (await options.caseFileStore.listUploads(caseId)).length;
+          }
           return { caseId, signature: memory.court?.sygnatura ?? null, court: memory.court?.nazwa ?? null, files };
         } catch {
           return { caseId, signature: null, court: null, files: null };

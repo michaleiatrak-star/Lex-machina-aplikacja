@@ -2,7 +2,7 @@ import { currentLocale, t, N_ } from "./i18n";
 import { InfoTip } from "./InfoTip";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleImportDialog } from "./GoogleIntegrationPanel.js";
 import { MicrosoftImportDialog, useMicrosoftConnected } from "./MicrosoftIntegration.js";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   correctDocument,
@@ -981,6 +981,66 @@ export function WorkspaceManager({
   const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item) && !decided(item));
   // Not processed yet and not chosen in the queue: its way can still be set.
   const isPending = (item: WorkspaceItem) => canRunPrivacyPipeline(item) && !processingFor(item) && !decided(item);
+
+  // Selection of shown files (as in the case list): hidden files drop out of it; actions apply to the selection.
+  // The file whose actions are open in a window ("⋯" in its row).
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!actionsFor) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionsFor(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [actionsFor]);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState<DocumentProcessingMode | "">("");
+  useEffect(() => {
+    const shown = new Set(visibleItems.map((item) => item.itemId));
+    setSelectedFiles((current) => {
+      const kept = [...current].filter((id) => shown.has(id));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [visibleItems]);
+  const toggleFile = (itemId: string, on: boolean) =>
+    setSelectedFiles((current) => {
+      const next = new Set(current);
+      if (on) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+  const chosenFiles = visibleItems.filter((item) => selectedFiles.has(item.itemId));
+  const allFilesSelected = visibleItems.length > 0 && chosenFiles.length === visibleItems.length;
+  const allFilesBox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (allFilesBox.current) allFilesBox.current.indeterminate = chosenFiles.length > 0 && !allFilesSelected;
+  }, [chosenFiles.length, allFilesSelected]);
+  const chosenPending = chosenFiles.filter(isPending);
+  async function processChosen(): Promise<void> {
+    if (!chosenPending.length) return;
+    const modes = new Map(chosenPending.map((item) => [item.itemId, bulkMode || modeFor(item)]));
+    if ([...modes.values()].some(processingModeKeepsClearText) &&
+      !window.confirm(t("Zaznaczone pliki ({count}) zostaną przetworzone bez anonimizacji. Wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?", { count: chosenPending.length }))) {
+      return;
+    }
+    if (bulkMode) setModeByItem((current) => ({ ...current, ...Object.fromEntries(chosenPending.map((item) => [item.itemId, bulkMode])) }));
+    await processAll(chosenPending, true);
+  }
+  async function moveChosen(folderId: string | null): Promise<void> {
+    const items = chosenFiles;
+    await run(async () => {
+      for (const item of items) await moveWorkspaceItem(caseId, item.itemId, folderId);
+    });
+  }
+  async function deleteChosen(): Promise<void> {
+    const items = chosenFiles;
+    if (!items.length || !window.confirm(t("Usunąć zaznaczone pliki ({count})?", { count: items.length }))) return;
+    await run(async () => {
+      for (const item of items) await deleteWorkspaceItem(caseId, item.itemId);
+      if (preview && items.some((item) => item.itemId === preview.item.itemId)) setPreview(null);
+      setSelectedFiles(new Set());
+    });
+  }
   // The other pending files of the case of the same category whose choice differs from this file's.
   function othersLike(item: WorkspaceItem): WorkspaceItem[] {
     const category = caseFileCategory(item);
@@ -1505,6 +1565,69 @@ export function WorkspaceManager({
             </span>
           </div>
 
+          {visibleItems.length > 0 ? (
+            <div className="workspace-bulk">
+              <label className="workspace-select-all">
+                <input
+                  ref={allFilesBox}
+                  type="checkbox"
+                  checked={allFilesSelected}
+                  onChange={(event) => setSelectedFiles(event.target.checked ? new Set(visibleItems.map((item) => item.itemId)) : new Set())}
+                />
+                {t("Zaznacz wszystkie widoczne")}
+              </label>
+              {chosenFiles.length ? (
+                <div className="case-list-bulk" role="group" aria-label={t("Działania na zaznaczonych plikach")}>
+                  <small>{t("Zaznaczone: {count}", { count: String(chosenFiles.length) })}</small>
+                  {canWrite && chosenPending.length ? (
+                    <>
+                      <select
+                        aria-label={t("Sposób przetwarzania zaznaczonych")}
+                        value={bulkMode}
+                        disabled={busy}
+                        onChange={(event) => setBulkMode(event.target.value as DocumentProcessingMode | "")}
+                      >
+                        <option value="">{t("Sposób: jak przy pliku")}</option>
+                        {DOCUMENT_PROCESSING_MODES.map((entry) => (
+                          <option key={entry.mode} value={entry.mode} title={entry.title}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void processChosen()}>
+                        {t("Przetwórz ({count})", { count: chosenPending.length })}
+                      </button>
+                    </>
+                  ) : null}
+                  {canWrite ? (
+                    <select
+                      aria-label={t("Przenieś zaznaczone do folderu")}
+                      value="__"
+                      disabled={busy}
+                      onChange={(event) => void moveChosen(event.target.value === "__root" ? null : event.target.value)}
+                    >
+                      <option value="__" disabled>{t("Przenieś do…")}</option>
+                      <option value="__root">{rootFolderName}</option>
+                      {folders.map((folder) => (
+                        <option key={folder.folderId} value={folder.folderId}>
+                          {folderPath(folder, folders)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {canWrite ? (
+                    <button type="button" className="chat-secondary-action workspace-delete" disabled={busy} onClick={() => void deleteChosen()}>
+                      {t("Usuń zaznaczone")}
+                    </button>
+                  ) : null}
+                  <button type="button" className="chat-link-button" onClick={() => setSelectedFiles(new Set())}>
+                    {t("Odznacz")}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {visibleItems.length === 0 ? (
             <p className="workspace-empty">
               {documentSearch.trim()
@@ -1572,9 +1695,28 @@ export function WorkspaceManager({
                       ) : null}
                     </header>
                     {collapsed ? null : (
-                      <ul className="workspace-file-list workspace-file-actions-list">
+                      <table className="lex-case-table workspace-file-table">
+                        <thead>
+                          <tr>
+                            <th scope="col" className="case-list-check"><span className="sr-only">{t("Zaznaczenie")}</span></th>
+                            <th scope="col">{t("Plik")}</th>
+                            <th scope="col">{t("Folder")}</th>
+                            <th scope="col"><span className="sr-only">{t("Działania")}</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
                         {group.items.map((item) => (
-                        <li key={item.itemId}>
+                        <Fragment key={item.itemId}>
+                        <tr className={selectedFiles.has(item.itemId) ? "lex-case-row workspace-file-selected" : "lex-case-row"}>
+                        <td className="case-list-check">
+                          <input
+                            type="checkbox"
+                            aria-label={t("Zaznacz plik {filename}", { filename: item.filename })}
+                            checked={selectedFiles.has(item.itemId)}
+                            onChange={(event) => toggleFile(item.itemId, event.target.checked)}
+                          />
+                        </td>
+                        <td className="workspace-file-cell">
                           <div>
                             <strong title={item.filename}>{item.filename}</strong>
                             <span title={item.mediaType}>
@@ -1638,6 +1780,9 @@ export function WorkspaceManager({
                               </div>
                             ) : null}
                           </div>
+                          </td>
+                          <td className="workspace-file-folder">{itemFolderLabel(item)}</td>
+                          <td className="workspace-file-row-actions">
                           <div className="workspace-item-actions">
                             <button
                               type="button"
@@ -1655,12 +1800,51 @@ export function WorkspaceManager({
                                 ? t("Podgląd s. {pageStart}", { pageStart: knowledgeHitFor(item)!.pageStart })
                                 : t("Podgląd")}
                             </button>
+                            <button
+                              type="button"
+                              className="workspace-row-more-button"
+                              aria-haspopup="dialog"
+                              title={t("Więcej działań")}
+                              aria-label={t("Więcej działań: {filename}", { filename: item.filename })}
+                              onClick={() => setActionsFor(item.itemId)}
+                            >
+                              ⋯
+                            </button>
+                            {actionsFor === item.itemId ? (
+                            <div
+                              className="privacy-preview-overlay"
+                              role="dialog"
+                              aria-modal="true"
+                              aria-labelledby={`file-actions-${item.itemId}`}
+                              onClick={(event) => {
+                                if (event.target === event.currentTarget) setActionsFor(null);
+                              }}
+                            >
+                            <section className="chat-card matter-section-dialog workspace-file-dialog">
+                              <div className="matter-section-dialog-head">
+                                <div>
+                                  <p className="eyebrow">{t("Działania na pliku")}</p>
+                                  <h2 id={`file-actions-${item.itemId}`} title={item.filename}>{item.filename}</h2>
+                                  <small>{itemFolderLabel(item)}</small>
+                                </div>
+                                <button type="button" className="chat-secondary-action" onClick={() => setActionsFor(null)}>
+                                  {t("Zamknij")}
+                                </button>
+                              </div>
+                              <div
+                                className="workspace-file-dialog-actions"
+                                onClickCapture={(event) => {
+                                  // An action that opens its own view (preview, key, deanonymizing) or ends the file closes this window.
+                                  if ((event.target as HTMLElement).closest("button[data-closes]")) setTimeout(() => setActionsFor(null), 0);
+                                }}
+                              >
                             {processingFor(item)?.reviewed === false ? (
                               <button
                                 type="button"
                                 className="primary-button"
                                 disabled={busy}
                                 title={t("Dokument nie został jeszcze zatwierdzony po podglądzie i nie trafi do modelu spoza komputera")}
+                                data-closes="1"
                                 onClick={() => showAnonymized(item, "marked")}
                               >
                                 {t("Podgląd i zatwierdzenie")}
@@ -1672,7 +1856,8 @@ export function WorkspaceManager({
                                   type="button"
                                   disabled={busy}
                                   title={t("Symbole zastępcze i dane, które zastępują (tylko na tym komputerze)")}
-                                  onClick={() => showAnonymized(item, "key")}
+                                  data-closes="1"
+                                onClick={() => showAnonymized(item, "key")}
                                 >
                                   {t("Klucz anonimizacji")}
                                 </button>
@@ -1685,6 +1870,7 @@ export function WorkspaceManager({
                             /\.(txt|md|markdown|csv|tsv|docx|odt|xlsx|xlsm)$/i.test(item.filename) ? (
                               <button
                                 type="button"
+                                data-closes="1"
                                 disabled={busy}
                                 title={t("Plik z symbolami (np. odpowiedź zewnętrznego modelu): podstawia dane z klucza wybranego dokumentu")}
                                 onClick={() =>
@@ -1695,7 +1881,8 @@ export function WorkspaceManager({
                               </button>
                             ) : null}
                             {isDesktopShell() ? (
-                              <button type="button" disabled={busy} onClick={() => void openInSystem(item)}>
+                              <button type="button" disabled={busy} data-closes="1"
+                                onClick={() => void openInSystem(item)}>
                                 {t("Otwórz w systemie")}
                               </button>
                             ) : null}
@@ -1760,6 +1947,7 @@ export function WorkspaceManager({
                                 ) : null}
                                 <button
                                   type="button"
+                                  data-closes="1"
                                   disabled={busy}
                                   onClick={() => {
                                     const mode = modeFor(item);
@@ -1802,6 +1990,7 @@ export function WorkspaceManager({
                               <button
                                 type="button"
                                 className="workspace-delete"
+                                data-closes="1"
                                 disabled={busy}
                                 onClick={() => void run(async () => {
                                   if (!window.confirm(t("Usunąć plik „{filename}”?", { filename: item.filename }))) return;
@@ -1813,8 +2002,15 @@ export function WorkspaceManager({
                               </button>
                               </div>
                             ) : null}
+                              </div>
+                            </section>
+                            </div>
+                            ) : null}
                           </div>
+                          </td>
+                          </tr>
                           {fileDeanonymize?.itemId === item.itemId ? (
+                          <tr className="workspace-file-subrow"><td colSpan={4}>
                             <div className="artifact-deanonymize">
                               <label>
                                 {t("Klucz dokumentu źródłowego")}{" "}
@@ -1850,10 +2046,12 @@ export function WorkspaceManager({
                               </button>
                               <button type="button" onClick={() => setFileDeanonymize(null)}>{t("Anuluj")}</button>
                             </div>
+                            </td></tr>
                           ) : null}
-                        </li>
+                        </Fragment>
                         ))}
-                      </ul>
+                        </tbody>
+                      </table>
                     )}
                   </section>
                 );

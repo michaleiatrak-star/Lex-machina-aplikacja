@@ -1489,3 +1489,135 @@
   border-radius: 8px;
   font-size: 12.5px;
 }
+
+/* Files as one table (as the case list): selection, folder, the row's actions; the rarer ones under "⋯". */
+.workspace-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  min-height: 32px;
+  margin: 4px 0 8px;
+}
+
+.workspace-select-all {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.workspace-bulk .case-list-bulk {
+  flex-wrap: wrap;
+}
+
+.workspace-bulk select,
+.workspace-bulk button {
+  width: auto;
+  max-width: 260px;
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+/* Fixed columns: the tables of the file groups line up one under another. */
+.workspace-file-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.workspace-file-table th:nth-child(3) {
+  width: 22%;
+}
+
+.workspace-file-table th:nth-child(4) {
+  width: 150px;
+}
+
+.workspace-file-cell strong {
+  overflow-wrap: anywhere;
+}
+
+.workspace-file-table .case-list-check {
+  width: 32px;
+}
+
+.workspace-file-table td {
+  vertical-align: top;
+}
+
+.workspace-file-cell > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-file-cell strong {
+  overflow-wrap: anywhere;
+}
+
+.workspace-file-cell > div > span,
+.workspace-file-cell small {
+  color: var(--lm-t8);
+  font-size: 12px;
+}
+
+.workspace-file-folder {
+  color: var(--lm-t8);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-file-selected td {
+  background: rgb(var(--lm-o1-rgb) / 0.06);
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.workspace-row-more-button {
+  padding: 2px 10px;
+  border: 1px solid var(--lm-l39);
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* A file's other actions open in a window, like the case-card sections. */
+.workspace-file-dialog h2 {
+  overflow-wrap: anywhere;
+  font-size: 1.1rem;
+}
+
+.workspace-file-dialog-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.workspace-file-dialog-actions .workspace-process,
+.workspace-file-dialog-actions .workspace-item-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.workspace-file-subrow td {
+  background: rgb(var(--lm-o1-rgb) / 0.03);
+}
+
+@media (max-width: 720px) {
+  .workspace-file-table th:nth-child(3),
+  .workspace-file-folder {
+    display: none;
+  }
+
+  .workspace-file-table th:nth-child(4) {
+    width: 120px;
+  }
+}
