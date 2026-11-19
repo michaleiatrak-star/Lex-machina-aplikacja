@@ -53,7 +53,8 @@ jobs:
             echo "released=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # The ELI copy of every act the act maps name (the RAG of Polish law), shipped in the installers
+  # The ELI copy of every Polish act in force with a consolidated text and the amendments after it
+  # (the RAG of Polish law: the act maps and the whole ELI catalogue), shipped in the installers
   # and as core-law-seed.zip in the release: the repository's starter copy (core-law-seed/), or the
   # previous release's newer one, is updated (only what ELI
   # changed is read again), the first one is built whole. A failure here does not hold the release:
@@ -88,7 +89,7 @@ jobs:
           done
       - name: Read the acts from ELI
         continue-on-error: true
-        run: node app/lex-runtime/dist/core-law-seed-build.js "Wersja rozwojowa rozpakowana" core-law-seed --max-minutes 170
+        run: node app/lex-runtime/dist/core-law-seed-build.js "Wersja rozwojowa rozpakowana" core-law-seed --max-minutes 170 --full-catalog
       - name: Pack
         shell: bash
         run: |
