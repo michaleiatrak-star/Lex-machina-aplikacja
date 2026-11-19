@@ -54,7 +54,8 @@ jobs:
           fi
 
   # The ELI copy of every act the act maps name (the RAG of Polish law), shipped in the installers
-  # and as core-law-seed.zip in the release: the previous release's copy is updated (only what ELI
+  # and as core-law-seed.zip in the release: the repository's starter copy (core-law-seed/), or the
+  # previous release's newer one, is updated (only what ELI
   # changed is read again), the first one is built whole. A failure here does not hold the release:
   # the installers are then built without it and the application downloads the acts itself.
   core_law_seed:
@@ -80,7 +81,7 @@ jobs:
           set -uo pipefail
           for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 15 --json tagName -q '.[].tagName'); do
             if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern core-law-seed.zip --dir . >/dev/null 2>&1; then
-              mkdir -p core-law-seed && unzip -q core-law-seed.zip -d core-law-seed && rm -f core-law-seed.zip
+              mkdir -p core-law-seed && unzip -oq core-law-seed.zip -d core-law-seed && rm -f core-law-seed.zip
               echo "::notice::core-law-seed updated from $tag ($(ls core-law-seed | wc -l) files)"
               break
             fi
