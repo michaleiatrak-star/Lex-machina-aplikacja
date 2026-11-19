@@ -19,8 +19,19 @@ const STOP = new Set(
   "ktore ktory ktora jest bylo byly bedzie oraz przez przy jako tego tych takze zgodnie wobec ramach sprawie sprawy dnia roku powod powoda powodem powodowi pozwany pozwanej pozwana pozwanego swiadek swiadka mnie mi sie nie tak juz tylko bardzo".split(" ")
 );
 // Five letters: the inflected forms of one word meet ("kontaktowali", "kontaktu" -> "konta").
-const stem = (word: string) => (word.length >= 6 ? word.slice(0, 5) : word);
-const stemsOf = (text: string) => [...new Set((fold(text).match(/\p{L}{4,}/gu) ?? []).filter((word) => !STOP.has(word)).map(stem))];
+// Names of one role or channel meet too (F-240: "informatyk" in one record, "programista" in the other).
+const SAME_STEM: Record<string, string> = { progr: "infor", smsow: "wiado", whats: "wiado" };
+const stem = (word: string) => {
+  const head = word.length >= 6 ? word.slice(0, 5) : word;
+  return SAME_STEM[head] ?? head;
+};
+// The witness disclaims knowledge or memory ("nie pamiętam", "nie są mi znane", "już nie").
+const IGNORANCE = /\bnie\s+(?:pamietam|wiem|wiadomo|sa\s+mi\s+znan|jest\s+mi\s+(?:wiadom|znan)|widzial\p{L}*|slyszal\p{L}*|mam\s+(?:zadnej\s+)?wiedzy|uczestniczyl\p{L}*)|\bjuz\s+nie\b/gu;
+// The witness shows knowledge: an assessment, a sequence, a document, a number.
+const KNOWS = /zarzadzeni|umow[aey]\b|ukladal\p{L}*\s+sie|dobrze|\bzle\b|problem|na\s+poczatku|pozniej|potem|\b\d{1,4}\b/u;
+// The words of the disclaimer itself ("nie jest mi wiadomym") are not the topic.
+const stemsOf = (text: string) => [...new Set((fold(text).replace(IGNORANCE, " ").match(/\p{L}{4,}/gu) ?? []).filter((word) => !STOP.has(word)).map(stem))];
+const disclaims = (text: string) => new RegExp(IGNORANCE.source, "u").test(fold(text));
 
 // Numbers, years, months and lengths of time: what a witness most often says differently.
 const QUANTITY = /\b\d{1,4}(?:[.,]\d+)?\b|\b(?:styczni|lut|marc|kwietni|maj|czerwc|lipc|sierpni|wrzesni|pazdziernik|listopad|grudni)\p{L}*|\b(?:raz|dwa|trzy|kilka|kilkanascie|ponad|okolo|moze)\s+(?:na\s+)?(?:dzien|tydzien|miesiac|miesiace|miesiecy|rok|lata|lat)\b|\b(?:wczoraj|zeszl\p{L}*\s+rok\p{L}*|w\s+tym\s+roku|na\s+poczatku|pozniej|potem|wczesniej)\b/gu;
@@ -89,6 +100,15 @@ export function statementPairs(byWitness: ReadonlyMap<string, WitnessStatement[]
         const b = new Set(stemsOf(second.text));
         const shared = a.filter((item) => b.has(item));
         const sameRecord = first.documentId === second.documentId;
+        // F-240: a disclaimer of memory or knowledge in one record against an assessment or detail
+        // on the same topic in another ("współpraca układała się dobrze" / "nie pamiętam … programista"):
+        // one shared word of the topic is enough, the disclaimer is the difference.
+        const ignA = disclaims(first.text);
+        const ignB = disclaims(second.text);
+        if (!sameRecord && shared.length >= 1 && ignA !== ignB && KNOWS.test(fold(ignA ? second.text : first.text))) {
+          pairs.push({ witness, first, second, shared, differences: ["niepamięć lub brak wiedzy w jednej wypowiedzi wobec wiedzy w drugiej (SW-A9)"], score: (shared.length + 3) * 3 });
+          continue;
+        }
         // Within one record only a sharp difference (a quantity or a negation on three shared words).
         if (shared.length < 2) continue;
         const differences: string[] = [];
@@ -129,7 +149,7 @@ export function statementPairsPrompt(pairs: readonly StatementPair[]): string {
   if (!pairs.length) return "";
   return [
     "# ZEZNANIA TEGO SAMEGO ŚWIADKA — PARY WYPOWIEDZI NA TEN SAM TEMAT (zestawione przez aplikację)",
-    "Wypowiedzi przypisane świadkowi w protokołach, zestawione tematycznie; zaznaczono różnice (liczby i czas, zaprzeczenie, słowa tylko w jednej). Oceń każdą parę: sprzeczność, uzupełnienie czy zgodność. Sprzeczność wykazuj dosłownym cytatem obu wypowiedzi ze wskazaniem protokołu (sygnatura, data) i znacznikiem dokumentu. Nie twórz sprzeczności, których cytaty nie pokazują.",
+    "Wypowiedzi przypisane świadkowi w protokołach, zestawione tematycznie; zaznaczono różnice (liczby i czas, zaprzeczenie, słowa tylko w jednej, niepamięć wobec wiedzy). Para „niepamięć wobec wiedzy”: świadek w jednym protokole ocenił lub opisał to, czego w drugim „nie pamięta” albo co wyklucza — wykaż, że wiedzę miał (SW-A9). Oceń każdą parę: sprzeczność, uzupełnienie czy zgodność. Sprzeczność wykazuj dosłownym cytatem obu wypowiedzi ze wskazaniem protokołu (sygnatura, data) i znacznikiem dokumentu. Nie twórz sprzeczności, których cytaty nie pokazują.",
     ...pairs.map(
       (pair, index) =>
         `P${index + 1}. świadek ${pair.witness}\n  A [[LEXDOC:${pair.first.documentId}:${pair.first.chunkIndex}]] (${pair.first.heading || "protokół"}): „${pair.first.text}”\n  B [[LEXDOC:${pair.second.documentId}:${pair.second.chunkIndex}]] (${pair.second.heading || "protokół"}): „${pair.second.text}”${pair.differences.length ? `\n  różnice: ${pair.differences.join("; ")}` : ""}`

@@ -41,6 +41,23 @@ describe("the same witness in two hearings (universal: no topics or words per ca
   });
 });
 
+describe("F-240: a disclaimer of memory against knowledge shown in another record (SW-A9)", () => {
+  it("pairs „współpraca układała się dobrze” with „nie pamiętam … programista” across records", () => {
+    const s = (documentId: string, heading: string, text: string) => ({ documentId, chunkIndex: 0, heading, text });
+    const M = "IV P 12/25, 17 marca 2026";
+    const N = "V P 3/26, 13 listopada 2026";
+    const pairs = statementPairs(new Map([["Lenk", [
+      s("m", M, "Jak powód był informatykiem to współpraca układała się dobrze. Później jak powód został rekruterem to nasza współpraca nie układała się dobrze."),
+      s("m", M, "Było zarządzenie wewnętrzne u pozwanej, żeby pracownicy nie kontaktowali się z powodem."),
+      s("n", N, "Nie pamiętam dokładnie od jakiego okresu czasu powód był zatrudniony jako programista."),
+      s("n", N, "Nie słyszałem aby ograniczono nam możliwości kontaktu z powodem.")
+    ]]]));
+    const sw = pairs.filter((pair) => pair.differences.some((item) => item.includes("SW-A9")));
+    expect(sw.some((pair) => /informatykiem/u.test(pair.first.text) && /programista/u.test(pair.second.text))).toBe(true);
+    expect(sw.some((pair) => /zarządzenie/u.test(pair.first.text) && /ograniczono/u.test(pair.second.text))).toBe(true);
+  });
+});
+
 describe("the testimony matrix: topics × records, facts taken from it", async () => {
   const { testimonyMatrix, matrixGoals } = await import("../src/witness-statements.js");
   const s = (documentId: string, heading: string, text: string) => ({ documentId, chunkIndex: 0, heading, text });
