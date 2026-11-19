@@ -531,6 +531,61 @@ function eliOrder(eli) {
     const match = /^(?:DU|MP)\/(\d{4})\/(\d+)$/.exec(eli);
     return match ? [Number(match[1]), Number(match[2])] : [0, 0];
 }
+/**
+ * The copy of the core law shipped with the installer (built by core-law-seed-build.ts from the
+ * same act maps): every act the user's copy does not hold yet is taken from it, so the acts are
+ * there at the first start instead of downloading for an hour. Acts already held stay (they may
+ * be newer); the daily ELI check then keeps all of them current. A seed entry without its text
+ * (ELI had none, a scan without OCR) is not copied: the user's copy tries it itself.
+ */
+export function seedCoreLawCopy(directory, seedDir) {
+    const seedIndex = path.join(seedDir, "index.json");
+    if (!fs.existsSync(seedIndex))
+        return { added: [] };
+    let seed;
+    try {
+        seed = JSON.parse(fs.readFileSync(seedIndex, "utf8"));
+    }
+    catch {
+        return { added: [] };
+    }
+    fs.mkdirSync(directory, { recursive: true });
+    const target = path.join(directory, "index.json");
+    let state = { acts: {}, blockedUntil: null };
+    try {
+        state = JSON.parse(fs.readFileSync(target, "utf8"));
+    }
+    catch {
+        // No copy yet: the seed starts it.
+    }
+    const added = [];
+    for (const [eli, entry] of Object.entries(seed.acts ?? {})) {
+        if (state.acts[eli]?.fetchedAt)
+            continue;
+        const file = fileNameFor(entry.currentEli ?? eli);
+        const source = path.join(seedDir, file);
+        if (!entry.fetchedAt || !fs.existsSync(source))
+            continue;
+        const destination = path.join(directory, file);
+        if (!fs.existsSync(destination))
+            fs.copyFileSync(source, destination);
+        state.acts[eli] = { ...entry, lastError: null };
+        added.push(eli);
+    }
+    // Amending acts and other records the seed holds besides the map acts (read for post-t.j. changes).
+    for (const name of fs.readdirSync(seedDir)) {
+        if (!name.endsWith(".json") || name === "index.json")
+            continue;
+        const destination = path.join(directory, name);
+        if (!fs.existsSync(destination))
+            fs.copyFileSync(path.join(seedDir, name), destination);
+    }
+    if (added.length) {
+        fs.writeFileSync(`${target}.tmp`, JSON.stringify(state, null, 1));
+        fs.renameSync(`${target}.tmp`, target);
+    }
+    return { added };
+}
 export function defaultCoreLawDir(env = process.env) {
     const override = env.LEX_CORE_LAW_DIR?.trim();
     if (override)
@@ -647,10 +702,12 @@ export class CoreLawIndex {
         this.mapsSignature = signature;
         return this.refs.map((ref) => ref.eli).filter((eli) => !before.has(eli));
     }
-    load(corpusRoot) {
+    load(corpusRoot, seedDir) {
         this.corpusRoot = corpusRoot;
         this.mapsSignature = CoreLawIndex.mapsSignatureOf(corpusRoot) + this.catalogSignature();
         fs.mkdirSync(this.directory, { recursive: true });
+        if (seedDir)
+            seedCoreLawCopy(this.directory, seedDir);
         this.refs = this.withCatalog(extractCoreActs(corpusRoot));
         try {
             this.state = JSON.parse(fs.readFileSync(path.join(this.directory, "index.json"), "utf8"));

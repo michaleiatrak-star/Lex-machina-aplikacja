@@ -53,24 +53,82 @@ jobs:
             echo "released=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The ELI copy of every act the act maps name (the RAG of Polish law), shipped in the installers
+  # and as core-law-seed.zip in the release: the previous release's copy is updated (only what ELI
+  # changed is read again), the first one is built whole. A failure here does not hold the release:
+  # the installers are then built without it and the application downloads the acts itself.
+  core_law_seed:
+    name: ELI copy of the act maps
+    needs: version
+    if: needs.version.outputs.released != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Runtime build
+        working-directory: app/lex-runtime
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: Previous release's copy
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 15 --json tagName -q '.[].tagName'); do
+            if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern core-law-seed.zip --dir . >/dev/null 2>&1; then
+              mkdir -p core-law-seed && unzip -q core-law-seed.zip -d core-law-seed && rm -f core-law-seed.zip
+              echo "::notice::core-law-seed updated from $tag ($(ls core-law-seed | wc -l) files)"
+              break
+            fi
+          done
+      - name: Read the acts from ELI
+        continue-on-error: true
+        run: node app/lex-runtime/dist/core-law-seed-build.js "Wersja rozwojowa rozpakowana" core-law-seed --max-minutes 170
+      - name: Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f core-law-seed/index.json ]]; then
+            cat core-law-seed/seed-report.json | head -c 400 || true
+            (cd core-law-seed && zip -qr ../core-law-seed.zip .)
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: hashFiles('core-law-seed/index.json') != ''
+        with:
+          name: core-law-seed
+          path: core-law-seed/
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: hashFiles('core-law-seed.zip') != ''
+        with:
+          name: core-law-seed-zip
+          path: core-law-seed.zip
+          retention-days: 7
+
   # One release carries Windows and macOS: a separate macOS publish workflow raced this
   # one for the tag (0.1.14 lost its macOS package that way).
   macos:
-    needs: version
-    if: needs.version.outputs.released != 'true'
+    needs: [version, core_law_seed]
+    if: ${{ !cancelled() && needs.version.outputs.released != 'true' }}
     uses: ./.github/workflows/macos-installer.yml
     with:
       asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Online.pkg
+      core_law_seed: true
     secrets: inherit
 
   # The macOS offline package, shipped with the Windows offline installer (RELEASE_OFFLINE_INSTALLER).
   macos_offline:
-    needs: version
-    if: needs.version.outputs.released != 'true' && needs.version.outputs.offline == 'true'
+    needs: [version, core_law_seed]
+    if: ${{ !cancelled() && needs.version.outputs.released != 'true' && needs.version.outputs.offline == 'true' }}
     uses: ./.github/workflows/macos-installer.yml
     with:
       asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Offline.pkg
       offline: true
+      core_law_seed: true
     secrets: inherit
 
   runtime:
@@ -88,15 +146,19 @@ jobs:
     secrets: inherit
 
   online:
-    needs: version
-    if: needs.version.outputs.released != 'true'
+    needs: [version, core_law_seed]
+    if: ${{ !cancelled() && needs.version.outputs.released != 'true' }}
     uses: ./.github/workflows/lex-installer.yml
+    with:
+      core_law_seed: true
     secrets: inherit
 
   offline:
-    needs: version
-    if: needs.version.outputs.released != 'true' && needs.version.outputs.offline == 'true'
+    needs: [version, core_law_seed]
+    if: ${{ !cancelled() && needs.version.outputs.released != 'true' && needs.version.outputs.offline == 'true' }}
     uses: ./.github/workflows/offline-windows-installer.yml
+    with:
+      core_law_seed: true
     secrets: inherit
 
   publish:
@@ -175,6 +237,13 @@ jobs:
         with:
           name: LexMachina-macOS-Offline-Installer
           path: release-input/macos-offline
+
+      - name: Download the ELI copy
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: core-law-seed-zip
+          path: release-input/core-law-seed
 
       - name: Verify acceptance receipts and normalize asset names
         id: assets
@@ -255,6 +324,12 @@ jobs:
             summed+=("$mac_offline_out")
           fi
 
+          # The ELI copy shipped in the installers, for the next release to update instead of rebuilding.
+          if [[ -f release-input/core-law-seed/core-law-seed.zip ]]; then
+            cp release-input/core-law-seed/core-law-seed.zip "$out/core-law-seed.zip"
+            summed+=("core-law-seed.zip")
+          fi
+
           (
             cd "$out"
             sha256sum "${summed[@]}" "windows-release-source.json" > SHA256SUMS.txt
@@ -328,6 +403,10 @@ jobs:
           if [[ "$OFFLINE" == "true" ]]; then
             offline_receipt=(release-assets/SHA256-OFFLINE.txt)
           fi
+          seed=()
+          if [[ -f release-assets/core-law-seed.zip ]]; then
+            seed=(release-assets/core-law-seed.zip)
+          fi
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "Lex Machina v$VERSION" \
@@ -337,6 +416,7 @@ jobs:
             release-assets/*.pkg \
             release-assets/SHA256-ONLINE.txt \
             "${offline_receipt[@]}" \
+            "${seed[@]}" \
             release-assets/SHA256SUMS.txt \
             release-assets/windows-release-source.json
 
