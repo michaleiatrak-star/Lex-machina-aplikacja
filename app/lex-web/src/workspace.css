@@ -252,6 +252,7 @@
 
 .workspace-location-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1520,18 +1521,67 @@
   font-size: 13px;
 }
 
-/* Fixed columns: the tables of the file groups line up one under another. */
+/* One table like the case list: compact rows, file groups as thin separator rows. */
 .workspace-file-table {
   width: 100%;
   table-layout: fixed;
+  border-collapse: collapse;
 }
 
-.workspace-file-table th:nth-child(3) {
-  width: 22%;
+.workspace-file-table td,
+.workspace-file-table th {
+  padding: 6px 8px;
 }
 
-.workspace-file-table th:nth-child(4) {
-  width: 150px;
+.workspace-file-table .workspace-col-type {
+  width: 90px;
+}
+
+.workspace-file-table .workspace-col-size {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.workspace-file-table .workspace-col-folder {
+  width: 18%;
+}
+
+.workspace-file-table .workspace-col-actions {
+  width: 130px;
+}
+
+.workspace-file-table td.workspace-col-type,
+.workspace-file-table td.workspace-col-size,
+.workspace-file-table td.workspace-col-folder {
+  color: var(--lm-t2, inherit);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-category-row > td {
+  padding: 10px 8px 4px;
+  border-bottom: 1px solid var(--lm-l39);
+}
+
+.workspace-category-row .workspace-category-head {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.workspace-file-row-actions .workspace-item-actions > button {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 13px;
 }
 
 .workspace-file-cell strong {
@@ -1612,12 +1662,129 @@
 }
 
 @media (max-width: 720px) {
-  .workspace-file-table th:nth-child(3),
-  .workspace-file-folder {
+  .workspace-file-table .workspace-col-type,
+  .workspace-file-table .workspace-col-folder {
     display: none;
   }
 
-  .workspace-file-table th:nth-child(4) {
-    width: 120px;
+  .workspace-file-table .workspace-col-size {
+    display: none;
   }
+
+  /* Hidden columns still take room in a fixed layout. */
+  .workspace-file-table {
+    table-layout: auto;
+  }
+
+  .workspace-file-cell {
+    width: 100%;
+  }
+
+  .workspace-file-table .workspace-col-actions {
+    width: 112px;
+  }
+
+  .workspace-file-table .workspace-file-row-actions .workspace-item-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* On a phone the folder name opens it; "Otwórz" would take the name's room. */
+  .workspace-folder-line .workspace-item-actions > button:first-child {
+    display: none;
+  }
+}
+
+/* Folders as on a computer: no side tree, subfolders are rows, the path above leads back up. */
+.workspace-manager-grid.workspace-explorer {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-crumb {
+  all: unset;
+  cursor: pointer;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.workspace-crumb:hover,
+.workspace-crumb:focus-visible {
+  text-decoration: underline;
+}
+
+.workspace-crumb.current {
+  font-weight: 800;
+}
+
+.workspace-up {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--lm-l39);
+  border-radius: 8px;
+}
+
+.workspace-location-line .workspace-new-folder {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0;
+}
+
+.workspace-location-line .workspace-new-folder input {
+  width: 200px;
+  min-height: 30px;
+}
+
+.workspace-add-folder {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+.workspace-folder-open {
+  all: unset;
+  cursor: pointer;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.workspace-folder-open:hover,
+.workspace-folder-open:focus-visible {
+  text-decoration: underline;
+}
+
+.workspace-folder-line .workspace-folder-purpose-tag {
+  margin-left: 8px;
+}
+
+.workspace-folder-line .workspace-folder-chat-default {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (max-width: 720px) {
+  .workspace-location-line .workspace-add-folder {
+    align-self: flex-start;
+  }
+}
+
+.workspace-file-row-actions .workspace-item-actions > button {
+  width: auto;
 }

@@ -238,21 +238,6 @@ function folderPath(folder: WorkspaceFolder, all: WorkspaceFolder[]): string {
   return names.join(" / ");
 }
 
-function folderDepth(folder: WorkspaceFolder, all: WorkspaceFolder[]): number {
-  let depth = 0;
-  let parentId = folder.parentId;
-  const seen = new Set<string>();
-  while (parentId && depth < 8) {
-    if (seen.has(parentId)) break;
-    seen.add(parentId);
-    const parent = all.find((item) => item.folderId === parentId);
-    if (!parent) break;
-    depth += 1;
-    parentId = parent.parentId;
-  }
-  return depth;
-}
-
 // -1: the default of the local models panel; 0: estimated by the models; 2-12: given.
 const SPEAKER_CHOICES: ReadonlyArray<{ value: number; label: string }> = [
   { value: -1, label: N_("Rozmówcy: jak w ustawieniach") },
@@ -283,6 +268,7 @@ export function WorkspaceManager({
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [documentSearch, setDocumentSearch] =
     useState("");
   const [
@@ -940,6 +926,15 @@ export function WorkspaceManager({
     [workspace]
   );
   const openedFolder = selectedFolder ? folders.find((item) => item.folderId === selectedFolder) ?? null : null;
+  // Folders as on a computer: the opened folder's subfolders are rows of the list, the path above it leads back up.
+  const folderChain: WorkspaceFolder[] = [];
+  for (let current = openedFolder; current; current = current.parentId ? folders.find((item) => item.folderId === current!.parentId) ?? null : null) {
+    folderChain.unshift(current);
+    if (folderChain.length > 50) break;
+  }
+  const subfolders = documentSearch.trim()
+    ? []
+    : folders.filter((item) => (item.parentId ?? null) === selectedFolder).sort((a, b) => a.name.localeCompare(b.name, "pl"));
 
   const rootFolderName =
     workspace?.caseDisplayName
@@ -1437,99 +1432,43 @@ export function WorkspaceManager({
         </div>
       </div>
 
-      <div className="workspace-manager-grid">
-        <aside className="workspace-tree" aria-label={t("Foldery workspace")}>
-          <button
-            type="button"
-            className={selectedFolder === null ? "workspace-folder active" : "workspace-folder"}
-            onClick={() => setSelectedFolder(null)}
-          >
-            📁 {rootFolderName}
-          </button>
-          {folders.map((folder) => (
-            <div key={folder.folderId} className="workspace-folder-row">
-              <button
-                type="button"
-                className={selectedFolder === folder.folderId ? "workspace-folder active" : "workspace-folder"}
-                style={{ paddingLeft: `${12 + folderDepth(folder, folders) * 14}px` }}
-                title={folderPath(folder, folders)}
-                onClick={() => setSelectedFolder(folder.folderId)}
-              >
-                📁 {folder.name}
-              </button>
-              {workspace?.caseKind === "FIRM_KNOWLEDGE" ? (
-                <label
-                  className="workspace-folder-chat-default"
-                  title={t("Folder zaznaczony w każdej rozmowie: model korzysta z jego plików bez wybierania. Pozostałe foldery tylko po wybraniu w rozmowie.")}
-                >
-                  <input
-                    type="checkbox"
-                    checked={folder.chatDefault === true}
-                    disabled={!canWrite || busy}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      void run(async () => {
-                        await setWorkspaceFolderChatDefault(caseId, folder.folderId, next);
-                      });
-                    }}
-                  />
-                  {t("domyślnie w rozmowie")}
-                </label>
-              ) : null}
-              {workspace?.caseKind === "FIRM_KNOWLEDGE" && folder.purpose ? (
-                <small className="workspace-folder-purpose-tag">{t(FOLDER_PURPOSE_LABEL[folder.purpose])}</small>
-              ) : null}
-              {canWrite ? (
-                <button
-                  type="button"
-                  className="workspace-icon-button"
-                  title={t("Usuń pusty folder")}
-                  disabled={busy}
-                  onClick={() => void run(async () => {
-                    await deleteWorkspaceFolder(caseId, folder.folderId);
-                    if (selectedFolder === folder.folderId) setSelectedFolder(null);
-                  })}
-                >
-                  ×
-                </button>
-              ) : null}
-            </div>
-          ))}
-
-          {canWrite ? (
-            <div className="workspace-new-folder">
-              <input
-                value={newFolderName}
-                maxLength={120}
-                placeholder={t("Nazwa folderu")}
-                onChange={(event) => setNewFolderName(event.target.value)}
-              />
-              <button
-                type="button"
-                disabled={busy || !newFolderName.trim()}
-                onClick={() => void run(async () => {
-                  await createWorkspaceFolder(caseId, newFolderName.trim(), selectedFolder);
-                  setNewFolderName("");
-                })}
-              >
-                {t("+ Folder")}
-              </button>
-            </div>
-          ) : null}
-        </aside>
+      <div className="workspace-manager-grid workspace-explorer">
 
         <section className="workspace-items" aria-label={t("Pliki workspace")}>
           <div className="workspace-location-line">
-            <strong>
-              {documentSearch.trim()
-                ? documentScope ===
-                    "ALL_CASE"
-                  ? t("Wyniki w całej sprawie")
-                  : t("Wyniki w bieżącym folderze")
-                : selectedFolder
-                  ? folderPath(folders.find((item) => item.folderId === selectedFolder)!, folders)
-                  : rootFolderName}
-            </strong>
+            {documentSearch.trim() ? (
+              <strong>{documentScope === "ALL_CASE" ? t("Wyniki w całej sprawie") : t("Wyniki w bieżącym folderze")}</strong>
+            ) : (
+              <nav className="workspace-breadcrumb" aria-label={t("Ścieżka folderu")}>
+                {openedFolder ? (
+                  <button
+                    type="button"
+                    className="workspace-up"
+                    title={t("Folder nadrzędny")}
+                    aria-label={t("Folder nadrzędny")}
+                    onClick={() => setSelectedFolder(openedFolder.parentId ?? null)}
+                  >
+                    ↑
+                  </button>
+                ) : null}
+                <button type="button" className={openedFolder ? "workspace-crumb" : "workspace-crumb current"} aria-current={openedFolder ? undefined : "location"} onClick={() => setSelectedFolder(null)}>
+                  {rootFolderName}
+                </button>
+                {folderChain.map((folder) => (
+                  <Fragment key={folder.folderId}>
+                    <span aria-hidden="true">/</span>
+                    <button
+                      type="button"
+                      className={folder.folderId === selectedFolder ? "workspace-crumb current" : "workspace-crumb"}
+                      aria-current={folder.folderId === selectedFolder ? "location" : undefined}
+                      onClick={() => setSelectedFolder(folder.folderId)}
+                    >
+                      {folder.name}
+                    </button>
+                  </Fragment>
+                ))}
+              </nav>
+            )}
             {workspace?.caseKind === "FIRM_KNOWLEDGE" && !documentSearch.trim() && openedFolder ? (
               <label className="workspace-folder-purpose">
                 {t("Rodzaj zasobu")}
@@ -1563,6 +1502,52 @@ export function WorkspaceManager({
                 ? t(" · szukam w treści…")
                 : ""}
             </span>
+            {canWrite && !documentSearch.trim() ? (
+              newFolderOpen ? (
+                <span className="workspace-new-folder">
+                  <input
+                    autoFocus
+                    value={newFolderName}
+                    maxLength={120}
+                    aria-label={t("Nazwa folderu")}
+                    placeholder={t("Nazwa folderu")}
+                    onChange={(event) => setNewFolderName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setNewFolderOpen(false);
+                        setNewFolderName("");
+                      } else if (event.key === "Enter" && newFolderName.trim()) {
+                        void run(async () => {
+                          await createWorkspaceFolder(caseId, newFolderName.trim(), selectedFolder);
+                          setNewFolderName("");
+                          setNewFolderOpen(false);
+                        });
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="inline-edit-confirm"
+                    aria-label={t("Utwórz folder")}
+                    disabled={busy || !newFolderName.trim()}
+                    onClick={() => void run(async () => {
+                      await createWorkspaceFolder(caseId, newFolderName.trim(), selectedFolder);
+                      setNewFolderName("");
+                      setNewFolderOpen(false);
+                    })}
+                  >
+                    ✓
+                  </button>
+                  <button type="button" className="inline-edit-cancel" aria-label={t("Anuluj")} onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}>
+                    ✕
+                  </button>
+                </span>
+              ) : (
+                <button type="button" className="chat-secondary-action workspace-add-folder" onClick={() => setNewFolderOpen(true)}>
+                  {t("+ Folder")}
+                </button>
+              )
+            ) : null}
           </div>
 
           {visibleItems.length > 0 ? (
@@ -1628,21 +1613,102 @@ export function WorkspaceManager({
             </div>
           ) : null}
 
-          {visibleItems.length === 0 ? (
+          {visibleItems.length === 0 && subfolders.length === 0 ? (
             <p className="workspace-empty">
               {documentSearch.trim()
                 ? t("Nie znaleziono dokumentów pasujących do wyszukiwania.")
                 : t("Ten folder jest pusty.")}
             </p>
           ) : (
-            <div className="workspace-categories">
+            <div className="case-list-scroll">
+            <table className="lex-case-table workspace-file-table">
+              <thead>
+                <tr>
+                  <th scope="col" className="case-list-check"><span className="sr-only">{t("Zaznaczenie")}</span></th>
+                  <th scope="col">{t("Nazwa")}</th>
+                  <th scope="col" className="workspace-col-type">{t("Typ")}</th>
+                  <th scope="col" className="workspace-col-size">{t("Rozmiar")}</th>
+                  <th scope="col" className="workspace-col-folder">{t("Folder")}</th>
+                  <th scope="col" className="workspace-col-actions"><span className="sr-only">{t("Działania")}</span></th>
+                </tr>
+              </thead>
+              {subfolders.length ? (
+                <tbody className="workspace-folder-rows">
+                  {subfolders.map((folder) => {
+                    const files = Object.entries(workspace?.itemLocations ?? {}).filter(([, location]) => location === folder.folderId).length;
+                    const inner = folders.filter((entry) => entry.parentId === folder.folderId).length;
+                    const empty = files === 0 && inner === 0;
+                    return (
+                      <tr key={folder.folderId} className="lex-case-row workspace-folder-line" onDoubleClick={() => setSelectedFolder(folder.folderId)}>
+                        <td className="case-list-check" />
+                        <td>
+                          <button type="button" className="workspace-folder-open" title={t("Otwórz folder")} onClick={() => setSelectedFolder(folder.folderId)}>
+                            <span aria-hidden="true">📁</span> {folder.name}
+                          </button>
+                          {workspace?.caseKind === "FIRM_KNOWLEDGE" && folder.purpose ? (
+                            <small className="workspace-folder-purpose-tag">{t(FOLDER_PURPOSE_LABEL[folder.purpose])}</small>
+                          ) : null}
+                        </td>
+                        <td className="workspace-col-type">{t("Folder")}</td>
+                        <td className="workspace-col-size" title={t("Plików: {files}, folderów: {inner}", { files: String(files), inner: String(inner) })}>
+                          {inner ? t("{files} pl. · {inner} fold.", { files: String(files), inner: String(inner) }) : t("{files} pl.", { files: String(files) })}
+                        </td>
+                        <td className="workspace-col-folder">
+                          {workspace?.caseKind === "FIRM_KNOWLEDGE" ? (
+                            <label
+                              className="workspace-folder-chat-default"
+                              title={t("Folder zaznaczony w każdej rozmowie: model korzysta z jego plików bez wybierania. Pozostałe foldery tylko po wybraniu w rozmowie.")}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={folder.chatDefault === true}
+                                disabled={!canWrite || busy}
+                                onChange={(event) => {
+                                  const next = event.target.checked;
+                                  void run(async () => {
+                                    await setWorkspaceFolderChatDefault(caseId, folder.folderId, next);
+                                  });
+                                }}
+                              />
+                              {t("domyślnie w rozmowie")}
+                            </label>
+                          ) : null}
+                        </td>
+                        <td className="workspace-file-row-actions">
+                          <div className="workspace-item-actions">
+                            <button type="button" onClick={() => setSelectedFolder(folder.folderId)}>
+                              {t("Otwórz")}
+                            </button>
+                            {canWrite ? (
+                              <button
+                                type="button"
+                                className="workspace-row-more-button"
+                                title={empty ? t("Usuń pusty folder") : t("Usunąć można tylko pusty folder")}
+                                aria-label={t("Usuń folder {name}", { name: folder.name })}
+                                disabled={busy || !empty}
+                                onClick={() => void run(async () => {
+                                  if (!window.confirm(t("Usunąć folder „{name}”?", { name: folder.name }))) return;
+                                  await deleteWorkspaceFolder(caseId, folder.folderId);
+                                })}
+                              >
+                                ×
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              ) : null}
               {groupCaseFiles(visibleItems).map((group) => {
                 const collapsed = collapsedCategories[group.category] === true;
                 const pending = canWrite ? group.items.filter(isPending) : [];
                 const pendingModes = [...new Set(pending.map(modeFor))];
                 return (
-                  <section key={group.category} className="workspace-category" aria-label={group.label}>
-                    <header className="workspace-category-head">
+                  <tbody key={group.category} className="workspace-category" aria-label={group.label}>
+                    <tr className="workspace-category-row"><td colSpan={6}>
+                    <div className="workspace-category-head">
                       <button
                         type="button"
                         className="workspace-category-toggle"
@@ -1693,19 +1759,10 @@ export function WorkspaceManager({
                           </button>
                         </span>
                       ) : null}
-                    </header>
+                    </div>
+                    </td></tr>
                     {collapsed ? null : (
-                      <table className="lex-case-table workspace-file-table">
-                        <thead>
-                          <tr>
-                            <th scope="col" className="case-list-check"><span className="sr-only">{t("Zaznaczenie")}</span></th>
-                            <th scope="col">{t("Plik")}</th>
-                            <th scope="col">{t("Folder")}</th>
-                            <th scope="col"><span className="sr-only">{t("Działania")}</span></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                        {group.items.map((item) => (
+                        group.items.map((item) => (
                         <Fragment key={item.itemId}>
                         <tr className={selectedFiles.has(item.itemId) ? "lex-case-row workspace-file-selected" : "lex-case-row"}>
                         <td className="case-list-check">
@@ -1719,9 +1776,6 @@ export function WorkspaceManager({
                         <td className="workspace-file-cell">
                           <div>
                             <strong title={item.filename}>{item.filename}</strong>
-                            <span title={item.mediaType}>
-                              {item.kind === "TEMPLATE" ? t("Wzór") : t("Dokument")} · {fileTypeLabel(item)} · {bytesLabel(item.bytes)}
-                            </span>
                             {documentSearch.trim() ? (
                               <>
                                 <small className="workspace-search-path">
@@ -1769,7 +1823,7 @@ export function WorkspaceManager({
                                       : `Tekst cyfrowy · ${processingFor(item)!.totalPages} ${processingFor(item)!.totalPages === 1 ? "strona" : "stron"}`
                                     : queue.some((entry) => entry.itemId === item.itemId)
                                       ? ""
-                                      : t("Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”")}
+                                      : <span title={t("Nieprzetworzony - wybierz sposób przetwarzania i „Przetwórz”")}>{t("Nieprzetworzony")}</span>}
                                 </span>
                               </small>
                             ) : null}
@@ -1781,7 +1835,9 @@ export function WorkspaceManager({
                             ) : null}
                           </div>
                           </td>
-                          <td className="workspace-file-folder">{itemFolderLabel(item)}</td>
+                          <td className="workspace-col-type" title={item.mediaType}>{item.kind === "TEMPLATE" ? `${t("Wzór")} · ` : ""}{fileTypeLabel(item)}</td>
+                          <td className="workspace-col-size">{bytesLabel(item.bytes)}</td>
+                          <td className="workspace-col-folder">{itemFolderLabel(item)}</td>
                           <td className="workspace-file-row-actions">
                           <div className="workspace-item-actions">
                             <button
@@ -2010,7 +2066,7 @@ export function WorkspaceManager({
                           </td>
                           </tr>
                           {fileDeanonymize?.itemId === item.itemId ? (
-                          <tr className="workspace-file-subrow"><td colSpan={4}>
+                          <tr className="workspace-file-subrow"><td colSpan={6}>
                             <div className="artifact-deanonymize">
                               <label>
                                 {t("Klucz dokumentu źródłowego")}{" "}
@@ -2049,13 +2105,12 @@ export function WorkspaceManager({
                             </td></tr>
                           ) : null}
                         </Fragment>
-                        ))}
-                        </tbody>
-                      </table>
+                        ))
                     )}
-                  </section>
+                  </tbody>
                 );
               })}
+            </table>
             </div>
           )}
         </section>
