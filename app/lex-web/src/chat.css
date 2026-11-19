@@ -5376,3 +5376,39 @@ mark.restored {
 .case-collaboration-row {
   margin-top: 12px;
 }
+
+/* Courts' wokanda register and users: one compact table, as the case list. */
+.wokanda-table,
+.admin-users-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.wokanda-table .case-list-check { width: 36px; }
+.wokanda-table .wokanda-col-state { width: 34%; }
+.wokanda-table .wokanda-col-state small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wokanda-table .wokanda-col-site { width: 18%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wokanda-table th:last-child { width: 175px; }
+.wokanda-mobile-state { display: none; }
+.wokanda-row-actions,
+.admin-users-table td:last-child { white-space: nowrap; }
+.wokanda-row-actions .chat-link-button + .chat-link-button { margin-left: 10px; }
+.admin-users-table th:last-child { width: 150px; }
+.admin-users-filters input[type="search"] { flex: 1 1 260px; }
+.matter-section-dialog.wokanda-bulk-dialog {
+  width: min(720px, calc(100vw - 32px));
+  margin: 32px auto;
+}
+.wokanda-bulk-state.is-verified { font-weight: 600; }
+.wokanda-bulk-state.is-skipped,
+.wokanda-bulk-state.is-failed { color: var(--lm-t11); }
+@media (max-width: 720px) {
+  .wokanda-table,
+  .admin-users-table { table-layout: auto; }
+  .wokanda-table .wokanda-col-state { display: none; }
+  .wokanda-mobile-state { display: block; color: var(--lm-t11); }
+  .wokanda-table .wokanda-row-actions .chat-link-button { display: block; margin: 0 0 4px; }
+  .wokanda-table .wokanda-row-actions .chat-link-button + .chat-link-button { margin-left: 0; }
+  .wokanda-table .wokanda-col-site,
+  .admin-users-table .admin-users-col-role,
+  .admin-users-table .admin-users-col-kind { display: none; }
+}

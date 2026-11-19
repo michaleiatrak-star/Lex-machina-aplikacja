@@ -74,6 +74,7 @@ export function AdminUsersPanel({
 }) {
   // Account dialog opened by clicking the user's name.
   const [openUserId, setOpenUserId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [users, setUsers] =
     useState<AuthenticatedUser[]>([]);
   const [loginName, setLoginName] =
@@ -148,6 +149,14 @@ export function AdminUsersPanel({
 
 
 
+
+  const words = query.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().split(/\s+/u).filter(Boolean);
+  const shownUsers = users
+    .filter((user) => {
+      const text = `${user.displayName} ${user.loginName} ${user.email ?? ""}`.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+      return words.every((word) => text.includes(word));
+    })
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, "pl"));
 
   return (
     <section className="admin-users-panel">
@@ -247,30 +256,58 @@ export function AdminUsersPanel({
         </div>
       )}
 
-      <div className="admin-users-list">
-        {users.map((user) => (
-          <article
-            key={user.userId}
-            className="admin-user-row"
-          >
-            <div>
-              <button
-                type="button"
-                className="admin-user-name"
-                title={t("Ustawienia konta: dane, typ, uprawnienia, hasło, blokada, usunięcie")}
-                onClick={() => setOpenUserId(user.userId)}
-              >
-                {user.displayName}
-              </button>
-              <span>
-                @{user.loginName}{user.email ? ` · ${user.email}` : ""} · {user.appRole === "ADMIN" ? "administrator" : "użytkownik"} · {accountKindLabel(user.accountKind)} · {user.status === "ACTIVE" ? "aktywne" : "zablokowane"}
-              </span>
-            </div>
-            <button type="button" className="chat-secondary-action" onClick={() => setOpenUserId(user.userId)}>
-              {t("Ustawienia konta")}
-            </button>
-          </article>
-        ))}
+      <div className="case-list-filters admin-users-filters">
+        <input
+          type="search"
+          value={query}
+          placeholder={t("Imię i nazwisko, login lub e-mail")}
+          aria-label={t("Szukaj użytkownika")}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+      <div className="case-list-status">
+        <small role="status">{t("Użytkowników: {count}", { count: String(shownUsers.length) })}</small>
+      </div>
+      <div className="case-list-scroll">
+        <table className="lex-case-table admin-users-table">
+          <thead>
+            <tr>
+              <th scope="col">{t("Imię i nazwisko")}</th>
+              <th scope="col">{t("Login")}</th>
+              <th scope="col" className="admin-users-col-role">{t("Rola")}</th>
+              <th scope="col" className="admin-users-col-kind">{t("Typ konta")}</th>
+              <th scope="col">{t("Stan")}</th>
+              <th scope="col">
+                <span className="sr-only">{t("Działania")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {shownUsers.map((user) => (
+              <tr key={user.userId} className="lex-case-row">
+                <td>
+                  <button
+                    type="button"
+                    className="lex-case-open"
+                    title={t("Ustawienia konta: dane, typ, uprawnienia, hasło, blokada, usunięcie")}
+                    onClick={() => setOpenUserId(user.userId)}
+                  >
+                    {user.displayName}
+                  </button>
+                </td>
+                <td title={user.email || undefined}>@{user.loginName}</td>
+                <td className="admin-users-col-role">{user.appRole === "ADMIN" ? t("administrator") : t("użytkownik")}</td>
+                <td className="admin-users-col-kind">{accountKindLabel(user.accountKind)}</td>
+                <td>{user.status === "ACTIVE" ? t("aktywne") : t("zablokowane")}</td>
+                <td>
+                  <button type="button" className="chat-link-button" onClick={() => setOpenUserId(user.userId)}>
+                    {t("Ustawienia konta")}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       {openUser && (
         <UserAccountDialog
