@@ -367,6 +367,20 @@ function Invoke-RedirectedNativeProcess(
   }
 }
 
+# Zip archives unpacked with .NET directly: Expand-Archive of Windows PowerShell 5.1 fails on some
+# machines with "Cannot find an overload for ExtractToDirectory" (release run 2026-11-19); the
+# two-argument ZipFile.ExtractToDirectory exists in every .NET Framework 4.5+.
+function Expand-ZipToNewDirectory([string]$ZipPath, [string]$Destination) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  if (Test-Path -LiteralPath $Destination) { Remove-Item -LiteralPath $Destination -Recurse -Force }
+  try {
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $Destination)
+  } catch {
+    Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $Destination -Force
+  }
+}
+
 Write-Host "[1/6] Private Node"
 Set-BootstrapProgress "Sprawdzanie narzędzi aplikacji…"
 $nodeDir = Join-Path $runtime "node"
@@ -378,7 +392,7 @@ if (-not (Test-CommandVersion $nodeExe @("--version") $nodeExpected)) {
   $extract = Join-Path $cache "node-extract-$($manifest.runtime.node.version)"
   Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
   Set-BootstrapProgress "Przygotowanie pobranych narzędzi aplikacji…"
-  Expand-Archive -LiteralPath $nodeZip -DestinationPath $extract -Force
+  Expand-ZipToNewDirectory $nodeZip $extract
   $source = Get-ChildItem $extract -Directory | Select-Object -First 1
   if (-not $source) { throw "BOOTSTRAP_NODE_ARCHIVE_LAYOUT_INVALID" }
   Remove-Item $nodeDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -441,7 +455,7 @@ if (-not (Test-CommandVersion $pythonExe @("--version") $pythonExpected)) {
   Set-BootstrapProgress "Przygotowanie pobranych narzędzi analizy dokumentów…"
   $pythonStage = Join-Path $cache "python-extract-$($manifest.runtime.python.version)"
   Remove-Item $pythonStage -Recurse -Force -ErrorAction SilentlyContinue
-  Expand-Archive -LiteralPath $pythonZip -DestinationPath $pythonStage -Force
+  Expand-ZipToNewDirectory $pythonZip $pythonStage
   if (-not (Test-Path -LiteralPath (Join-Path $pythonStage "python.exe") -PathType Leaf)) {
     throw "BOOTSTRAP_PYTHON_ARCHIVE_LAYOUT_INVALID"
   }
