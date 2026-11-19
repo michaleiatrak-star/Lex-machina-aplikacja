@@ -29,7 +29,10 @@ export async function buildCoreLawSeed(corpus, seedDir, maxMinutes = 120, fullCa
     }
     const index = new CoreLawIndex(path.resolve(seedDir));
     index.load(path.resolve(corpus));
-    const missing = () => index.summaries().filter((act) => !act.fetchedAt && !act.unavailable);
+    // A scan without a text layer is not read here (no OCR in the build): another pass cannot get it,
+    // the installed application reads it with its local OCR. Only acts ELI may still give are retried.
+    const scanOnly = (act) => /^PDF w ELI jest skanem/u.test(act.lastError ?? "");
+    const missing = () => index.summaries().filter((act) => !act.fetchedAt && !act.unavailable && !scanOnly(act));
     // A run stops after a few failures in a row (ELI busy): it is resumed after a pause.
     for (let pass = 0; pass < (fullCatalog ? 30 : 6) && Date.now() - started < maxMinutes * 60_000; pass += 1) {
         const left = missing().map((act) => act.eli);

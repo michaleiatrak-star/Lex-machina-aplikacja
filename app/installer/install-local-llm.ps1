@@ -63,6 +63,20 @@ if (-not (Get-Command Get-FileHash -ErrorAction SilentlyContinue)) {
   }
 }
 
+# Zip archives unpacked with .NET directly: Expand-Archive of Windows PowerShell 5.1 fails on some
+# machines with "Cannot find an overload for ExtractToDirectory" (release run 2026-11-19); the
+# two-argument ZipFile.ExtractToDirectory exists in every .NET Framework 4.5+.
+function Expand-ZipToNewDirectory([string]$ZipPath, [string]$Destination) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  if (Test-Path -LiteralPath $Destination) { Remove-Item -LiteralPath $Destination -Recurse -Force }
+  try {
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $Destination)
+  } catch {
+    Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $Destination -Force
+  }
+}
+
 function Write-LocalAiProgress(
   [string]$Phase,
   [string]$Label,
@@ -270,7 +284,7 @@ function Install-EngineBackend([object]$BackendSpec) {
   if (-not (Test-Path -LiteralPath $serverPath -PathType Leaf)) {
     $extract = Join-Path $cache ("llama-extract-" + $engine.version + "-" + $backendId.ToLowerInvariant())
     Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
-    Expand-Archive -LiteralPath $engineZip -DestinationPath $extract -Force
+    Expand-ZipToNewDirectory $engineZip $extract
     $server = Get-ChildItem -Path $extract -Recurse -File -Filter "llama-server.exe" | Select-Object -First 1
     if (-not $server) {
       throw "LOCAL_LLM_ENGINE_ARCHIVE_LAYOUT_INVALID:$backendId"
