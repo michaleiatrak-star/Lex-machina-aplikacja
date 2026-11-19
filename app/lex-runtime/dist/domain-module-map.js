@@ -449,8 +449,12 @@ function substanceFirst(ranked) {
     const second = top.skill.startsWith("dr-16-") ? { ...top, weight: Math.min(top.weight, matter.weight) } : top;
     return [matter, second, ...ranked.filter((row) => row !== matter && row !== top)];
 }
+const COURT_ADDRESSEE = /(?<![\p{L}])(?<!(?:prawo|prawa|prawem|dostęp|dostępu|dostępie)\s)(?:do|w|we|przed|dla|od)\s+s[aą]d(?:u|zie|em|ów)(?![\p{L}])(?!\s+(?:administracyjn|polubown|pracy|rodzinn|najwy[zż]sz|apelacyjn|okr[eę]gow|rejonow|gospodarcz|konstytucyjn|dyscyplinarn|karn)\p{L}*)|(?<![\p{L}])s[aą]dowi(?![\p{L}])/giu;
 function rankByPhrases(registry, rows, text, limit) {
-    const flash = substanceFirst(flashDomains(rows, text, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
+    // The court a letter goes to is its addressee, not its subject: "odpowiedź do sądu" in a labour case
+    // named the courts-and-legal-professions domain by the one word "sąd" (live test 2026-11-19).
+    const subject = text.replace(COURT_ADDRESSEE, " ");
+    const flash = substanceFirst(flashDomains(rows, subject, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
         .filter((row) => registry.get(row.skill))
         .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
         .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);

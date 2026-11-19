@@ -116,7 +116,8 @@ describe("automatic turn: the switch asked in lay words", () => {
     });
     const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
     const result = await executor.execute({
-      query: "Przygotuj odwołanie.",
+      // A request to draft runs the pleading path from the start (2026-11-19); the offer is checked on a lay question.
+      query: "Dostałem decyzję ZUS po terminie, co dalej?",
       provider: "openai",
       model: "account/openai/default",
       primarySkill: "dr-04-prawo-pracy-zus-swiadczenia",

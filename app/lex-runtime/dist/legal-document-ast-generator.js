@@ -382,8 +382,12 @@ const ORDERED_ITEM = /^\s*\d{1,3}[.)]\s+/u;
 const BULLET_ITEM = /^\s*[-•*–]\s+/u;
 const TABLE_ROW = /^\s*\|.*\|\s*$/u;
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/u;
+// The chat's case-file markers ([[LEXDOC:…]], the chips [[LEXDOCREF:docref_N]]) link a passage in the
+// thread; a filed letter has no such links (live test 2026-11-19: they reached the file as text).
+const CASE_FILE_MARKER = /\s?\[\[LEXDOC(?:REF)?:[^\]\r\n]{1,200}\]\]/gu;
 function cleanText(text) {
     return text
+        .replace(CASE_FILE_MARKER, "")
         .replace(/\\n/gu, "\n")
         .replace(EMPHASIS, (_match, bold, underline, code) => bold ?? underline ?? code)
         .split("\n")
@@ -519,7 +523,8 @@ const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT
 export function letterMarkupMode(request) {
     return (request.documentType === "letter" || request.documentType === "pleading") && !request.processRenderOnly;
 }
-function parseValidatedAst(answer, request) {
+function parseValidatedAst(modelAnswer, request) {
+    const answer = modelAnswer.replace(CASE_FILE_MARKER, "");
     // An answer the provider cut (its note at the end): never a file, whatever its format.
     if (/\[ODPOWIEDŹ UCIĘTA\b/u.test(answer))
         throw new Error("DOCUMENT_OUTPUT_TRUNCATED");
