@@ -56,6 +56,13 @@ cp -R "$REPO/app/ocr" "$PAYLOAD/ocr"
 cp -R "$REPO/app/privacy" "$PAYLOAD/privacy"
 cp -R "$REPO/app/storage" "$PAYLOAD/storage"
 cp -R "$REPO/Wersja rozwojowa rozpakowana" "$PAYLOAD/corpus"
+# The ELI copy of the acts the act maps name (built once by the release workflow).
+if [ -f "$REPO/core-law-seed/index.json" ]; then
+  cp -R "$REPO/core-law-seed" "$PAYLOAD/core-law-seed"
+  echo "core-law-seed: $(ls "$REPO/core-law-seed" | wc -l) files"
+else
+  echo "core-law-seed: none (the application downloads the acts at first start)"
+fi
 find "$PAYLOAD" -name "__pycache__" -type d -prune -exec rm -rf {} +
 # MCP connector package must match the skill's CHECKSUMS.sha256 byte for byte.
 expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpus/prawo-polskie-v2/CHECKSUMS.sha256")"

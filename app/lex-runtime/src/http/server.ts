@@ -327,6 +327,21 @@ export function connectorCorpusRoot(runtimeRoot: string, baseRuntimeRoot: string
     .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
 }
 
+/**
+ * The core-law copy shipped with the installer, next to its corpus (runtime\\core-law-seed), or
+ * LEX_CORE_LAW_SEED; null when the installation has none (a source checkout).
+ */
+export function coreLawSeedDir(): string | null {
+  const explicit = process.env.LEX_CORE_LAW_SEED?.trim();
+  const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+  const candidates = [
+    ...(explicit ? [path.resolve(explicit)] : []),
+    ...(bundled ? [path.resolve(bundled, "..", "core-law-seed")] : []),
+    path.resolve(bundledRuntimeRoot(), "..", "core-law-seed")
+  ];
+  return candidates.find((dir) => fs.existsSync(path.join(dir, "index.json"))) ?? null;
+}
+
 export function resolveRuntimeRoot(): string {
   const explicitlyConfigured =
     process.env
@@ -744,7 +759,8 @@ export async function startLocalServer(options?: {
     new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
   try {
     coreLawIndex.load(
-      runtimeRoot
+      runtimeRoot,
+      coreLawSeedDir()
     );
     if (
       !/^(off|0|false)$/i.test(

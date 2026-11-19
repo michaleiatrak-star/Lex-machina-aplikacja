@@ -68,6 +68,7 @@
   RMDir /r "$INSTDIR\runtime\privacy"
   RMDir /r "$INSTDIR\runtime\storage"
   RMDir /r "$INSTDIR\runtime\bootstrap"
+  RMDir /r "$INSTDIR\runtime\core-law-seed"
   Delete "$INSTDIR\runtime\lex-runtime-sidecar.exe"
   Delete "$INSTDIR\runtime\release-source.json"
   Delete "$INSTDIR\runtime\release-requirements.txt"

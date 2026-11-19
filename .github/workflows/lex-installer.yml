@@ -2,6 +2,12 @@ name: Lex Windows Online Installer
 
 on:
   workflow_call:
+    inputs:
+      core_law_seed:
+        # Put the release's ELI copy (artifact core-law-seed) into the installer.
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - "app/installer/**"
@@ -73,6 +79,16 @@ jobs:
       - name: Local primary model chat selection contract
         working-directory: app/lex-web
         run: npx vitest run src/MatterChatApp.primary-model.test.ts
+
+      # The ELI copy of the act maps' acts (publish-windows-installers.yml core_law_seed), put into
+      # the payload by the build script; a build without it downloads the acts at first start.
+      - name: Core law copy (ELI) for the installer
+        if: inputs.core_law_seed
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: core-law-seed
+          path: core-law-seed
 
       - name: Build thin online bootstrap payload
         shell: pwsh

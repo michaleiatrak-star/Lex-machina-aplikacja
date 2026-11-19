@@ -73,6 +73,15 @@ Copy-Item (Join-Path $repo "app\ocr") (Join-Path $payload "ocr") -Recurse
 Copy-Item (Join-Path $repo "app\privacy") (Join-Path $payload "privacy") -Recurse
 Copy-Item (Join-Path $repo "app\storage") (Join-Path $payload "storage") -Recurse
 Copy-Item (Join-Path $repo "Wersja rozwojowa rozpakowana") (Join-Path $payload "corpus") -Recurse
+# The ELI copy of the acts the act maps name (core-law-seed-build.js, built once by the release
+# workflow): the installed application starts with the texts instead of downloading them for an hour.
+$coreLawSeed = Join-Path $repo "core-law-seed"
+if (Test-Path (Join-Path $coreLawSeed "index.json")) {
+  Copy-Item $coreLawSeed (Join-Path $payload "core-law-seed") -Recurse
+  Write-Host "core-law-seed: $((Get-ChildItem $coreLawSeed -Filter *.json).Count) plików"
+} else {
+  Write-Host "core-law-seed: brak (aplikacja pobierze akty przy pierwszym uruchomieniu)"
+}
 # Pakiet serwerów MCP musi mieć bajty z sumy w CHECKSUMS.sha256 skilla (bez CRLF z checkoutu).
 $mcpSkill = Join-Path $payload "corpus\prawo-polskie-v2"
 $mcpBundle = Join-Path $mcpSkill "mcp-servers\dist\lex-mcp.mjs"

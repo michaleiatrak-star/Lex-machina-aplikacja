@@ -198,6 +198,20 @@ export function connectorCorpusRoot(runtimeRoot, baseRuntimeRoot) {
     return [runtimeRoot, baseRuntimeRoot, ...(bundled ? [path.resolve(bundled)] : []), bundledRuntimeRoot()]
         .find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot;
 }
+/**
+ * The core-law copy shipped with the installer, next to its corpus (runtime\\core-law-seed), or
+ * LEX_CORE_LAW_SEED; null when the installation has none (a source checkout).
+ */
+export function coreLawSeedDir() {
+    const explicit = process.env.LEX_CORE_LAW_SEED?.trim();
+    const bundled = process.env.LEX_BUNDLED_SKILLS_PATH?.trim();
+    const candidates = [
+        ...(explicit ? [path.resolve(explicit)] : []),
+        ...(bundled ? [path.resolve(bundled, "..", "core-law-seed")] : []),
+        path.resolve(bundledRuntimeRoot(), "..", "core-law-seed")
+    ];
+    return candidates.find((dir) => fs.existsSync(path.join(dir, "index.json"))) ?? null;
+}
 export function resolveRuntimeRoot() {
     const explicitlyConfigured = process.env
         .LEX_SKILLS_PATH
@@ -441,7 +455,7 @@ export async function startLocalServer(options) {
     // PDFs (old Dz.U.) are read with the local OCR.
     const coreLawIndex = new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
     try {
-        coreLawIndex.load(runtimeRoot);
+        coreLawIndex.load(runtimeRoot, coreLawSeedDir());
         if (!/^(off|0|false)$/i.test(process.env.LEX_CORE_LAW_REFRESH?.trim() ?? "")) {
             void coreLawIndex
                 .refresh()
