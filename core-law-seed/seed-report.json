@@ -1,0 +1,91 @@
+{
+ "builtAt": "2026-11-19T11:32:00.667Z",
+ "acts": 443,
+ "withText": 437,
+ "withoutArticles": [
+  "DU/2013/1624",
+  "DU/2025/1202",
+  "DU/2025/1298",
+  "DU/2026/300",
+  "DU/2026/492",
+  "DU/2026/909",
+  "DU/2026/1297",
+  "DU/1962/238",
+  "DU/1963/189",
+  "DU/1965/167",
+  "DU/1977/167",
+  "DU/1977/169",
+  "DU/1980/48",
+  "DU/1982/98",
+  "DU/1985/26",
+  "DU/1985/158",
+  "DU/1991/517",
+  "DU/2000/257",
+  "DU/2013/1374",
+  "DU/2014/1616",
+  "DU/2016/1430",
+  "DU/2017/1290",
+  "DU/2021/2484",
+  "DU/2023/1256",
+  "DU/2023/2670",
+  "DU/2024/96",
+  "DU/2024/1474",
+  "DU/2025/845",
+  "DU/2025/1299",
+  "DU/2026/188",
+  "DU/2026/724",
+  "DU/2026/1072",
+  "DU/2026/1085",
+  "DU/2026/1086",
+  "DU/2026/1288"
+ ],
+ "missing": [
+  {
+   "eli": "DU/1965/232",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  },
+  {
+   "eli": "DU/2002/690",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  },
+  {
+   "eli": "DU/2007/674",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  },
+  {
+   "eli": "DU/2009/858",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  },
+  {
+   "eli": "DU/2011/382",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  },
+  {
+   "eli": "DU/2015/1676",
+   "reason": "PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny."
+  }
+ ],
+ "newerConsolidated": [
+  {
+   "eli": "DU/2020/164",
+   "currentEli": "DU/2026/1519"
+  },
+  {
+   "eli": "DU/2021/24",
+   "currentEli": "DU/2026/1502"
+  },
+  {
+   "eli": "DU/2024/1741",
+   "currentEli": "DU/2026/1462"
+  },
+  {
+   "eli": "DU/2025/383",
+   "currentEli": "DU/2026/1342"
+  },
+  {
+   "eli": "DU/2025/869",
+   "currentEli": "DU/2026/1505"
+  }
+ ],
+ "minutes": 46
+}

@@ -14,6 +14,8 @@ import { CoreLawIndex } from "./core-law-index.js";
 export type SeedReport = {
   acts: number;
   withText: number;
+  // Text held but not split into "Art." units (regulations with paragraphs, treaties): searched as a whole.
+  withoutArticles: string[];
   missing: Array<{ eli: string; reason: string }>;
   newerConsolidated: Array<{ eli: string; currentEli: string }>;
   minutes: number;
@@ -36,12 +38,15 @@ export async function buildCoreLawSeed(corpus: string, seedDir: string, maxMinut
     await new Promise((resolve) => setTimeout(resolve, 30_000));
   }
   const summaries = index.summaries();
+  // An act held as another map row's newer t.j. (its own row has no state) is held.
+  const held = (act: (typeof summaries)[number]) => Boolean(act.fetchedAt) || index.record(act.currentEli) !== null || index.record(act.eli) !== null;
   return {
     acts: summaries.length,
-    withText: summaries.filter((act) => act.fetchedAt && act.articleCount > 0).length,
+    withText: summaries.filter(held).length,
+    withoutArticles: summaries.filter((act) => held(act) && act.fetchedAt && act.articleCount === 0).map((act) => act.eli),
     missing: summaries
-      .filter((act) => !act.fetchedAt || act.articleCount === 0)
-      .map((act) => ({ eli: act.eli, reason: act.unavailable ?? act.lastError ?? "brak tekstu" })),
+      .filter((act) => !held(act))
+      .map((act) => ({ eli: act.eli, reason: act.unavailable ?? act.lastError ?? "brak tekstu w ELI" })),
     newerConsolidated: summaries.filter((act) => act.currentEli !== act.eli).map((act) => ({ eli: act.eli, currentEli: act.currentEli })),
     minutes: Math.round((Date.now() - started) / 60_000)
   };
@@ -58,5 +63,5 @@ if (invoked) {
   }
   const report = await buildCoreLawSeed(corpus, seedDir, maxMinutes);
   fs.writeFileSync(path.join(seedDir, "seed-report.json"), JSON.stringify({ builtAt: new Date().toISOString(), ...report }, null, 1));
-  process.stdout.write(`CORE_LAW_SEED acts=${report.acts} withText=${report.withText} missing=${report.missing.length} newerTj=${report.newerConsolidated.length} minutes=${report.minutes}\n`);
+  process.stdout.write(`CORE_LAW_SEED acts=${report.acts} withText=${report.withText} withoutArticles=${report.withoutArticles.length} missing=${report.missing.length} newerTj=${report.newerConsolidated.length} minutes=${report.minutes}\n`);
 }
