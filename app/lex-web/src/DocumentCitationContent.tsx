@@ -17,6 +17,9 @@ function HighlightedContext({
 }: {
   citation: WorkspaceDocumentCitation;
 }) {
+  useEffect(() => {
+    document.getElementById(`highlight-${citation.citationId}`)?.scrollIntoView({ block: "center" });
+  }, [citation.citationId]);
   const start = citation.highlightStart;
   const end = citation.highlightEnd;
   if (
@@ -73,7 +76,13 @@ function FullDocument({
   }, [caseId, selected.documentId]);
   useEffect(() => {
     if (!version) return;
-    document.getElementById(`full-${selected.citationId}`)?.scrollIntoView({ block: "center" });
+    const target = document.getElementById(`full-${selected.citationId}`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    // The place the link points to is shown at once: marked and briefly lit up.
+    target.classList.remove("document-citation-arrived");
+    void target.offsetWidth;
+    target.classList.add("document-citation-arrived");
   }, [version, selected.citationId]);
 
   if (error) return <p className="document-citation-error">{t("Nie udało się wczytać dokumentu:")} {error}</p>;
@@ -113,7 +122,13 @@ function FullDocument({
                 ? `full-${selected.citationId}`
                 : undefined
             }
-            className={cited ? "document-citation-full-chunk is-cited" : "document-citation-full-chunk"}
+            className={
+              selected.chunkIndex === chunk.index
+                ? "document-citation-full-chunk is-cited is-target"
+                : cited
+                  ? "document-citation-full-chunk is-cited"
+                  : "document-citation-full-chunk"
+            }
           >
             <small>s. {chunk.pageStart}{chunk.pageEnd !== chunk.pageStart ? `–${chunk.pageEnd}` : ""}</small>
             <pre>{parts}</pre>
@@ -122,6 +137,11 @@ function FullDocument({
       })}
     </div>
   );
+}
+
+/** The link's anchor: the document, its passage and the cited words' place in it. */
+export function citationAnchor(citation: WorkspaceDocumentCitation): string {
+  return `akta-${citation.documentId}-${citation.chunkIndex}${citation.highlightStart !== undefined ? `-${citation.highlightStart}` : ""}`.replace(/[^A-Za-z0-9_-]/gu, "_");
 }
 
 // The text the user marked in the viewer, else the quoted words, else the passage.
@@ -164,6 +184,12 @@ export function DocumentCitationContent({
   const [selected, setSelected] = useState<WorkspaceDocumentCitation | null>(null);
   const [whole, setWhole] = useState(false);
   const viewerRef = useRef<HTMLElement>(null);
+  // A citation opens where it points: the whole document when the case's files can be read, scrolled to
+  // the cited words (or the cited passage) and marked; otherwise the passage itself (user 2026-11-19).
+  const openAt = (citation: WorkspaceDocumentCitation) => {
+    setSelected(citation);
+    setWhole(Boolean(caseId || citation.caseId));
+  };
   const byMarker = useMemo(
     () => new Map(citations.map((item) => [item.marker, item])),
     [citations]
@@ -187,17 +213,20 @@ export function DocumentCitationContent({
       const fidelity = citationFidelity(citation);
       const number = citations.indexOf(citation) + 1;
       return (
-        <button
+        <a
           key={`${key}-${citation.citationId}-${index}`}
-          type="button"
+          href={`#${citationAnchor(citation)}`}
           className={`document-citation-link document-citation-note ${fidelity.className}`}
-          title={`${citation.label} · ${fidelity.label}`}
+          title={`${citation.label}, ${t("s.")} ${citation.pageStart} · ${fidelity.label}`}
           aria-label={t("Przypis {number}: {label}, {state}", { number, label: citation.label, state: fidelity.label })}
           aria-controls={`citation-${citation.citationId}`}
-          onClick={() => { setSelected(citation); setWhole(false); }}
+          onClick={(event) => {
+            event.preventDefault();
+            openAt(citation);
+          }}
         >
           {number}
-        </button>
+        </a>
       );
     });
 
@@ -237,7 +266,7 @@ export function DocumentCitationContent({
                   {t("Fragment")}
                 </button>
                 {caseId || citation.caseId ? (
-                  <button type="button" className="chat-secondary-action" onClick={() => { setSelected(citation); setWhole(true); }}>
+                  <button type="button" className="chat-secondary-action" onClick={() => openAt(citation)}>
                     {t("Cały dokument z zaznaczeniem")}
                   </button>
                 ) : null}
@@ -260,8 +289,9 @@ export function DocumentCitationContent({
             <div>
               <strong>{selected.label}</strong>
               <small>
-                {t("dokument")} {selected.documentId} {t("· fragment")} {selected.chunkIndex}
-                {selected.caseId ? ` · sprawa ${selected.caseId.slice(0, 14)}…` : ""}
+                {t("Strona")} {selected.pageStart}
+                {selected.pageEnd !== selected.pageStart ? `–${selected.pageEnd}` : ""}
+                {selected.quote ? ` · „${selected.quote.length > 80 ? `${selected.quote.slice(0, 80)}…` : selected.quote}”` : ""}
               </small>
             </div>
             <div>

@@ -104,6 +104,8 @@ def search_system(page_url: str, body: str) -> dict | None:
             return {"system": "DRUPAL_VIEW", "url": action}
         if 'name="sygnatura"' in inner:
             return {"system": "POST_FORM" if method == "post" else "GET_FORM", "url": action}
+        if method == "get" and 'name="signature"' in inner and "Sygnatura" in inner:
+            return {"system": "GET_FORM", "url": action, "pole": "signature"}
     if re.search(r"<th[^>]*>\s*Sygnatura", body, re.I) and re.search(r"<td", body):
         return {"system": "LIST", "url": page_url}
     return None
@@ -141,6 +143,9 @@ def probe(court: dict) -> dict:
     last = ""
     for base in (f"https://{domain}", f"https://www.{domain}"):
         status, url, body = get(base + "/wokanda")
+        # A captcha on another form of the page (site search) does not hide a readable search.
+        if status == 200 and search_system(url, body):
+            return {**result, "status": "PORTAL", **search_system(url, body)}
         if VERIFICATION.search(body):
             return {**result, "status": "BROWSER", "url": url, "powod": "weryfikacja przeglądarki"}
         if status == 200:

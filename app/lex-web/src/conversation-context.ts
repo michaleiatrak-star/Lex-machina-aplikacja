@@ -55,8 +55,21 @@ function corrections(item: CaseChatMessage): string {
     .join("");
 }
 
+// The chat shows an answer's case-file citations as [[LEXDOCREF:docref_N]] chips; the model knows only
+// [[LEXDOC:document:chunk]] markers. Sent back as chips, they reached the next turn and the letter's file
+// as text ("pola do uzupełnienia: [LEXDOCREF:docref_1] …", live test 2026-11-19): each goes back as the
+// marker it came from, one with no record is dropped.
+export function modelCitationMarkers(item: Pick<CaseChatMessage, "content" | "documentCitations">): string {
+  if (!item.content.includes("[[LEXDOCREF:")) return item.content;
+  const byId = new Map((item.documentCitations ?? []).map((citation) => [citation.citationId, citation]));
+  return item.content.replace(/\s?\[\[LEXDOCREF:(docref_\d+)\]\]/gu, (whole, id: string) => {
+    const citation = byId.get(id);
+    return citation ? `${whole.startsWith(" ") ? " " : ""}[[LEXDOC:${citation.documentId}:${citation.chunkIndex}]]` : "";
+  });
+}
+
 function turn(item: CaseChatMessage): string {
-  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}${register(item)}${corrections(item)}`;
+  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${modelCitationMarkers(item)}${register(item)}${corrections(item)}`;
 }
 
 // Newest turns first, whole messages only; older turns that do not fit are dropped

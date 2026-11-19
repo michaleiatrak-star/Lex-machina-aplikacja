@@ -23,7 +23,8 @@ export type WokandaCourt = {
   url?: string;
   powod?: string;
   system?: WokandaSystem;
-  // CMS_FORM: the signature field of its search form ("pole315").
+  // CMS_FORM: the signature field of its search form ("pole315"); GET_FORM: its signature field
+  // when not "sygnatura" ("signature" in the BIP e-wokanda of Sąd Okręgowy w Warszawie).
   pole?: string;
 };
 
@@ -73,11 +74,40 @@ export type FetchText = (
 ) => Promise<{ status: number; url: string; text: string }>;
 
 export const WOKANDA_USER_AGENT = "LexMachina (wokanda; zapytanie uzytkownika o jego sprawe)";
-const TIMEOUT_MS = 20_000;
+// Some court sites answer slowly (report 2026-11-19: Oleśnica): a long wait rather than "no answer".
+const TIMEOUT_MS = 45_000;
 const MAX_HEARINGS = 10;
 // A browser verification page (JavaScript challenge), reCAPTCHA or a similar guard: the
 // application does not get past it and gives the address instead.
 const GUARD = /weryfikacja przeglądarki|g-recaptcha|recaptcha_response|mosparo|cf-challenge/iu;
+
+const FORM_TAG = /<form\b([^>]*)>([\s\S]*?)<\/form>/giu;
+const formAttr = (tag: string, name: string) => new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "iu").exec(tag)?.[1] ?? "";
+const absoluteUrl = (base: string, href: string) => (/^https?:/u.test(href) ? href : `${/^https?:\/\/[^/]+/u.exec(base)?.[0] ?? ""}${href.startsWith("/") ? "" : "/"}${href}`);
+
+/**
+ * How this page searches the wokanda by signature (app/courts/probe_wokanda.py search_system):
+ * the same detection on the user's computer, so a court re-checked there keeps its system.
+ */
+export function detectSearchSystem(pageUrl: string, html: string): Pick<WokandaCourt, "system" | "url" | "pole"> | null {
+  if (html.includes('name="nrspr"')) return { system: "MS_PORTAL", url: pageUrl };
+  for (const [, head = "", inner = ""] of html.matchAll(FORM_TAG)) {
+    const action = formAttr(head, "action") ? absoluteUrl(pageUrl, formAttr(head, "action")) : pageUrl;
+    const method = (formAttr(head, "method") || "get").toLowerCase();
+    const pole = /name="(pole\d+)"/u.exec(inner)?.[1];
+    if (/id="form_search\d+"/u.test(head) && pole && /Sygnatura/u.test(inner)) return { system: "CMS_FORM", url: action, pole };
+    if (inner.includes('name="field_sygnatura_value"')) return { system: "DRUPAL_VIEW", url: action };
+    if (inner.includes('name="sygnatura"')) return { system: method === "post" ? "POST_FORM" : "GET_FORM", url: action };
+    if (method === "get" && inner.includes('name="signature"') && /Sygnatura/u.test(inner)) return { system: "GET_FORM", url: action, pole: "signature" };
+  }
+  if (/<th[^>]*>\s*Sygnatura/iu.test(html) && /<td/iu.test(html)) return { system: "LIST", url: pageUrl };
+  return null;
+}
+
+/** A guard page: a browser check or captcha and no search the application reads. */
+export function isGuardPage(pageUrl: string, html: string): boolean {
+  return GUARD.test(html) && !detectSearchSystem(pageUrl, html);
+}
 
 export const defaultFetchText: FetchText = async (url, headers = {}, init) => {
   const allHeaders = { "user-agent": WOKANDA_USER_AGENT, ...(init ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...headers };
@@ -163,11 +193,13 @@ export function clearWokandaSessions(): void {
 export async function probeWokandaSession(domain: string, cookie: string, userAgent: string, fetchText: FetchText = defaultFetchText): Promise<{ ready: boolean }> {
   const court = WOKANDA_REGISTER.sady.find((item) => item.domena === courtDomain(domain));
   if (!court) throw new Error("WOKANDA_COURT_UNKNOWN");
-  if (!cookie.trim()) return { ready: false };
   try {
-    const page = await fetchText(`https://${court.domena}/wokanda`, { cookie, "user-agent": userAgent || WOKANDA_USER_AGENT });
-    const ready = page.status === 200 && !GUARD.test(page.text) && page.text.includes('name="nrspr"');
-    if (ready) setWokandaSession(court.domena, cookie, userAgent);
+    // The court's own wokanda address (not always /wokanda) and any system the application reads.
+    // No cookie (a site that blocked another network but lets this computer in): ready without
+    // a session, the re-check finds the wokanda directly.
+    const page = await fetchText(court.url ?? `https://${court.domena}/wokanda`, cookie.trim() ? { cookie, "user-agent": userAgent || WOKANDA_USER_AGENT } : {});
+    const ready = page.status === 200 && Boolean(detectSearchSystem(page.url, page.text)) && !isGuardPage(page.url, page.text);
+    if (ready && cookie.trim()) setWokandaSession(court.domena, cookie, userAgent);
     return { ready };
   } catch {
     return { ready: false };
@@ -278,7 +310,7 @@ const COLUMN: Array<[keyof WokandaHearing, RegExp]> = [
   ["sygnatura", /^sygn/u],
   ["godzina", /^godz/u],
   ["data", /^data|^termin/u],
-  ["sala", /^sala/u],
+  ["sala", /^sala|^miejsce/u],
   ["wydzial", /^wydz/u],
   ["przewodniczacy", /^przewodn|^sedzi|^sklad/u],
   ["status", /^status|^komunikat|^uwagi/u]
@@ -404,7 +436,8 @@ async function otherSystemPage(court: WokandaCourt, signature: string, fetchPage
       return { ...(await fetchPage(target, {}, { method: "POST", body: form(fields) })), searchUrl: url };
     }
     case "GET_FORM": {
-      const searchUrl = `${url}${url.includes("?") ? "&" : "?"}${form({ sygnatura: signature, wydzial: "", data: "", szukaj: "" })}`;
+      const fields = court.pole && court.pole !== "sygnatura" ? { [court.pole]: signature } : { sygnatura: signature, wydzial: "", data: "", szukaj: "" };
+      const searchUrl = `${url}${url.includes("?") ? "&" : "?"}${form(fields)}`;
       return { ...(await fetchPage(searchUrl)), searchUrl };
     }
     case "POST_FORM":
@@ -450,7 +483,7 @@ export async function checkWokanda(
   // court's window, a real browser engine, gets through and lends its session.
   const verifiable =
     court.status === "PORTAL" ||
-    (court.status === "BROWSER" && (court.powod === "weryfikacja przeglądarki" || Boolean(court.powod?.startsWith("strona blokuje zapytania aplikacji"))));
+    (court.status === "BROWSER" && (court.powod === "weryfikacja przeglądarki" || Boolean(court.powod?.startsWith("strona blokuje zapytania"))));
   const verification = (savedSession: boolean) => ({ domain: court.domena, url: court.url ?? `https://${court.domena}/wokanda`, savedSession });
   const session = verifiable ? sessionHeaders(court.domena) : null;
   if (court.status === "BROWSER" && !session) {
@@ -471,7 +504,8 @@ export async function checkWokanda(
   if (court.system && court.system !== "MS_PORTAL") {
     try {
       const page = await otherSystemPage(court, wanted, fetchPage);
-      if (GUARD.test(page.text)) return { ...base, state: "BROWSER_ONLY", url: page.searchUrl, reason: "Strona sądu wymaga teraz weryfikacji przeglądarki: otwórz wokandę w przeglądarce." };
+      // A page with a captcha on another form (the BIP's site search) still lists the hearings.
+      if (isGuardPage(page.url, page.text)) return { ...base, state: "BROWSER_ONLY", url: page.searchUrl, reason: "Strona sądu wymaga teraz weryfikacji przeglądarki: otwórz wokandę w przeglądarce." };
       if (page.status !== 200) return { ...base, state: "UNREACHABLE", url: page.searchUrl, reason: `Strona sądu odpowiedziała kodem ${page.status}.` };
       const seen = new Set<string>();
       const hearings = [...parseTableHearings(page.text, page.url), ...parseVerticalHearings(page.text, page.url), ...parseLabeledHearings(page.text, page.url)]
@@ -533,9 +567,10 @@ export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchT
   const session = sessionHeaders(court.domena);
   if (session) {
     try {
-      const portal = await fetchText(`https://${court.domena}/wokanda`, session);
-      if (portal.status === 200 && !GUARD.test(portal.text) && portal.text.includes('name="nrspr"')) {
-        return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: portal.url, powod: "przez sesję z okna sądu" };
+      const portal = await fetchText(court.url ?? `https://${court.domena}/wokanda`, session);
+      const found = portal.status === 200 ? detectSearchSystem(portal.url, portal.text) : null;
+      if (found && !isGuardPage(portal.url, portal.text)) {
+        return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", ...found, ...(found.system === "MS_PORTAL" ? { url: portal.url } : {}), powod: "przez sesję z okna sądu" };
       }
     } catch {
       // The session no longer serves: the check below says what the court answers without it.
@@ -544,7 +579,10 @@ export async function recheckWokandaCourt(court: WokandaCourt, fetchText: FetchT
   try {
     const page = await fetchText(url);
     // Another system that answers without a guard keeps its way of searching.
-    if (other && page.status === 200 && !GUARD.test(page.text)) return { ...court, url: court.url ?? url };
+    if (other && page.status === 200 && !isGuardPage(page.url, page.text)) return { ...court, url: court.url ?? url };
+    // A search the application reads (also on an address given for the court, not /wokanda).
+    const found = page.status === 200 ? detectSearchSystem(page.url, page.text) : null;
+    if (found && found.system !== "MS_PORTAL" && !isGuardPage(page.url, page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", ...found };
     if (page.status === 200 && page.text.includes('name="nrspr"') && page.text.includes('value="cases"')) return { nazwa: court.nazwa, domena: court.domena, status: "PORTAL", url: page.url };
     if (GUARD.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: "weryfikacja przeglądarki" };
     if (page.status === 200 && /wokand/iu.test(page.text)) return { nazwa: court.nazwa, domena: court.domena, status: "BROWSER", url: page.url, powod: court.powod ?? "inny system wokandy" };
@@ -599,7 +637,10 @@ export function effectiveWokandaCourt(name: string, file: string = wokandaOverri
   const shipped = wokandaCourt(name);
   if (!shipped) return null;
   const local = readOverrides(file)[shipped.nazwa];
-  return local ? { nazwa: shipped.nazwa, domena: local.domena, status: local.status, ...(local.url ? { url: local.url } : {}), ...(local.powod ? { powod: local.powod } : {}) } : shipped;
+  // The system and its signature field come along: a re-check that found another system keeps it.
+  return local
+    ? { nazwa: shipped.nazwa, domena: local.domena, status: local.status, ...(local.url ? { url: local.url } : {}), ...(local.powod ? { powod: local.powod } : {}), ...(local.system ? { system: local.system } : {}), ...(local.pole ? { pole: local.pole } : {}) }
+    : shipped;
 }
 
 /** Re-checks the named courts (all when none), a few at a time, and keeps the results. */

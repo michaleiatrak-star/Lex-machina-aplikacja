@@ -272,6 +272,7 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
       /\bodpowiedz na pozew\b/,
       /\bpismo procesow[a-z]*\b/,
       /\bpismo wielowatk[a-z]*\b/,
+      /\bpismo przygotowawcz[a-z]*\b/,
       /\bskarga kasacyjn[a-z]*\b/
     ]
   },
@@ -398,6 +399,15 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
   }
 ];
 
+// A letter, reply or filing to draft (normalized text, no diacritics).
+const DRAFT_VERB = "(?:przygotuj|napisz|sporzadz|zredaguj|opracuj|stworz|utworz|wygeneruj|zrob|przygotowac|napisac|sporzadzic|zredagowac|opracowac|stworzyc|wygenerowac|chce zlozyc|chcialbym zlozyc|chcialabym zlozyc)[a-z]*";
+const DRAFT_OBJECT =
+  "(?:pism[a-z]*|odpowiedz[a-z]*|odpowiedzi|wniosek|wniosku|wnioski? (?:dowodow[a-z]*|o [a-z]+)|skarg[a-z]*|odwolan[a-z]*|zazalen[a-z]*|apelacj[a-z]*|pozew|pozwu|sprzeciw[a-z]*|zarzut[a-z]*|stanowisk[a-z]*|replik[a-z]*|duplik[a-z]*|zastrzezen[a-z]*|uwag[a-z]*|oswiadczen[a-z]*|zawiadomien[a-z]*|prywatny akt oskarzenia|kasacj[a-z]*|zazalenie)";
+const DRAFTING: readonly RegExp[] = [
+  new RegExp(`\\b${DRAFT_VERB}(?: [a-z]+){0,3} ${DRAFT_OBJECT}\\b`),
+  /\b(?:odpowiedz|pismo|stanowisko|replik[a-z]*) do sadu\b/
+];
+
 function explicitExecutionSkillHints(
   query: string,
   candidates: readonly LexSkillRecord[]
@@ -423,6 +433,19 @@ function explicitExecutionSkillHints(
     .map((rule) => rule.skill);
 
   let resolved = matched;
+  // Every letter or reply the user asks to draft runs the pleading path (pisma-procesowe-v3, with its
+  // validation before the file), unless it is one of the simple letters pisma-proste-v2 names, or a
+  // contract (user 2026-11-19: "Przygotuj odpowiedź do sądu … protokół … sprzeczności" ran the
+  // evidence analysis, wrote the letter outside the pleading path, then started over at its first step).
+  if (
+    available.has("pisma-procesowe-v3") &&
+    !resolved.includes("pisma-procesowe-v3") &&
+    !resolved.includes("pisma-proste-v2") &&
+    !resolved.includes("analizator-umow-v1") &&
+    DRAFTING.some((pattern) => pattern.test(normalized))
+  ) {
+    resolved = ["pisma-procesowe-v3", ...resolved];
+  }
   if (
     resolved.includes("pisma-procesowe-v3") &&
     resolved.includes("pisma-proste-v2")

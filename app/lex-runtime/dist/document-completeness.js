@@ -1,4 +1,4 @@
-const FIELD = /\[(?!(?:LM)?PII:)[^\[\]\r\n]{1,48}\]/gu;
+const FIELD = /\[(?!(?:LM)?PII:|LEXDOC(?:REF)?:)[^\[\]\r\n]{1,48}\]/gu;
 // Longer fields the drafting rules use: "[UZUPEŁNIJ: …]", the court the application could not decide.
 const LONG_FIELD = /\[(?:UZUPEŁNIJ|Sąd do ustalenia|SĄD DO SPRAWDZENIA)\b[^\[\]\r\n]{0,240}\]/giu;
 const COURT_FIELD = /\[(?:Sąd do ustalenia|SĄD DO SPRAWDZENIA)\b/iu;

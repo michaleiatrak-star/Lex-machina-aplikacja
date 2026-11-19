@@ -2768,7 +2768,8 @@ export class LexExecutionEngine {
       "OK",
       `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`
     );
-    emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(promptParts.join("\n\n"))));
+    // What the model got: the instructions after they were fitted to its window.
+    emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
     const mainMessages: LlmMessage[] = [
       ...(args.documentContext
         ? [{

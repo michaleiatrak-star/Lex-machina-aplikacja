@@ -252,6 +252,7 @@
 
 .workspace-location-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1488,4 +1489,323 @@
   padding: 2px 24px 2px 6px;
   border-radius: 8px;
   font-size: 12.5px;
+}
+
+/* Files as one table (as the case list): selection, folder, the row's actions; the rarer ones under "⋯". */
+.workspace-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  min-height: 32px;
+  margin: 4px 0 8px;
+}
+
+.workspace-select-all {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.workspace-bulk .case-list-bulk {
+  flex-wrap: wrap;
+}
+
+.workspace-bulk select,
+.workspace-bulk button {
+  width: auto;
+  max-width: 260px;
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+/* One table like the case list: compact rows, file groups as thin separator rows. */
+.workspace-file-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.workspace-file-table td,
+.workspace-file-table th {
+  padding: 6px 8px;
+}
+
+.workspace-file-table .workspace-col-type {
+  width: 90px;
+}
+
+.workspace-file-table .workspace-col-size {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.workspace-file-table .workspace-col-folder {
+  width: 18%;
+}
+
+.workspace-file-table .workspace-col-actions {
+  width: 130px;
+}
+
+.workspace-file-table td.workspace-col-type,
+.workspace-file-table td.workspace-col-size,
+.workspace-file-table td.workspace-col-folder {
+  color: var(--lm-t2, inherit);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-category-row > td {
+  padding: 10px 8px 4px;
+  border-bottom: 1px solid var(--lm-l39);
+}
+
+.workspace-category-row .workspace-category-head {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.workspace-file-row-actions .workspace-item-actions > button {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+.workspace-file-cell strong {
+  overflow-wrap: anywhere;
+}
+
+.workspace-file-table .case-list-check {
+  width: 32px;
+}
+
+.workspace-file-table td {
+  vertical-align: top;
+}
+
+.workspace-file-cell > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-file-cell strong {
+  overflow-wrap: anywhere;
+}
+
+.workspace-file-cell > div > span,
+.workspace-file-cell small {
+  color: var(--lm-t8);
+  font-size: 12px;
+}
+
+.workspace-file-folder {
+  color: var(--lm-t8);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-file-selected td {
+  background: rgb(var(--lm-o1-rgb) / 0.06);
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.workspace-row-more-button {
+  padding: 2px 10px;
+  border: 1px solid var(--lm-l39);
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* A file's other actions open in a window, like the case-card sections. */
+.workspace-file-dialog h2 {
+  overflow-wrap: anywhere;
+  font-size: 1.1rem;
+}
+
+.workspace-file-dialog-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.workspace-file-dialog-actions .workspace-process,
+.workspace-file-dialog-actions .workspace-item-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.workspace-file-subrow td {
+  background: rgb(var(--lm-o1-rgb) / 0.03);
+}
+
+@media (max-width: 720px) {
+  .workspace-file-table .workspace-col-type,
+  .workspace-file-table .workspace-col-folder {
+    display: none;
+  }
+
+  .workspace-file-table .workspace-col-size {
+    display: none;
+  }
+
+  /* Hidden columns still take room in a fixed layout. */
+  .workspace-file-table {
+    table-layout: auto;
+  }
+
+  .workspace-file-cell {
+    width: 100%;
+  }
+
+  .workspace-file-table .workspace-col-actions {
+    width: 112px;
+  }
+
+  .workspace-file-table .workspace-file-row-actions .workspace-item-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* On a phone the folder name opens it; "Otwórz" would take the name's room. */
+  .workspace-folder-line .workspace-item-actions > button:first-child {
+    display: none;
+  }
+}
+
+/* Folders as on a computer: no side tree, subfolders are rows, the path above leads back up. */
+.workspace-manager-grid.workspace-explorer {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-crumb {
+  all: unset;
+  cursor: pointer;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.workspace-crumb:hover,
+.workspace-crumb:focus-visible {
+  text-decoration: underline;
+}
+
+.workspace-crumb.current {
+  font-weight: 800;
+}
+
+.workspace-up {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--lm-l39);
+  border-radius: 8px;
+}
+
+.workspace-location-line .workspace-new-folder {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0;
+}
+
+.workspace-location-line .workspace-new-folder input {
+  width: 200px;
+  min-height: 30px;
+}
+
+.workspace-add-folder {
+  min-height: 30px;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+.workspace-folder-open {
+  all: unset;
+  cursor: pointer;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.workspace-folder-open:hover,
+.workspace-folder-open:focus-visible {
+  text-decoration: underline;
+}
+
+.workspace-folder-line .workspace-folder-purpose-tag {
+  margin-left: 8px;
+}
+
+.workspace-folder-line .workspace-folder-chat-default {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.workspace-file-row-actions .workspace-item-actions {
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (max-width: 720px) {
+  .workspace-location-line .workspace-add-folder {
+    align-self: flex-start;
+  }
+}
+
+.workspace-file-row-actions .workspace-item-actions > button {
+  width: auto;
+}
+
+/* The place a citation link points to: its passage framed, the cited words lit up for a moment. */
+.document-citation-full-chunk.is-target {
+  border-left-width: 4px;
+  background: rgb(var(--lm-o1-rgb) / 0.04);
+}
+
+.document-citation-arrived {
+  animation: document-citation-arrive 1.6s ease-out 1;
+}
+
+@keyframes document-citation-arrive {
+  0% { box-shadow: 0 0 0 4px rgb(255 196 0 / 0.75); }
+  100% { box-shadow: 0 0 0 0 rgb(255 196 0 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-citation-arrived {
+    animation: none;
+  }
 }

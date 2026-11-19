@@ -160,7 +160,7 @@ describe("wokanda: browser verification passed by the user (as sn.pl)", () => {
   });
 
   it("a court with another system gets only its address, no verification window", async () => {
-    const other = wokandaRegister().sady.find((court) => court.status === "BROWSER" && court.powod !== "weryfikacja przeglądarki")!;
+    const other = wokandaRegister().sady.find((court) => court.status === "BROWSER" && court.powod === "inny system wokandy")!;
     const result = await checkWokanda(other.nazwa, "I C 1/26");
     expect(result).toMatchObject({ state: "BROWSER_ONLY", url: other.url });
     expect("verification" in result).toBe(false);
@@ -218,5 +218,17 @@ describe("wokanda: other systems (probed and read live 2026-11-04: 30 of 35 cour
   it("the register knows each system of the probed courts", () => {
     const systems = new Set(wokandaRegister().sady.map((item) => item.system).filter(Boolean));
     for (const system of ["MS_PORTAL", "CMS_FORM", "GET_FORM", "POST_FORM", "DRUPAL_VIEW", "LIST"]) expect(systems.has(system as never)).toBe(true);
+  });
+
+  it("a court blocking networks outside Poland opens the court's window at its own address (2026-11-19)", async () => {
+    const blocked = wokandaRegister().sady.find((court) => court.domena === "jaroslaw.sr.gov.pl")!;
+    const result = await checkWokanda(blocked.nazwa, "I C 1/26");
+    expect(result).toMatchObject({ state: "BROWSER_ONLY", verification: { url: "https://jaroslaw.sr.gov.pl/wokanda-sr-jaroslaww.html" } });
+    // From this computer the page answers without any cookie: ready, no session kept.
+    const portal = '<form class="cases-form"><input name="p" type="hidden" value="cases" /><input name="nrspr"/></form>';
+    const asked: string[] = [];
+    expect(await probeWokandaSession(blocked.domena, "", "Mozilla/5.0", async (url) => (asked.push(url), { status: 200, url, text: portal }))).toEqual({ ready: true });
+    expect(asked).toEqual(["https://jaroslaw.sr.gov.pl/wokanda-sr-jaroslaww.html"]);
+    expect(wokandaSessionDomains()).not.toContain(blocked.domena);
   });
 });

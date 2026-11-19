@@ -465,8 +465,13 @@ const BULLET_ITEM = /^\s*[-•*–]\s+/u;
 const TABLE_ROW = /^\s*\|.*\|\s*$/u;
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/u;
 
+// The chat's case-file markers ([[LEXDOC:…]], the chips [[LEXDOCREF:docref_N]]) link a passage in the
+// thread; a filed letter has no such links (live test 2026-11-19: they reached the file as text).
+const CASE_FILE_MARKER = /\s?\[\[LEXDOC(?:REF)?:[^\]\r\n]{1,200}\]\]/gu;
+
 function cleanText(text: string): string {
   return text
+    .replace(CASE_FILE_MARKER, "")
     .replace(/\\n/gu, "\n")
     .replace(EMPHASIS, (_match, bold, underline, code) => bold ?? underline ?? code)
     .split("\n")
@@ -608,7 +613,8 @@ export function letterMarkupMode(request: Pick<LegalDocumentAstGenerationRequest
   return (request.documentType === "letter" || request.documentType === "pleading") && !request.processRenderOnly;
 }
 
-function parseValidatedAst(answer: string, request: LegalDocumentAstGenerationRequest): ReturnType<typeof validateLegalDocumentAst> {
+function parseValidatedAst(modelAnswer: string, request: LegalDocumentAstGenerationRequest): ReturnType<typeof validateLegalDocumentAst> {
+  const answer = modelAnswer.replace(CASE_FILE_MARKER, "");
   // An answer the provider cut (its note at the end): never a file, whatever its format.
   if (/\[ODPOWIEDŹ UCIĘTA\b/u.test(answer)) throw new Error("DOCUMENT_OUTPUT_TRUNCATED");
   // The letter markup: the AST is made here, its text as the model wrote it (no normalization).

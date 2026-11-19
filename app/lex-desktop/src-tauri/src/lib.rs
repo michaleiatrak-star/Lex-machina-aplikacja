@@ -318,15 +318,19 @@ async fn sn_verification_open(app: tauri::AppHandle, minimized: Option<bool>) ->
 
 // A verification window opened minimized, brought to the front: its check waits for the user.
 #[tauri::command]
-async fn verification_window_show(app: tauri::AppHandle, kind: String) -> Result<(), String> {
+async fn verification_window_show(
+    app: tauri::AppHandle,
+    kind: String,
+    slot: Option<u32>,
+) -> Result<(), String> {
     let label = match kind.as_str() {
-        "sn" => SN_VERIFICATION_LABEL,
-        "wokanda" => WOKANDA_VERIFICATION_LABEL,
-        "law-source" => LAW_SOURCE_VERIFICATION_LABEL,
+        "sn" => SN_VERIFICATION_LABEL.to_string(),
+        "wokanda" => wokanda_label(slot),
+        "law-source" => LAW_SOURCE_VERIFICATION_LABEL.to_string(),
         _ => return Err("VERIFICATION_WINDOW_UNKNOWN".to_string()),
     };
     let window = app
-        .get_webview_window(label)
+        .get_webview_window(&label)
         .ok_or_else(|| "VERIFICATION_WINDOW_MISSING".to_string())?;
     let _ = window.unminimize();
     window
@@ -384,6 +388,15 @@ async fn sn_verification_close(app: tauri::AppHandle) -> Result<(), String> {
 // w oknie strony sądu; aplikacja odczytuje tylko ciasteczka tej sesji i przekazuje je runtime.
 // Okno zostaje w domenie tego sądu (sądy powszechne: *.sa|so|sr.gov.pl); strona nie ma IPC.
 const WOKANDA_VERIFICATION_LABEL: &str = "wokanda-verification";
+// Bulk verification (settings, courts without access): up to this many court windows at once.
+const WOKANDA_MAX_SLOTS: u32 = 10;
+
+fn wokanda_label(slot: Option<u32>) -> String {
+    match slot {
+        Some(slot) if slot < WOKANDA_MAX_SLOTS => format!("{WOKANDA_VERIFICATION_LABEL}-{slot}"),
+        _ => WOKANDA_VERIFICATION_LABEL.to_string(),
+    }
+}
 
 fn court_host(host: &str) -> Option<String> {
     let bare = host.strip_prefix("www.").unwrap_or(host).to_ascii_lowercase();
@@ -411,20 +424,27 @@ async fn wokanda_verification_open(
     app: tauri::AppHandle,
     url: String,
     minimized: Option<bool>,
+    slot: Option<u32>,
 ) -> Result<(), String> {
     let target = wokanda_court_url(&url)?;
     let court = target.host_str().and_then(court_host).unwrap_or_default();
-    if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
+    let label = wokanda_label(slot);
+    if let Some(window) = app.get_webview_window(&label) {
         let _ = window.close();
     }
     let quiet = minimized.unwrap_or(false);
+    // The windows of one round in a cascade, so each court's check is visible.
+    let offset = f64::from(slot.unwrap_or(0) % WOKANDA_MAX_SLOTS) * 28.0;
     let window = tauri::WebviewWindowBuilder::new(
         &app,
-        WOKANDA_VERIFICATION_LABEL,
+        &label,
         tauri::WebviewUrl::External(target),
     )
-    .title("Weryfikacja wokandy sadu - przejdz weryfikacje, sprawdzenie ponowi sie samo")
+    .title(format!(
+        "Weryfikacja wokandy: {court} - przejdz weryfikacje, okno zamknie sie samo"
+    ))
     .inner_size(1000.0, 760.0)
+    .position(60.0 + offset, 40.0 + offset)
     .focused(!quiet)
     .on_navigation(move |next| {
         next.scheme() == "https" && next.host_str().and_then(court_host).as_deref() == Some(court.as_str())
@@ -440,10 +460,14 @@ async fn wokanda_verification_open(
 
 // Ciasteczka okna sądu dla adresu tego sądu, jako nagłówek Cookie (bez zamykania okna).
 #[tauri::command]
-async fn wokanda_verification_cookies(app: tauri::AppHandle, url: String) -> Result<String, String> {
+async fn wokanda_verification_cookies(
+    app: tauri::AppHandle,
+    url: String,
+    slot: Option<u32>,
+) -> Result<String, String> {
     let target = wokanda_court_url(&url)?;
     let window = app
-        .get_webview_window(WOKANDA_VERIFICATION_LABEL)
+        .get_webview_window(&wokanda_label(slot))
         .ok_or_else(|| "WOKANDA_VERIFICATION_WINDOW_MISSING".to_string())?;
     let cookies = window
         .cookies_for_url(target)
@@ -454,8 +478,11 @@ async fn wokanda_verification_cookies(app: tauri::AppHandle, url: String) -> Res
 }
 
 #[tauri::command]
-async fn wokanda_verification_close(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(WOKANDA_VERIFICATION_LABEL) {
+async fn wokanda_verification_close(
+    app: tauri::AppHandle,
+    slot: Option<u32>,
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&wokanda_label(slot)) {
         let _ = window.close();
     }
     Ok(())

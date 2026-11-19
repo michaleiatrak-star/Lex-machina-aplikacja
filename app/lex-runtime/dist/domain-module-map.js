@@ -48,28 +48,60 @@ function stemOf(word) {
         return word;
     const ending = ENDINGS.find((end) => word.endsWith(end) && word.length - end.length >= 3);
     const base = ending ? word.slice(0, -ending.length) : word;
-    return base.length >= 8 ? base.slice(0, -2) : base;
+    if (base.length < 8) {
+        if (!WHOLE_STEMS.has(base)) {
+            WHOLE_STEMS.add(base);
+            strictTests.delete(base);
+        }
+        return base;
+    }
+    const stem = base.slice(0, -2);
+    const next = LETTER_CLASS(base[stem.length]);
+    let letters = CUT_NEXT.get(stem);
+    if (!letters)
+        CUT_NEXT.set(stem, (letters = new Set()));
+    if (!letters.has(next)) {
+        letters.add(next);
+        strictTests.delete(stem);
+    }
+    return stem;
 }
+// A long word's stem is cut by two letters ("urzednik" -> "urzedn", matching "urzednicy",
+// "urzednicze"); the cut stem goes on with a letter of the kind its word had there (a vowel, or a
+// consonant: "komornik" and "komornicy" alternate k/c), or ends. Without that,
+// "sprzeciw" -> "sprzec" matched "sprzecznosci" and a pleading about contradictions in testimony
+// pointed to the GDPR objection module (live test 2026-11-19).
+const CUT_NEXT = new Map();
+const LETTER_CLASS = (letter) => (/[aeiouy]/u.test(letter) ? "v" : "c");
+// Stems that are a whole word's base: no such restriction.
+const WHOLE_STEMS = new Set();
 // A short stem is an ending away from its word, not the start of another one
 // ("powi" of "powiat" is not "powierzenia").
 // A stem's test for one token, built once ("=kp" whole, else its forms by prefix).
 const stemTests = new Map();
-function stemTest(stem) {
-    let test = stemTests.get(stem);
+// The act maps' words, tested strictly: a cut stem goes on as its word did (see CUT_NEXT).
+const strictTests = new Map();
+function stemTest(stem, strict = false) {
+    const cache = strict ? strictTests : stemTests;
+    let test = cache.get(stem);
     if (!test)
-        stemTests.set(stem, (test = buildStemTest(stem)));
+        cache.set(stem, (test = buildStemTest(stem, strict)));
     return test;
 }
-function buildStemTest(stem) {
+function buildStemTest(stem, strict) {
     if (stem.startsWith("=")) {
         const whole = stem.slice(1);
         return (token) => token === whole;
     }
     const forms = alternations(stem);
-    return (token) => forms.some((form) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)));
+    // A flash-routing phrase keeps the loose test ("zawiadomił" is "zawiadomienie o wszczęciu").
+    const next = !strict || WHOLE_STEMS.has(stem) ? undefined : CUT_NEXT.get(stem);
+    return (token) => forms.some((form) => token.startsWith(form) &&
+        (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)) &&
+        (!next || token.length === form.length || next.has(LETTER_CLASS(token[form.length]))));
 }
 function hit(stem, tokens) {
-    return tokens.some(stemTest(stem));
+    return tokens.some(stemTest(stem, true));
 }
 /**
  * The words of a phrase in one place of the text, not scattered over a story: "umowa o
@@ -302,7 +334,14 @@ function domainSpread(registry) {
 // How many different words of the question the matched stems stand for ("pozwol" and
 // "pozwole" are one word; a three-letter stem counts for none).
 function distinctWords(stems, have) {
-    return new Set(have.filter((token) => stems.some((stem) => stem.replace(/^=/, "").length >= 4 && hit(stem, [token])))).size;
+    // Distinct words of the row, not forms of one word ("protokół" and "protokoły" are one word).
+    // Stems of one word ("pozwol", "pozwole") count once: a stem that begins another is the same word.
+    const words = [];
+    for (const stem of stems.filter((item) => item.replace(/^=/, "").length >= 4 && hit(item, have)).sort((a, b) => a.length - b.length)) {
+        if (!words.some((word) => stem.startsWith(word)))
+            words.push(stem);
+    }
+    return words.length;
 }
 /** The domain's act modules the case text points to (rarer words weigh more). */
 export function suggestDomainModules(registry, skill, text, limit = 3) {
@@ -449,17 +488,39 @@ function substanceFirst(ranked) {
     const second = top.skill.startsWith("dr-16-") ? { ...top, weight: Math.min(top.weight, matter.weight) } : top;
     return [matter, second, ...ranked.filter((row) => row !== matter && row !== top)];
 }
+// The court or office a text names, where it is, and what the court did in the case are not the
+// matter's subject (user 2026-11-19): "odpowiedź do sądu", "Sąd Okręgowy w Katowicach XI Wydział
+// Pracy", "ul. …", "Sąd dopuścił dowód", "sąd wyznaczył rozprawę" name no domain. A complaint about
+// the court ("sąd nie wyznaczył rozprawy od roku") stays: it is the matter.
+const COURT_ADDRESSEE = /(?<![\p{L}])(?<!(?:prawo|prawa|prawem|dostęp|dostępu|dostępie)\s)(?:do|w|we|przed|dla|od)\s+s[aą]d(?:u|zie|em|ów)(?![\p{L}])(?!\s+(?:administracyjn|polubown|pracy|rodzinn|najwy[zż]sz|apelacyjn|okr[eę]gow|rejonow|gospodarcz|konstytucyjn|dyscyplinarn|karn)\p{L}*)|(?<![\p{L}])s[aą]dowi(?![\p{L}])/giu;
+const COURT_NAME = /(?<![\p{L}])[sS][aą]d(?:u|zie|em|owi)?\s+(?:[rR]ejonow|[oO]kr[eę]gow|[aA]pelacyjn)\p{L}*(?:\s+(?:dla|w|we)\s+\p{Lu}[\p{L}-]*(?:\s+\p{Lu}[\p{L}-]*){0,3})?/gu;
+const COURT_DIVISION = /(?<![\p{L}])(?:[IVXL]{1,5}\s+)?wydzia[lł]\p{L}*(?:\s+(?!\d)[\p{L}-]+|\s+i){0,6}/giu;
+const STREET_ADDRESS = /(?<![\p{L}])(?:ul\.|ulica|al\.|aleja|pl\.|plac)\s+[^\n,;]{1,60}|\b\d{2}-\d{3}\s+\p{Lu}[\p{L}-]+/gu;
+const COURT_ACTION = /(?<![\p{L}])s[aą]d(?![\p{L}])(?:\s+(?:I|II|pierwszej|drugiej)\s+instancji)?\s+(?:dopu[sś]ci|oddali|odrzuci|zas[aą]dzi|uwzgl[eę]dni|wezwa|postanowi|wyda|umorzy|zawiesi|przes[lł]ucha|zobowi[aą]za|wyznaczy|zarz[aą]dzi|przyzna|ustali|uzna|nakaza|skaza|uniewinni|zwr[oó]ci|pouczy|odroczy|zamkn[aą]|otworzy|odebra|przyj[aą]|stwierdzi|oceni)\p{L}*/giu;
+export function domainSubject(text) {
+    return text
+        .replace(COURT_ACTION, " ")
+        .replace(COURT_NAME, " ")
+        .replace(COURT_DIVISION, " ")
+        .replace(STREET_ADDRESS, " ")
+        .replace(COURT_ADDRESSEE, " ");
+}
+// The bare word "sąd" names no domain; a phrase with it does ("sąd polubowny", "prezes sądu").
+const withoutBareCourt = (rows) => rows.map((row) => ({ ...row, phrases: row.phrases.filter((phrase) => fold(phrase).trim() !== "sad") }));
 function rankByPhrases(registry, rows, text, limit) {
-    const flash = substanceFirst(flashDomains(rows, text, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
+    // The court a letter goes to is its addressee, not its subject: "odpowiedź do sądu" in a labour case
+    // named the courts-and-legal-professions domain by the one word "sąd" (live test 2026-11-19).
+    const subject = domainSubject(text);
+    const flash = substanceFirst(flashDomains(withoutBareCourt(rows), subject, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
         .filter((row) => registry.get(row.skill))
-        .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
+        .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) }))
         .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);
     if (flash.length)
         return flash;
-    const have = tokens(text);
+    const have = tokens(subject);
     return [...registry.skills.values()]
         .filter((skill) => isDomainSkill(skill.name))
-        .map((skill) => ({ skill: skill.name, modules: suggestDomainModules(registry, skill.name, text) }))
+        .map((skill) => ({ skill: skill.name, modules: suggestDomainModules(registry, skill.name, subject) }))
         // Without a flash-routing phrase: two words of one act-map row, not one shared word
         // ("odpowiedzi" is not a data subject request).
         .filter((row) => (row.modules[0]?.score ?? 0) >= 1 && distinctWords(row.modules[0].matched, have) >= 2)

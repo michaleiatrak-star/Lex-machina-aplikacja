@@ -1665,7 +1665,8 @@ export class LexExecutionEngine {
         // the route event follows from the audited corpus reads (session executor).
         const workflowPlan = createDeterministicWorkflowPlan(this.registry, null);
         emit("gate", "G39H_WORKFLOW_PREFLIGHT", "OK", `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`);
-        emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(promptParts.join("\n\n"))));
+        // What the model got: the instructions after they were fitted to its window.
+        emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
         const mainMessages = [
             ...(args.documentContext
                 ? [{
