@@ -4289,6 +4289,29 @@ export async function importCaseLawPackage(file: File): Promise<CaseLawImportRes
   return payload;
 }
 
+// Papier firmowy: the sender of the user's letters (Settings), put into each letter's file.
+export type LetterSender = { name: string; address: string; contact: string; templateId: string; logo: boolean };
+
+export function getLetterSender(): Promise<LetterSender> {
+  return json("/api/letter-sender");
+}
+
+export function saveLetterSender(sender: LetterSender): Promise<LetterSender> {
+  return json("/api/letter-sender", { method: "PUT", body: JSON.stringify(sender) });
+}
+
+export async function saveLetterLogo(file: File | null): Promise<LetterSender> {
+  if (!file) return json("/api/letter-sender/logo", { method: "DELETE" });
+  const response = await fetch(`${apiBase()}/api/letter-sender/logo`, {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": file.type === "image/png" ? "image/png" : "image/jpeg", ...authorizationHeaders() },
+    body: await binaryBody(file)
+  });
+  const payload = (await response.json().catch(() => null)) as (LetterSender & { error?: string }) | null;
+  if (!response.ok || !payload) throw new ApiError(payload?.error ?? `HTTP_${response.status}`, response.status);
+  return payload;
+}
+
 export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
 
 export function getLocalOffline(): Promise<{ enabled: boolean; forced: boolean }> {

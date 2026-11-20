@@ -1,3 +1,5 @@
+import express from "express";
+import { MAX_LETTER_LOGO_BYTES, readLetterSender, saveLetterLogo, saveLetterSender } from "../letter-sender.js";
 import { buildCaseLawSource, caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow, stopCaseLawBuild } from "../case-law-sync.js";
 import { CASE_LAW_PACKAGE_FORMAT, CASE_LAW_SOURCES, CaseLawDatabase, caseLawPackageManifest, defaultCaseLawDbDir, setSharedCaseLawDatabase, sharedCaseLawDatabase, type CaseLawImportResult, type CaseLawSource } from "../case-law-db.js";
 import { createGunzip, createGzip } from "node:zlib";
@@ -60,6 +62,11 @@ function requireAdmin(
   authService: AuthService
 ): boolean {
   return authorize(req, res, authService, true);
+}
+
+/** The signed-in user's id (after requireUser). */
+function responseUserId(req: Request, authService: AuthService): string {
+  return authService.authenticateAuthorization(req.get("authorization")).user.userId;
 }
 
 function requireUser(
@@ -876,6 +883,30 @@ export function registerMcpConnectorRoutes(
     const source = typeof req.body?.source === "string" ? req.body.source.slice(0, 40) : "";
     const changed = req.body?.stop === true ? stopCaseLawBuild(source) : buildCaseLawSource(source);
     res.json({ changed, server: caseLawSyncStatus() });
+  });
+  // Papier firmowy: the sender of the user's letters (name or firm, address, contact).
+  app.get("/api/letter-sender", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json(readLetterSender(responseUserId(req, authService)));
+  });
+  app.put("/api/letter-sender", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json(saveLetterSender(responseUserId(req, authService), req.body));
+  });
+  // The letterhead's logo: PNG or JPEG, up to 1 MB (raw body); DELETE removes it.
+  app.put("/api/letter-sender/logo", express.raw({ type: ["image/png", "image/jpeg"], limit: MAX_LETTER_LOGO_BYTES }), (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    try {
+      saveLetterLogo(responseUserId(req, authService), Buffer.isBuffer(req.body) ? req.body : null);
+      res.json(readLetterSender(responseUserId(req, authService)));
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "LETTER_LOGO_INVALID" });
+    }
+  });
+  app.delete("/api/letter-sender/logo", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    saveLetterLogo(responseUserId(req, authService), null);
+    res.json(readLetterSender(responseUserId(req, authService)));
   });
   app.put("/api/case-law/library", (req, res) => {
     if (!requireUser(req, res, authService)) return;

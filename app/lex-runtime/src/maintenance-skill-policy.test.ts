@@ -38,7 +38,7 @@ function discoveryResult(
     status: "AVAILABLE",
     checkedAt:
       "2026-09-18T09:00:00.000Z",
-    latestVersion: "0.2.4",
+    latestVersion: "0.2.5",
     skillsBundle: {
       name:
         "LexMachina-Skills-0.2.4.zip",
@@ -87,7 +87,7 @@ function verifiedIndex(args?: {
         "LEX_MACHINA_SKILLS_INDEX",
       version:
         args?.version ??
-        "0.2.4",
+        "0.2.5",
       bundle: {
         filename:
           "LexMachina-Skills-0.2.4.zip",
@@ -307,7 +307,7 @@ describe(
         } = service(
           verifiedIndex({
             version:
-              "0.2.5"
+              "0.2.6"
           })
         );
 

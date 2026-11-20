@@ -67,6 +67,8 @@ function letterheadReport(value: unknown): LetterheadReport | undefined {
   return { applied: false, reason: typeof raw.reason === "string" ? raw.reason.slice(0, 120) : "TEMPLATE_NOT_APPLIED" };
 }
 
+export type DocumentLetterhead = { sender?: { name: string; address: string; contact: string }; caseSignature?: string; logo?: { data: Uint8Array; type: "png" | "jpeg" } };
+
 export class LocalLegalDocumentRenderer {
   private readonly python:
     string;
@@ -100,7 +102,10 @@ export class LocalLegalDocumentRenderer {
     ast:
       LegalDocumentAst,
     // The firm's template file (DOCX): its letterhead frames the generated body.
-    template?: Uint8Array
+    template?: Uint8Array,
+    // The sender from Settings and the case's signature: the letterhead without a template,
+    // and the template's {{nadawca}}, {{adres nadawcy}}, {{sygnatura}}.
+    letterhead?: DocumentLetterhead
   ): Promise<
     LegalDocumentPackage
   > {
@@ -109,7 +114,10 @@ export class LocalLegalDocumentRenderer {
         "render",
       format,
       ast,
-      ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {})
+      ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {}),
+      ...(letterhead?.sender?.name ? { sender: letterhead.sender } : {}),
+      ...(letterhead?.caseSignature ? { caseSignature: letterhead.caseSignature } : {}),
+      ...(letterhead?.logo ? { logoBase64: Buffer.from(letterhead.logo.data).toString("base64"), logoType: letterhead.logo.type } : {})
     });
   }
 

@@ -4,6 +4,7 @@ import MatterChatApp, {
 import { LocalAiSetupPanel } from "./LocalAiSetupPanel.js";
 import { MaintenancePanel } from "./MaintenancePanel.js";
 import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
+import { LetterSenderSection } from "./LetterSenderSection.js";
 import { WebSearchSection } from "./WebSearchSection.js";
 import "./maintenance.css";
 import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
@@ -73,12 +74,15 @@ export default function App({
           ) : null,
         account: serverMode ? <MyServerAccountPanel /> : null,
         security: (
-          <AccountSecurityPanel
-            user={user}
-            onAuthUpdated={
-              onAuthUpdated
-            }
-          />
+          <>
+            <AccountSecurityPanel
+              user={user}
+              onAuthUpdated={
+                onAuthUpdated
+              }
+            />
+            <LetterSenderSection />
+          </>
         ),
         users:
           user.appRole ===

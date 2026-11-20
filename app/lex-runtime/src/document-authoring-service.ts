@@ -1,3 +1,4 @@
+import type { DocumentLetterhead } from "./legal-document-renderer.js";
 import {
   createHash
 } from "node:crypto";
@@ -309,6 +310,7 @@ export class LocalDocumentAuthoringService {
   async createTokenized(args: {
     // The firm's template file (DOCX): its letterhead frames the generated body.
     template?: Uint8Array;
+    letterhead?: DocumentLetterhead;
     caseId: string;
     createdByUserId:
       string;
@@ -364,7 +366,8 @@ export class LocalDocumentAuthoringService {
         .render(
           args.format,
           documentAst,
-          args.template
+          args.template,
+          args.letterhead
         );
     try {
       const validation =
@@ -545,6 +548,7 @@ export class LocalDocumentAuthoringService {
   async createReady(args: {
     // The firm's template file (DOCX): its letterhead frames the generated body.
     template?: Uint8Array;
+    letterhead?: DocumentLetterhead;
     caseId: string;
     createdByUserId:
       string;
@@ -600,7 +604,8 @@ export class LocalDocumentAuthoringService {
         .render(
           args.format,
           documentAst,
-          args.template
+          args.template,
+          args.letterhead
         );
     try {
       const validation =

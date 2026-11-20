@@ -1575,7 +1575,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/case-law/import"
         | "/api/case-law/build" => method == "POST",
         "/api/case-law/server/documents" | "/api/case-law/export" => method == "GET",
-        "/api/case-law/library" => matches!(method, "GET" | "PUT"),
+        "/api/case-law/library" | "/api/letter-sender" => matches!(method, "GET" | "PUT"),
+        "/api/letter-sender/logo" => matches!(method, "PUT" | "DELETE"),
         "/api/core-law/settings" => method == "PUT",
         // Model zapasowy routingu dziedzin (Ustawienia; lex-web api.ts).
         "/api/settings/domain-fallback" => matches!(method, "GET" | "PUT"),
@@ -2254,6 +2255,12 @@ mod tests {
         assert!(!route_allowed("GET", "/api/case-law/import"));
         assert!(route_allowed("POST", "/api/case-law/build"));
         assert!(!route_allowed("GET", "/api/case-law/build"));
+        assert!(route_allowed("GET", "/api/letter-sender"));
+        assert!(route_allowed("PUT", "/api/letter-sender"));
+        assert!(!route_allowed("DELETE", "/api/letter-sender"));
+        assert!(route_allowed("PUT", "/api/letter-sender/logo"));
+        assert!(route_allowed("DELETE", "/api/letter-sender/logo"));
+        assert!(!route_allowed("GET", "/api/letter-sender/logo"));
         assert!(!route_allowed("GET", "/api/auth/activity"));
         assert!(route_allowed("POST", "/api/privacy/name-forms"));
         assert!(route_allowed("POST", "/api/deanonymization/preview"));

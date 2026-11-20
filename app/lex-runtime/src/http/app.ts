@@ -1,3 +1,4 @@
+import { readLetterLogo, readLetterSender } from "../letter-sender.js";
 import { usageOwner, usageSummary } from "../usage-log.js";
 import { executionAbort } from "../providers/gateway.js";
 import { parseFirmKnowledgeSelection, type FirmKnowledgeSelection } from "../firm-knowledge-scope.js";
@@ -8303,11 +8304,33 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         // The firm's DOCX template frames the file: its letterhead (headers, footers with
         // their images, page setup) around the generated body (legal_document_worker).
         let letterheadTemplate: Buffer | undefined;
-        if (templateId && format === "docx" && options.sharedTemplateStore?.readTemplate) {
-          const template = await options.sharedTemplateStore.readTemplate(templateId);
+        const letterSender = readLetterSender(context.user.userId);
+        // No template chosen for the letter: the firm file set as the letterhead in Settings.
+        const letterheadId = templateId ?? (letterSender.templateId || undefined);
+        if (letterheadId && format === "docx" && options.sharedTemplateStore?.readTemplate) {
+          const template = await options.sharedTemplateStore.readTemplate(letterheadId).catch(() => null);
+          if (!template) {
+            // A letterhead file removed from the firm's templates: the sender's own letterhead.
+          } else
           if (template.manifest.mediaType === DOCX_MEDIA_TYPE) letterheadTemplate = template.data;
           else template.data.fill(0);
         }
+        // The letterhead's sender (Settings) and the case's signature (its card): always in the file
+        // (user, 2026-11-20), added at rendering, never sent to a model.
+        const letterLogo = readLetterLogo(context.user.userId);
+        const caseSignature = options.caseMemoryStore
+          ? await options.caseAccessService
+              .withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) =>
+                options.caseMemoryStore!.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion })
+              )
+              .then((memory) => memory.court?.sygnatura ?? "")
+              .catch(() => "")
+          : "";
+        const letterhead = {
+          ...(letterSender.name ? { sender: { name: letterSender.name, address: letterSender.address, contact: letterSender.contact } } : {}),
+          ...(caseSignature ? { caseSignature } : {}),
+          ...(letterLogo ? { logo: letterLogo } : {})
+        };
 
         // "Generuj dokument" under an answer that is itself a letter: its file from that text,
         // mechanically (answer-document.ts), with no model turn that would write it again. The
@@ -8350,6 +8373,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               keyVersion: caseView.keyVersion,
               validationContext: stored.validationContext,
               ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
+              letterhead,
               ...(typeof req.body?.filename === "string" ? { filename: req.body.filename } : {})
             })
           );
@@ -8610,6 +8634,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         generated
                           .validationContext,
                       ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
+              letterhead,
                       ...(typeof req
                         .body
                         ?.filename ===
@@ -8679,6 +8704,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       generated
                         .validationContext,
                     ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
+              letterhead,
                     ...(typeof req
                       .body
                       ?.filename ===
