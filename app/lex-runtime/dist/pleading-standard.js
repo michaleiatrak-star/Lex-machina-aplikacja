@@ -6,7 +6,7 @@
 // the elements a reader can see.
 export const PLEADING_STANDARD_RESOURCE = "modules/MOD-BUDOWA-ARGUMENTU.md";
 const DRAFT = /(?<![\p{L}])(?:przygotuj|sporządź|napisz|zredaguj|opracuj|stwórz|przygotować|sporządzić|napisać|projekt)\p{L}*/iu;
-const PLEADING = /(?<![\p{L}])(?:pism\p{L}*\s+(?:procesow|przygotowawcz|do\s+(?:s[ąa]du|organu|rzecznika|prokurat))\p{L}*|pozew|pozwu|odpowied\p{L}*\s+na\s+(?:pozew|apelacj|zażaleni|skarg)\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|odwołani\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*\s+(?:dowodow|o\s+)\p{L}*|podważeni\p{L}*|zarzut\p{L}*\s+od|kasacj\p{L}*|zawiadomieni\p{L}*\s+o\s+(?:popełnieni|przewinieni|przestęp|podejrzeni)\p{L}*)/iu;
+const PLEADING = /(?<![\p{L}])(?:pism\p{L}*\s+(?:procesow|przygotowawcz|do\s+(?:s[ąa]du|organu|rzecznika|prokurat))\p{L}*|pozew|pozwu|odpowied\p{L}*\s+na\s+(?:pozew|apelacj|zażaleni|skarg|zarządzeni|zobowiązani|postanowieni|wezwani\p{L}*\s+s[ąa]d)\p{L}*|(?:odpowied|stanowisk|wyjaśnieni|ustosunkowani)\p{L}*\s+(?:\p{L}+\s+){0,2}?do\s+(?:s[ąa]du|organu)|apelacj\p{L}*|zażaleni\p{L}*|odwołani\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*\s+(?:dowodow|o\s+)\p{L}*|podważeni\p{L}*|zarzut\p{L}*\s+od|kasacj\p{L}*|zawiadomieni\p{L}*\s+o\s+(?:popełnieni|przewinieni|przestęp|podejrzeni)\p{L}*)/iu;
 // What is drafted is an assessment, not the pleading ("przygotuj ocenę szans apelacji").
 const ASSESSMENT_DRAFTED = /(?<![\p{L}])(?:przygotuj|sporządź|napisz|zredaguj|opracuj|stwórz|przygotować|sporządzić|napisać)\p{L}*\s+(?:\p{L}+\s+){0,2}?(?:ocen\p{L}*|analiz\p{L}*|opini\p{L}*|raport\p{L}*|podsumowani\p{L}*|notatk\p{L}*|streszczeni\p{L}*|pytani\p{L}*|chronologi\p{L}*|plan\p{L}*)(?![\p{L}])/iu;
 /** The turn asks for a pleading to a court or an authority (not an opinion or a summary). */

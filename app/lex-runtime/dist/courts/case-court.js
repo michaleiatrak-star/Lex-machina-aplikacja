@@ -4,6 +4,7 @@
 // letters of the case are addressed to it without asking the model to know any address.
 import { courtByName, courtsInText, regionalCourt } from "./court-base.js";
 import { courtOfSignature } from "../court-of-signature.js";
+import { caseFileKey } from "../verification-ledger.js";
 // "I Wydział Cywilny", "III Wydział Rodzinny i Nieletnich": the department's name on its line.
 const DEPARTMENT = /\b([IVXL]{1,6})[ \t]+Wydzia[łl][ \t]+((?:[A-ZĄĆĘŁŃÓŚŹŻ][\p{Ll}]+)(?:[ \t]+(?:i[ \t]+)?[A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż][\p{Ll}]+){0,4})/u;
 const SIGNATURE = /\b(?:sygn\.?\s*(?:akt)?\s*:?\s*)?((?:[IVXL]{1,6})\s+[A-Z][A-Za-z]{0,4}(?:\s*-\s*[A-Za-z]+)?\s+\d{1,6}\/\d{2,4})\b/u;
@@ -66,6 +67,31 @@ export function addresseeCourt(letter) {
     const start = letter.search(/===\s*PISMO\s*===|@TYTUL:|^#\s/mu);
     const head = letter.slice(Math.max(0, start), Math.max(0, start) + 1_200);
     return courtsInText(head)[0]?.court.nazwa ?? null;
+}
+const LETTER_SIGNATURE = /^[^\p{L}\n]*sygn(?:atura|\.)?\s*(?:akt)?\s*[:.]?\s*([IVXLC]{1,6}\s+[A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż]{1,5}(?:\s+[A-Za-z]{1,4})?\s+\d{1,6}\/\d{2,4})/gimu;
+const COURT_LINE = /^\W*(Sąd\s+(?:Rejonowy|Okręgowy|Apelacyjny|Najwyższy|Wojewódzki|Administracyjny)[^\n]{0,160})$/gmu;
+/**
+ * The heading of a letter written in a case against the case card: another signature or another
+ * court there means the letter went to the wrong file (a live case, 2026-11-20: the signature and
+ * court of an earlier case quoted in the files headed the letter). Said outside the letter.
+ */
+export function letterCaseMismatch(letter, court, related = []) {
+    const head = letter.slice(0, 1_500);
+    const findings = [];
+    if (court.sygnatura) {
+        const own = caseFileKey(court.sygnatura);
+        const other = [...head.matchAll(LETTER_SIGNATURE)].map((match) => match[1].replace(/\s+/gu, " ").trim()).filter((value) => caseFileKey(value) !== own);
+        for (const value of [...new Set(other)])
+            findings.push(`[SYGNATURA DO SPRAWDZENIA: nagłówek pisma podaje „${value}”, a karta sprawy „${court.sygnatura}”. Pismo w toczącym się postępowaniu nosi sygnaturę tej sprawy.]`);
+    }
+    const fold = (text) => text.toLowerCase().replace(/\s+/gu, " ").trim();
+    const accepted = [court.nazwa, ...related].map(fold);
+    const named = [...head.matchAll(COURT_LINE)].map((match) => match[1].replace(/[*_,;]+$/u, "").trim());
+    const foreign = named.filter((line) => !accepted.some((name) => fold(line).includes(name)));
+    if (named.length && foreign.length === named.length) {
+        findings.push(`[SĄD DO SPRAWDZENIA: nagłówek pisma wskazuje „${foreign[0]}”, a karta sprawy „${court.nazwa}${court.wydzial ? `, ${court.wydzial}` : ""}”.]`);
+    }
+    return findings;
 }
 /** What the model is told about the case's court (the drafting turn's system prompt). */
 export function caseCourtPrompt(court) {

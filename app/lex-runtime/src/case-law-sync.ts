@@ -5,6 +5,8 @@
 // adapter only fetches what is new. One copy per ruling: a ruling held from another official source
 // (same signature and date) is not stored again.
 import { plainText } from "./eli/readers.js";
+import { zusAdapter } from "./case-law-zus.js";
+import type { ImageOcrEngine } from "./image-ingestion.js";
 import type { OcrEngine } from "./document-ingestion.js";
 import { inflateRawSync } from "node:zlib";
 import { lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
@@ -727,7 +729,7 @@ const SN_WINDOW_DAYS = 60;
 const SN_PAGE = 25;
 
 /** "Waiting for the user" message when sn.pl asks for its human check. */
-export const SN_WAITING = "czeka na potwierdzenie w oknie sn.pl (Ustawienia albo czat); potem pobieranie wznowi się samo";
+export const SN_WAITING = "czeka na potwierdzenie w oknie sn.pl (przycisk „Zweryfikuj w sn.pl” przy źródle albo czat); potem pobieranie wznowi się samo";
 
 export const snAdapter: SyncAdapter = {
   source: "SN",
@@ -1541,7 +1543,10 @@ export const rfAdapter: SyncAdapter = {
   }
 };
 
-export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter, knfAdapter, ukeAdapter, rioAdapter, krritAdapter, rfAdapter];
+// ZUS written interpretations: the BIP list (PDF decisions) and the RAR archives (case-law-zus.ts).
+export const zusSyncAdapter: SyncAdapter = zusAdapter({ pdf: pdfText, imageOcr: () => caseLawImageOcr() }, rulingDate);
+
+export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter, knfAdapter, ukeAdapter, rioAdapter, krritAdapter, rfAdapter, zusSyncAdapter];
 
 // ── schedule and status ──
 
@@ -1553,7 +1558,6 @@ export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
   { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
   { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
   { source: "RIO Katowice, Łódź, Lublin, Olsztyn, Opole, Rzeszów, Wrocław", reason: "BIP-y na innych systemach niż pozostałe izby; uchwały dostępne w ich BIP-ach, bez pobierania do bazy" },
-  { source: "ZUS — interpretacje", reason: "publikowane w archiwach RAR; odczyt wymaga dodatkowej biblioteki (czeka na zgodę)" },
   { source: "Izby adwokackie i izby radców prawnych bez archiwum orzeczeń", reason: "wykaz izb i powód przy każdej — w pozycji sądów dyscyplinarnych I instancji (wybór izby)" }
 ];
 
@@ -1563,9 +1567,23 @@ const running = new Set<string>();
 // Sources an administrator asked to build on this installation (no server mode needed).
 const building = new Set<string>();
 let syncActive = false;
+let imageOcrEngine: ImageOcrEngine | null = null;
+/** The picture OCR the sync was started with (case-law-zus.ts reads scans pasted into .doc files). */
+export function caseLawImageOcr(): ImageOcrEngine | null {
+  return imageOcrEngine;
+}
+let syncIntervalMs = 10 * 60 * 1000;
+let lastTickAt = 0;
+// Errors in a row of a build (a network failure): it is tried again a few times before it stops.
+const buildErrors = new Map<string, number>();
+const BUILD_ERROR_RETRIES = 3;
 
 export type CaseLawSyncOptions = {
   isServerMode?: () => boolean;
+  /** OCR of pictures (a scan pasted into a Word file); none: such a document is held without text. */
+  imageOcr?: ImageOcrEngine;
+  /** How long a build waiting for the user's session waits before it tries again. */
+  waitRetryMs?: number;
   fetcher?: SyncFetch;
   /** sn.pl requests with the session the user verified in the app's window. */
   snFetcher?: SyncFetch;
@@ -1638,10 +1656,16 @@ function buildStep(adapter: SyncAdapter, options: CaseLawSyncOptions): void {
       // The whole budget used: more is waiting at the source. Fewer requests, an error or a
       // source waiting for the user's session ends the build (the cursor keeps the place).
       const more = run !== null && !run.error && !run.waiting && run.requests >= budget;
-      if (more && building.has(adapter.source)) {
-        const timer = setTimeout(() => buildStep(adapter, options), gapMs);
+      // A source waiting for the user's session (sn.pl captcha, a folder to open) keeps the build:
+      // it is tried again until the session is there or the administrator stops it.
+      const waiting = run !== null && Boolean(run.waiting);
+      const errors = run === null || run.error ? (buildErrors.get(adapter.source) ?? 0) + 1 : 0;
+      buildErrors.set(adapter.source, errors);
+      const retry = errors > 0 && errors <= BUILD_ERROR_RETRIES;
+      if ((more || waiting || retry) && building.has(adapter.source)) {
+        const timer = setTimeout(() => buildStep(adapter, options), waiting || retry ? (options.waitRetryMs ?? 30_000) : gapMs);
         timer.unref?.();
-      } else building.delete(adapter.source);
+      } else if (building.delete(adapter.source)) saveBuilding(options);
     });
 }
 
@@ -1655,17 +1679,47 @@ export function buildCaseLawSource(source: string): boolean {
   const adapter = options ? adapterOf(source, options) : undefined;
   if (!options || !adapter) return false;
   building.add(adapter.source);
+  saveBuilding(options);
   buildStep(adapter, options);
   return true;
 }
 
 /** Stops a build after the batch in progress. */
 export function stopCaseLawBuild(source: string): boolean {
-  return building.delete(source);
+  const stopped = building.delete(source);
+  if (stopped && startedWith) saveBuilding(startedWith);
+  return stopped;
+}
+
+// The builds in progress are kept in the database: closing the application (or a restart of the
+// server) interrupts them, and the next start continues them from the saved cursor.
+const BUILDING_STATE = "BUILD:sources";
+
+function databaseOf(options: CaseLawSyncOptions): CaseLawDatabase {
+  if (options.database) return options.database();
+  const held = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
+  setSharedCaseLawDatabase(held);
+  return held;
+}
+
+function saveBuilding(options: CaseLawSyncOptions): void {
+  try {
+    databaseOf(options).saveState(BUILDING_STATE, building.size ? [...building] : null);
+  } catch {
+    // The list is a convenience; a build runs without it.
+  }
+}
+
+/** Where a source stands, read from its progress: not started, interrupted mid-way, or caught up. */
+export function progressPhase(progress: string): "NONE" | "PARTIAL" | "COMPLETE" {
+  if (/^nie rozpoczęto/u.test(progress)) return "NONE";
+  if (/pobrane w całości|przegląd(?: izb)? zakończony/u.test(progress)) return "COMPLETE";
+  return "PARTIAL";
 }
 
 export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
   startedWith = options;
+  imageOcrEngine = options.imageOcr ?? null;
   const isServerMode = options.isServerMode ?? (() => false);
   const fetcher = options.fetcher ?? (globalThis.fetch.bind(globalThis) as SyncFetch);
   const adapters = options.adapters ?? CASE_LAW_ADAPTERS;
@@ -1692,12 +1746,32 @@ export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
     }
   };
   tick();
-  const timer = setInterval(tick, options.intervalMs ?? 10 * 60 * 1000);
+  // Builds interrupted by closing the application go on (not in server mode: its schedule runs all).
+  if (!syncActive) {
+    let saved: string[] = [];
+    try {
+      saved = databaseOf(options).state<string[]>(BUILDING_STATE) ?? [];
+    } catch {
+      saved = [];
+    }
+    for (const source of saved) {
+      const adapter = adapterOf(source, options);
+      if (!adapter) continue;
+      building.add(adapter.source);
+      buildStep(adapter, options);
+    }
+  }
+  syncIntervalMs = options.intervalMs ?? 10 * 60 * 1000;
+  const timer = setInterval(() => {
+    lastTickAt = Date.now();
+    tick();
+  }, syncIntervalMs);
+  lastTickAt = Date.now();
   timer.unref?.();
   return () => clearInterval(timer);
 }
 
-export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; running: boolean; building: boolean; lastRun: AdapterRun | null; bodies?: CaseLawBody[] };
+export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; phase: "NONE" | "PARTIAL" | "COMPLETE"; running: boolean; building: boolean; lastRun: AdapterRun | null; bodies?: CaseLawBody[] };
 
 /** What the settings window shows: whether the download runs, and each source's count and place. */
 export type CaseLawBody = {
@@ -1741,15 +1815,26 @@ export function caseLawServerDocuments(source: string, court: string | null, off
   };
 }
 
-export function caseLawSyncStatus(): { active: boolean; sources: CaseLawSourceStatus[]; notBulk: typeof CASE_LAW_NOT_BULK } {
+export function caseLawSyncStatus(): {
+  active: boolean;
+  schedule: { intervalMinutes: number; nextAt: string | null };
+  sources: CaseLawSourceStatus[];
+  notBulk: typeof CASE_LAW_NOT_BULK;
+} {
   const database = sharedCaseLawDatabase();
   return {
     active: syncActive,
+    // Server mode: every source is read on this schedule, in full first and then only what is new.
+    schedule: {
+      intervalMinutes: Math.round(syncIntervalMs / 60_000),
+      nextAt: syncActive && lastTickAt ? new Date(lastTickAt + syncIntervalMs).toISOString() : null
+    },
     sources: CASE_LAW_ADAPTERS.map((adapter) => ({
       source: adapter.source,
       label: adapter.label,
       documents: database ? database.count(adapter.source) : 0,
       progress: database ? adapter.progress(database) : "nie rozpoczęto",
+      phase: progressPhase(database ? adapter.progress(database) : "nie rozpoczęto"),
       running: running.has(adapter.source),
       building: building.has(adapter.source),
       lastRun: runs.get(adapter.source) ?? null,

@@ -719,6 +719,41 @@ export class CoreLawIndex {
             if (!this.ref(adopted.eli))
                 this.refs.push(adoptedRef(adopted));
         }
+        this.adoptCatalogAmendments();
+    }
+    /**
+     * The ELI catalogue's amendments after each act's t.j. (eli-catalog.ts reads them from the act's
+     * amending acts) joined to the act's own list (report 2026-11-20: the release copy lost them for
+     * 520 acts, because the act's references in ELI rarely list "Nowelizacje po tekście jednolitym"
+     * and the copy of an older release replaced a fuller one). Only for the same t.j.: a newer t.j.
+     * already holds them. Returns how many were joined.
+     */
+    adoptCatalogAmendments() {
+        let joined = 0;
+        let catalog;
+        try {
+            catalog = loadCatalog(this.directory);
+        }
+        catch {
+            return 0;
+        }
+        const byTj = new Map(Object.values(catalog.acts ?? {}).filter((act) => act.inForce && act.amendmentsAfter?.length).map((act) => [act.tj, act]));
+        if (!byTj.size)
+            return 0;
+        for (const [key, state] of Object.entries(this.state.acts)) {
+            const act = byTj.get(state.currentEli ?? key);
+            if (!act)
+                continue;
+            const known = new Set((state.amendmentsAfter ?? []).map((item) => item.eli));
+            for (const eli of act.amendmentsAfter) {
+                if (known.has(eli))
+                    continue;
+                known.add(eli);
+                state.amendmentsAfter = [...(state.amendmentsAfter ?? []), { eli, title: this.record(eli)?.title ?? null, promulgation: null }];
+                joined += 1;
+            }
+        }
+        return joined;
     }
     /**
      * Akt zweryfikowany w źródle (ELI): spoza map -> dołączony do kopii i RAG; z map, ale z
@@ -1345,6 +1380,8 @@ export class CoreLawIndex {
                 maxRequests: CATALOG_REQUESTS_PER_RUN,
                 now: this.now
             }).catch(() => undefined);
+            if (this.adoptCatalogAmendments())
+                this.saveState();
         }
         this.reloadMapsIfChanged();
         if (!options.force &&

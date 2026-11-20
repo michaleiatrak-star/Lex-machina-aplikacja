@@ -308,7 +308,7 @@ const ANSWER_WANTED =
   /(?<![\p{L}])(?:odpowied\p{L}*|odpis\p{L}*|co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:napisać|złożyć|zrobić))(?![\p{L}])/iu;
 // A pleading named as what to produce, and "use these documents in the claim".
 const PLEADING_NOUN =
-  /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od|odwołani\p{L}*|kasacj\p{L}*|skarg\p{L}*\s+kasacyjn\p{L}*)(?![\p{L}])/iu;
+  /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|(?:odpowied|stanowisk|wyjaśnieni|ustosunkowani)\p{L}*\s+(?:\p{L}+\s+){0,2}?do\s+s[ąa]du|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od|odwołani\p{L}*|kasacj\p{L}*|skarg\p{L}*\s+kasacyjn\p{L}*)(?![\p{L}])/iu;
 const USE_IN_PLEADING =
   /(?<![\p{L}])(?:wykorzystaj|użyj|powołaj|dołącz|załącz)\p{L}*\s+(?:\p{L}+\s+){0,4}?(?:w|do)\s+(?:\p{L}+\s+)?(?:pozw|odpowiedzi|apelacj|pism|zażaleni|skarg)\p{L}*/iu;
 

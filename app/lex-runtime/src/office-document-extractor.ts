@@ -85,7 +85,8 @@ implements OfficeDocumentTextExtractor {
   }
 
   async images(data: Uint8Array, mediaType: OfficeDocumentMediaType): Promise<EmbeddedImage[]> {
-    if (mediaType !== DOCX_MEDIA_TYPE && mediaType !== ODT_MEDIA_TYPE) return [];
+    // Word 97-2003 too: a scan pasted into a .doc (the ZUS archives hold such files).
+    if (mediaType !== DOCX_MEDIA_TYPE && mediaType !== ODT_MEDIA_TYPE && mediaType !== DOC_MEDIA_TYPE) return [];
     if (data.byteLength < 1 || data.byteLength > 64 * 1024 * 1024) return [];
     const output = await new Promise<string>((resolve, reject) => {
       const child = spawn(this.python, [this.workerPath, "--media-type", mediaType, "--images"], { stdio: ["pipe", "pipe", "pipe"] });
