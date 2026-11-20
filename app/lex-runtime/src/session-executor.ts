@@ -1727,15 +1727,17 @@ export class SafeSessionExecutor implements SessionExecutor {
   private readonly engine: LexExecutionEngine;
   // The fact matrices of a case's documents, kept for the next steps of the same pleading
   // (2026-11-20: each AUTO step rebuilt them, 75 s and more per step). Key: the model and the
-  // documents' text; only complete matrices are kept, for six hours.
+  // documents' text; matrices with facts are kept, for six hours.
   private readonly matrixCache = new Map<string, { at: number; value: unknown }>();
-  private async cachedMatrix<T extends { failures: unknown[] }>(key: string, compute: () => Promise<T>): Promise<T> {
+  private async cachedMatrix<T extends { failures: unknown[]; facts: unknown[] }>(key: string, compute: () => Promise<T>): Promise<T> {
     const now = Date.now();
     for (const [stored, entry] of this.matrixCache) if (now - entry.at > 6 * 3_600_000) this.matrixCache.delete(stored);
     const hit = this.matrixCache.get(key);
     if (hit) return hit.value as T;
     const value = await compute();
-    if (!value.failures.length) {
+    // A matrix with facts is kept even when a part failed (its register shows the gap); rebuilding it
+    // at the next step cost 150 s and more (live run 2026-11-20).
+    if (value.facts.length) {
       this.matrixCache.set(key, { at: now, value });
       while (this.matrixCache.size > 50) this.matrixCache.delete(this.matrixCache.keys().next().value!);
     }
@@ -5114,8 +5116,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       // In a pleading's checkpoint pipeline: the first draft (no draft kept yet) and the step that writes
       // the draft (CP-ATAK, W2); the other steps (scan, matrix, review) are not rewritten for the letter's
       // strength (each AUTO step did, about 300 s each).
-      const draftStep = !request.processWorkflowContext || !request.processWorkflowContext.draft || request.processWorkflowContext.checkpoint === "CP-ATAK";
-      const draftLetter = draftStep && (pleadingAsked || answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput));
+      // In the pipeline the answer must hold the letter itself: a CP-1a validation report was "fixed" for a
+      // missing petitum (live run 2026-11-20, 292 s).
+      const letterInAnswer = answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput);
+      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" || (letterInAnswer && !request.processWorkflowContext.draft) : true;
+      const draftLetter = draftStep && (request.processWorkflowContext ? letterInAnswer : pleadingAsked || answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput));
       const [admission, deadline] = draftLetter && pleadingAsked ? await Promise.all([admissionFindings(modelOutput), deadlineFindings(modelOutput)]) : [null, null];
       const extraBlocks = [admission?.instruction, deadline?.instruction].filter((item): item is string => Boolean(item));
       const findingsCount = gaps.length + schema.length + charges.length + (admission ? admission.conceded.length : 0) + (deadline ? deadline.changed.length : 0);
@@ -5415,7 +5420,10 @@ export class SafeSessionExecutor implements SessionExecutor {
           const before = modelOutput;
           modelOutput = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected)).body;
           await verifyDraft();
-          const second = await detect();
+          // Only quotes were wrong and fixed by point edits: checked again locally, the provisions and
+          // rulings judged on the first text stand (re-judging all of them took most of 353 s, live run).
+          const quotesOnly = pointEdits > 0 && first.size === first.quotes.length;
+          const second = quotesOnly ? { ...first, quotes: checkQuotes(modelOutput), size: checkQuotes(modelOutput).length } : await detect();
           if (second.size < first.size) {
             if (first.caseReview.semantic.length + first.caseReview.lexical.length + first.caseReview.courts.length) {
               corrections.push(
