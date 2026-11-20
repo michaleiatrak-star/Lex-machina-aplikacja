@@ -1,4 +1,5 @@
 import { CaseLawBodies } from "./CaseLawBodies";
+import { CaseLawPackage } from "./CaseLawPackage";
 import { N_, t } from "./i18n";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
@@ -386,6 +387,7 @@ export function CaseLawLibrarySection() {
                 )}
               </>
             ) : null}
+            {server ? <CaseLawPackage server={server} library={entries.length} onServer={setServer} onImported={() => void load(query)} /> : null}
             {server ? (
               <div className="case-law-server">
                 <h3>

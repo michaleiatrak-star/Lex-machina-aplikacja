@@ -44,7 +44,20 @@ export function verificationOnlyBlock(event: Pick<AuditEvent, "type" | "target" 
 
 export type LocalHybridValidationReport = {
   result: "PASS" | "BLOCKED";
+  // Only what makes a file impossible (no text at all) refuses it.
   reasons: string[];
+  // Everything else is named with the saved file; the user corrects it in the document (user,
+  // 2026-11-20: "blokady pozamieniaj na ostrzeżenia ... gdzie człowiek sam może dokonać korekt").
+  warnings: string[];
+};
+
+// HYBRID-VAL findings as warnings shown with the file.
+export const HYBRID_WARNING_TEXT: Record<string, string> = {
+  DRAFT_UNVERIFIED: "dokument ma oznaczenie DRAFT — NIEWERYFIKOWANY: usuń je po sprawdzeniu powołań",
+  PRIVACY_TOKEN_REMAINS: "w treści zostały symbole anonimizacji ([PII:…] / [LMPII:…]): wpisz w ich miejsce właściwe dane",
+  CONTROL_CHARACTER: "tekst zawiera znaki sterujące (niewidoczne): sprawdź formatowanie w edytorze",
+  SOURCE_SESSION_BLOCKED_EVENT: "w rozmowie, z której powstał dokument, był krok zatrzymany przez kontrolę (np. niezweryfikowane źródło): sprawdź powołania i fakty przed podpisaniem",
+  SOURCE_DOCUMENT_AUDIT_MISSING: "brak śladu odczytu dokumentu źródłowego sprawy: porównaj fakty pisma z aktami"
 };
 
 export function validateLocalHybridDocument(
@@ -52,34 +65,35 @@ export function validateLocalHybridDocument(
   context: DocumentGenerationValidationContext
 ): LocalHybridValidationReport {
   const reasons: string[] = [];
+  const found: string[] = [];
   if (!text.trim()) reasons.push("EMPTY_DOCUMENT");
   // Fields to fill in ([UZUPEŁNIJ: …], ⬛, [Sąd do ustalenia: …]) stay in the file and are
   // named to the user with it (documentCompletenessWarnings): never a reason to refuse the file.
-  if (/DRAFT\s*[—-]\s*NIEWERYFIKOWANY/iu.test(text)) {
-    reasons.push("DRAFT_UNVERIFIED");
-  }
-  if (/\[(?:LMPII|PII):[^\]]+\]/u.test(text)) {
-    reasons.push("PRIVACY_TOKEN_REMAINS");
-  }
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) {
-    reasons.push("CONTROL_CHARACTER");
-  }
+  if (/DRAFT\s*[—-]\s*NIEWERYFIKOWANY/iu.test(text)) found.push("DRAFT_UNVERIFIED");
+  if (/\[(?:LMPII|PII):[^\]]+\]/u.test(text)) found.push("PRIVACY_TOKEN_REMAINS");
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) found.push("CONTROL_CHARACTER");
   const blockedSourceEvent = context.auditEvents.some(
     (event) => event.status === "BLOCKED" && !(context.acceptedUnverifiedSource && verificationOnlyBlock(event))
   );
-  if (blockedSourceEvent) reasons.push("SOURCE_SESSION_BLOCKED_EVENT");
+  if (blockedSourceEvent) found.push("SOURCE_SESSION_BLOCKED_EVENT");
   if (
     context.usedDocumentContext &&
     !context.auditEvents.some(
       (event) => event.type === "resource_read" && event.target.startsWith("local-document:")
     )
   ) {
-    reasons.push("SOURCE_DOCUMENT_AUDIT_MISSING");
+    found.push("SOURCE_DOCUMENT_AUDIT_MISSING");
   }
   return {
     result: reasons.length === 0 ? "PASS" : "BLOCKED",
-    reasons
+    reasons,
+    warnings: found
   };
+}
+
+/** The findings in words, for the file's warnings. */
+export function hybridWarningTexts(codes: readonly string[]): string[] {
+  return codes.map((code) => HYBRID_WARNING_TEXT[code] ?? code);
 }
 
 export function rebuildGenerationExportState(
@@ -146,10 +160,12 @@ export function rebuildGenerationExportState(
         | "tool_decision"
         | "gate",
       event.target,
-      // An accepted draft: its verification refusals stay in the trail as degraded, not blocking.
-      context.acceptedUnverifiedSource && verificationOnlyBlock(event) ? "DEGRADED" : event.status,
+      // A step the conversation stopped stays in the export's trail as degraded: it is named to
+      // the user as a warning with the file (HYBRID-VAL), not a reason to refuse the file.
+      event.status === "BLOCKED" ? "DEGRADED" : event.status,
       {
         sourceSequence: event.sequence,
+        ...(event.status === "BLOCKED" ? { sourceStatus: "BLOCKED" } : {}),
         ...(event.detail ? { sourceDetail: { ...event.detail } } : {})
       }
     );

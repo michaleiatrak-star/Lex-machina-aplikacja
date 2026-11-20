@@ -42,199 +42,199 @@
  ],
  "totals": {
   "pl": {
-   "całość": 95,
+   "całość": 96,
    "częściowo": 0,
    "wcale": 0
   },
   "en": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "de": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "fr": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "it": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "es": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "pt": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "nl": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "ca": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "lb": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "sv": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "da": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "nb": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "fi": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "is": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "fo": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "et": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "lv": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "lt": {
    "całość": 71,
    "częściowo": 24,
-   "wcale": 0
+   "wcale": 1
   },
   "cs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "sk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "hu": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "sl": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "hr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "bs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "sr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "cnr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "mk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "sq": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "ro": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "bg": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "el": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "mt": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "tr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "uk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "ka": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "hy": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "az": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   },
   "rw": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 93
+   "wcale": 94
   }
  },
  "components": [
@@ -1451,6 +1451,71 @@
     "et": "całość",
     "lv": "całość",
     "lt": "całość",
+    "cs": "wcale",
+    "sk": "wcale",
+    "hu": "wcale",
+    "sl": "wcale",
+    "hr": "wcale",
+    "bs": "wcale",
+    "sr": "wcale",
+    "cnr": "wcale",
+    "mk": "wcale",
+    "sq": "wcale",
+    "ro": "wcale",
+    "bg": "wcale",
+    "el": "wcale",
+    "mt": "wcale",
+    "tr": "wcale",
+    "uk": "wcale",
+    "ka": "wcale",
+    "hy": "wcale",
+    "az": "wcale",
+    "rw": "wcale"
+   }
+  },
+  {
+   "component": "CaseLawPackage",
+   "translatable": 18,
+   "notYetTranslatable": 0,
+   "translated": {
+    "ca": 0,
+    "da": 0,
+    "de": 0,
+    "en": 0,
+    "es": 0,
+    "et": 0,
+    "fi": 0,
+    "fr": 0,
+    "is": 0,
+    "it": 0,
+    "lb": 0,
+    "lt": 0,
+    "lv": 0,
+    "nb": 0,
+    "nl": 0,
+    "pt": 0,
+    "sv": 0
+   },
+   "state": {
+    "pl": "całość",
+    "en": "wcale",
+    "de": "wcale",
+    "fr": "wcale",
+    "it": "wcale",
+    "es": "wcale",
+    "pt": "wcale",
+    "nl": "wcale",
+    "ca": "wcale",
+    "lb": "wcale",
+    "sv": "wcale",
+    "da": "wcale",
+    "nb": "wcale",
+    "fi": "wcale",
+    "is": "wcale",
+    "fo": "wcale",
+    "et": "wcale",
+    "lv": "wcale",
+    "lt": "wcale",
     "cs": "wcale",
     "sk": "wcale",
     "hu": "wcale",

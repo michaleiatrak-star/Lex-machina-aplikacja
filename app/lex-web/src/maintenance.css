@@ -611,3 +611,35 @@ li.anomaly-error > strong {
 .case-law-session-button {
   margin-left: 6px;
 }
+
+/* Package of the local database of rulings: sources to export, then the two actions. */
+.case-law-package {
+  border-top: 1px solid var(--lm-l2);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.case-law-package h3 {
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+.case-law-package-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2px 12px;
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+.case-law-package-sources label {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+.case-law-package-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

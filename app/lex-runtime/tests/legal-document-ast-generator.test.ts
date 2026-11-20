@@ -539,12 +539,12 @@ describe("pismo z niezweryfikowanym przepisem: projekt po decyzji użytkownika (
   it("po decyzji: AST i kontekst projektu; HYBRID-VAL i audyt eksportu nie blokują już weryfikacji", async () => {
     const generated = await generator().generate({ ...request, acceptUnverified: true });
     expect(generated.validationContext.acceptedUnverifiedSource).toEqual({ claims: ["art. 484 § 2"] });
-    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", generated.validationContext)).toEqual({ result: "PASS", reasons: [] });
+    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", generated.validationContext)).toEqual({ result: "PASS", reasons: [], warnings: [] });
     const { audit } = rebuildGenerationExportState(generated.validationContext);
     expect(audit.validateCompletion({ requireVerification: false }).violations).not.toContain("blocked_event_present");
     // Without the decision the same source still blocks the file.
     const { acceptedUnverifiedSource: _accepted, ...plain } = generated.validationContext;
-    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", plain).reasons).toContain("SOURCE_SESSION_BLOCKED_EVENT");
+    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", plain).warnings).toContain("SOURCE_SESSION_BLOCKED_EVENT");
   });
 
   it("inna blokada (brak zasobu) nadal blokuje, także po decyzji", async () => {

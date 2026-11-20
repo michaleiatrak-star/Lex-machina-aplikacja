@@ -3,7 +3,7 @@ import { buildGenerationAliases, resolveGenerationAliases, applyRestorationOverr
 import { legalDocumentPlainText, validateLegalDocumentAst } from "./legal-document-ast.js";
 import { LocalLegalDocumentRenderer } from "./legal-document-renderer.js";
 import { privacyVaultDeanonymizationKeyBinding } from "./privacy/vault-store.js";
-import { rebuildGenerationExportState, validateLocalHybridDocument } from "./document-generation-validation.js";
+import { rebuildGenerationExportState, validateLocalHybridDocument, hybridWarningTexts } from "./document-generation-validation.js";
 import { ExportGate } from "./export-gate.js";
 import { CASE_MATERIAL_MARKER_TEXT, FinalizationGate, markUnverifiedReferences } from "./finalization-gate.js";
 import { astTextLines } from "./ast-text-lines.js";
@@ -186,7 +186,9 @@ export class LocalDocumentAuthoringService {
             }
             // HYBRID-VAL before the .docx, as for a ready document; the privacy tokens are this
             // file's purpose (they are replaced and checked again on deanonymization).
-            const hybridReasons = validateLocalHybridDocument(validation.text, args.validationContext).reasons.filter((reason) => reason !== "PRIVACY_TOKEN_REMAINS");
+            const tokenizedHybrid = validateLocalHybridDocument(validation.text, args.validationContext);
+            const hybridReasons = tokenizedHybrid.reasons;
+            const hybridWarnings = hybridWarningTexts(tokenizedHybrid.warnings.filter((reason) => reason !== "PRIVACY_TOKEN_REMAINS"));
             if (hybridReasons.length) {
                 throw new Error("TOKENIZED_DOCUMENT_HYBRID_BLOCKED:" +
                     hybridReasons.join(","));
@@ -262,7 +264,10 @@ export class LocalDocumentAuthoringService {
                     .aliasesUsed,
                 text: rendered.text,
                 deanonymizationKeyBound: true,
-                warnings: documentCompletenessWarnings(documentAst, rendered.text),
+                warnings: [
+                    ...hybridWarnings,
+                    ...documentCompletenessWarnings(documentAst, rendered.text)
+                ],
                 ...(rendered.template ? { letterhead: rendered.template } : {})
             };
         }
@@ -357,7 +362,10 @@ export class LocalDocumentAuthoringService {
                 format: args.format,
                 sha256,
                 text: validation.text,
-                warnings: documentCompletenessWarnings(documentAst, validation.text),
+                warnings: [
+                    ...hybridWarningTexts(hybrid.warnings),
+                    ...documentCompletenessWarnings(documentAst, validation.text)
+                ],
                 ...(rendered.template ? { letterhead: rendered.template } : {})
             };
         }

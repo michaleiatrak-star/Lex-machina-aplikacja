@@ -4259,6 +4259,31 @@ export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean 
   return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
+// A package of the local database of rulings (gzip JSON lines; each document keeps its source).
+export async function exportCaseLawPackage(sources: string[]): Promise<{ blob: Blob; filename: string }> {
+  const query = sources.length ? `?sources=${encodeURIComponent(sources.join(","))}` : "";
+  const response = await fetch(`${apiBase()}/api/case-law/export${query}`, { headers: authorizationHeaders() });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `HTTP_${response.status}`, response.status);
+  }
+  const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "orzeczenia.lexcl.gz";
+  return { blob: await response.blob(), filename };
+}
+
+export type CaseLawImportResult = { format: string | null; imported: number; skipped: number; invalid: number; sources: Record<string, number> };
+
+export async function importCaseLawPackage(file: File): Promise<CaseLawImportResult & { server: CaseLawServerStatus }> {
+  const response = await fetch(`${apiBase()}/api/case-law/import`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": /\.gz$/i.test(file.name) ? "application/gzip" : "application/x-ndjson", ...authorizationHeaders() },
+    body: await binaryBody(file)
+  });
+  const payload = (await response.json().catch(() => null)) as (CaseLawImportResult & { server: CaseLawServerStatus; error?: string }) | null;
+  if (!response.ok || !payload) throw new ApiError(payload?.error ?? `HTTP_${response.status}`, response.status);
+  return payload;
+}
+
 export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
 
 export function getLocalOffline(): Promise<{ enabled: boolean; forced: boolean }> {
