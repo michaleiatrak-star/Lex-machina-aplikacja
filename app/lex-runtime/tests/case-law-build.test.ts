@@ -19,11 +19,27 @@ const adapter: SyncAdapter = {
     }
   }
 };
+// A source behind a confirmation (as sn.pl's captcha): it waits until the session is there.
+let session = false;
+let waits = 0;
+const gated: SyncAdapter = {
+  source: "TK",
+  label: "TK (test)",
+  progress: () => (session ? "gotowe" : "czeka"),
+  async run(ctx) {
+    if (!session) {
+      waits += 1;
+      ctx.waiting = "czeka na potwierdzenie";
+      return;
+    }
+    await ctx.get("https://example.test/tk");
+  }
+};
 const fetcher = vi.fn(async () => new Response("ok", { status: 200 }));
 const kio = () => caseLawSyncStatus().sources.find((item) => item.source === "KIO");
 const previous = process.env.LEX_CASE_LAW_SYNC;
 process.env.LEX_CASE_LAW_SYNC = "0";
-const stop = startCaseLawSync({ adapters: [adapter], fetcher, budget: 2, gapMs: 0, database: () => db, intervalMs: 3_600_000 });
+const stop = startCaseLawSync({ adapters: [adapter, gated], fetcher, budget: 2, gapMs: 0, waitRetryMs: 10, database: () => db, intervalMs: 3_600_000 });
 
 afterAll(() => {
   stop();
@@ -53,5 +69,16 @@ describe("the administrator builds a source on request (no server mode)", () => 
     await vi.waitFor(() => expect(kio()?.running).toBe(false), { timeout: 2_000 });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(buildCaseLawSource("NIEZNANE")).toBe(false);
+  });
+
+  it("a build waiting for the user's session goes on once the session is confirmed", async () => {
+    const tk = () => caseLawSyncStatus().sources.find((item) => item.source === "TK");
+    fetcher.mockClear();
+    buildCaseLawSource("TK");
+    await vi.waitFor(() => expect(waits).toBeGreaterThanOrEqual(2), { timeout: 2_000 });
+    expect(tk()?.building).toBe(true);
+    session = true;
+    await vi.waitFor(() => expect(tk()).toMatchObject({ building: false, running: false }), { timeout: 2_000 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

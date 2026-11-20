@@ -727,7 +727,7 @@ const SN_WINDOW_DAYS = 60;
 const SN_PAGE = 25;
 
 /** "Waiting for the user" message when sn.pl asks for its human check. */
-export const SN_WAITING = "czeka na potwierdzenie w oknie sn.pl (Ustawienia albo czat); potem pobieranie wznowi się samo";
+export const SN_WAITING = "czeka na potwierdzenie w oknie sn.pl (przycisk „Zweryfikuj w sn.pl” przy źródle albo czat); potem pobieranie wznowi się samo";
 
 export const snAdapter: SyncAdapter = {
   source: "SN",
@@ -1566,6 +1566,8 @@ let syncActive = false;
 
 export type CaseLawSyncOptions = {
   isServerMode?: () => boolean;
+  /** How long a build waiting for the user's session waits before it tries again. */
+  waitRetryMs?: number;
   fetcher?: SyncFetch;
   /** sn.pl requests with the session the user verified in the app's window. */
   snFetcher?: SyncFetch;
@@ -1638,8 +1640,11 @@ function buildStep(adapter: SyncAdapter, options: CaseLawSyncOptions): void {
       // The whole budget used: more is waiting at the source. Fewer requests, an error or a
       // source waiting for the user's session ends the build (the cursor keeps the place).
       const more = run !== null && !run.error && !run.waiting && run.requests >= budget;
-      if (more && building.has(adapter.source)) {
-        const timer = setTimeout(() => buildStep(adapter, options), gapMs);
+      // A source waiting for the user's session (sn.pl captcha, a folder to open) keeps the build:
+      // it is tried again until the session is there or the administrator stops it.
+      const waiting = run !== null && Boolean(run.waiting);
+      if ((more || waiting) && building.has(adapter.source)) {
+        const timer = setTimeout(() => buildStep(adapter, options), waiting ? (options.waitRetryMs ?? 30_000) : gapMs);
         timer.unref?.();
       } else building.delete(adapter.source);
     });

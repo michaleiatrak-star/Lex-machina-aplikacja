@@ -11,6 +11,7 @@ import {
   type CaseLawServerStatus, buildCaseLawSource, runCaseLawSource } from "./api.js";
 import { CASE_RANGE_PRESETS, rangeForPreset, type CaseRangePreset } from "./CaseAccessAdminPanel.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
+import { SnVerification } from "./SnVerification.js";
 import { InfoTip } from "./InfoTip";
 
 function label(entry: CaseLawCatalogEntry): string {
@@ -57,6 +58,9 @@ const NIL_VERIFICATION = {
   host: "naczelnaizbalekarska.sharepoint.com",
   label: "NIL"
 };
+
+// sn.pl asks for a captcha (Imperva): the build of SN waits until the session is confirmed here.
+const SN_SEARCH_URL = "https://www.sn.pl/pl/wyszukiwarka-orzeczen";
 
 const RPO_VERIFICATION = {
   url: "https://bip.brpo.gov.pl/sprawy-generalne/index.php?p_rodzaj=8779",
@@ -110,6 +114,18 @@ export function CaseLawLibrarySection({ admin = false }: { admin?: boolean }) {
   const [error, setError] = useState("");
   const titleId = useId();
   const [sessionWindow, setSessionWindow] = useState("");
+  // A build stopped by a site's bot protection (sn.pl captcha, a folder needing sign-in) opens the
+  // site's window by itself, as the chat does for sn.pl and the courts for their lists; once per source.
+  const [autoOpened, setAutoOpened] = useState<string[]>([]);
+  useEffect(() => {
+    if (!admin || sessionWindow || !server || server.active) return;
+    const blocked = server.sources.find(
+      (item) => item.building && item.lastRun?.waiting && (item.source === "SN" || SESSION_SOURCES[item.source]) && !autoOpened.includes(item.source)
+    );
+    if (!blocked) return;
+    setAutoOpened((current) => [...current, blocked.source]);
+    setSessionWindow(blocked.source);
+  }, [admin, server, sessionWindow, autoOpened]);
 
   const load = useCallback(async (search: string) => {
     try {
@@ -467,13 +483,30 @@ export function CaseLawLibrarySection({ admin = false }: { admin?: boolean }) {
                           <CaseLawBodies title={t("Sąd")} source={item.source} bodies={item.bodies} active={server.active} onServer={setServer} onError={setError} />
                         )
                       ) : null}
+                      {item.source === "SN" && admin && !server.active ? (
+                        sessionWindow === "SN" ? (
+                          <SnVerification
+                            verification={{ url: SN_SEARCH_URL }}
+                            autoStart={autoOpened.includes("SN")}
+                            onVerified={() => {
+                              setSessionWindow("");
+                              build("SN", false);
+                            }}
+                          />
+                        ) : (
+                          <button type="button" className="case-access-link case-law-session-button" onClick={() => setSessionWindow("SN")}>
+                            {t("Zweryfikuj w sn.pl")}
+                          </button>
+                        )
+                      ) : null}
                       {SESSION_SOURCES[item.source] ? (
                         sessionWindow === item.source ? (
                           <LawSourceVerification
                             verification={SESSION_SOURCES[item.source]!.verification}
-                            autoStart={false}
+                            autoStart={autoOpened.includes(item.source)}
                             onVerified={() => {
                               setSessionWindow("");
+                              if (item.building) build(item.source, false);
                               void load(query);
                             }}
                           />
