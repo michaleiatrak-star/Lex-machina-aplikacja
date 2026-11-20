@@ -4243,7 +4243,9 @@ export function getCaseLawServerDocuments(source: string, court: string, offset 
 
 export type CaseLawServerStatus = {
   active: boolean;
-  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; building?: boolean; lastRun: CaseLawSyncRun | null; bodies?: CaseLawBody[] }>;
+  /** Server mode: every source on this schedule, in full first, then only what is new. */
+  schedule?: { intervalMinutes: number; nextAt: string | null };
+  sources: Array<{ source: string; label: string; documents: number; progress: string; phase?: "NONE" | "PARTIAL" | "COMPLETE"; running: boolean; building?: boolean; lastRun: CaseLawSyncRun | null; bodies?: CaseLawBody[] }>;
   notBulk: Array<{ source: string; reason: string }>;
 };
 

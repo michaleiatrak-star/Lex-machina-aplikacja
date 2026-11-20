@@ -88,7 +88,10 @@ function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string
     duplicates: run.duplicates
   });
   if (run.waiting) return `${head} · ${run.waiting}`;
-  return run.error ? `${head} · ${t("błąd: {error}", { error: run.error })}` : head;
+  if (!run.error) return head;
+  // A network failure comes from the runtime in English: said in Polish.
+  const error = /fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket|network|aborted|timeout/iu.test(run.error) ? t("brak połączenia ze źródłem") : run.error;
+  return `${head} · ${t("błąd: {error}", { error })}`;
 }
 
 /**
@@ -424,9 +427,16 @@ export function CaseLawLibrarySection({ admin = false }: { admin?: boolean }) {
                   {server.active ? t("Baza serwera — wszystkie orzeczenia") : t("Pełne bazy orzeczeń ze źródeł")}
                   <InfoTip>{t("W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.")}</InfoTip>
                 </h3>
-                {server.active ? null : admin ? (
+                {server.active ? (
                   <p className="field-help">
-                    {t("Automatycznie baza jest pobierana tylko w trybie serwerowym. Jako administrator możesz ją zbudować tutaj: pobieranie ruszy dopiero po kliknięciu „Buduj bazę” przy źródle i zakończy się samo, gdy źródło zostanie pobrane do końca.")}
+                    {t("Aktualizacja automatyczna co {minutes} min: najpierw pełne pobranie, potem dociągane są tylko nowe orzeczenia (przyrostowo).", {
+                      minutes: server.schedule?.intervalMinutes ?? 10
+                    })}
+                    {server.schedule?.nextAt ? ` ${t("Następna: {time}.", { time: new Date(server.schedule.nextAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }) })}` : ""}
+                  </p>
+                ) : admin ? (
+                  <p className="field-help">
+                    {t("Automatycznie baza jest pobierana tylko w trybie serwerowym. Jako administrator możesz ją zbudować tutaj: pobieranie ruszy dopiero po kliknięciu „Buduj bazę” przy źródle i zakończy się samo, gdy źródło zostanie pobrane do końca. Przerwana budowa (zamknięcie aplikacji) wznawia się po ponownym uruchomieniu; po błędzie albo zatrzymaniu „Kontynuuj budowę” rusza od miejsca przerwania.")}
                   </p>
                 ) : (
                   <p className="field-help">{t("Pobieranie działa w trybie serwerowym albo na żądanie administratora.")}</p>
@@ -443,7 +453,13 @@ export function CaseLawLibrarySection({ admin = false }: { admin?: boolean }) {
                           className="case-access-link case-law-session-button"
                           onClick={() => build(item.source, Boolean(item.building))}
                         >
-                          {item.building ? t("Zatrzymaj") : t("Buduj bazę")}
+                          {item.building
+                            ? t("Zatrzymaj")
+                            : item.phase === "PARTIAL"
+                              ? t("Kontynuuj budowę")
+                              : item.phase === "COMPLETE"
+                                ? t("Dociągnij nowe")
+                                : t("Buduj bazę")}
                         </button>
                       ) : null}
                       {server.active && !item.running ? (
