@@ -1572,7 +1572,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/case-law/resolve"
         | "/api/case-law/library/remove"
         | "/api/case-law/sync/run"
-        | "/api/case-law/import" => method == "POST",
+        | "/api/case-law/import"
+        | "/api/case-law/build" => method == "POST",
         "/api/case-law/server/documents" | "/api/case-law/export" => method == "GET",
         "/api/case-law/library" => matches!(method, "GET" | "PUT"),
         "/api/core-law/settings" => method == "PUT",
@@ -2251,6 +2252,8 @@ mod tests {
         assert!(!route_allowed("POST", "/api/case-law/export"));
         assert!(route_allowed("POST", "/api/case-law/import"));
         assert!(!route_allowed("GET", "/api/case-law/import"));
+        assert!(route_allowed("POST", "/api/case-law/build"));
+        assert!(!route_allowed("GET", "/api/case-law/build"));
         assert!(!route_allowed("GET", "/api/auth/activity"));
         assert!(route_allowed("POST", "/api/privacy/name-forms"));
         assert!(route_allowed("POST", "/api/deanonymization/preview"));

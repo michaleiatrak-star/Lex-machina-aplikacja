@@ -1,4 +1,4 @@
-import { caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
+import { buildCaseLawSource, caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow, stopCaseLawBuild } from "../case-law-sync.js";
 import { CASE_LAW_PACKAGE_FORMAT, CASE_LAW_SOURCES, CaseLawDatabase, caseLawPackageManifest, defaultCaseLawDbDir, setSharedCaseLawDatabase, sharedCaseLawDatabase, type CaseLawImportResult, type CaseLawSource } from "../case-law-db.js";
 import { createGunzip, createGzip } from "node:zlib";
 import { createInterface } from "node:readline";
@@ -869,6 +869,13 @@ export function registerMcpConnectorRoutes(
       req.resume();
       res.status(400).json({ error: code, ...result });
     }
+  });
+  // "Buduj bazę" / "Zatrzymaj" (administrator, any installation): the source is downloaded on request only.
+  app.post("/api/case-law/build", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const source = typeof req.body?.source === "string" ? req.body.source.slice(0, 40) : "";
+    const changed = req.body?.stop === true ? stopCaseLawBuild(source) : buildCaseLawSource(source);
+    res.json({ changed, server: caseLawSyncStatus() });
   });
   app.put("/api/case-law/library", (req, res) => {
     if (!requireUser(req, res, authService)) return;

@@ -7109,7 +7109,9 @@ export function createLexHttpApp(options) {
             if (!trivialChat) {
                 const signals = modeSignals(options.registry);
                 if (signals) {
-                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null, responseAuthContext(res).user.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL");
+                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null, 
+                    // Without an account (internal runs, G15) the KROK 1 detection applies as before.
+                    ((auth) => (auth && auth.user.accountKind !== "INDIVIDUAL" ? "PROFESSIONAL" : "INDIVIDUAL"))(res.locals.lexAuth));
                     request.mode = decision.mode;
                     request.modeDecision = decision;
                     request.onStep?.("ROUTING", `tryb ${decision.mode} (${decision.decision.toLowerCase().replaceAll("_", " ")})`);

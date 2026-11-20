@@ -1560,6 +1560,8 @@ export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
 type AdapterRun = { at: string; requests: number; stored: number; duplicates: number; error?: string; waiting?: string };
 const runs = new Map<string, AdapterRun>();
 const running = new Set<string>();
+// Sources an administrator asked to build on this installation (no server mode needed).
+const building = new Set<string>();
 let syncActive = false;
 
 export type CaseLawSyncOptions = {
@@ -1601,9 +1603,7 @@ let startedWith: CaseLawSyncOptions | null = null;
  */
 export function runCaseLawSourceNow(source: string): boolean {
   const options = startedWith;
-  const adapter = source.startsWith("OSD:")
-    ? disciplinarySeedAdapter(source.slice(4))
-    : (options?.adapters ?? CASE_LAW_ADAPTERS).find((item) => item.source === source);
+  const adapter = options ? adapterOf(source, options) : undefined;
   if (!options || !adapter || running.has(adapter.source) || !syncActive) return false;
   const held = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
   setSharedCaseLawDatabase(held);
@@ -1613,6 +1613,55 @@ export function runCaseLawSourceNow(source: string): boolean {
     .then((run) => runs.set(adapter.source, run))
     .finally(() => running.delete(adapter.source));
   return true;
+}
+
+function adapterOf(source: string, options: CaseLawSyncOptions): SyncAdapter | undefined {
+  return source.startsWith("OSD:") ? (disciplinarySeedAdapter(source.slice(4)) ?? undefined) : (options.adapters ?? CASE_LAW_ADAPTERS).find((item) => item.source === source);
+}
+
+function buildStep(adapter: SyncAdapter, options: CaseLawSyncOptions): void {
+  if (running.has(adapter.source)) return;
+  const held = sharedCaseLawDatabase() ?? new CaseLawDatabase(defaultCaseLawDbDir());
+  setSharedCaseLawDatabase(held);
+  const budget = options.budget ?? 600;
+  const gapMs = options.gapMs ?? 1_000;
+  const fetcher = adapter.source === "SN" && options.snFetcher ? options.snFetcher : (options.fetcher ?? (globalThis.fetch.bind(globalThis) as SyncFetch));
+  running.add(adapter.source);
+  void runAdapter(adapter, options.database ? options.database() : held, fetcher, budget, gapMs, undefined, options.ocr ?? null)
+    .then((run) => {
+      runs.set(adapter.source, run);
+      return run;
+    })
+    .catch(() => null)
+    .then((run) => {
+      running.delete(adapter.source);
+      // The whole budget used: more is waiting at the source. Fewer requests, an error or a
+      // source waiting for the user's session ends the build (the cursor keeps the place).
+      const more = run !== null && !run.error && !run.waiting && run.requests >= budget;
+      if (more && building.has(adapter.source)) {
+        const timer = setTimeout(() => buildStep(adapter, options), gapMs);
+        timer.unref?.();
+      } else building.delete(adapter.source);
+    });
+}
+
+/**
+ * The administrator's "Buduj bazę" (user, 2026-11-20): only on request, on any installation, the
+ * source is downloaded batch after batch until it is caught up, an error or a missing session
+ * stops it, or the administrator stops it. False for an unknown source or before start.
+ */
+export function buildCaseLawSource(source: string): boolean {
+  const options = startedWith;
+  const adapter = options ? adapterOf(source, options) : undefined;
+  if (!options || !adapter) return false;
+  building.add(adapter.source);
+  buildStep(adapter, options);
+  return true;
+}
+
+/** Stops a build after the batch in progress. */
+export function stopCaseLawBuild(source: string): boolean {
+  return building.delete(source);
 }
 
 export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
@@ -1648,7 +1697,7 @@ export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
   return () => clearInterval(timer);
 }
 
-export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; running: boolean; lastRun: AdapterRun | null; bodies?: CaseLawBody[] };
+export type CaseLawSourceStatus = { source: string; label: string; documents: number; progress: string; running: boolean; building: boolean; lastRun: AdapterRun | null; bodies?: CaseLawBody[] };
 
 /** What the settings window shows: whether the download runs, and each source's count and place. */
 export type CaseLawBody = {
@@ -1702,6 +1751,7 @@ export function caseLawSyncStatus(): { active: boolean; sources: CaseLawSourceSt
       documents: database ? database.count(adapter.source) : 0,
       progress: database ? adapter.progress(database) : "nie rozpoczęto",
       running: running.has(adapter.source),
+      building: building.has(adapter.source),
       lastRun: runs.get(adapter.source) ?? null,
       ...(database && (adapter.source === "OSD" || adapter.source === "WSD") ? { bodies: sourceBodies(database, adapter.source) } : {})
     })),

@@ -47,73 +47,73 @@
    "wcale": 0
   },
   "en": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "de": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "fr": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "it": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "es": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "pt": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "nl": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "ca": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "lb": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "sv": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "da": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "nb": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "fi": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "is": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "fo": {
@@ -122,18 +122,18 @@
    "wcale": 94
   },
   "et": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "lv": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "lt": {
-   "całość": 71,
-   "częściowo": 24,
+   "całość": 70,
+   "częściowo": 25,
    "wcale": 1
   },
   "cs": {
@@ -1410,7 +1410,7 @@
   },
   {
    "component": "CaseLawLibrarySection",
-   "translatable": 50,
+   "translatable": 55,
    "notYetTranslatable": 0,
    "translated": {
     "ca": 50,
@@ -1433,24 +1433,24 @@
    },
    "state": {
     "pl": "całość",
-    "en": "całość",
-    "de": "całość",
-    "fr": "całość",
-    "it": "całość",
-    "es": "całość",
-    "pt": "całość",
-    "nl": "całość",
-    "ca": "całość",
-    "lb": "całość",
-    "sv": "całość",
-    "da": "całość",
-    "nb": "całość",
-    "fi": "całość",
-    "is": "całość",
+    "en": "częściowo",
+    "de": "częściowo",
+    "fr": "częściowo",
+    "it": "częściowo",
+    "es": "częściowo",
+    "pt": "częściowo",
+    "nl": "częściowo",
+    "ca": "częściowo",
+    "lb": "częściowo",
+    "sv": "częściowo",
+    "da": "częściowo",
+    "nb": "częściowo",
+    "fi": "częściowo",
+    "is": "częściowo",
     "fo": "wcale",
-    "et": "całość",
-    "lv": "całość",
-    "lt": "całość",
+    "et": "częściowo",
+    "lv": "częściowo",
+    "lt": "częściowo",
     "cs": "wcale",
     "sk": "wcale",
     "hu": "wcale",

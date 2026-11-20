@@ -8,7 +8,7 @@ import {
   removeCaseLawLibraryEntry,
   setCaseLawLibrary,
   type CaseLawCatalogEntry,
-  type CaseLawServerStatus, runCaseLawSource } from "./api.js";
+  type CaseLawServerStatus, buildCaseLawSource, runCaseLawSource } from "./api.js";
 import { CASE_RANGE_PRESETS, rangeForPreset, type CaseRangePreset } from "./CaseAccessAdminPanel.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
 import { InfoTip } from "./InfoTip";
@@ -93,7 +93,7 @@ function runText(run: CaseLawServerStatus["sources"][number]["lastRun"]): string
  * the list opens in a window. In server mode the window also shows the database of all rulings the
  * server downloads from the bulk sources.
  */
-export function CaseLawLibrarySection() {
+export function CaseLawLibrarySection({ admin = false }: { admin?: boolean }) {
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(true);
   const [entries, setEntries] = useState<CaseLawCatalogEntry[]>([]);
@@ -136,6 +136,20 @@ export function CaseLawLibrarySection() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // While a source is being built, its counts are refreshed every few seconds.
+  const working = Boolean(server?.sources.some((item) => item.running || item.building));
+  useEffect(() => {
+    if (!open || !working) return;
+    const timer = window.setInterval(() => void load(query), 5000);
+    return () => window.clearInterval(timer);
+  }, [open, working, load, query]);
+
+  function build(source: string, stop: boolean): void {
+    void buildCaseLawSource(source, stop)
+      .then((reply) => setServer(reply.server))
+      .catch((caught: unknown) => setError(caught instanceof ApiError ? caught.code : String(caught)));
+  }
 
   const courts = useMemo(() => [...new Set(entries.map((entry) => entry.court).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pl")), [entries]);
   const listed = useMemo(() => filterCaseLaw(entries, { court, sort, range, field }), [entries, court, sort, range, field]);
@@ -391,16 +405,31 @@ export function CaseLawLibrarySection() {
             {server ? (
               <div className="case-law-server">
                 <h3>
-                  {t("Baza serwera — wszystkie orzeczenia")}
+                  {server.active ? t("Baza serwera — wszystkie orzeczenia") : t("Pełne bazy orzeczeń ze źródeł")}
                   <InfoTip>{t("W trybie serwerowym serwer pobiera całe oficjalne bazy orzeczeń (od najstarszych), potem już tylko nowe. Przerwane pobieranie wznawia się od miejsca zatrzymania. To samo orzeczenie z dwóch baz jest zapisywane raz.")}</InfoTip>
                 </h3>
-                {server.active ? null : <p className="field-help">{t("Pobieranie działa tylko w trybie serwerowym.")}</p>}
+                {server.active ? null : admin ? (
+                  <p className="field-help">
+                    {t("Automatycznie baza jest pobierana tylko w trybie serwerowym. Jako administrator możesz ją zbudować tutaj: pobieranie ruszy dopiero po kliknięciu „Buduj bazę” przy źródle i zakończy się samo, gdy źródło zostanie pobrane do końca.")}
+                  </p>
+                ) : (
+                  <p className="field-help">{t("Pobieranie działa w trybie serwerowym albo na żądanie administratora.")}</p>
+                )}
                 <ul>
                   {server.sources.map((item) => (
                     <li key={item.source}>
                       <strong>{item.label}</strong>: {t("dokumentów: {count}", { count: item.documents })} · {item.progress}
-                      {item.running ? ` · ${t("pobieranie trwa")}` : ""}
+                      {item.building ? ` · ${t("budowanie trwa")}` : item.running ? ` · ${t("pobieranie trwa")}` : ""}
                       {item.lastRun ? <small className="field-help"> {runText(item.lastRun)}</small> : null}
+                      {admin && !server.active ? (
+                        <button
+                          type="button"
+                          className="case-access-link case-law-session-button"
+                          onClick={() => build(item.source, Boolean(item.building))}
+                        >
+                          {item.building ? t("Zatrzymaj") : t("Buduj bazę")}
+                        </button>
+                      ) : null}
                       {server.active && !item.running ? (
                         <button
                           type="button"

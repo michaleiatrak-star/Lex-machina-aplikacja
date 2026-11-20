@@ -11038,7 +11038,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             request.auxiliaryText ?? latestUserTurn(request.query),
             signals,
             threadEvidence?.mode ?? null,
-            responseAuthContext(res).user.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL"
+            // Without an account (internal runs, G15) the KROK 1 detection applies as before.
+            ((auth) => (auth && auth.user.accountKind !== "INDIVIDUAL" ? "PROFESSIONAL" : "INDIVIDUAL"))(res.locals.lexAuth as AuthenticatedContext | undefined)
           );
           request.mode = decision.mode;
           request.modeDecision = decision;

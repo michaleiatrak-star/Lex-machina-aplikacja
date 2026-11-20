@@ -106,7 +106,7 @@ export default function App({
                 with the application's maintenance; on a server only the administrator sees them. */}
             {isDesktopShell() || user.appRole === "ADMIN" ? (
               <div className="maintenance-panel maintenance-panel-embedded">
-                <CaseLawLibrarySection />
+                <CaseLawLibrarySection admin={user.appRole === "ADMIN"} />
                 <WebSearchSection admin={user.appRole === "ADMIN"} />
               </div>
             ) : null}

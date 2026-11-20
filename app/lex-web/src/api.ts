@@ -4243,7 +4243,7 @@ export function getCaseLawServerDocuments(source: string, court: string, offset 
 
 export type CaseLawServerStatus = {
   active: boolean;
-  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; lastRun: CaseLawSyncRun | null; bodies?: CaseLawBody[] }>;
+  sources: Array<{ source: string; label: string; documents: number; progress: string; running: boolean; building?: boolean; lastRun: CaseLawSyncRun | null; bodies?: CaseLawBody[] }>;
   notBulk: Array<{ source: string; reason: string }>;
 };
 
@@ -4253,6 +4253,11 @@ export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; avail
 
 export function runCaseLawSource(source: string): Promise<{ started: boolean; server: CaseLawServerStatus }> {
   return json("/api/case-law/sync/run", { method: "POST", body: JSON.stringify({ source }) });
+}
+
+// "Buduj bazę" / "Zatrzymaj" (administrator): one source downloaded on request until caught up.
+export function buildCaseLawSource(source: string, stop = false): Promise<{ changed: boolean; server: CaseLawServerStatus }> {
+  return json("/api/case-law/build", { method: "POST", body: JSON.stringify({ source, stop }) });
 }
 
 export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean }> {
