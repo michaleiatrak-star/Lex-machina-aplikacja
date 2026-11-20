@@ -1064,7 +1064,7 @@ export type MandatoryPathView = {
 
 export type QueryModeDecisionView = {
   mode: "LAIK" | "PRAWNIK";
-  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY";
+  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY" | "KONTO_KANCELARII";
   signals: { laik: string[]; prawnik: string[]; direct: string[] };
 };
 

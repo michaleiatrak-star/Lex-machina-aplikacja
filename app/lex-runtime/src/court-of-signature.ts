@@ -166,3 +166,31 @@ export function officialCaseLawCall(call: { name: string; input?: unknown }): bo
   }
   return false;
 }
+
+/**
+ * A signature the case files cite as case law ("wyrok Sądu Apelacyjnego w … z dnia …, sygn. akt
+ * I ACa 12/24", "uchwała SN … III CZP 1/20"), not a proceeding of the case itself or of the
+ * client's other matters (a protocol, a summons, a decision issued to the party). Only cited
+ * rulings are looked up in SAOS; the parties' own proceedings are not published there (user
+ * report 2026-11-20: "SAOS (tekst orzeczeń z akt): XI P 27/26, VII P 94/25, VIII W 633/25").
+ */
+export function citedAsCaseLaw(text: string, signature: string): boolean {
+  const flat = text.normalize("NFKC").replace(/\s+/gu, " ");
+  const escaped = signature.replace(/\s+/gu, " ").replace(/[.*+?^${}()|[\]\\/]/gu, "\\$&").replace(/ /gu, "\\s+");
+  const pattern = new RegExp(escaped, "gu");
+  const RULING = /(?<![\p{L}])(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*|orzeczeni\p{L}*)(?![\p{L}])/giu;
+  for (const match of flat.matchAll(pattern)) {
+    const before = flat.slice(Math.max(0, match.index! - 160), match.index!);
+    // The nearest ruling word before the signature, and what stands between them: a citation
+    // names the court or the date ("wyrok SA w Krakowie z dnia …, sygn."), a decision issued in the
+    // party's own proceeding names the case ("postanowienie w sprawie o …, sygn.").
+    const rulings = [...before.matchAll(RULING)];
+    const last = rulings.at(-1);
+    if (!last) continue;
+    const tail = before.slice(last.index! + last[0].length);
+    const courtOrDate = /(?<![\p{L}])(?:SN|NSA|WSA|SA|TK|Sąd\p{L}*\s+(?:Najwyższ|Apelacyjn|Okręgow|Rejonow|Administracyjn)\p{L}*|z\s+dnia\s+\d{1,2})/u.test(tail);
+    const ownProceeding = /(?<![\p{L}])(?:w\s+sprawie|spraw\p{L}*\s+o|w\s+postępowani\p{L}*|wydan\p{L}*\s+w|doręczon\p{L}*)/iu.test(tail);
+    if (courtOrDate && !ownProceeding) return true;
+  }
+  return false;
+}

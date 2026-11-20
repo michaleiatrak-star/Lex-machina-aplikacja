@@ -11037,7 +11037,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           const decision = detectQueryMode(
             request.auxiliaryText ?? latestUserTurn(request.query),
             signals,
-            threadEvidence?.mode ?? null
+            threadEvidence?.mode ?? null,
+            responseAuthContext(res).user.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL"
           );
           request.mode = decision.mode;
           request.modeDecision = decision;

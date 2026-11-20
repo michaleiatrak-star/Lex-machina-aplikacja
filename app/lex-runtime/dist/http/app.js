@@ -7109,7 +7109,7 @@ export function createLexHttpApp(options) {
             if (!trivialChat) {
                 const signals = modeSignals(options.registry);
                 if (signals) {
-                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null);
+                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null, responseAuthContext(res).user.accountKind === "INDIVIDUAL" ? "INDIVIDUAL" : "PROFESSIONAL");
                     request.mode = decision.mode;
                     request.modeDecision = decision;
                     request.onStep?.("ROUTING", `tryb ${decision.mode} (${decision.decision.toLowerCase().replaceAll("_", " ")})`);

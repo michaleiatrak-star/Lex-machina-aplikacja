@@ -76,6 +76,7 @@ import type {
 } from "./providers/types.js";
 import { LexSkillRegistry } from "./registry.js";
 import {
+  caseFileKey,
   VerificationLedger,
   type VerificationRecord
 } from "./verification-ledger.js";
@@ -211,7 +212,7 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
-import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
+import { citedAsCaseLaw, officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { findWsdRuling, wsdNumber, wsdPrefetchPrompt } from "./courts/wsd-portal.js";
 import { wsdRulingsByIssue, wsdSecondRound, wsdTopicPrompt } from "./courts/wsd-topics.js";
 import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/common-court-issue.js";
@@ -2513,10 +2514,12 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     // The proceeding's own case number (header of the case's documents, the user's own
     // words) is not case law: G8 does not ask to verify it as a judgment.
-    for (const signature of ownCaseFileNumbers(
+    const ownNumbers = new Set(ownCaseFileNumbers(
       attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n")),
       threadUserText(request.query)
-    )) {
+    ));
+    if (request.caseCourt?.sygnatura) ownNumbers.add(caseFileKey(request.caseCourt.sygnatura));
+    for (const signature of ownNumbers) {
       ledger.addCaseFileNumber(signature);
     }
     for (const signature of mentionedCaseNumbers([
@@ -2857,7 +2860,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     const wsdSignatures = [...new Set(fileSignatures.filter((item) => item.court === "DYSCYPLINARNY").map((item) => item.signature))].filter((signature) => wsdNumber(signature)).slice(0, 8);
     // SN up to 2016 and the common courts: the whole text from SAOS when the file cites them
     // (sn.pl often asks for its human check; a live case then had no text of SDI 9/12 at all).
-    const saosSignatures = [...new Set(fileSignatures.filter((item) => saosCovers(item.signature, item.court)).map((item) => item.signature))].slice(0, 6);
+    // Only rulings the files cite as case law; the case's own number and the client's other
+    // proceedings in the files are the matter's own facts, not sources to verify (2026-11-20).
+    const saosSignatures = [
+      ...new Set(
+        fileSignatures
+          .filter((item) => saosCovers(item.signature, item.court) && !ownNumbers.has(caseFileKey(item.signature)) && citedAsCaseLaw(fileText, item.signature))
+          .map((item) => item.signature)
+      )
+    ].slice(0, 6);
     const saosFound = saosSignatures.length ? Promise.all(saosSignatures.map((signature) => saosText(signature))) : Promise.resolve([] as SaosText[]);
     // A code of professional ethics the file cites ("§ 16 zd. 3 KEA"): its paragraphs read from
     // the council's consolidated text, as the chat did (live case: the central norm was never read).

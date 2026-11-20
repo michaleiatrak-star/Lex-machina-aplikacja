@@ -9,7 +9,8 @@ export type QueryMode = "LAIK" | "PRAWNIK";
 export type QueryModeDecision = {
   mode: QueryMode;
   // NIEROZSTRZYGNIETY: no signal decides; the model asks the KROK 1 question.
-  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY";
+  // KONTO_KANCELARII: an account of a law office answers as PRAWNIK unless asked for plain words.
+  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY" | "KONTO_KANCELARII";
   signals: { laik: string[]; prawnik: string[]; direct: string[] };
   source: string;
 };
@@ -59,10 +60,21 @@ function matchesPrawnik(signal: string, text: string, folded: string): boolean {
   return folded.includes(fold(signal));
 }
 
+// An explicit request for plain language (also on a law office account).
+const PLAIN_LANGUAGE =
+  /(?<![\p{L}])(?:prostym\p{L}*\s+(?:slow\p{L}*|jezyk\p{L}*)|jak\s+dla\s+laika|dla\s+laika|nie\s+jestem\s+prawnik\p{L}*|wyjasnij\s+(?:mi\s+)?prosto|po\s+ludzku|zrozumial\p{L}*\s+dla\s+klienta)/u;
+
+/**
+ * The account decides the default (2026-11-20): the application is a tool for lawyers, so a law
+ * office account (PROFESSIONAL) answers as PRAWNIK unless the user asks for plain words or answers
+ * the KROK 1 question with b); lay signals alone ("dostałem pismo") do not switch it — a lawyer
+ * describes a client's situation in those words. An individual account keeps the KROK 1 detection.
+ */
 export function detectQueryMode(
   question: string,
   signals: ModeSignals,
-  previous: QueryMode | null
+  previous: QueryMode | null,
+  accountKind: "PROFESSIONAL" | "INDIVIDUAL" = "INDIVIDUAL"
 ): QueryModeDecision {
   const text = question.trim();
   const folded = fold(text);
@@ -73,6 +85,14 @@ export function detectQueryMode(
   }
   if (/^\s*(b\)?|b\.|nie,? potrzebuj[eę] wyja[sś]nie[nń].*)\s*$/i.test(text)) {
     return { ...base, mode: "LAIK", decision: "ODPOWIEDZ_NA_PYTANIE", signals: { laik: ["odpowiedź b)"], prawnik: [], direct: [] } };
+  }
+  if (accountKind === "PROFESSIONAL") {
+    if (PLAIN_LANGUAGE.test(folded)) return { ...base, mode: "LAIK", decision: "LAIK", signals: { laik: ["prośba o prosty język"], prawnik: [], direct: [] } };
+    const found = [...new Set(signals.prawnik.filter((signal) => matchesPrawnik(signal, text, folded)))];
+    if (found.length) return { ...base, mode: "PRAWNIK", decision: "PRAWNIK", signals: { laik: [], prawnik: found, direct: [] } };
+    // An earlier plain-language request of the matter stays; otherwise the account's default.
+    if (previous === "LAIK") return { ...base, mode: "LAIK", decision: "POPRZEDNI", signals: { laik: [], prawnik: [], direct: [] } };
+    return { ...base, mode: "PRAWNIK", decision: "KONTO_KANCELARII", signals: { laik: [], prawnik: ["konto kancelarii"], direct: [] } };
   }
   const prawnik = [...new Set(signals.prawnik.filter((signal) => matchesPrawnik(signal, text, folded)))];
   if (ACT_ABBREVIATIONS.test(text) && !prawnik.some((signal) => /^[A-Z]{2,4}$/.test(signal))) prawnik.push("skrót aktu");
