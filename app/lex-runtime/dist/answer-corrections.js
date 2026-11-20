@@ -140,3 +140,66 @@ export const NO_ANSWER_CORRECTION = [
     "jeżeli czegoś brakuje do dalszej części, wymień konkretnie, czego (dane, dokumenty, decyzje użytkownika), w formie pytań.",
     "Nie zapowiadaj odpowiedzi na później i nie powołuj się na niedomknięte kontrole bez wskazania, co z nich wynika."
 ].join(" ");
+// A round that rewrites the whole answer replaces it only with an answer (XI P 27/26, 2026-11-20:
+// a weaker model answered the source check with "Odtworzę pełną odpowiedź … Najpierw odczytam
+// brakującą część zlecenia." and the application took it for the pleading: no quote and no
+// provision left, so "fewer problems"; the user got one sentence instead of the letter).
+const ANNOUNCEMENT = /^[\s*_#>]*(?:odtworzę|naniosę|poprawię|uzupełnię|przepiszę|przygotuję|sporządzę|zacznę|najpierw\s+(?:odczytam|sprawdzę|przeczytam|wczytam|ustalę)|poniżej\s+(?:poprawion|uzupełnion|pełn))/iu;
+const PETITUM = /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu;
+const DOCUMENT_MARK = /\[\[LEXDOC(?:REF)?:/gu;
+/** Why a rewritten answer may not replace the first one; null when it may. */
+export function rewriteRejection(before, after) {
+    const text = after.trim();
+    if (!text)
+        return "pusta odpowiedź";
+    if (emptyDeferral(text))
+        return "odpowiedź odroczona bez treści";
+    const original = before.trim();
+    if (original.length >= 1_200 && text.length < original.length * 0.6)
+        return "krótsza niż 60% pierwszej wersji";
+    if (text.length < 600 && ANNOUNCEMENT.test(text))
+        return "zapowiedź pracy zamiast odpowiedzi";
+    if (PETITUM.test(original) && !PETITUM.test(text))
+        return "bez wniosków, które miała pierwsza wersja";
+    const marks = (value) => (value.match(DOCUMENT_MARK) ?? []).length;
+    if (marks(original) >= 4 && marks(text) < marks(original) / 2)
+        return "utracone odwołania do akt";
+    return null;
+}
+// Point corrections (2026-11-20, a pleading's checks took 1006 s: each round rewrote the whole
+// letter): for a wrong quote or a provision described otherwise than its wording the model returns
+// only the fragments to replace; the application applies them to the answer.
+export const POINT_EDITS_FORM = [
+    "FORMA: NIE przepisuj odpowiedzi. Zwróć WYŁĄCZNIE wiersze JSON, jeden obiekt w wierszu:",
+    '{"bylo": "fragment odpowiedzi skopiowany dosłownie, z jednego akapitu, tak krótki, jak się da, ale jednoznaczny", "ma_byc": "nowe brzmienie tego fragmentu (pusty tekst = usunięcie)"}',
+    "Jeden obiekt na każde miejsce do poprawy; nic poza wierszami JSON."
+].join("\n");
+/** The answer with the model's point edits applied; edits whose fragment is not found once are skipped. */
+export function applyPointEdits(answer, reply) {
+    let text = answer;
+    let applied = 0;
+    let skipped = 0;
+    for (const line of reply.split("\n")) {
+        const candidate = line.trim().replace(/^[-*]\s*/u, "").replace(/,$/u, "");
+        if (!candidate.startsWith("{") || !candidate.endsWith("}"))
+            continue;
+        let edit;
+        try {
+            edit = JSON.parse(candidate);
+        }
+        catch {
+            skipped += 1;
+            continue;
+        }
+        const from = typeof edit.bylo === "string" ? edit.bylo : "";
+        const to = typeof edit.ma_byc === "string" ? edit.ma_byc : null;
+        const at = from.length >= 8 ? text.indexOf(from) : -1;
+        if (at < 0 || to === null || text.indexOf(from, at + 1) >= 0) {
+            skipped += 1;
+            continue;
+        }
+        text = text.slice(0, at) + to + text.slice(at + from.length);
+        applied += 1;
+    }
+    return { text: text.replace(/[ \t]+\n/gu, "\n").replace(/\n{3,}/gu, "\n\n"), applied, skipped };
+}

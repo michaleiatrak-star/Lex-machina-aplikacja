@@ -17,6 +17,7 @@ export function pleadingStandardPrompt(moduleText) {
     return [
         "# STANDARD BUDOWY PISMA PROCESOWEGO (pisma-procesowe-v3, wczytany przez aplikację)",
         "Kolejność pracy: (1) fakty z akt z dosłownym źródłem; (2) zależności: który fakt wykazuje który cel, które fakty się wzmacniają albo przeczą sobie; (3) dopiero potem pismo. Każdy blok uzasadnienia według schematu poniżej. Etapy (1)–(2) w uwagach poza pismem, krótko (tabela cel → fakty → zależność).",
+        "Wnioski dowodowe (reguły ogólne): dokument albo wiadomość, którą według akt ma strona przeciwna (zarządzenie, regulamin, notatka, wiadomości do pracowników lub grup, listy uczestników) — wniosek o zobowiązanie jej do przedstawienia, osobno dla każdego; protokół albo dokument z innej sprawy — wniosek o dopuszczenie dowodu z niego (ewentualnie o nadesłanie akt), nie traktuj go jak dowodu już przeprowadzonego; fakt z nagrania rozprawy, którego nie ma w protokole — wniosek o odtworzenie fragmentu ze wskazaniem czasu zapisu; potrzeba dowodu, która wynikła z przebiegu postępowania — wykaż ją (dlaczego dopiero teraz). Fakt, który zna tylko strona (jej własne działanie, data jej wiadomości), ustal pytaniem do niej poza pismem zamiast rozpisywać warianty. Formę pisma (pismo przygotowawcze, wniosek dowodowy, stanowisko na rozprawie) wybierz na brzmieniu przepisów odczytanych w tej turze tak, by nie podlegało zwrotowi; nie zostawiaj tej decyzji niesprawdzonej.",
         moduleText.trim()
     ].join("\n\n");
 }
@@ -87,6 +88,7 @@ export function argumentSchemaGaps(answer, options = {}) {
             detail: `wnioski powołują ${unapplied.join(", ")}, a uzasadnienie nie wykazuje, że przesłanki tego przepisu są spełnione w tej sprawie (kto, jakie fakty, który dowód): wykaż każdą przesłankę albo usuń wniosek`
         });
     }
+    gaps.push(...evidenceMotionGaps(answer));
     if (conditional.length)
         gaps.push({ element: "TEZA WARUNKOWA", detail: `${conditional.length} zdań przesądza wniosek zależny od faktu do uzupełnienia (⬛): rozpisz warianty albo usuń tezę do czasu ustalenia faktu` });
     return gaps;
@@ -118,4 +120,56 @@ export function motionProvisionsWithoutPremises(answer) {
             missing.push(`art. ${number}`);
     }
     return missing;
+}
+// Evidence motions a reader of the draft can check (XI P 27/26, 2026-11-20: the user's own motion had
+// what the application's drafts lacked — art. 248 for each document of the opponent, the record of
+// another case moved as evidence, the question to the party instead of a variant).
+const OPPONENT_DOCUMENTS = [
+    { label: "zarządzenie", mention: /zarządzeni\p{L}*\s+(?:wewnętrzn|pracodawc|prezes|zarząd|dyrektor)\p{L}*/iu, motion: /zarządzeni/iu },
+    { label: "regulamin", mention: /regulamin\p{L}*\s+(?:wewnętrzn|prac|pracy|wynagradzani|premiowani)\p{L}*/iu, motion: /regulamin/iu },
+    { label: "notatka", mention: /notatk\p{L}*\s+(?:służbow|ze\s+spotkania|wewnętrzn)\p{L}*/iu, motion: /notat/iu },
+    { label: "wiadomości do pracowników lub grup", mention: /wiadomoś\p{L}*\s+(?:\p{L}+\s+){0,3}(?:do\s+(?:pracownik|grup|koordynator|zatrudnion)|na\s+grup)\p{L}*/iu, motion: /wiadomoś|korespondencj/iu },
+    { label: "lista uczestników lub obecności", mention: /list\p{L}*\s+(?:uczestnik|obecnoś)\p{L}*/iu, motion: /list\p{L}*\s+(?:uczestnik|obecnoś)/iu }
+];
+const SIGNATURE = /(?<![\p{L}\d])([IVXLC]{1,6}\s+[A-Z][\p{L}]{0,4}(?:\/[A-Z][\p{L}]{0,3})?\s+\d{1,5}\/\d{2})(?!\d)/gu;
+const PRODUCE = /(?:przedstawi\p{L}*|przedłoż\p{L}*|złożeni\p{L}*|art\.\s*248)/iu;
+export function evidenceMotionGaps(answer) {
+    const split = /\n[#*\s]*UZASADNIENIE/iu.exec(answer);
+    if (!split)
+        return [];
+    const opening = /(?:wnosz[ęe]|wnosi)\s+o\s*:?/iu.exec(answer.slice(0, split.index));
+    if (!opening)
+        return [];
+    const petitum = answer.slice(opening.index, split.index);
+    const body = answer.slice(split.index);
+    const gaps = [];
+    const documents = OPPONENT_DOCUMENTS.filter((item) => item.mention.test(body) && !(item.motion.test(petitum) && PRODUCE.test(petitum)));
+    if (documents.length) {
+        gaps.push({
+            element: "DOKUMENT U PRZECIWNIKA",
+            detail: `uzasadnienie opiera się na dokumentach, które według akt ma strona przeciwna (${documents.map((item) => item.label).join(", ")}), a wnioski nie żądają ich przedstawienia: dla każdego wnieś o zobowiązanie strony przeciwnej do przedstawienia (teza dowodowa: istnienie, data, adresaci, treść) albo wyjaśnij, dlaczego nie`
+        });
+    }
+    // The case's own signature is the one in the letter's heading; another case's record needs its motion.
+    const own = new Set([...answer.slice(0, opening.index).matchAll(SIGNATURE)].map((match) => match[1].replace(/\s+/gu, " ")));
+    const others = [...new Set([...body.matchAll(SIGNATURE)].map((match) => match[1].replace(/\s+/gu, " ")))].filter((signature) => !own.has(signature) && new RegExp(`protok\\p{L}*[^.]{0,120}${signature.replace(/[/\s]/gu, "\\s*$&")}|${signature.replace(/[/\s]/gu, "\\s*$&")}[^.]{0,120}protok\\p{L}*`, "iu").test(body));
+    const unmoved = others.filter((signature) => !petitum.replace(/\s+/gu, " ").includes(signature));
+    if (own.size && unmoved.length) {
+        gaps.push({
+            element: "DOWÓD Z INNEJ SPRAWY",
+            detail: `pismo powołuje protokół z innej sprawy (${unmoved.join(", ")}), a wnioski nie obejmują dowodu z niego: wnieś o dopuszczenie dowodu z tego protokołu (odpis w załączeniu) albo o nadesłanie akt; to nie jest dowód już przeprowadzony w tej sprawie`
+        });
+    }
+    if (/(?:nagrani\p{L}*\s+(?:rozpraw|posiedzeni)|zapis\p{L}*\s+(?:audio|wideo|dźwięk\p{L}*|obrazu\s+i\s+dźwięku|nagrani))/iu.test(body) && !/(?:odtworzeni|odsłuchani|odtworz)/iu.test(petitum)) {
+        gaps.push({ element: "NAGRANIE", detail: "pismo powołuje się na nagranie rozprawy: wnieś o odtworzenie wskazanych fragmentów zapisu (czas początku i końca) albo powołuj tylko treść protokołu" });
+    }
+    if (/nie\s+sprawdzi\p{L}*,?\s+czy\s+(?:to\s+)?pismo/iu.test(answer)) {
+        gaps.push({ element: "FORMA PISMA", detail: "dopuszczalność formy pisma została oznaczona jako niesprawdzona: ustal ją na brzmieniu przepisów odczytanych w tej turze i wybierz formę, która nie podlega zwrotowi" });
+    }
+    const ACT = "(?:wysłał|napisał|otrzymał|złożył|podpisał|zapłacił|przekazał|rozmawiał)\\p{L}*";
+    const PARTY = "(?:Pan|Pani|Ty|powód|powódka)(?![\\p{L}])";
+    if (new RegExp(`(?:jeżeli|jeśli|gdy|o\\s+ile)\\s+(?:(?:\\p{L}+\\s+){0,3}${PARTY}\\s+(?:\\p{L}+\\s+){0,2}${ACT}|${ACT}\\s+(?:\\p{L}+\\s+){0,2}${PARTY})`, "iu").test(answer)) {
+        gaps.push({ element: "PYTANIE DO STRONY", detail: "wniosek zależy od faktu, który zna tylko strona (jej własne działanie): zadaj jej to pytanie wprost przed pismem i oznacz miejsce w piśmie ⬛ zamiast rozpisywać warianty" });
+    }
+    return gaps;
 }
