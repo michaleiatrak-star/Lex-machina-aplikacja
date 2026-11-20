@@ -168,7 +168,8 @@ export function registerMaintenanceRoutes(
     const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
     const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
     try {
-      res.json(await probeWokandaSession(domain, cookie, userAgent, dependencies.wokandaFetch));
+      const pageUrl = typeof req.body?.pageUrl === "string" ? req.body.pageUrl.slice(0, 2048) : undefined;
+      res.json(await probeWokandaSession(domain, cookie, userAgent, dependencies.wokandaFetch, pageUrl));
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "WOKANDA_SESSION_INVALID" });
     }

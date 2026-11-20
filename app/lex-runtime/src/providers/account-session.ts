@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { joinContinuations } from "./continuation-seams.js";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -1851,6 +1852,23 @@ export function runDirectForTests(...args: Parameters<typeof runDirect>): Return
 }
 
 function runDirect(
+  executable: string,
+  args: string[],
+  stdinText: string | undefined,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+  cwd?: string,
+  abortSignal?: AbortSignal,
+  settleOptions: RunSettleOptions = {}
+): Promise<RunResult> {
+  // The tokens a client reports in its own output go to the call's meter (cliUsage).
+  return runDirectProcess(executable, args, stdinText, env, timeoutMs, cwd, abortSignal, settleOptions).then((result) => {
+    noteCliUsage(result.stdout);
+    return result;
+  });
+}
+
+function runDirectProcess(
   executable: string,
   args: string[],
   stdinText: string | undefined,
@@ -4892,7 +4910,73 @@ export class AccountSessionManager {
   }
 }
 
+type CliUsage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; seen: boolean };
+const cliUsageScope = new AsyncLocalStorage<CliUsage>();
+
+/**
+ * Tokens a signed-in client prints with its answer (user, 2026-11-20: the usage table showed 0 for
+ * account models): Codex "turn.completed" usage (input with cached), Claude's "result" usage (input
+ * without the cache, added here). Other clients print none: their calls stay unmetered.
+ */
+export function cliUsageOf(stdout: string): Omit<CliUsage, "seen"> | null {
+  const total = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  let seen = false;
+  const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{") || !trimmed.includes("usage")) continue;
+    let event: { type?: unknown; usage?: Record<string, unknown> };
+    try {
+      event = JSON.parse(trimmed) as typeof event;
+    } catch {
+      continue;
+    }
+    const usage = event.usage;
+    if (!usage || typeof usage !== "object") continue;
+    if (event.type === "turn.completed") {
+      total.inputTokens += num(usage.input_tokens);
+      total.cacheReadTokens += num(usage.cached_input_tokens);
+      total.outputTokens += num(usage.output_tokens);
+      seen = true;
+    } else if (event.type === "result") {
+      const read = num(usage.cache_read_input_tokens);
+      const written = num(usage.cache_creation_input_tokens);
+      total.inputTokens += num(usage.input_tokens) + read + written;
+      total.cacheReadTokens += read;
+      total.cacheWriteTokens += written;
+      total.outputTokens += num(usage.output_tokens);
+      seen = true;
+    }
+  }
+  return seen ? total : null;
+}
+
+function noteCliUsage(stdout: string): void {
+  const meter = cliUsageScope.getStore();
+  const usage = meter ? cliUsageOf(stdout) : null;
+  if (!meter || !usage) return;
+  meter.inputTokens += usage.inputTokens;
+  meter.outputTokens += usage.outputTokens;
+  meter.cacheReadTokens += usage.cacheReadTokens;
+  meter.cacheWriteTokens += usage.cacheWriteTokens;
+  meter.seen = true;
+}
+
 export async function streamAccountSession(
+  manager: AccountSessionManager,
+  provider: ProviderId,
+  params: ProviderStreamParams
+): Promise<ProviderStreamResult> {
+  const meter: CliUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, seen: false };
+  const result = await cliUsageScope.run(meter, () => streamAccountSessionText(manager, provider, params));
+  if (!meter.seen || result.usage) return result;
+  return {
+    ...result,
+    usage: { inputTokens: meter.inputTokens, outputTokens: meter.outputTokens, cacheReadTokens: meter.cacheReadTokens, cacheWriteTokens: meter.cacheWriteTokens }
+  };
+}
+
+async function streamAccountSessionText(
   manager: AccountSessionManager,
   provider: ProviderId,
   params: ProviderStreamParams

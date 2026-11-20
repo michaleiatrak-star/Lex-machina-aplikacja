@@ -44,12 +44,18 @@ export class LocalLegalDocumentRenderer {
     }
     async render(format, ast, 
     // The firm's template file (DOCX): its letterhead frames the generated body.
-    template) {
+    template, 
+    // The sender from Settings and the case's signature: the letterhead without a template,
+    // and the template's {{nadawca}}, {{adres nadawcy}}, {{sygnatura}}.
+    letterhead) {
         return await this.call({
             operation: "render",
             format,
             ast,
-            ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {})
+            ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {}),
+            ...(letterhead?.sender?.name ? { sender: letterhead.sender } : {}),
+            ...(letterhead?.caseSignature ? { caseSignature: letterhead.caseSignature } : {}),
+            ...(letterhead?.logo ? { logoBase64: Buffer.from(letterhead.logo.data).toString("base64"), logoType: letterhead.logo.type } : {})
         });
     }
     async validate(format, data) {

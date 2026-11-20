@@ -135,7 +135,7 @@ DOCX_ALLOWED = {
 }
 # Documents rendered before the footer existed stay valid (deanonymized and checked later).
 DOCX_REQUIRED = set(DOCX_ALLOWED)
-DOCX_ALLOWED = DOCX_ALLOWED | {"word/footer1.xml"}
+DOCX_ALLOWED = DOCX_ALLOWED | {"word/footer1.xml", "word/header1.xml"}
 ODT_ALLOWED = {
     "mimetype",
     "content.xml",
@@ -413,6 +413,9 @@ FIELD_ALIASES = {
     "sygnatura": "sygnatura", "sygn": "sygnatura", "sygnatura akt": "sygnatura",
     "tytul": "tytul", "tytuł": "tytul",
     "tresc": "tresc", "treść": "tresc", "content": "tresc",
+    # The sender from Settings (Papier firmowy): a person's name or a firm's, and its address.
+    "nadawca": "nadawca", "kancelaria": "nadawca", "uczestnik": "nadawca",
+    "adres nadawcy": "adres_nadawcy", "adres_nadawcy": "adres_nadawcy", "adres kancelarii": "adres_nadawcy",
 }
 POLISH_MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia",
                  "września", "października", "listopada", "grudnia"]
@@ -436,11 +439,19 @@ def safe_inline_text(nodes):
     except (ValueError, AttributeError, TypeError):
         return ""
 
-def field_values(ast, today):
-    """Values of the fields from the document itself; what it does not say stays to fill in."""
+def field_values(ast, today, extra=None):
+    """Values of the fields from the document itself; what it does not say stays to fill in.
+    extra: the sender from Settings and the case's signature (its card), used where the document
+    does not say them."""
     blocks = ast.get("blocks") or []
     layout = block_layout(ast)
     values = {"data": polish_date(today)}
+    extra = extra or {}
+    sender = extra.get("sender") or {}
+    if sender.get("name"):
+        values["nadawca"] = sender["name"]
+    if sender.get("address"):
+        values["adres_nadawcy"] = sender["address"]
     title = safe_inline_text(ast.get("title")).strip()
     if not title:
         for block in blocks:
@@ -464,6 +475,8 @@ def field_values(ast, today):
     match = SIGNATURE_RE.search(whole)
     if match:
         values["sygnatura"] = re.sub(r"\s+", " ", match.group(1))
+    elif extra.get("caseSignature"):
+        values["sygnatura"] = extra["caseSignature"]
     return values
 
 def fill_fields(xml, values, used, allow_alias=True):
@@ -577,7 +590,7 @@ def template_body(entries):
 
 MAX_TEMPLATE_BODY_PARAGRAPHS = 200
 
-def template_letterhead(data, ast=None, today=None):
+def template_letterhead(data, ast=None, today=None, extra=None):
     """Headers, footers (with their images) and the page setup of the template's last
     section: what a firm's letterhead is. Fails closed (ValueError) on anything that would
     have to be copied blindly: an external link, a non-image relationship, a missing part."""
@@ -594,7 +607,7 @@ def template_letterhead(data, ast=None, today=None):
         for rel in ET.fromstring(entries["word/_rels/document.xml.rels"]).iter("{%s}Relationship" % PKG_REL_NS):
             rels[rel.attrib.get("Id")] = rel.attrib
     parts, media, references = [], [], []
-    values = field_values(ast, today or datetime.date.today()) if ast is not None else {}
+    values = field_values(ast, today or datetime.date.today(), extra) if ast is not None else {}
     used = set()
     for ref in list(sect):
         kind = ref.tag.split("}")[1]
@@ -620,6 +633,8 @@ def template_letterhead(data, ast=None, today=None):
             # value names a person is left to fill in.
             part_xml = fill_fields(part_xml.decode("utf-8"), values, used, allow_alias=False).encode("utf-8")
             ET.fromstring(part_xml)
+        if part_kind == "footer" and ref_type == "default":
+            part_xml = with_page_number(part_xml)
         part_rels = None
         rels_source = "word/_rels/" + source.split("/", 1)[1] + ".rels"
         if rels_source in entries:
@@ -667,7 +682,100 @@ def template_letterhead(data, ast=None, today=None):
             "titlePg": sect.find("{%s}titlePg" % W_NS) is not None,
             "before": before, "after": after, "body": body_parts is not None, "fields": sorted(used)}
 
-def render_docx(ast, letterhead=None):
+PAGE_NUMBER_PARAGRAPH = ('<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'
+                         '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r>'
+                         '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+                         '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>'
+                         '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>1</w:t></w:r>'
+                         '<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r></w:p>')
+
+
+def with_page_number(footer_xml):
+    """The firm's footer keeps its content; a page number is added when it has none (user,
+    2026-11-20: a letter on the letterhead carries page numbers)."""
+    text = footer_xml.decode("utf-8") if isinstance(footer_xml, bytes) else footer_xml
+    if re.search(r"\bPAGE\b", text) or "</w:ftr>" not in text:
+        return footer_xml
+    out = text.replace("</w:ftr>", PAGE_NUMBER_PARAGRAPH + "</w:ftr>", 1)
+    ET.fromstring(out.encode("utf-8"))
+    return out.encode("utf-8") if isinstance(footer_xml, bytes) else out
+
+
+def xml_text(value):
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def image_size(data, ext):
+    """Width and height in pixels of a PNG or JPEG, or None."""
+    try:
+        if ext == "png" and data[:8] == b"\x89PNG\r\n\x1a\n":
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+        if ext == "jpeg" and data[:2] == b"\xff\xd8":
+            index = 2
+            while index + 9 < len(data):
+                if data[index] != 0xFF:
+                    index += 1
+                    continue
+                marker = data[index + 1]
+                length = int.from_bytes(data[index + 2:index + 4], "big")
+                if marker in (0xC0, 0xC1, 0xC2):
+                    return int.from_bytes(data[index + 7:index + 9], "big"), int.from_bytes(data[index + 5:index + 7], "big")
+                index += 2 + length
+    except (IndexError, ValueError):
+        return None
+    return None
+
+
+LOGO_MEDIA = "media/lex_t999.%s"
+LOGO_HEIGHT_EMU = 576000  # 1.6 cm
+
+
+def sender_header(ast, extra):
+    """The sender's letterhead when the firm has no template of its own (user, 2026-11-20): the
+    logo, the participant's name (a person or a firm) and address from Settings, and the case's
+    signature when the letter does not state it. (header xml, its rels or None, its media or None),
+    or None without a sender."""
+    sender = (extra or {}).get("sender") or {}
+    name = (sender.get("name") or "").strip()
+    if not name:
+        return None
+    lines = []
+    rels, media = None, None
+    logo = (extra or {}).get("logo") or {}
+    if logo.get("data") and logo.get("ext") in ("png", "jpeg"):
+        size = image_size(logo["data"], logo["ext"])
+        if size and size[0] > 0 and size[1] > 0:
+            height = LOGO_HEIGHT_EMU
+            width = min(int(height * size[0] / size[1]), 5400000)
+            target = LOGO_MEDIA % logo["ext"]
+            media = ("word/" + target, logo["data"], logo["ext"])
+            rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="%s">'
+                    '<Relationship Id="rIdLogo" Type="%simage" Target="%s"/></Relationships>') % (PKG_REL_NS, REL_TYPE_BASE, target)
+            lines.append(
+                '<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+                '<wp:extent cx="%d" cy="%d"/><wp:docPr id="900" name="Logo"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+                '<pic:pic><pic:nvPicPr><pic:cNvPr id="900" name="logo"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdLogo"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+                '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+                '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>' % (width, height, width, height))
+    lines.append('<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">%s</w:t></w:r></w:p>' % xml_text(name[:160]))
+    for line in [item.strip() for item in (sender.get("address") or "").splitlines() if item.strip()][:3] + [item.strip() for item in (sender.get("contact") or "").splitlines() if item.strip()][:2]:
+        lines.append('<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">%s</w:t></w:r></w:p>' % xml_text(line[:200]))
+    signature = ((extra or {}).get("caseSignature") or "").strip()
+    whole = "\n".join(safe_inline_text(block.get("content")) for block in (ast.get("blocks") or []) if block.get("content"))
+    if signature and not SIGNATURE_RE.search(whole):
+        lines.append('<w:p><w:pPr><w:jc w:val="right"/><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">Sygn. akt %s</w:t></w:r></w:p>' % xml_text(signature[:60]))
+    # A rule under the letterhead.
+    lines[-1] = lines[-1].replace("<w:pPr>", '<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="808080"/></w:pBdr>', 1)
+    xml = ('<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+           'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+           'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+           'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+           'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">%s</w:hdr>' % "".join(lines))
+    ET.fromstring(xml.encode("utf-8"))
+    return xml, rels, media
+
+
+def render_docx(ast, letterhead=None, sender_extra=None):
     body = []
     if ast.get("title"):
         body.append(docx_paragraph(ast.get("title"), "Title"))
@@ -694,12 +802,16 @@ def render_docx(ast, letterhead=None):
     content_types, doc_rels = DOCX_CT, DOCX_DOC_RELS
     extra = []
     own_footer = True
+    # The sender's own letterhead where the firm's template brings no header of its own.
+    own_header = sender_header(ast, sender_extra) if not (letterhead and any(kind == "header" for (kind, _, _, _, _) in letterhead["parts"])) else None
+    if own_header:
+        sect = sect.replace("<w:sectPr>", '<w:sectPr><w:headerReference w:type="default" r:id="rId6"/>', 1)
     if letterhead:
         # The firm's letterhead: its headers and footers and its page setup; Lex keeps its
         # page-number footer only where the template has no default footer.
         own_footer = not any(kind == "footer" and 'w:type="default"' in ref
                              for (kind, _, _, _, _), ref in zip(letterhead["parts"], letterhead["references"]))
-        refs = "".join(letterhead["references"]) + ('<w:footerReference w:type="default" r:id="rId5"/>' if own_footer else "")
+        refs = "".join(letterhead["references"]) + ('<w:footerReference w:type="default" r:id="rId5"/>' if own_footer else "") + ('<w:headerReference w:type="default" r:id="rId6"/>' if own_header else "")
         t, r, b, l, h, f = letterhead["margins"]
         sect = ('<w:sectPr>%s<w:pgSz w:w="%d" w:h="%d"/><w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" '
                 'w:header="%d" w:footer="%d" w:gutter="0"/>%s</w:sectPr>') % (
@@ -718,6 +830,18 @@ def render_docx(ast, letterhead=None):
         if not own_footer:
             content_types = content_types.replace('<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>', "")
             doc_rels = doc_rels.replace('<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>', "")
+    if own_header:
+        header_xml, header_rels, header_media = own_header
+        content_types = content_types.replace("</Types>", '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>', 1)
+        doc_rels = doc_rels.replace("</Relationships>", '<Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>', 1)
+        extra_parts = [("word/header1.xml", header_xml)]
+        if header_rels and header_media:
+            extra_parts.append(("word/_rels/header1.xml.rels", header_rels))
+            extra_parts.append((header_media[0], header_media[1]))
+            if 'Extension="%s"' % header_media[2] not in content_types:
+                content_types = content_types.replace("<Default ", '<Default Extension="%s" ContentType="%s"/><Default ' % (header_media[2], MEDIA_CONTENT_TYPES[header_media[2]]), 1)
+    else:
+        extra_parts = []
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>%s%s</w:body></w:document>') % ("".join(body), sect)
     entries = [
@@ -732,6 +856,7 @@ def render_docx(ast, letterhead=None):
         ("word/numbering.xml", DOCX_NUMBERING),
         *([("word/footer1.xml", DOCX_FOOTER)] if own_footer else []),
         ("word/_rels/document.xml.rels", doc_rels),
+        *extra_parts,
         *extra,
     ]
     return zip_bytes([(n, d.encode("utf-8") if isinstance(d, str) else d) for n, d in entries])
@@ -993,6 +1118,11 @@ def main():
         ast = request.get("ast")
         template = request.get("templateBase64")
         letterhead, template_report = None, None
+        extra = {"sender": request.get("sender") or {}, "caseSignature": request.get("caseSignature") or ""}
+        if request.get("logoBase64") and request.get("logoType") in ("png", "jpeg"):
+            logo = base64.b64decode(request["logoBase64"], validate=True)
+            if len(logo) <= 1024 * 1024:
+                extra["logo"] = {"data": logo, "ext": request["logoType"]}
         if template:
             # The firm's template: its letterhead goes into the file; a template whose parts
             # cannot be copied safely is reported, and the document keeps Lex's own layout.
@@ -1001,7 +1131,7 @@ def main():
             else:
                 try:
                     today = datetime.date.fromisoformat(request["date"]) if request.get("date") else None
-                    letterhead = template_letterhead(base64.b64decode(template, validate=True), ast, today)
+                    letterhead = template_letterhead(base64.b64decode(template, validate=True), ast, today, extra)
                     template_report = {"applied": True,
                                        "body": letterhead["body"],
                                        "fields": letterhead["fields"],
@@ -1011,7 +1141,7 @@ def main():
                 except (ValueError, ET.ParseError) as exc:
                     template_report = {"applied": False, "reason": str(exc) or exc.__class__.__name__}
         if fmt == "docx":
-            package = render_docx(ast, letterhead)
+            package = render_docx(ast, letterhead, extra)
             _, _, text = validate_docx(package)
         elif fmt == "odt":
             package = render_odt(ast)

@@ -138,3 +138,23 @@ export function demoteContradictedMarkers(text: string, contradicted: ReadonlyAr
     })
     .join("\n");
 }
+
+/**
+ * A letter for the court carries no note of the application (user, 2026-11-20: a warning on
+ * art. 233 § 2 stood in the letter's text). When the answer holds a letter, each provision's
+ * warning leaves its line (the provision keeps the plain source mark set by
+ * demoteContradictedMarkers) and is listed after the answer, outside the letter; an answer
+ * without a letter keeps the warning next to the provision.
+ */
+export function moveStatuteWarningsOutOfLetter(text: string, warnings: ReadonlyArray<{ claim: string; warning: string }>, hasLetter: boolean): string {
+  if (!hasLetter || !warnings.length) return text;
+  let out = text;
+  const moved: string[] = [];
+  for (const item of warnings) {
+    if (!out.includes(item.warning)) continue;
+    out = out.split(item.warning).join("").replace(/[ \t]+(?=\n|$)/gu, "");
+    moved.push(`- ${item.claim}: ${item.warning}`);
+  }
+  if (!moved.length) return out;
+  return `${out.trimEnd()}\n\nKontrola treści przepisów (poza pismem; popraw w piśmie przed złożeniem):\n${moved.join("\n")}`;
+}

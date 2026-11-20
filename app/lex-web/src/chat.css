@@ -5400,6 +5400,7 @@ mark.restored {
 }
 .wokanda-bulk-state.is-verified { font-weight: 600; }
 .wokanda-bulk-state.is-skipped,
+.wokanda-bulk-state.is-browserOnly,
 .wokanda-bulk-state.is-failed { color: var(--lm-t11); }
 @media (max-width: 720px) {
   .wokanda-table,

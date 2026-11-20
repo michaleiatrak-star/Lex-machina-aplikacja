@@ -183,7 +183,7 @@ export function CaseWorkspacePanel({
         </p>
         <h3>
           {t("Wzory kancelarii")}
-          <InfoTip>{t("Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego. Papier firmowy (DOCX lub DOTX): nagłówek, stopka i układ strony trafiają do pisma; pola")} {"{{data}}"}, {"{{miejscowość}}"}, {"{{adresat}}"}, {"{{sygnatura}}"}, {"{{tytuł}}"} {t("są wypełniane, a w osobnym wierszu")} {"{{treść}}"} {t("wskazuje miejsce na treść pisma.")}</InfoTip>
+          <InfoTip>{t("Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego. Papier firmowy (DOCX lub DOTX): nagłówek, stopka i układ strony trafiają do pisma; pola")} {"{{data}}"}, {"{{miejscowość}}"}, {"{{adresat}}"}, {"{{sygnatura}}"}, {"{{tytuł}}"}, {"{{nadawca}}"}, {"{{adres nadawcy}}"} {t("są wypełniane, a w osobnym wierszu")} {"{{treść}}"} {t("wskazuje miejsce na treść pisma.")}</InfoTip>
         </h3>
 
         {isAdmin && caseId && (

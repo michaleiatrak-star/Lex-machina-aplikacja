@@ -643,3 +643,49 @@ li.anomaly-error > strong {
   align-items: center;
   gap: 8px;
 }
+
+/* Papier firmowy: one column of the account form's fields; the address as tall as its lines. */
+.letter-sender .account-security-grid {
+  grid-template-columns: minmax(0, 620px);
+}
+.letter-sender {
+  margin-top: 20px;
+}
+.letter-sender textarea {
+  min-height: 0;
+  height: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+.letter-sender select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-l1);
+  border-radius: 10px;
+  font: inherit;
+}
+.letter-sender-field {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+.letter-sender-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+.letter-sender-logo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+.letter-sender-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}

@@ -383,6 +383,14 @@ export function WorkspaceManager({
 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // The queue's list is shown while files are being read; after the work it folds to one line.
+  const [queueOpen, setQueueOpen] = useState(false);
+  // A notice about finished background work leaves after a while (user, 2026-11-20).
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const [artifacts, setArtifacts] = useState<CaseArtifact[]>([]);
   const [deanonymizing, setDeanonymizing] = useState<string | null>(null);
   const [renamingArtifact, setRenamingArtifact] = useState<string | null>(null);
@@ -2307,15 +2315,28 @@ export function WorkspaceManager({
           {t("Wyszukiwanie po nazwie działa. Indeks treści dokumentów jest chwilowo niedostępny:")} {knowledgeSearchError}
         </p>
       ) : null}
-      {queue.length ? (
-        <section className="workspace-queue" aria-label={t("Kolejka przetwarzania")}>
+      {queue.length ? (() => {
+        const summary = queueSummary(queue);
+        const working = summary.running + summary.waiting > 0;
+        const listed = working || queueOpen;
+        return (
+        <section className={listed ? "workspace-queue" : "workspace-queue is-folded"} aria-label={t("Kolejka przetwarzania")}>
           <header>
             <strong>
-              {t("Kolejka przetwarzania ·")} {(() => {
-                const summary = queueSummary(queue);
-                return t("w toku {running} · czeka {waiting} · do wyboru {toChoose} · do podglądu {ready}{value}", { running: summary.running, waiting: summary.waiting, toChoose: summary.toChoose, ready: summary.ready, value: summary.failed ? ` · błędy ${summary.failed}` : "" });
-              })()}
+              {t("Kolejka przetwarzania ·")}{" "}
+              {working
+                ? t("w toku {running} · czeka {waiting} · do wyboru {toChoose} · do podglądu {ready}{value}", { running: summary.running, waiting: summary.waiting, toChoose: summary.toChoose, ready: summary.ready, value: summary.failed ? ` · błędy ${summary.failed}` : "" })
+                : t("zakończono{choose}{ready}{failed}", {
+                    choose: summary.toChoose ? ` · ${t("do wyboru {count}", { count: summary.toChoose })}` : "",
+                    ready: summary.ready ? ` · ${t("do podglądu {count}", { count: summary.ready })}` : "",
+                    failed: summary.failed ? ` · ${t("błędy {count}", { count: summary.failed })}` : ""
+                  })}
             </strong>
+            {working ? null : (
+              <button type="button" aria-expanded={queueOpen} onClick={() => setQueueOpen((open) => !open)}>
+                {queueOpen ? t("Ukryj") : t("Pokaż")}
+              </button>
+            )}
             {queue.some((entry) => entry.status === "QUEUED") ? (
               <button type="button" onClick={() => setQueue(stopQueued)} title={t("Pliki czekające na OCR wypadają z kolejki; bieżący plik kończy się normalnie")}>
                 {t("Zatrzymaj kolejkę")}
@@ -2327,6 +2348,7 @@ export function WorkspaceManager({
               </button>
             ) : null}
           </header>
+          {listed ? (
           <ol>
             {queue.map((entry) => (
               <li key={entry.itemId} className={`workspace-queue-${entry.status.toLowerCase()}`}>
@@ -2360,8 +2382,10 @@ export function WorkspaceManager({
               </li>
             ))}
           </ol>
+          ) : null}
         </section>
-      ) : null}
+        );
+      })() : null}
       {notice ? <p className="workspace-notice">{notice}</p> : null}
       {privacyPreview ? (
         <PrivacyPreview

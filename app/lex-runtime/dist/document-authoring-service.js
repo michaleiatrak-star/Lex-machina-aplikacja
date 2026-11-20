@@ -162,7 +162,7 @@ export class LocalDocumentAuthoringService {
         const stripped = stripAstVerificationMarkers(validated.ast).ast;
         const documentAst = draft ? draft.ast(stripped) : stripped;
         const rendered = await this.renderer
-            .render(args.format, documentAst, args.template);
+            .render(args.format, documentAst, args.template, args.letterhead);
         try {
             const validation = await this.renderer
                 .validate(args.format, rendered.data);
@@ -290,7 +290,7 @@ export class LocalDocumentAuthoringService {
         const stripped = stripAstVerificationMarkers(validated.ast).ast;
         const documentAst = draft ? draft.ast(stripped) : stripped;
         const rendered = await this.renderer
-            .render(args.format, documentAst, args.template);
+            .render(args.format, documentAst, args.template, args.letterhead);
         try {
             const validation = await this.renderer
                 .validate(args.format, rendered.data);

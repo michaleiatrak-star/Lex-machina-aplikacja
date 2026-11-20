@@ -92,7 +92,7 @@ export function UsagePanel() {
         </tbody>
       </table>
       <p className="field-help">
-        {t("Liczone od wersji 0.2.0, dla rozmów z modelem. Model połączony przez konto (np. ChatGPT, Claude przez logowanie) nie podaje liczby tokenów — jego wywołania są oznaczone „bez licznika”.")}
+        {t("Liczone od wersji 0.2.0, dla rozmów z modelem. ChatGPT i Claude połączone przez konto podają tokeny od wersji 0.2.4; wcześniejsze ich wywołania i modele, które liczby tokenów nie podają, są oznaczone „bez licznika”.")}
       </p>
     </article>
   );
