@@ -131,6 +131,19 @@ describe("materials the user delivers (documents and evidence)", () => {
     // Evidence next to a judgment is not "evidence without a pleading".
     expect(decideTask(routes, matrix, "Oceń te materiały", [judgment, invoice])?.primary).toBe("analiza-sadowa-v6");
   });
+
+  it("a reply to the court built from the record is a pleading, not an evidence assessment", () => {
+    const record = kind("PROTOKÓŁ ROZPRAWY\nSąd Okręgowy\nSygn. akt X P 1/26\nŚwiadek zeznał", 0);
+    for (const ask of [
+      "Przygotuj odpowiedź do sądu wykorzystując wcześniejszy protokół z rozprawy",
+      "Napisz stanowisko do sądu w sprawie zeznań świadka",
+      "Przygotuj odpowiedź na zarządzenie sądu"
+    ]) {
+      expect(decideTask(routes, matrix, ask, [record, protocol])?.primary).toBe("pisma-procesowe-v3");
+      expect(decideTask(routes, matrix, ask)?.primary).toBe("pisma-procesowe-v3");
+    }
+    expect(decideTask(routes, matrix, "Oceń zeznania świadka z protokołu", [record])?.primary).not.toBe("pisma-procesowe-v3");
+  });
 });
 
 describe("coverage of executive skills (documents and tasks)", () => {

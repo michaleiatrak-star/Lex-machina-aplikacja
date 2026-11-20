@@ -7,7 +7,7 @@ import { directImageNote, type DirectImage } from "./direct-images.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 import { detectHealthData } from "./privacy/health-data.js";
-import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
+import { WAIT_FOR_USER_MARKER, pausesForUser, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
@@ -272,7 +272,7 @@ import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from ".
 import { issueKey } from "./case-work.js";
 import { longDocumentRule } from "./long-document.js";
 import { CourtToolRuntime } from "./courts/court-tool-runtime.js";
-import { addresseeCourt, caseCourtPrompt, type CaseCourt } from "./courts/case-court.js";
+import { addresseeCourt, caseCourtPrompt, letterCaseMismatch, type CaseCourt } from "./courts/case-court.js";
 import { districtCourt, regionalCourt } from "./courts/court-base.js";
 import {
   applyAutomaticVerificationMarkers,
@@ -4831,7 +4831,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.contractWorkflowContext &&
       !request.orderedCaseWorkflowContext &&
       // Questions to the user (missing facts) are not the legal answer the gates belong to.
-      !waitsForUser(modelOutput) &&
+      !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) &&
       legalAnswer(modelOutput)
     );
     const missingGates = correctionEligible ? missingGateBlocks(mandatoryModel!, effectiveProfile, modelOutput) : [];
@@ -4939,7 +4939,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the application cannot tell which is meant, so one correcting round asks the model to name
     // the act at those citations only. Bare articles with one verified act are completed by the
     // application (completeBareArticleActs); unverified ones are marked ⚠️, not asked about.
-    const ambiguous = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/") && !waitsForUser(modelOutput)
+    const ambiguous = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/") && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)
       ? ambiguousBareArticles(modelOutput, ledger)
       : [];
     if (ambiguous.length > 0) {
@@ -4984,7 +4984,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // One correcting round for both; what remains is shown to the user next to the answer.
     // An answer that only defers ("nie mogę jeszcze…, odpowiedź zostanie przygotowana po…")
     // without the substance or a question: one correcting round; what stays is no basis for a file.
-    if (legalTurn && !waitsForUser(modelOutput) && emptyDeferral(modelOutput)) {
+    if (legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) && emptyDeferral(modelOutput)) {
       step("MODEL", "odpowiedź bez treści i bez pytania: runda poprawcza");
       let text = "";
       try {
@@ -5024,7 +5024,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           }))
         )
     };
-    if (legalTurn && !waitsForUser(modelOutput) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length || pleadingAsked)) {
+    if (legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length || pleadingAsked)) {
       const required = requiredPassages(strengthPassages, strengthKeyFacts);
       const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required);
       const schema = pleadingAsked ? argumentSchemaGaps(modelOutput, schemaOptions) : [];
@@ -5094,7 +5094,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // An admission (a thesis conceded, a charge dropped) is checked on the wording of the provisions
     // before it stays (admission-check.ts; a live case: the GDPR thesis conceded for companies).
-    if (pleadingAsked && !waitsForUser(modelOutput)) {
+    if (pleadingAsked && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
       const conceded = admissions(modelOutput);
       if (conceded.length) {
         step("MODEL", `przyznanie w piśmie (${conceded.length}): sprawdzenie przesłanek na brzmieniu przepisów`);
@@ -5131,7 +5131,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // A deadline the pleading adopts from a provision: its wording on the event date first (a live case
     // plan, point 9: art. 88a Pr. adw., 7 or 14 days). Event dates from the question and the decisions.
-    if (pleadingAsked && !offline && this.verificationToolFactory && !waitsForUser(modelOutput)) {
+    if (pleadingAsked && !offline && this.verificationToolFactory && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
       const provisions = deadlineProvisions(modelOutput);
       const eventText = [
         pathFacts.query,
@@ -5227,7 +5227,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // re-check side by side (live test 2026-11-15: three rounds one after another took 13 of 23
     // minutes of a turn on a Claude account). The correction stays when it leaves fewer findings.
     const statuteWarnings = new Map<string, string>();
-    const checksOn = legalTurn && !waitsForUser(modelOutput);
+    const checksOn = legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null);
     const caseCheckOn = checksOn && caseSourceTexts.length > 0;
     const quoteCheckOn = checksOn && /[„“]/u.test(modelOutput);
     const statuteCheckOn = checksOn && !request.documentAstOutput && !astLines && Boolean(verificationTools);
@@ -6666,6 +6666,10 @@ export class SafeSessionExecutor implements SessionExecutor {
     const foldCourt = (text: string) => text.toLowerCase().replace(/\s+/gu, " ");
     const inFiles = addressee ? foldCourt(fileText).includes(foldCourt(addressee)) : false;
     const courtCheck = addressee && !known.has(addressee) && !inFiles ? { unverified: [addressee] } : null;
+    // The letter's heading against the case card (signature, court).
+    const letterText = answerLetterMarkup(restoredAnswer.text) ?? (letterSkill ? restoredAnswer.text : null);
+    const caseMismatch = letterText && request.caseCourt ? letterCaseMismatch(letterText, request.caseCourt, [...known]) : [];
+    if (caseMismatch.length) restoredAnswer.text += `\n\n${caseMismatch.join("\n")}`;
     if (courtCheck) {
       restoredAnswer.text += `\n\n[SĄD DO SPRAWDZENIA: „${addressee}” nie pochodzi z ustalenia aplikacji (court_for_address) ani z akt sprawy. Sprawdź właściwość dla adresu strony.]`;
     }

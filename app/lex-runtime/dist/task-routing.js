@@ -250,7 +250,7 @@ const REPLY_KINDS = new Set(["ODPOWIEDZ_NA_POZEW", "ODPOWIEDZ_NA_SRODEK", "PISMO
 const COURT_SUMMONS_TEXT = /(?<![\p{L}])(?:(?:wezwani\p{L}*|zarządzeni\p{L}*|zobowiązani\p{L}*)\s+(?:\p{L}+\s+){0,2}?(?:sądu|sąd\p{L}*|przewodnicząc\p{L}*|referendarz\p{L}*)|(?:sąd|przewodnicząc\p{L}*|referendarz\p{L}*)\s+(?:mnie\s+|nas\s+)?(?:wezwał|zobowiązał|zarządził)\p{L}*)(?![\p{L}])/iu;
 const ANSWER_WANTED = /(?<![\p{L}])(?:odpowied\p{L}*|odpis\p{L}*|co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:napisać|złożyć|zrobić))(?![\p{L}])/iu;
 // A pleading named as what to produce, and "use these documents in the claim".
-const PLEADING_NOUN = /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od|odwołani\p{L}*|kasacj\p{L}*|skarg\p{L}*\s+kasacyjn\p{L}*)(?![\p{L}])/iu;
+const PLEADING_NOUN = /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|(?:odpowied|stanowisk|wyjaśnieni|ustosunkowani)\p{L}*\s+(?:\p{L}+\s+){0,2}?do\s+s[ąa]du|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od|odwołani\p{L}*|kasacj\p{L}*|skarg\p{L}*\s+kasacyjn\p{L}*)(?![\p{L}])/iu;
 const USE_IN_PLEADING = /(?<![\p{L}])(?:wykorzystaj|użyj|powołaj|dołącz|załącz)\p{L}*\s+(?:\p{L}+\s+){0,4}?(?:w|do)\s+(?:\p{L}+\s+)?(?:pozw|odpowiedzi|apelacj|pism|zażaleni|skarg)\p{L}*/iu;
 /**
  * pisma-procesowe-v3 MODUŁY-MAPA "opponent-attack-v9 — aktywny gdy: mamy pismo przeciwnika DO

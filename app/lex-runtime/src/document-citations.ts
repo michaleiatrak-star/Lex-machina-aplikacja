@@ -624,8 +624,18 @@ function documentLabel(attachment: SessionDocumentAttachment): string {
   return label;
 }
 
+// Some models write the marker with single brackets ("[LEXDOC:doc_x:1]") or put it alone on the
+// line after the quote; left so, the raw token stood in the letter (a live case, 2026-11-20).
+const SINGLE_MARKER = /(?<!\[)\[LEXDOC:([^:\[\]\r\n]{1,180}):(\d{1,7})((?::(?:u|a)\d{1,4})?)\](?!\])/g;
+const ORPHAN_MARKER_LINE = /[ \t]*\n[ \t]*(?:>[ \t]*)?(\[\[LEXDOC:[^\]\r\n]{1,200}\]\])[ \t]*(\.?)[ \t]*(?=\n|$)/g;
+
+/** Single-bracket and stand-alone markers as the canonical marker after the quote they source. */
+export function normalizeCitationMarkers(text: string): string {
+  return text.replace(SINGLE_MARKER, "[[LEXDOC:$1:$2$3]]").replace(ORPHAN_MARKER_LINE, " $1$2");
+}
+
 export function processDocumentCitationMarkers(
-  modelText: string,
+  rawModelText: string,
   attachments: SessionDocumentAttachment[],
   options: {
     // Texts a quote may legitimately come from without a case document link: the thread
@@ -633,6 +643,7 @@ export function processDocumentCitationMarkers(
     otherTexts?: string[];
   } = {}
 ): ProcessedDocumentCitations {
+  const modelText = normalizeCitationMarkers(rawModelText);
   labelAttachments = attachments;
   const chunks = new Map<string, ChunkEntry>();
   for (const attachment of attachments) {
