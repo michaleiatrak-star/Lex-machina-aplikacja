@@ -705,7 +705,7 @@ describe("SafeSessionExecutor", () => {
         verificationRecords: [],
         auditEvents: events
       });
-      expect(hybrid.reasons).not.toContain("SOURCE_SESSION_BLOCKED_EVENT");
+      expect(hybrid.warnings).not.toContain("SOURCE_SESSION_BLOCKED_EVENT");
     }
   });
 

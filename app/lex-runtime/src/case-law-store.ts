@@ -214,6 +214,38 @@ export class CaseLawRepository {
     return found;
   }
 
+  /** The library's copies for a package (the court mapped to the database's source names). */
+  *exportEntries(sources: readonly string[] | null): Generator<StoredCaseLaw> {
+    for (const item of this.index()) {
+      if (!inLibrary(item.cardUrl)) continue;
+      if (sources?.length && !sources.includes(packageSource(item.court))) continue;
+      const entry = this.library.get(item.cardUrl);
+      if (entry) yield entry;
+    }
+  }
+
+  /**
+   * A copy from a package: kept in the library whatever the switch (the user loaded it on
+   * purpose); false when this library already holds the same text or the copy is not usable.
+   */
+  importEntry(entry: StoredCaseLaw): "imported" | "skipped" | "invalid" {
+    if (!entry || typeof entry.cardUrl !== "string" || typeof entry.text !== "string" || !inLibrary(entry.cardUrl)) return "invalid";
+    const before = this.library.get(entry.cardUrl);
+    if (before && before.sha256 === createHash("sha256").update(entry.text.trim()).digest("hex")) return "skipped";
+    const kept = this.library.put({
+      cardUrl: entry.cardUrl,
+      text: entry.text,
+      ...(typeof entry.court === "string" ? { court: entry.court } : {}),
+      ...(typeof entry.signature === "string" ? { signature: entry.signature } : {}),
+      ...(typeof entry.date === "string" ? { date: entry.date } : {}),
+      ...(typeof entry.form === "string" ? { form: entry.form } : {}),
+      ...(typeof entry.fetchedAt === "string" ? { fetchedAt: entry.fetchedAt } : {})
+    });
+    if (!kept) return "invalid";
+    this.indexEntry(kept);
+    return before ? "skipped" : "imported";
+  }
+
   remove(cardUrl: string): boolean {
     const rest = this.index().filter((item) => item.cardUrl !== cardUrl);
     const removed = this.library.delete(cardUrl);
@@ -224,6 +256,11 @@ export class CaseLawRepository {
   removeCase(caseId: string): void {
     if (CASE_ID.test(caseId)) fs.rmSync(path.join(this.root, "cases", caseId), { recursive: true, force: true });
   }
+}
+
+// The library's courts named like the database's sources, for choosing what goes into a package.
+export function packageSource(court: string): string {
+  return court === "NSA/WSA" ? "CBOSA" : court;
 }
 
 let configured: CaseLawRepository | null = null;

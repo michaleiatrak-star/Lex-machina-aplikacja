@@ -45,6 +45,13 @@ export function defaultCaseLawDbDir(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 /** "II  K 336/17" -> "II K 336/17"; the form a signature is compared in. */
+export const CASE_LAW_PACKAGE_FORMAT = "lex-case-law/1";
+export const CASE_LAW_SOURCES: readonly CaseLawSource[] = ["SAOS", "CBOSA", "SN", "EUREKA", "SP", "TK", "KIO", "UODO", "WSD", "OSD", "SEJM", "NIL", "URE", "RPO", "KNF", "UKE", "RIO", "KRRIT", "RF"];
+export function caseLawPackageManifest(documents: Record<string, number>, library = 0): string {
+  return JSON.stringify({ format: CASE_LAW_PACKAGE_FORMAT, exportedAt: new Date().toISOString(), documents, library });
+}
+export type CaseLawImportResult = { format: string | null; imported: number; skipped: number; invalid: number; sources: Record<string, number> };
+
 export function normalizeSignature(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, " ").replace(/\s*\/\s*/gu, "/").trim().toLocaleUpperCase("pl");
 }
@@ -193,6 +200,76 @@ export class CaseLawDatabase {
   cursor(source: CaseLawSource): SyncCursor | null {
     const row = this.db.prepare("SELECT cursor FROM sync_state WHERE source = ?").get(source) as { cursor: string } | undefined;
     return row ? (JSON.parse(row.cursor) as SyncCursor) : null;
+  }
+
+  /**
+   * A package of the database (user, 2026-11-20: the user builds the base where a source answers
+   * only a browser — sn.pl behind its check — and loads it elsewhere): one JSON line per document
+   * with its card (the source it came from), text and links, then each source's synchronisation
+   * state, so the next run there continues where this one stopped. Only the given sources.
+   */
+  documentCounts(sources: readonly CaseLawSource[] | null = null): Record<string, number> {
+    return sources?.length
+      ? Object.fromEntries(sources.map((source) => [source, this.count(source)]))
+      : Object.fromEntries((this.db.prepare("SELECT source, COUNT(*) AS n FROM documents GROUP BY source").all() as Array<{ source: string; n: number }>).map((row) => [row.source, row.n]));
+  }
+
+  *exportLines(sources: readonly CaseLawSource[] | null = null, withManifest = true): Generator<string> {
+    const wanted = sources?.length ? sources : null;
+    if (withManifest) yield caseLawPackageManifest(this.documentCounts(wanted));
+    const where = wanted ? `WHERE source IN (${wanted.map(() => "?").join(",")})` : "";
+    const rows = this.db.prepare(`SELECT id, card, text FROM documents ${where} ORDER BY id`).iterate(...(wanted ?? []));
+    const links = this.db.prepare("SELECT kind, target, label FROM links WHERE id = ?");
+    for (const row of rows as Iterable<{ id: string; card: string; text: string | null }>) {
+      yield JSON.stringify({ card: JSON.parse(row.card), text: row.text, links: links.all(row.id) });
+    }
+    const states = this.db.prepare("SELECT source, cursor FROM sync_state").all() as Array<{ source: string; cursor: string }>;
+    for (const state of states) {
+      const source = state.source.split(":")[0]!;
+      if (!wanted || wanted.includes(source as CaseLawSource)) yield JSON.stringify({ state: state.source, cursor: JSON.parse(state.cursor) });
+    }
+  }
+
+  /**
+   * Loads a package line by line. A document already held in the same version is skipped; a
+   * ruling held from another official source is not stored twice; the sync state is taken only
+   * when this database has none for the source (its own run is never moved back).
+   */
+  importLine(line: string, result: CaseLawImportResult): void {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let item: Record<string, unknown>;
+    try {
+      item = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      result.invalid += 1;
+      return;
+    }
+    if (typeof item.format === "string") {
+      if (item.format !== CASE_LAW_PACKAGE_FORMAT) throw new Error("CASE_LAW_PACKAGE_FORMAT_UNKNOWN");
+      result.format = item.format;
+      return;
+    }
+    if (typeof item.state === "string") {
+      if (!this.state(item.state)) this.saveState(item.state, item.cursor);
+      return;
+    }
+    const card = item.card as CaseLawCard | undefined;
+    if (!card || !CASE_LAW_SOURCES.includes(card.source) || typeof card.sourceId !== "string" || !Array.isArray(card.signatures)) {
+      result.invalid += 1;
+      return;
+    }
+    const { id: _id, fetchedAt, textSha256: _sha, ...rest } = card;
+    if (this.duplicateOf(card.source, card.signatures, card.date)) {
+      result.skipped += 1;
+      return;
+    }
+    const links = Array.isArray(item.links) ? (item.links as CaseLawLink[]).filter((link) => link && typeof link.target === "string") : [];
+    const stored = this.upsert(rest, typeof item.text === "string" ? item.text : null, links, typeof fetchedAt === "string" ? fetchedAt : undefined);
+    if (stored) {
+      result.imported += 1;
+      result.sources[card.source] = (result.sources[card.source] ?? 0) + 1;
+    } else result.skipped += 1;
   }
 
   saveCursor(source: CaseLawSource, cursor: SyncCursor): void {

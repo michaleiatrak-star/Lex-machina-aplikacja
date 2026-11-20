@@ -1,10 +1,13 @@
-import { caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow } from "../case-law-sync.js";
+import { buildCaseLawSource, caseLawServerDocuments, caseLawSyncStatus, runCaseLawSourceNow, stopCaseLawBuild } from "../case-law-sync.js";
+import { CASE_LAW_PACKAGE_FORMAT, CASE_LAW_SOURCES, CaseLawDatabase, caseLawPackageManifest, defaultCaseLawDbDir, setSharedCaseLawDatabase, sharedCaseLawDatabase, type CaseLawImportResult, type CaseLawSource } from "../case-law-db.js";
+import { createGunzip, createGzip } from "node:zlib";
+import { createInterface } from "node:readline";
 import type { Express, Request, Response } from "express";
 import { localBrowserAnswers, setupLocalSearxng } from "../searxng-local.js";
 import { attemptServerBrowserSession, passCheckInServerBrowser } from "../eli/server-browser-session.js";
 import { probeWokandaSession, wokandaRegister } from "../courts/wokanda.js";
 import { CaseLawPreviewService } from "../case-law-preview.js";
-import { caseLawRepository } from "../case-law-store.js";
+import { caseLawRepository, packageSource, type StoredCaseLaw } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
 import { PublicWebSearch, resetSearxngEngineReport, searxngEngineReport } from "../web-search.js";
 import { runWebSearchBenchmark } from "../web-search-benchmark.js";
@@ -776,6 +779,103 @@ export function registerMcpConnectorRoutes(
     if (!requireAdmin(req, res, authService)) return;
     const source = typeof req.body?.source === "string" ? req.body.source : "";
     res.json({ started: runCaseLawSourceNow(source), server: caseLawSyncStatus() });
+  });
+  // A package of the local rulings (user, 2026-11-20): built where a source answers only a browser
+  // (sn.pl behind its check) and loaded on another installation; every ruling keeps the source it
+  // came from. gzip JSON lines: a manifest, the database's documents, then the library's copies.
+  app.get("/api/case-law/export", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    const database = sharedCaseLawDatabase();
+    const repository = caseLawRepository();
+    const sources = typeof req.query.sources === "string" && req.query.sources
+      ? req.query.sources.split(",").filter((item) => (CASE_LAW_SOURCES as readonly string[]).includes(item))
+      : null;
+    const library = repository ? [...repository.exportEntries(sources)] : [];
+    const documents = database ? database.documentCounts(sources as CaseLawSource[] | null) : {};
+    if (!library.length && !Object.values(documents).some((count) => count > 0)) {
+      res.status(404).json({ error: "CASE_LAW_DATABASE_EMPTY" });
+      return;
+    }
+    res.setHeader("Content-Type", "application/gzip");
+    res.setHeader("Content-Disposition", `attachment; filename="orzeczenia-${new Date().toISOString().slice(0, 10)}.lexcl.gz"`);
+    const gzip = createGzip();
+    gzip.pipe(res);
+    const lines = (function* () {
+      yield caseLawPackageManifest(documents, library.length);
+      if (database) yield* database.exportLines(sources as CaseLawSource[] | null, false);
+      for (const entry of library) yield JSON.stringify({ library: entry });
+    })();
+    const pump = () => {
+      for (;;) {
+        const next = lines.next();
+        if (next.done) {
+          gzip.end();
+          return;
+        }
+        if (!gzip.write(`${next.value}\n`)) {
+          gzip.once("drain", pump);
+          return;
+        }
+      }
+    };
+    pump();
+  });
+  // Loading a package (administrator): streamed, so a base of hundreds of thousands of rulings
+  // passes without the JSON body limit; the database is created when this installation has none,
+  // and the library is switched on when the package brings copies for it.
+  app.post("/api/case-law/import", async (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const result: CaseLawImportResult = { format: null, imported: 0, skipped: 0, invalid: 0, sources: {} };
+    const repository = caseLawRepository();
+    let database = sharedCaseLawDatabase();
+    const body = req.headers["content-type"] === "application/gzip" ? req.pipe(createGunzip()) : req;
+    try {
+      for await (const line of createInterface({ input: body, crlfDelay: Infinity })) {
+        if (!line.trim()) continue;
+        if (result.format === null) {
+          // The first line must be the manifest of this format.
+          let manifest: { format?: unknown } | null = null;
+          try {
+            manifest = JSON.parse(line) as { format?: unknown };
+          } catch {
+            manifest = null;
+          }
+          if (manifest?.format !== CASE_LAW_PACKAGE_FORMAT) throw new Error("CASE_LAW_PACKAGE_FORMAT_UNKNOWN");
+          result.format = CASE_LAW_PACKAGE_FORMAT;
+          continue;
+        }
+        if (line.startsWith('{"library":')) {
+          const entry = (JSON.parse(line) as { library: StoredCaseLaw }).library;
+          const outcome = repository ? repository.importEntry(entry) : "invalid";
+          result[outcome] += 1;
+          if (outcome === "imported") {
+            const source = packageSource(entry.court);
+            result.sources[source] = (result.sources[source] ?? 0) + 1;
+          }
+          continue;
+        }
+        if (!database) {
+          database = new CaseLawDatabase(defaultCaseLawDbDir());
+          setSharedCaseLawDatabase(database);
+        }
+        database.importLine(line, result);
+      }
+      if (result.format === null) throw new Error("CASE_LAW_PACKAGE_FORMAT_UNKNOWN");
+      if (repository && Object.keys(result.sources).length && !repository.libraryEnabled()) repository.setLibraryEnabled(true);
+      res.json({ ...result, server: caseLawSyncStatus() });
+    } catch (error) {
+      const code = error instanceof Error && error.message === "CASE_LAW_PACKAGE_FORMAT_UNKNOWN" ? error.message : "CASE_LAW_IMPORT_FAILED";
+      req.unpipe();
+      req.resume();
+      res.status(400).json({ error: code, ...result });
+    }
+  });
+  // "Buduj bazę" / "Zatrzymaj" (administrator, any installation): the source is downloaded on request only.
+  app.post("/api/case-law/build", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    const source = typeof req.body?.source === "string" ? req.body.source.slice(0, 40) : "";
+    const changed = req.body?.stop === true ? stopCaseLawBuild(source) : buildCaseLawSource(source);
+    res.json({ changed, server: caseLawSyncStatus() });
   });
   app.put("/api/case-law/library", (req, res) => {
     if (!requireUser(req, res, authService)) return;
