@@ -8,7 +8,7 @@ function sha256(bytes) {
 }
 function discoveryResult(indexBytes, signatureBytes) {
     return {
-        currentVersion: "0.2.3",
+        currentVersion: "0.2.4",
         status: "AVAILABLE",
         checkedAt: "2026-09-18T09:00:00.000Z",
         latestVersion: "0.2.4",
@@ -48,7 +48,7 @@ function verifiedIndex(args) {
             },
             compatibility: {
                 minAppVersion: args?.minAppVersion ??
-                    "0.2.3",
+                    "0.2.4",
                 ...(args?.maxAppVersion
                     ? {
                         maxAppVersion: args.maxAppVersion

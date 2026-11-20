@@ -34,7 +34,7 @@ function discoveryResult(
   signatureBytes: Uint8Array
 ): UpdateDiscoveryResult {
   return {
-    currentVersion: "0.2.3",
+    currentVersion: "0.2.4",
     status: "AVAILABLE",
     checkedAt:
       "2026-09-18T09:00:00.000Z",
@@ -98,7 +98,7 @@ function verifiedIndex(args?: {
       compatibility: {
         minAppVersion:
           args?.minAppVersion ??
-          "0.2.3",
+          "0.2.4",
         ...(args?.maxAppVersion
           ? {
               maxAppVersion:
