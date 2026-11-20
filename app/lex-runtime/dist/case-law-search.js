@@ -307,7 +307,7 @@ const LOCAL_SOURCES = {
     SAOS: ["SP", "SN", "TK", "KIO"],
     CBOSA: ["CBOSA"],
     SN: ["SN"],
-    BAZA: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF"]
+    BAZA: ["SP", "CBOSA", "SN", "TK", "KIO", "UODO", "EUREKA", "WSD", "OSD", "NIL", "URE", "RPO", "SEJM", "KNF", "UKE", "RIO", "KRRIT", "RF", "ZUS"]
 };
 // SAOS court types → the local bases holding such courts' rulings.
 const SAOS_COURT_BASES = {

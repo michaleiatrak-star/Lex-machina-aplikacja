@@ -727,7 +727,39 @@ IMAGE_MIN_BYTES = 30 * 1024
 IMAGE_MAX_COUNT = 20
 
 
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+PNG_END = b"IEND\xaeB`\x82"
+
+
+def doc_images(data: bytes) -> list:
+    """Pictures of a Word 97-2003 file: PNG and JPEG blobs in its Data stream (a scan pasted into .doc)."""
+    stream = cfb_streams(data).get("Data") or b""
+    found = []
+    at = 0
+    while len(found) < IMAGE_MAX_COUNT:
+        png, jpeg = stream.find(PNG_MAGIC, at), stream.find(b"\xff\xd8\xff", at)
+        starts = [pos for pos in (png, jpeg) if pos >= 0]
+        if not starts:
+            break
+        start = min(starts)
+        if start == png:
+            end = stream.find(PNG_END, start)
+            kind, end = "image/png", (end + len(PNG_END) if end >= 0 else -1)
+        else:
+            end = stream.find(b"\xff\xd9", start + 3)
+            kind, end = "image/jpeg", (end + 2 if end >= 0 else -1)
+        if end < 0:
+            break
+        raw = stream[start:end]
+        if IMAGE_MIN_BYTES <= len(raw) <= 20 * 1024 * 1024:
+            found.append({"name": f"Data/{len(found) + 1}", "mediaType": kind, "data": base64.b64encode(raw).decode("ascii")})
+        at = end
+    return found
+
+
 def embedded_images(data: bytes, media_type: str) -> list:
+    if media_type == DOC:
+        return doc_images(data)
     prefix = "word/media/" if media_type == DOCX else "Pictures/" if media_type == ODT else None
     if prefix is None:
         return []

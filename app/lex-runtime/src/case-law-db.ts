@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA" | "SP" | "TK" | "KIO" | "UODO" | "WSD" | "OSD" | "SEJM" | "NIL" | "URE" | "RPO" | "KNF" | "UKE" | "RIO" | "KRRIT" | "RF";
+export type CaseLawSource = "SAOS" | "CBOSA" | "SN" | "EUREKA" | "SP" | "TK" | "KIO" | "UODO" | "WSD" | "OSD" | "SEJM" | "NIL" | "URE" | "RPO" | "KNF" | "UKE" | "RIO" | "KRRIT" | "RF" | "ZUS";
 
 export type CaseLawCard = {
   id: string;
@@ -46,7 +46,7 @@ export function defaultCaseLawDbDir(env: NodeJS.ProcessEnv = process.env): strin
 
 /** "II  K 336/17" -> "II K 336/17"; the form a signature is compared in. */
 export const CASE_LAW_PACKAGE_FORMAT = "lex-case-law/1";
-export const CASE_LAW_SOURCES: readonly CaseLawSource[] = ["SAOS", "CBOSA", "SN", "EUREKA", "SP", "TK", "KIO", "UODO", "WSD", "OSD", "SEJM", "NIL", "URE", "RPO", "KNF", "UKE", "RIO", "KRRIT", "RF"];
+export const CASE_LAW_SOURCES: readonly CaseLawSource[] = ["SAOS", "CBOSA", "SN", "EUREKA", "SP", "TK", "KIO", "UODO", "WSD", "OSD", "SEJM", "NIL", "URE", "RPO", "KNF", "UKE", "RIO", "KRRIT", "RF", "ZUS"];
 export function caseLawPackageManifest(documents: Record<string, number>, library = 0): string {
   return JSON.stringify({ format: CASE_LAW_PACKAGE_FORMAT, exportedAt: new Date().toISOString(), documents, library });
 }

@@ -32,7 +32,8 @@ export class LocalOfficeDocumentTextExtractor {
                 60_000;
     }
     async images(data, mediaType) {
-        if (mediaType !== DOCX_MEDIA_TYPE && mediaType !== ODT_MEDIA_TYPE)
+        // Word 97-2003 too: a scan pasted into a .doc (the ZUS archives hold such files).
+        if (mediaType !== DOCX_MEDIA_TYPE && mediaType !== ODT_MEDIA_TYPE && mediaType !== DOC_MEDIA_TYPE)
             return [];
         if (data.byteLength < 1 || data.byteLength > 64 * 1024 * 1024)
             return [];

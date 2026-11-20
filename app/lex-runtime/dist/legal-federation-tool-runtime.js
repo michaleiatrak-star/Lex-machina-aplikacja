@@ -216,7 +216,7 @@ export const SOURCES_BY_KIND = [
     "# ŹRÓDŁA WEDŁUG RODZAJU (aplikacja)",
     "- Przepis: verify_legal_reference (ELI). Projekt, uzasadnienie ustawy: ISAP, sejm.gov.pl.",
     "- SN: źródło sn → verify_case_*. Sądy powszechne: sp (Portal Orzeczeń) i SAOS. NSA/WSA: cbosa (🟨, brak trafień = OUT_OF_SCOPE). TK: tk. KIO: kio. TSUE: eurlex. ETPC: etpcz. Szukaj w sądach, które takie sprawy rozstrzygają, nie tylko w najwyższym.",
-    "- Interpretacje KIS: eureka → verify_interpretation. Interpretacje ogólne i objaśnienia podatkowe MF, interpretacje ZUS: web_search site:gov.pl / site:zus.pl → fetch_auxiliary_legal_source na tej domenie.",
+    "- Interpretacje KIS: eureka → verify_interpretation. Interpretacje ZUS: najpierw search_case_law source=BAZA bases=[ZUS] (kopia BIP ZUS), bez trafień web_search site:zus.pl → fetch_auxiliary_legal_source. Interpretacje ogólne i objaśnienia podatkowe MF: web_search site:gov.pl → fetch_auxiliary_legal_source na tej domenie.",
     "- Decyzje i stanowiska organów: UODO (uodo), UOKiK (site:uokik.gov.pl), PIP, KNF, URE, UKE, RPO, EROD (site:edpb.europa.eu): web_search z site: domeny organu → dokument z domeny organu. Status: stanowisko organu, nie prawo powszechnie obowiązujące.",
     "- Podmiot: krs, ceidg, wl (biała lista VAT); kursy: nbp.",
     "- Wyszukiwarka (web_search): tylko trop — sygnatura, numer, tytuł, adres; treść, tezę i cytat bierz z dokumentu u źródła. Frazy ogólne, nigdy fakty sprawy ani symbole [PII].",

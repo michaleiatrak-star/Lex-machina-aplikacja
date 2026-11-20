@@ -5,6 +5,8 @@
 // adapter only fetches what is new. One copy per ruling: a ruling held from another official source
 // (same signature and date) is not stored again.
 import { plainText } from "./eli/readers.js";
+import { zusAdapter } from "./case-law-zus.js";
+import type { ImageOcrEngine } from "./image-ingestion.js";
 import type { OcrEngine } from "./document-ingestion.js";
 import { inflateRawSync } from "node:zlib";
 import { lawSourceSessionHeaders } from "./eli/law-source-sessions.js";
@@ -1541,7 +1543,10 @@ export const rfAdapter: SyncAdapter = {
   }
 };
 
-export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter, knfAdapter, ukeAdapter, rioAdapter, krritAdapter, rfAdapter];
+// ZUS written interpretations: the BIP list (PDF decisions) and the RAR archives (case-law-zus.ts).
+export const zusSyncAdapter: SyncAdapter = zusAdapter({ pdf: pdfText, imageOcr: () => caseLawImageOcr() }, rulingDate);
+
+export const CASE_LAW_ADAPTERS: SyncAdapter[] = [spAdapter, cbosaAdapter, snAdapter, tkAdapter, kioAdapter, uodoAdapter, eurekaAdapter, wsdAdapter, disciplinaryAdapter, nilAdapter, rpoAdapter, ureAdapter, sejmAdapter, knfAdapter, ukeAdapter, rioAdapter, krritAdapter, rfAdapter, zusSyncAdapter];
 
 // ── schedule and status ──
 
@@ -1553,7 +1558,6 @@ export const CASE_LAW_NOT_BULK: Array<{ source: string; reason: string }> = [
   { source: "ORKA2 (Sejm)", reason: "serwis chroniony przed automatami; druki i procesy pobierane z API Sejmu (źródło „Sejm”)" },
   { source: "UOKiK, dzienniki urzędowe", reason: "moduł pobierania w przygotowaniu" },
   { source: "RIO Katowice, Łódź, Lublin, Olsztyn, Opole, Rzeszów, Wrocław", reason: "BIP-y na innych systemach niż pozostałe izby; uchwały dostępne w ich BIP-ach, bez pobierania do bazy" },
-  { source: "ZUS — interpretacje", reason: "publikowane w archiwach RAR; odczyt wymaga dodatkowej biblioteki (czeka na zgodę)" },
   { source: "Izby adwokackie i izby radców prawnych bez archiwum orzeczeń", reason: "wykaz izb i powód przy każdej — w pozycji sądów dyscyplinarnych I instancji (wybór izby)" }
 ];
 
@@ -1563,6 +1567,11 @@ const running = new Set<string>();
 // Sources an administrator asked to build on this installation (no server mode needed).
 const building = new Set<string>();
 let syncActive = false;
+let imageOcrEngine: ImageOcrEngine | null = null;
+/** The picture OCR the sync was started with (case-law-zus.ts reads scans pasted into .doc files). */
+export function caseLawImageOcr(): ImageOcrEngine | null {
+  return imageOcrEngine;
+}
 let syncIntervalMs = 10 * 60 * 1000;
 let lastTickAt = 0;
 // Errors in a row of a build (a network failure): it is tried again a few times before it stops.
@@ -1571,6 +1580,8 @@ const BUILD_ERROR_RETRIES = 3;
 
 export type CaseLawSyncOptions = {
   isServerMode?: () => boolean;
+  /** OCR of pictures (a scan pasted into a Word file); none: such a document is held without text. */
+  imageOcr?: ImageOcrEngine;
   /** How long a build waiting for the user's session waits before it tries again. */
   waitRetryMs?: number;
   fetcher?: SyncFetch;
@@ -1708,6 +1719,7 @@ export function progressPhase(progress: string): "NONE" | "PARTIAL" | "COMPLETE"
 
 export function startCaseLawSync(options: CaseLawSyncOptions = {}): () => void {
   startedWith = options;
+  imageOcrEngine = options.imageOcr ?? null;
   const isServerMode = options.isServerMode ?? (() => false);
   const fetcher = options.fetcher ?? (globalThis.fetch.bind(globalThis) as SyncFetch);
   const adapters = options.adapters ?? CASE_LAW_ADAPTERS;

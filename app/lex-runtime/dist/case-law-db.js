@@ -18,7 +18,7 @@ export function defaultCaseLawDbDir(env = process.env) {
 }
 /** "II  K 336/17" -> "II K 336/17"; the form a signature is compared in. */
 export const CASE_LAW_PACKAGE_FORMAT = "lex-case-law/1";
-export const CASE_LAW_SOURCES = ["SAOS", "CBOSA", "SN", "EUREKA", "SP", "TK", "KIO", "UODO", "WSD", "OSD", "SEJM", "NIL", "URE", "RPO", "KNF", "UKE", "RIO", "KRRIT", "RF"];
+export const CASE_LAW_SOURCES = ["SAOS", "CBOSA", "SN", "EUREKA", "SP", "TK", "KIO", "UODO", "WSD", "OSD", "SEJM", "NIL", "URE", "RPO", "KNF", "UKE", "RIO", "KRRIT", "RF", "ZUS"];
 export function caseLawPackageManifest(documents, library = 0) {
     return JSON.stringify({ format: CASE_LAW_PACKAGE_FORMAT, exportedAt: new Date().toISOString(), documents, library });
 }
