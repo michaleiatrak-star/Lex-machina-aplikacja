@@ -112,7 +112,7 @@ describe("wokanda: browser verification passed by the user (as sn.pl)", () => {
       if (headers?.cookie !== "verified=1") return { status: 403, url, text: "Trwa weryfikacja przeglądarki" };
       return { status: 200, url, text: url.endsWith("/wokanda") ? portal : url.includes("index.php") ? SEARCH.replaceAll("https://krakow.so.gov.pl", `https://${guarded.domena}`) : DETAILS };
     };
-    expect(await probeWokandaSession(guarded.domena, "pending=1", "Mozilla/5.0 WebView", site)).toEqual({ ready: false });
+    expect(await probeWokandaSession(guarded.domena, "pending=1", "Mozilla/5.0 WebView", site)).toMatchObject({ ready: false });
     expect(await probeWokandaSession(`www.${guarded.domena}`, "verified=1", "Mozilla/5.0 WebView", site)).toEqual({ ready: true });
     await expect(probeWokandaSession("example.com", "verified=1", "x", site)).rejects.toThrow("WOKANDA_COURT_UNKNOWN");
 
@@ -230,5 +230,40 @@ describe("wokanda: other systems (probed and read live 2026-11-04: 30 of 35 cour
     expect(await probeWokandaSession(blocked.domena, "", "Mozilla/5.0", async (url) => (asked.push(url), { status: 200, url, text: portal }))).toEqual({ ready: true });
     expect(asked).toEqual(["https://jaroslaw.sr.gov.pl/wokanda-sr-jaroslaww.html"]);
     expect(wokandaSessionDomains()).not.toContain(blocked.domena);
+  });
+});
+
+describe("wokanda: the page the court's window shows (2026-11-20)", () => {
+  it("a wokanda reached on another address than the register's: ready, and that address is kept for the court", async () => {
+    clearWokandaSessions();
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lex-wok-window-")), "wokanda.json");
+    const court = wokandaRegister().sady.find((item) => item.status === "BROWSER" && item.powod === "weryfikacja przeglądarki")!;
+    const page = `https://${court.domena}/e-wokanda/77`;
+    const form = '<form name="searchForm" action="/e-wokanda/szukaj" method="get"><label>Sygnatura</label><input name="signature"/></form>';
+    const site: FetchText = async (url) => (url === page ? { status: 200, url, text: form } : { status: 404, url, text: "Nie znaleziono" });
+    expect(await probeWokandaSession(court.domena, "verified=1", "Mozilla/5.0", site, page, file)).toEqual({ ready: true, url: page });
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))[court.nazwa]).toMatchObject({ url: page, powod: "adres z okna sądu" });
+    // An address of another site is never taken from the window.
+    expect(await probeWokandaSession(court.domena, "verified=1", "Mozilla/5.0", site, "https://example.com/e-wokanda/77", file)).toMatchObject({ ready: true });
+    clearWokandaSessions();
+  });
+
+  it("the window shows the wokanda but the court refuses the application: BLOCKED, the address kept for its link", async () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lex-wok-blocked-")), "wokanda.json");
+    const court = wokandaRegister().sady.find((item) => item.status === "BROWSER" && item.powod === "weryfikacja przeglądarki")!;
+    const page = `https://${court.domena}/wokanda-sadu.html`;
+    const site: FetchText = async (url) => ({ status: 403, url, text: "" });
+    expect(await probeWokandaSession(court.domena, "a=1", "Mozilla/5.0", site, page, file)).toEqual({ ready: false, reason: "BLOCKED" });
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))[court.nazwa]).toMatchObject({ url: page });
+  });
+});
+
+describe("wokanda: the e-wokanda the court's home page names (2026-11-20)", () => {
+  it("no page at the register's address: the home page's /e-wokanda/<number> link is checked", async () => {
+    const court = { nazwa: "Sąd Rejonowy w Testowie", domena: "testowo.sr.gov.pl", status: "BROWSER" as const, url: "https://testowo.sr.gov.pl/wokanda" };
+    const form = '<form name="searchForm" action="/e-wokanda/szukaj" method="get"><label>Sygnatura</label><input name="signature"/></form>';
+    const site: FetchText = async (url) =>
+      url === "https://testowo.sr.gov.pl/" ? { status: 200, url, text: '<a href="/e-wokanda/208">E-Wokanda</a>' } : url.endsWith("/e-wokanda/208") ? { status: 200, url, text: form } : { status: 404, url, text: "" };
+    expect(await recheckWokandaCourt(court, site)).toMatchObject({ status: "PORTAL", system: "GET_FORM", pole: "signature" });
   });
 });

@@ -6,7 +6,12 @@ import { AUTO_TRIES, desktopInvoke } from "./SnVerification.js";
 /** Court windows open at once in one round of the bulk verification. */
 export const ROUND_SIZE = 10;
 
-type CourtState = "waiting" | "open" | "verified" | "skipped" | "failed";
+type CourtState = "waiting" | "open" | "verified" | "browserOnly" | "skipped" | "failed";
+
+// Ticks (4 s each) the window may show a wokanda the application cannot read before it closes;
+// a page the application still sees behind the court's check waits longer (the user may be passing it).
+export const UNREADABLE_TICKS = 3;
+export const GUARDED_TICKS = 15;
 
 /** The courts split into rounds of ROUND_SIZE, in the given order. */
 export function verificationRounds<T>(courts: readonly T[], size = ROUND_SIZE): T[][] {
@@ -21,6 +26,7 @@ const STATE_LABEL: Record<CourtState, string> = {
   waiting: N_("czeka"),
   open: N_("okno otwarte"),
   verified: N_("zweryfikowany"),
+  browserOnly: N_("wokanda widoczna tylko w przeglądarce"),
   skipped: N_("pominięty"),
   failed: N_("okno się nie otworzyło")
 };
@@ -64,6 +70,7 @@ export function WokandaBulkVerification({
     let shown = false;
     let busy = false;
     let closing = false;
+    const unreadable = new Map<string, number>();
     void Promise.all(
       batch.map((court, slot) =>
         invoke("wokanda_verification_open", { url: courtUrl(court), minimized: true, slot }).then(
@@ -83,11 +90,26 @@ export function WokandaBulkVerification({
         if (!cancelled && statesRef.current[court.nazwa] === "open") mark(court.nazwa, "skipped");
         return;
       }
-      const { ready } = await probeWokandaSession(court.domena, cookie, navigator.userAgent).catch(() => ({ ready: false }));
-      if (ready && !cancelled && statesRef.current[court.nazwa] === "open") {
+      // The page the window shows now: the user may have reached the wokanda by another link.
+      const pageUrl = await invoke!("wokanda_verification_url", { slot }).then(String, () => undefined);
+      const probe = await probeWokandaSession(court.domena, cookie, navigator.userAgent, pageUrl).catch(() => ({ ready: false, reason: "ERROR" as const }));
+      if (cancelled || statesRef.current[court.nazwa] !== "open") return;
+      if (probe.ready) {
         mark(court.nazwa, "verified");
         await invoke!("wokanda_verification_close", { slot }).catch(() => undefined);
+        return;
       }
+      // The wokanda stands in the window, but the court refuses the application or its page has no
+      // search the application reads: the window has done what it can, it closes.
+      const onWokanda = Boolean(pageUrl && /wokand/iu.test(new URL(pageUrl).pathname));
+      if (onWokanda && (shown || probe.reason !== "GUARD")) {
+        const count = (unreadable.get(court.nazwa) ?? 0) + 1;
+        unreadable.set(court.nazwa, count);
+        if (count >= (probe.reason === "GUARD" ? GUARDED_TICKS : UNREADABLE_TICKS)) {
+          mark(court.nazwa, "browserOnly");
+          await invoke!("wokanda_verification_close", { slot }).catch(() => undefined);
+        }
+      } else unreadable.delete(court.nazwa);
     }
 
     async function tick(): Promise<void> {

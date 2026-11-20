@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { joinContinuations } from "./continuation-seams.js";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -1201,6 +1202,13 @@ export function runDirectForTests(...args) {
     return runDirect(...args);
 }
 function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal, settleOptions = {}) {
+    // The tokens a client reports in its own output go to the call's meter (cliUsage).
+    return runDirectProcess(executable, args, stdinText, env, timeoutMs, cwd, abortSignal, settleOptions).then((result) => {
+        noteCliUsage(result.stdout);
+        return result;
+    });
+}
+function runDirectProcess(executable, args, stdinText, env, timeoutMs, cwd, abortSignal, settleOptions = {}) {
     return new Promise((resolve, reject) => {
         const child = spawnResolved(executable, args, cwd, env);
         let stdout = "";
@@ -3158,7 +3166,70 @@ export class AccountSessionManager {
         }
     }
 }
+const cliUsageScope = new AsyncLocalStorage();
+/**
+ * Tokens a signed-in client prints with its answer (user, 2026-11-20: the usage table showed 0 for
+ * account models): Codex "turn.completed" usage (input with cached), Claude's "result" usage (input
+ * without the cache, added here). Other clients print none: their calls stay unmetered.
+ */
+export function cliUsageOf(stdout) {
+    const total = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    let seen = false;
+    const num = (value) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+    for (const line of stdout.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("{") || !trimmed.includes("usage"))
+            continue;
+        let event;
+        try {
+            event = JSON.parse(trimmed);
+        }
+        catch {
+            continue;
+        }
+        const usage = event.usage;
+        if (!usage || typeof usage !== "object")
+            continue;
+        if (event.type === "turn.completed") {
+            total.inputTokens += num(usage.input_tokens);
+            total.cacheReadTokens += num(usage.cached_input_tokens);
+            total.outputTokens += num(usage.output_tokens);
+            seen = true;
+        }
+        else if (event.type === "result") {
+            const read = num(usage.cache_read_input_tokens);
+            const written = num(usage.cache_creation_input_tokens);
+            total.inputTokens += num(usage.input_tokens) + read + written;
+            total.cacheReadTokens += read;
+            total.cacheWriteTokens += written;
+            total.outputTokens += num(usage.output_tokens);
+            seen = true;
+        }
+    }
+    return seen ? total : null;
+}
+function noteCliUsage(stdout) {
+    const meter = cliUsageScope.getStore();
+    const usage = meter ? cliUsageOf(stdout) : null;
+    if (!meter || !usage)
+        return;
+    meter.inputTokens += usage.inputTokens;
+    meter.outputTokens += usage.outputTokens;
+    meter.cacheReadTokens += usage.cacheReadTokens;
+    meter.cacheWriteTokens += usage.cacheWriteTokens;
+    meter.seen = true;
+}
 export async function streamAccountSession(manager, provider, params) {
+    const meter = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, seen: false };
+    const result = await cliUsageScope.run(meter, () => streamAccountSessionText(manager, provider, params));
+    if (!meter.seen || result.usage)
+        return result;
+    return {
+        ...result,
+        usage: { inputTokens: meter.inputTokens, outputTokens: meter.outputTokens, cacheReadTokens: meter.cacheReadTokens, cacheWriteTokens: meter.cacheWriteTokens }
+    };
+}
+async function streamAccountSessionText(manager, provider, params) {
     const allowedTools = new Set((params.tools ?? [])
         .map((tool) => tool.function.name));
     const toolTranscript = [];

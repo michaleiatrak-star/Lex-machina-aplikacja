@@ -115,23 +115,72 @@ export function clearWokandaSessions() {
     sessions.clear();
     persistSessions();
 }
-/** The court's wokanda page read with the window's cookies: the portal answered, the session is kept. */
-export async function probeWokandaSession(domain, cookie, userAgent, fetchText = defaultFetchText) {
+/** An https address of this court (the window's page), or null. */
+function sameCourtUrl(raw, domain) {
+    if (!raw)
+        return null;
+    try {
+        const url = new URL(raw);
+        return url.protocol === "https:" && courtDomain(url.hostname) === domain ? url.toString() : null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * The court's wokanda read with the window's cookies: the portal answered, the session is kept.
+ * The page the window shows is tried first (user, 2026-11-20: the wokanda stood in the window, the
+ * status stayed "okno otwarte" because the register's address was another page); when it answers,
+ * that address is remembered for the court on this computer.
+ */
+export async function probeWokandaSession(domain, cookie, userAgent, fetchText = defaultFetchText, pageUrl, file = wokandaOverridesPath()) {
     const court = WOKANDA_REGISTER.sady.find((item) => item.domena === courtDomain(domain));
     if (!court)
         throw new Error("WOKANDA_COURT_UNKNOWN");
+    const registered = effectiveWokandaCourt(court.nazwa, file)?.url ?? court.url ?? `https://${court.domena}/wokanda`;
+    const windowUrl = sameCourtUrl(pageUrl, court.domena);
+    const candidates = [...new Set([windowUrl, registered].filter((item) => Boolean(item)))];
+    let reason = "ERROR";
+    for (const candidate of candidates) {
+        try {
+            // No cookie (a site that blocked another network but lets this computer in): ready without
+            // a session, the re-check finds the wokanda directly.
+            const page = await fetchText(candidate, cookie.trim() ? { cookie, "user-agent": userAgent || WOKANDA_USER_AGENT } : {});
+            const found = page.status === 200 ? detectSearchSystem(page.url, page.text) : null;
+            if (found && !isGuardPage(page.url, page.text)) {
+                if (cookie.trim())
+                    setWokandaSession(court.domena, cookie, userAgent);
+                if (candidate !== registered)
+                    rememberWokandaUrl(court, candidate, file);
+                return { ready: true, ...(candidate !== registered ? { url: candidate } : {}) };
+            }
+            const next = GUARD.test(page.text) ? "GUARD" : page.status === 403 || page.status === 429 ? "BLOCKED" : page.status === 200 ? "NO_SYSTEM" : "ERROR";
+            // The window's page decides (it is what the user sees); the register's only when the window gave nothing.
+            if (candidate === windowUrl || reason === "ERROR")
+                reason = next;
+            // A wokanda the window shows on another address than the register's: remembered even when the
+            // application cannot read it, so the court's link leads there.
+            if (candidate === windowUrl && candidate !== registered && /wokand/iu.test(new URL(candidate).pathname) && (next === "BLOCKED" || next === "NO_SYSTEM")) {
+                rememberWokandaUrl(court, candidate, file);
+            }
+        }
+        catch {
+            // Unreachable from here: the other address may answer.
+        }
+    }
+    return { ready: false, reason };
+}
+/** The court's wokanda address seen in its window, kept on this computer for later checks. */
+function rememberWokandaUrl(court, url, file) {
     try {
-        // The court's own wokanda address (not always /wokanda) and any system the application reads.
-        // No cookie (a site that blocked another network but lets this computer in): ready without
-        // a session, the re-check finds the wokanda directly.
-        const page = await fetchText(court.url ?? `https://${court.domena}/wokanda`, cookie.trim() ? { cookie, "user-agent": userAgent || WOKANDA_USER_AGENT } : {});
-        const ready = page.status === 200 && Boolean(detectSearchSystem(page.url, page.text)) && !isGuardPage(page.url, page.text);
-        if (ready && cookie.trim())
-            setWokandaSession(court.domena, cookie, userAgent);
-        return { ready };
+        const overrides = readOverrides(file);
+        const previous = overrides[court.nazwa];
+        overrides[court.nazwa] = { ...(previous ?? court), nazwa: court.nazwa, domena: court.domena, url, powod: "adres z okna sądu", sprawdzono: new Date().toISOString() };
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, JSON.stringify(overrides), "utf8");
     }
     catch {
-        return { ready: false };
+        // The address is found again by the next window.
     }
 }
 /** "XI C 1768/26" -> department XI, repertory C, number 1768, year 2026. */
@@ -481,6 +530,22 @@ export async function checkWokanda(courtName, signature, fetchText = defaultFetc
     hearings.sort((a, b) => `${a.data} ${a.godzina}`.localeCompare(`${b.data} ${b.godzina}`));
     return { ...base, state: hearings.length ? "FOUND" : "NOT_FOUND", searchUrl, hearings };
 }
+/** The e-wokanda address the court's home page links to (one request), or null. */
+async function linkedWokanda(domain, fetchText) {
+    try {
+        const home = await fetchText(`https://${domain}/`);
+        if (home.status !== 200)
+            return null;
+        const href = /href="((?:https:\/\/[^"/]+)?\/e-wokanda\/\d+)"/u.exec(home.text)?.[1];
+        if (!href)
+            return null;
+        const url = absoluteUrl(home.url || `https://${domain}/`, href);
+        return courtDomain(new URL(url).hostname) === domain ? url : null;
+    }
+    catch {
+        return null;
+    }
+}
 /** One court's wokanda checked again (developer settings): its page, one request. */
 export async function recheckWokandaCourt(court, fetchText = defaultFetchText) {
     const other = court.system && court.system !== "MS_PORTAL";
@@ -501,7 +566,14 @@ export async function recheckWokandaCourt(court, fetchText = defaultFetchText) {
         }
     }
     try {
-        const page = await fetchText(url);
+        let page = await fetchText(url);
+        // No page at the register's address: the court's home page names its e-wokanda (user,
+        // 2026-11-20: several courts keep it at /e-wokanda/<number>, not /wokanda).
+        if (page.status === 404) {
+            const linked = await linkedWokanda(court.domena, fetchText);
+            if (linked)
+                page = await fetchText(linked);
+        }
         // Another system that answers without a guard keeps its way of searching.
         if (other && page.status === 200 && !isGuardPage(page.url, page.text))
             return { ...court, url: court.url ?? url };
@@ -565,7 +637,13 @@ export function effectiveWokandaCourt(name, file = wokandaOverridesPath()) {
 }
 /** Re-checks the named courts (all when none), a few at a time, and keeps the results. */
 export async function recheckWokandaCourts(names, fetchText = defaultFetchText, file = wokandaOverridesPath(), concurrency = 6) {
-    const targets = WOKANDA_REGISTER.sady.filter((court) => !names || names.includes(court.nazwa));
+    // This computer's address for the court (a page found in its window) is the one checked again.
+    const targets = WOKANDA_REGISTER.sady
+        .filter((court) => !names || names.includes(court.nazwa))
+        .map((court) => {
+        const local = readOverrides(file)[court.nazwa];
+        return local?.powod === "adres z okna sądu" && local.url ? { ...court, url: local.url } : court;
+    });
     const checked = [];
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, async () => {

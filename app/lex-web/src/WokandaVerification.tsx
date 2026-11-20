@@ -38,7 +38,8 @@ export function WokandaVerification({
       try {
         const cookie = String(await invoke!("wokanda_verification_cookies", { url: verification.url }));
         if (cookie) {
-          const { ready } = await probeWokandaSession(verification.domain, cookie, navigator.userAgent);
+          const pageUrl = await invoke!("wokanda_verification_url", {}).then(String, () => undefined);
+          const { ready } = await probeWokandaSession(verification.domain, cookie, navigator.userAgent, pageUrl);
           if (ready && !cancelled && !done.current) {
             done.current = true;
             await invoke!("wokanda_verification_close").catch(() => undefined);

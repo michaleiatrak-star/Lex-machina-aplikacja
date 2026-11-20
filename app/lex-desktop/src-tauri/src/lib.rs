@@ -477,6 +477,25 @@ async fn wokanda_verification_cookies(
     ))
 }
 
+// The address the court's window shows now (the user may have reached the wokanda by another link
+// than the register's): only an https address of that court.
+#[tauri::command]
+async fn wokanda_verification_url(
+    app: tauri::AppHandle,
+    slot: Option<u32>,
+) -> Result<String, String> {
+    let window = app
+        .get_webview_window(&wokanda_label(slot))
+        .ok_or_else(|| "WOKANDA_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let url = window
+        .url()
+        .map_err(|_| "WOKANDA_VERIFICATION_URL_FAILED".to_string())?;
+    if url.scheme() != "https" || url.host_str().and_then(court_host).is_none() {
+        return Err("WOKANDA_VERIFICATION_URL_FAILED".to_string());
+    }
+    Ok(url.to_string())
+}
+
 #[tauri::command]
 async fn wokanda_verification_close(
     app: tauri::AppHandle,
@@ -873,6 +892,7 @@ pub fn run() {
                 sn_verification_close,
                 wokanda_verification_open,
                 wokanda_verification_cookies,
+                wokanda_verification_url,
                 wokanda_verification_close,
                 verification_window_show,
                 law_source_verification_open,

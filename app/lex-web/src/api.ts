@@ -5235,6 +5235,9 @@ export function attemptWokandaSessionOnServer(domain: string): Promise<{ ready: 
   return json("/api/courts/wokanda/session/server-attempt", { method: "POST", body: JSON.stringify({ domain }) });
 }
 
-export function probeWokandaSession(domain: string, cookie: string, userAgent: string): Promise<{ ready: boolean }> {
-  return json("/api/courts/wokanda/session/probe", { method: "POST", body: JSON.stringify({ domain, cookie, userAgent }) });
+export type WokandaProbe = { ready: boolean; reason?: "GUARD" | "BLOCKED" | "NO_SYSTEM" | "ERROR"; url?: string };
+
+// pageUrl: the address the court's window shows now (tried before the register's).
+export function probeWokandaSession(domain: string, cookie: string, userAgent: string, pageUrl?: string): Promise<WokandaProbe> {
+  return json("/api/courts/wokanda/session/probe", { method: "POST", body: JSON.stringify({ domain, cookie, userAgent, ...(pageUrl ? { pageUrl } : {}) }) });
 }

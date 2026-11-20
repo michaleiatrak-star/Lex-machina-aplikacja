@@ -126,7 +126,8 @@ import { documentQuoteFindings, quoteCorrectionPrompt, statuteQuoteFindings } fr
 import { SOURCES_BY_KIND } from "./legal-federation-tool-runtime.js";
 import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
 import { OFFLINE_ANSWER_NOTE, offlineTurn } from "./local-offline-mode.js";
-import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
+import { STATUTE_JUDGE_BATCH, STATUTE_JUDGE_BATCH_LOCAL, STATUTE_JUDGE_SYSTEM, claimsWithWording, parseStatuteVerdicts, statuteJudgePrompt, demoteContradictedMarkers, moveStatuteWarningsOutOfLetter, statuteContentWarning, statuteCorrectionPrompt, statuteItems, statuteProblems } from "./statute-content-check.js";
+import { answerLetterMarkup } from "./answer-document.js";
 import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 import { activeCountry, activeJurisdiction, COMPONENT_LABELS, foreignLegalSystemNotice, jurisdictionDegradedNotice, jurisdictionStatus, isDomainSkill } from "./jurisdiction.js";
 import { activeJurisdictionPack, domainSkillPrefix, familyModuleActive } from "./jurisdiction.js";
@@ -4723,13 +4724,17 @@ export class SafeSessionExecutor {
         // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
         const freeText = !request.documentAstOutput && !reportBlueprint;
         // Kontrola treści przepisów: a thesis the provision does not carry keeps the source link, not ✅.
-        const demotedText = demoteContradictedMarkers(processedDocumentCitations.text, ledger
+        const contradicted = ledger
+            .all()
+            .filter((record) => statuteWarnings.has(record.claim))
+            .map((record) => ({ claim: record.claim, warning: statuteWarnings.get(record.claim) }));
+        const demotedText = moveStatuteWarningsOutOfLetter(demoteContradictedMarkers(processedDocumentCitations.text, ledger
             .all()
             .filter((record) => statuteWarnings.has(record.claim))
             .flatMap((record) => {
             const marker = expectedVerificationMarker(record);
             return marker ? [{ warning: statuteWarnings.get(record.claim), marker }] : [];
-        }));
+        })), contradicted, answerLetterMarkup(processedDocumentCitations.text) !== null);
         // ST-FINAL under a pleading (step-register.ts): each step from the turn's evidence, the register
         // of the documents with it; a step not confirmed makes the pleading a draft, said over it too.
         const pleadingSteps = pleadingAsked && freeText && !waitsForUser(demotedText)
