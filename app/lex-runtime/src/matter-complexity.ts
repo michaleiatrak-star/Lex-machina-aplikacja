@@ -146,7 +146,7 @@ export function describeMatterComplexity(value: MatterComplexity): string {
 // An opinion or a view asked for in a few words ("co sądzisz o…", "jak oceniasz…", "czy Twoim
 // zdaniem…", "w skrócie"): answered from the matter's material, not by an executive skill's procedure.
 const OPINION =
-  /(?<!\p{L})(?:co (?:o tym |o tej \p{L}+ |o \p{L}+ )?(?:s[aą]dzisz|my[sś]lisz|uwa[zż]asz)|jak (?:to |t[eę] \p{L}+ )?(?:oceniasz|widzisz)|jakie (?:jest )?(?:twoje|pana|pani) zdanie|jaka (?:jest )?(?:twoja|pana|pani) opini|twoim zdaniem|(?:wed[lł]ug|zdaniem) ciebie|w skr[oó]cie|kr[oó]tko[,:]? )/iu;
+  /(?<!\p{L})(?:co (?:o tym |o tej \p{L}+ |o tym \p{L}+ |o \p{L}+ )?(?:s[aą]dzisz|my[sś]lisz|uwa[zż]asz)|co (?:ty )?na to|jak (?:to |t[eę] \p{L}+ |ten \p{L}+ )?(?:oceniasz|widzisz)|jakie (?:jest |masz )?(?:twoje |pana |pani )?zdanie|jaka (?:jest )?(?:twoja|pana|pani) (?:opini|ocen)|twoim zdaniem|(?:wed[lł]ug|zdaniem) ciebie|tw[oó]j pogl[aą]d|w skr[oó]cie|kr[oó]tko[,:]? )/iu;
 // The work products and analyses an executive skill exists for ("przeanalizuj", "oceń zeznania",
 // "szanse i ryzyka"): never the short form.
 const ANALYSIS_ASKED =

@@ -3919,8 +3919,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       // question routed only by the evidence or witness skill go without it.
       const lightable =
         taskRoute &&
-        !/^(?:pisma-|orzeczenia-|analizator-umow|analizator-przepisow|chronologia-|raport-)/u.test(taskRoute.primary) &&
-        (opinionAsked(pathFacts.query) || taskRoute.primary === "analizator-dowodow-v3" || taskRoute.primary === "przesluchanie-swiadkow-v2-min90");
+        // An opinion asked for ("co o tym myślisz?" with a delivered letter, "jakie jest Twoje zdanie?")
+        // goes in the simple form whatever skill the files point to (user 2026-11-21).
+        (opinionAsked(pathFacts.query) ||
+          (!/^(?:pisma-|orzeczenia-|analizator-umow|analizator-przepisow|chronologia-|raport-)/u.test(taskRoute.primary) &&
+            (taskRoute.primary === "analizator-dowodow-v3" || taskRoute.primary === "przesluchanie-swiadkow-v2-min90")));
       if (taskRoute && lightable && !taskRoute.reason.startsWith("kontynuacja") && simpleFormQuestion(pathFacts.query)) {
         audit.record("gate", "SIMPLE_FORM_QUESTION", "OK", { detail: `skipped=${taskRoute.primary}` });
         step("SKILLS", "pytanie w prostej formie: odpowiedź bez procedury skilla wykonawczego");

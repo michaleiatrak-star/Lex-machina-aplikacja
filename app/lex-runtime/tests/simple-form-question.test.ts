@@ -22,7 +22,7 @@ describe("work without a letter does not start the pleading pipeline (user 2026-
 
 describe("questions in the simple form: no executive skill's procedure", () => {
   it("opinions and one short question", () => {
-    for (const q of ["Co sądzisz o zachowaniu pozwanej?", "Jak oceniasz zeznania świadka Kasta?", "Czy Twoim zdaniem sąd uwzględni wniosek o zobowiązanie pozwanej?", "Jaki jest termin na wniesienie apelacji?"]) {
+    for (const q of ["Co sądzisz o zachowaniu pozwanej?", "Jak oceniasz zeznania świadka Kasta?", "Czy Twoim zdaniem sąd uwzględni wniosek o zobowiązanie pozwanej?", "Jaki jest termin na wniesienie apelacji?", "Dostałem to pismo, co o tym myślisz?", "Jakie jest Twoje zdanie?", "Co sądzisz o tej umowie?", "Jak oceniasz ten wyrok?"]) {
       expect(simpleFormQuestion(q), q).toBe(true);
     }
   });
