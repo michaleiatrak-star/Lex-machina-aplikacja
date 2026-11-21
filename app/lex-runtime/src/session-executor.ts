@@ -5088,7 +5088,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Strength of a pleading (2026-11-16): the record's passages on the issue and the
     // rulings read before the answer must be used or consciously set aside, and a thesis of the
     // decision is not conceded before the substantive law is checked. One correcting round.
-    const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query));
+    // The pleading's checks (strength, argument schema, evidence motions, admissions, deadlines) are
+    // pisma-procesowe-v3's: a simple letter (pisma-proste-v2, its schema catalogue) and a contract
+    // (analizator-umow-v1) are the router's exceptions to it and keep their own standards (user
+    // 2026-11-21); a "wniosek o uzasadnienie" routed to pisma-proste is not held to seven elements.
+    const leadingSkill = taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "";
+    const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query)) && leadingSkill !== "pisma-proste-v2" && leadingSkill !== "analizator-umow-v1";
     // What the strength and schema checks left (ST-PRE-W2 of the step register, step-register.ts).
     let pleadingPreW2: PleadingEvidence["preW2"] = null;
     // The refusal in the files rests on the opponent's explanations: a motion for access to the files is due.
@@ -5159,7 +5164,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // missing petitum (live run 2026-11-20, 292 s).
       const letterInAnswer = answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput);
       // A working list of motions in CP-1a ran the round twice in one AUTO batch (live run 2026-11-21).
-      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" : true;
+      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" : leadingSkill !== "pisma-proste-v2" && leadingSkill !== "analizator-umow-v1";
       const draftLetter = draftStep && (request.processWorkflowContext ? letterInAnswer : pleadingAsked || answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput));
       const [admission, deadline] = draftLetter && pleadingAsked ? await Promise.all([admissionFindings(modelOutput), deadlineFindings(modelOutput)]) : [null, null];
       const extraBlocks = [admission?.instruction, deadline?.instruction].filter((item): item is string => Boolean(item));

@@ -14,6 +14,7 @@ import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
+import { WAIT_FOR_USER_MARKER } from "../workflow-wait.js";
 import { aheadSectionVerdict, checkpointSections, evaluateCheckpointOutput, processStepDone } from "../process-checkpoint-contract.js";
 import { PROCESS_PLEADING_CHECKPOINTS } from "../process-pleading-state.js";
 import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
@@ -7788,21 +7789,32 @@ export function createLexHttpApp(options) {
                             }
                         };
                         // A checkpoint done ahead in the previous call: its section, checked by its own contract.
+                        // A section that asks the user: this checkpoint waits, as its own turn would have.
+                        if (prepared?.waiting) {
+                            return { result: { ...prepared.result, answer: prepared.text, waitingForUser: true }, commit: true, waitingForUser: true, notApplicable: null };
+                        }
                         const verdict = prepared ? aheadSectionVerdict(permit.checkpoint, prepared.text) : null;
                         const usePrepared = Boolean(prepared && verdict?.closed);
                         const nodeResult = usePrepared
-                            ? { ...prepared.result, answer: prepared.text }
+                            ? { ...prepared.result, answer: prepared.text, waitingForUser: false }
                             : await completePleadingAnswer(nodeRequest, await options
                                 .sessionExecutor
                                 .execute(nodeRequest));
-                        if (!usePrepared && ahead.length && typeof nodeResult.answer === "string" && nodeResult.waitingForUser !== true) {
+                        if (!usePrepared && ahead.length && typeof nodeResult.answer === "string") {
                             const sections = checkpointSections(nodeResult.answer, [permit.checkpoint, ...ahead]);
-                            if (sections.size > 1) {
+                            const asks = (text) => text.includes(WAIT_FOR_USER_MARKER);
+                            // The question to the user belongs to the section that asks it (2026-11-21: CP-1b asked
+                            // for the strategy and CP-1a, closed in the same answer, stayed open).
+                            if (sections.size > 1 && !asks(sections.get(permit.checkpoint))) {
                                 nodeResult.answer = sections.get(permit.checkpoint);
+                                nodeResult.waitingForUser = false;
                                 for (const next of ahead) {
                                     const text = sections.get(next);
-                                    if (text)
-                                        aheadSections.set(next, { result: nodeResult, text });
+                                    if (!text)
+                                        break;
+                                    aheadSections.set(next, { result: nodeResult, text, waiting: asks(text) });
+                                    if (asks(text))
+                                        break;
                                 }
                             }
                         }
