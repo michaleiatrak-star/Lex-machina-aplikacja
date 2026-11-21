@@ -239,7 +239,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
-import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, removedSentences, type AnswerCorrection } from "./answer-corrections.js";
+import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, removedSentences, rewriteRejection, applyPointEdits, POINT_EDITS_FORM, type AnswerCorrection } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
@@ -491,6 +491,8 @@ export type SessionExecutionRequest = {
     saveEvidence?: (inventory: EvidenceInventory) => Promise<void>;
     // The inventory's view for this step, written by the executor (aliases of this turn).
     evidencePrompt?: string;
+    // AUTO, stage W1: the next checkpoints done in the same answer, each with its own report.
+    ahead?: ProcessPleadingCheckpoint[];
   };
   courtWorkflowContext?: {
     stage: Exclude<
@@ -1725,6 +1727,24 @@ export function nfcRequest(request: SessionExecutionRequest): SessionExecutionRe
 
 export class SafeSessionExecutor implements SessionExecutor {
   private readonly engine: LexExecutionEngine;
+  // The fact matrices of a case's documents, kept for the next steps of the same pleading
+  // (2026-11-20: each AUTO step rebuilt them, 75 s and more per step). Key: the model and the
+  // documents' text; matrices with facts are kept, for six hours.
+  private readonly matrixCache = new Map<string, { at: number; value: unknown }>();
+  private async cachedMatrix<T extends { failures: unknown[]; facts: unknown[] }>(key: string, compute: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    for (const [stored, entry] of this.matrixCache) if (now - entry.at > 6 * 3_600_000) this.matrixCache.delete(stored);
+    const hit = this.matrixCache.get(key);
+    if (hit) return hit.value as T;
+    const value = await compute();
+    // A matrix with facts is kept even when a part failed (its register shows the gap); rebuilding it
+    // at the next step cost 150 s and more (live run 2026-11-20).
+    if (value.facts.length) {
+      this.matrixCache.set(key, { at: now, value });
+      while (this.matrixCache.size > 50) this.matrixCache.delete(this.matrixCache.keys().next().value!);
+    }
+    return value;
+  }
   private readonly autoRouter:
     ModelAutoRouter;
 
@@ -2983,6 +3003,28 @@ export class SafeSessionExecutor implements SessionExecutor {
         audit.record("gate", "ISSUE_PASSAGES", "OK", { passages: passages.map((passage) => `${passage.documentId}:${passage.chunkIndex}`) });
       }
     }
+    // The provisions the question and the files cite by article and act ("art. 233 § 1 k.p.c."): read
+    // from ELI before the answer, into this turn's verification register (live run 2026-11-21: the model
+    // stopped for verify_legal_reference and wrote the whole answer again, about 240 s).
+    if (legalTurn && !offline && this.verificationToolFactory) {
+      const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n").slice(0, 200_000);
+      const cited = citedProvisions(`${latestUserTurn(protectedQuery)}\n${fileText}`, 8);
+      if (cited.length) {
+        const wordings = await provisionWordings(cited, (calls) => this.verificationToolFactory!(ledger, { localModel: false }).runTools(calls)).catch(() => []);
+        const read = wordings.filter((item) => item.status === "VERIFIED");
+        if (read.length) {
+          pathSections.push(
+            [
+              "# PRZEPISY POWOŁANE W PYTANIU I W AKTACH — ODCZYTANE PRZEZ APLIKACJĘ Z ELI PRZED ODPOWIEDZIĄ",
+              "Brzmienie poniżej jest już w rejestrze weryfikacji tej tury: nie wywołuj ponownie narzędzia dla tych przepisów; inne przepisy weryfikuj jak dotąd.",
+              ...read.map((item) => `## ${item.claim}${item.source ? ` (${item.source})` : ""}\n${item.text}`)
+            ].join("\n\n")
+          );
+        }
+        audit.record("gate", "STATUTE_PREFETCH", read.length === cited.length ? "OK" : "DEGRADED", { provisions: wordings.map((item) => `${item.claim}:${item.status}`) });
+        step("VERIFY", `przepisy z pytania i akt odczytane przed odpowiedzią: ${read.length} z ${cited.length}`);
+      }
+    }
     if (ethicsResults.length) {
       pathSections.push(ethicsPrompt(ethicsResults));
       audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {
@@ -3199,7 +3241,10 @@ export class SafeSessionExecutor implements SessionExecutor {
           if (!request.model.startsWith("local/")) {
             step("PREPARE", `macierz faktów zeznań świadka etapami (${new Set(list.map((item) => item.documentId)).size} protokoły)`);
             const started = Date.now();
-            const described = await stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 });
+            const described = await this.cachedMatrix(
+              `witness:${request.model}:${createHash("sha256").update(JSON.stringify(list.map((item) => [item.heading, item.text]))).digest("hex")}`,
+              () => stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 })
+            );
             dumpMatrix("fact-matrix", { witness, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
             const factRowList = factRows(described.facts);
             if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
@@ -3264,7 +3309,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           const started = Date.now();
           if (toRead.length) step("PREPARE", `macierz faktów: odczyt wszystkich dokumentów (${toRead.length}), duże w częściach, równolegle`);
           const described = toRead.length
-            ? await fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
+            ? await this.cachedMatrix(`documents:${request.model}:${createHash("sha256").update(JSON.stringify(toRead.map((item) => [item.record, item.chunks.map((chunk) => chunk.text)]))).digest("hex")}`, () => fullDocumentMatrix(toRead, contextFocus || matrixQuestion, streamedCall, {
                 concurrency: 6,
                 seedTopics: witnessMatrices.flatMap((matrix) => matrix.topics),
                 onPart: (progress) =>
@@ -3274,7 +3319,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                       ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
                       : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`
                   )
-              })
+              }))
             : { facts: [], dropped: 0, topics: [], failures: [], coverage: [] as MatrixCoverage[] };
           dumpMatrix("document-matrix", { documents: toRead.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped, coverage: described.coverage });
           documentRegister = buildRegister(registerDocuments, [...witnessCoverage, ...described.coverage], challenged);
@@ -4113,6 +4158,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       step("MODEL", "brak materiału: pytanie aplikacji, bez wywołania modelu");
       audit.record("gate", "MATERIAL_REQUIRED", "OK", { skill: materialSkill, waitingForUser: true });
     }
+    // How long this model takes for the answer here: the correcting rounds are budgeted from it.
+    const firstAnswerStarted = Date.now();
     const execution = await this.engine.executePolishLegalQuery({
       ...(fixedAnswer ? { fixedAnswer } : {}),
       instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages], optIn: [...optInComponents] },
@@ -4852,6 +4899,23 @@ export class SafeSessionExecutor implements SessionExecutor {
     // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
     // and account clients keep the short prompt.
     const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
+    const accountCache =
+      request.model.startsWith("account/") && execution.modelPrompt?.systemPromptCachePrefix ? { systemPrompt: execution.modelPrompt.systemPrompt, systemPromptCachePrefix: execution.modelPrompt.systemPromptCachePrefix } : null;
+    // The correcting rounds of a turn share a budget measured on this model's own pace (a pleading
+    // took 1006 s, 2026-11-20): twice the time of the first answer, at least
+    // LEX_CORRECTION_BUDGET_S (default 300 s). A running round is never cut (slow servers, user
+    // 2026-11-20): the budget only decides whether the next round starts; past it the first
+    // version stays with its marks.
+    const firstAnswerMs = Date.now() - firstAnswerStarted;
+    const roundsStarted = Date.now();
+    const roundBudgetMs = Math.max(Math.max(60, Number(process.env.LEX_CORRECTION_BUDGET_S) || 300) * 1000, firstAnswerMs * 2);
+    const roundsLeftMs = () => roundBudgetMs - (Date.now() - roundsStarted);
+    const roundsExhausted = (round: string) => {
+      if (roundsLeftMs() > 0) return false;
+      audit.record("gate", "CORRECTION_BUDGET", "DEGRADED", { skipped: round, budgetSeconds: Math.round(roundBudgetMs / 1000), firstAnswerSeconds: Math.round(firstAnswerMs / 1000) });
+      step("MODEL", `czas rund poprawczych wyczerpany: ${round} pominięta, zostaje wersja z oznaczeniami`);
+      return true;
+    };
     const correctingRound = (answer: string, instruction: string, systemPrompt?: string, form: string = CORRECTED_ANSWER_FORM): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
       reusable
         ? {
@@ -4859,7 +4923,20 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...(reusable.tools?.length ? { toolChoice: "none" as const } : {}),
             messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }]
           }
-        : {
+        : accountCache
+          ? {
+              // An account model: the main call's system prompt (its stable part is cached by the
+              // account's Claude since it goes as the system prompt, providers/account-session.ts),
+              // without tools; the round's own messages after it.
+              systemPrompt: accountCache.systemPrompt,
+              systemPromptCachePrefix: accountCache.systemPromptCachePrefix,
+              messages: [
+                { role: "user" as const, content: protectedQuery },
+                { role: "assistant" as const, content: answer },
+                { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }
+              ]
+            }
+          : {
             systemPrompt:
               systemPrompt ??
               [
@@ -4876,7 +4953,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           };
     const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
 
-    if (missingGates.length || supervisedMissing.length) {
+    if ((missingGates.length || supervisedMissing.length) && !roundsExhausted("ścieżka obowiązkowa")) {
       step(
         "MODEL",
         `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`
@@ -4900,14 +4977,15 @@ export class SafeSessionExecutor implements SessionExecutor {
                   : [])
               ].join("\n"))),
           accountContinuity: "none",
-          reasoning: "none"
+                    reasoning: "none"
         });
         const returned = withoutCorrectionPreface(corrected.fullText).trim();
         const text = blocksOnly && returned ? `${modelOutput.trimEnd()}\n\n${returned}` : returned;
         const remaining = text ? missingGateBlocks(mandatoryModel!, effectiveProfile, text) : missingGates;
         const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
+        const rejected = blocksOnly ? (returned ? null : "pusta odpowiedź") : rewriteRejection(modelOutput, text);
         const accepted =
-          Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;
+          !rejected && Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;
         if (accepted) {
           corrections.push(
             answerCorrection(
@@ -4924,6 +5002,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           remaining: accepted
             ? [...remaining.map((item) => item.block), ...remainingSupervised.map((check) => check.id)]
             : [...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)],
+          ...(rejected ? { rejected } : {}),
           // The correction's own cost, apart from the turn's total.
           ...(corrected.usage ? { inputTokens: corrected.usage.inputTokens, outputTokens: corrected.usage.outputTokens } : {})
         });
@@ -4942,7 +5021,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const ambiguous = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/") && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)
       ? ambiguousBareArticles(modelOutput, ledger)
       : [];
-    if (ambiguous.length > 0) {
+    if (ambiguous.length > 0 && !roundsExhausted("nazwa aktu")) {
       step("MODEL", `nazwa aktu przy ${ambiguous.length} powołaniach: runda poprawcza`);
       const instruction = [
         "KONTROLA APLIKACJI — nazwa aktu: w odpowiedzi są powołania przepisów bez nazwy aktu, a ten sam numer artykułu zweryfikowano w tej turze w kilku aktach:",
@@ -4954,7 +5033,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           model: request.model,
           ...correctingRound(modelOutput, instruction),
           accountContinuity: "none",
-          reasoning: "none"
+                    reasoning: "none"
         });
         const text = corrected.fullText.trim();
         const remaining = text ? ambiguousBareArticles(text, ledger) : ambiguous;
@@ -4984,7 +5063,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // One correcting round for both; what remains is shown to the user next to the answer.
     // An answer that only defers ("nie mogę jeszcze…, odpowiedź zostanie przygotowana po…")
     // without the substance or a question: one correcting round; what stays is no basis for a file.
-    if (legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) && emptyDeferral(modelOutput)) {
+    if (legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) && emptyDeferral(modelOutput) && !roundsExhausted("odpowiedź bez treści")) {
       step("MODEL", "odpowiedź bez treści i bez pytania: runda poprawcza");
       let text = "";
       try {
@@ -4992,13 +5071,13 @@ export class SafeSessionExecutor implements SessionExecutor {
           model: request.model,
           ...correctingRound(modelOutput, NO_ANSWER_CORRECTION),
           accountContinuity: "none",
-          reasoning: "none"
+                    reasoning: "none"
         });
         text = corrected.fullText.trim();
       } catch {
         text = "";
       }
-      const fixed = Boolean(text) && !emptyDeferral(text);
+      const fixed = Boolean(text) && !rewriteRejection(modelOutput, text);
       audit.record("gate", "ANSWER_SUBSTANCE", fixed ? "OK" : "DEGRADED", { corrected: fixed });
       if (fixed) {
         corrections.push(answerCorrection("NO_ANSWER", ["odpowiedź odroczona bez treści i bez pytania do użytkownika"], modelOutput, text));
@@ -5009,7 +5088,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Strength of a pleading (2026-11-16): the record's passages on the issue and the
     // rulings read before the answer must be used or consciously set aside, and a thesis of the
     // decision is not conceded before the substantive law is checked. One correcting round.
-    const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query));
+    // The pleading's checks (strength, argument schema, evidence motions, admissions, deadlines) are
+    // pisma-procesowe-v3's: a simple letter (pisma-proste-v2, its schema catalogue) and a contract
+    // (analizator-umow-v1) are the router's exceptions to it and keep their own standards (user
+    // 2026-11-21); a "wniosek o uzasadnienie" routed to pisma-proste is not held to seven elements.
+    const leadingSkill = taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "";
+    const pleadingAsked = legalTurn && isCourtPleading(latestUserTurn(request.query)) && leadingSkill !== "pisma-proste-v2" && leadingSkill !== "analizator-umow-v1";
     // What the strength and schema checks left (ST-PRE-W2 of the step register, step-register.ts).
     let pleadingPreW2: PleadingEvidence["preW2"] = null;
     // The refusal in the files rests on the opponent's explanations: a motion for access to the files is due.
@@ -5024,13 +5108,69 @@ export class SafeSessionExecutor implements SessionExecutor {
           }))
         )
     };
+    // An admission (a thesis conceded, a charge dropped) is checked on the wording of the provisions
+    // before it stays (admission-check.ts; a live case: the GDPR thesis conceded for companies).
+    const admissionFindings = async (answer: string) => {
+      const conceded = admissions(answer);
+      if (!conceded.length) return null;
+      step("MODEL", `przyznanie w piśmie (${conceded.length}): sprawdzenie przesłanek na brzmieniu przepisów`);
+      const cited = citedProvisions([...conceded, answer].join("\n"));
+      const [wordings, ethics] = await Promise.all([
+        this.verificationToolFactory
+          ? provisionWordings(cited, (calls) => this.verificationToolFactory!(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => [])
+          : Promise.resolve([]),
+        offline ? Promise.resolve([]) : ethicsWordings([...conceded, answer].join("\n")).catch(() => [])
+      ]);
+      return {
+        conceded,
+        instruction: admissionCorrection(conceded, wordings, ethics),
+        provisions: wordings.map((item) => `${item.claim}:${item.status}`),
+        ethics: ethics.length
+      };
+    };
+    // A deadline the pleading adopts from a provision: its wording on the event date first (a live case
+    // plan, point 9: art. 88a Pr. adw., 7 or 14 days). Event dates from the question and the decisions.
+    const deadlineFindings = async (answer: string) => {
+      if (offline || !this.verificationToolFactory) return null;
+      const provisions = deadlineProvisions(answer);
+      if (!provisions.length) return null;
+      const eventText = [
+        pathFacts.query,
+        ...recognisedDocuments
+          .filter((document) => document.category === "ORZECZENIE")
+          .map((document) => attachments.find((attachment) => attachment.documentId === document.documentId)?.chunks.map((chunk) => chunk.text).join("\n").slice(0, 3_000) ?? "")
+      ].join("\n");
+      const dates = eventDates(eventText, todayWarsaw()).slice(-2);
+      if (!dates.length) return null;
+      step("MODEL", `termin w piśmie: brzmienie ${provisions.map((item) => item.claim).join(", ")} na dzień zdarzenia`);
+      const wordings = await deadlineWordings(provisions, dates, (calls) => this.verificationToolFactory!(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => []);
+      const changed = wordings.filter((item) => item.result !== "SAME");
+      audit.record("gate", "DEADLINE_WORDING", changed.length ? "DEGRADED" : "OK", { items: wordings.map((item) => `${item.claim}@${item.asOf}:${item.result}`) });
+      return changed.length ? { changed, instruction: deadlineCorrection(wordings) } : null;
+    };
     if (legalTurn && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null) && (strengthPassages.length || strengthRulings.length || strengthKeyFacts.length || pleadingAsked)) {
       const required = requiredPassages(strengthPassages, strengthKeyFacts);
       const gaps = strengthGaps(modelOutput, strengthPassages, [...new Set(strengthRulings)], required);
       const schema = pleadingAsked ? argumentSchemaGaps(modelOutput, schemaOptions) : [];
       const charges = pleadingAsked ? unaddressedCharges(modelOutput, pleadingCharges) : [];
-      if (gaps.length || schema.length || charges.length) {
-        step("MODEL", `siła pisma: ${gaps.length + schema.length} braków, runda poprawcza`);
+      // The pleading's checks first, side by side (an admission checked on the wording of the provisions,
+      // a deadline on its wording at the event date), then ONE round for all of them (2026-11-20: three
+      // rewrites in a row took most of 1006 s). Only for a draft letter: an analysis or a workflow step
+      // keeps its answer, the unused passages go under it as a note.
+      // In a pleading's checkpoint pipeline: the first draft (no draft kept yet) and the step that writes
+      // the draft (CP-ATAK, W2); the other steps (scan, matrix, review) are not rewritten for the letter's
+      // strength (each AUTO step did, about 300 s each).
+      // In the pipeline the answer must hold the letter itself: a CP-1a validation report was "fixed" for a
+      // missing petitum (live run 2026-11-20, 292 s).
+      const letterInAnswer = answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput);
+      // A working list of motions in CP-1a ran the round twice in one AUTO batch (live run 2026-11-21).
+      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" : leadingSkill !== "pisma-proste-v2" && leadingSkill !== "analizator-umow-v1";
+      const draftLetter = draftStep && (request.processWorkflowContext ? letterInAnswer : pleadingAsked || answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput));
+      const [admission, deadline] = draftLetter && pleadingAsked ? await Promise.all([admissionFindings(modelOutput), deadlineFindings(modelOutput)]) : [null, null];
+      const extraBlocks = [admission?.instruction, deadline?.instruction].filter((item): item is string => Boolean(item));
+      const findingsCount = gaps.length + schema.length + charges.length + (admission ? admission.conceded.length : 0) + (deadline ? deadline.changed.length : 0);
+      if (draftLetter && (gaps.length || schema.length || charges.length || extraBlocks.length) && !roundsExhausted("siła pisma")) {
+        step("MODEL", `siła pisma: ${findingsCount} ${findingsCount === 1 ? "brak" : findingsCount < 5 ? "braki" : "braków"}, jedna runda poprawcza`);
         let text = "";
         try {
           const corrected = await this.providers.stream(request.provider, {
@@ -5040,7 +5180,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               [
                 gaps.length ? strengthCorrection(gaps) : "KONTROLA APLIKACJI — siła pisma. Popraw projekt i oddaj go w całości:",
                 ...(schema.length ? [schemaCorrection(schema)] : []),
-                ...(charges.length ? [chargeCorrection(charges)] : [])
+                ...(charges.length ? [chargeCorrection(charges)] : []),
+                ...extraBlocks
               ]
                 .join("\n\n")
                 // The sections the round holds, numbered 1, 2, 3 (each block has its own fixed number).
@@ -5050,7 +5191,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                 })())
             ),
             accountContinuity: "none",
-            reasoning: "none"
+                        reasoning: "none"
           });
           text = corrected.fullText.trim();
         } catch {
@@ -5061,16 +5202,38 @@ export class SafeSessionExecutor implements SessionExecutor {
         const lost = required.some((passage) => passageUsed(modelOutput, passage) && !passageUsed(text, passage));
         const schemaAfter = pleadingAsked ? argumentSchemaGaps(text, schemaOptions) : [];
         const chargesAfter = pleadingAsked ? unaddressedCharges(text, pleadingCharges) : [];
+        const rejected = rewriteRejection(modelOutput, text);
         const accepted =
-          text.length > modelOutput.length * 0.6 &&
+          !rejected &&
           !lost &&
           after.length <= gaps.length &&
           schemaAfter.length <= schema.length &&
           chargesAfter.length <= charges.length &&
-          (JSON.stringify(after) !== JSON.stringify(gaps) || schemaAfter.length < schema.length || chargesAfter.length < charges.length);
-        audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { gaps: [...gaps.map((gap) => gap.kind), ...schema.map((gap) => gap.element), ...charges.map(() => "CHARGE_UNADDRESSED")], corrected: accepted });
+          (JSON.stringify(after) !== JSON.stringify(gaps) || schemaAfter.length < schema.length || chargesAfter.length < charges.length || extraBlocks.length > 0);
+        if (admission) {
+          audit.record("gate", "ADMISSION_CHECK", accepted ? "OK" : "DEGRADED", {
+            admissions: admission.conceded.length,
+            provisions: admission.provisions,
+            ethics: admission.ethics,
+            remaining: accepted ? admissions(text).length : admission.conceded.length
+          });
+        }
+        audit.record("gate", "ANSWER_STRENGTH", accepted ? "OK" : "DEGRADED", { ...(rejected ? { rejected } : {}), gaps: [...gaps.map((gap) => gap.kind), ...schema.map((gap) => gap.element), ...charges.map(() => "CHARGE_UNADDRESSED")], corrected: accepted });
         if (accepted) {
-          corrections.push(answerCorrection("STRENGTH", [...gaps.map((gap) => gap.label), ...schema.map((gap) => `schemat argumentu: ${gap.element}`), ...charges.map((charge) => `zarzut strony bez odpowiedzi: ${charge.slice(0, 80)}`)], modelOutput, text));
+          corrections.push(
+            answerCorrection(
+              "STRENGTH",
+              [
+                ...gaps.map((gap) => gap.label),
+                ...schema.map((gap) => `schemat argumentu: ${gap.element}`),
+                ...charges.map((charge) => `zarzut strony bez odpowiedzi: ${charge.slice(0, 80)}`),
+                ...(admission?.conceded.map((item) => `przyznanie sprawdzone na brzmieniu przepisów: ${item.slice(0, 80)}`) ?? []),
+                ...(deadline?.changed.map((item) => `termin według brzmienia ${item.claim} na ${item.asOf}`) ?? [])
+              ],
+              modelOutput,
+              text
+            )
+          );
           modelOutput = text;
         }
       }
@@ -5089,80 +5252,6 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (note) {
         modelOutput = `${modelOutput.trimEnd()}\n${note}`;
         audit.record("gate", "REQUIRED_PASSAGES_NOTE", "DEGRADED", { missing: required.filter((passage) => !passageUsed(modelOutput, passage)).length });
-      }
-    }
-
-    // An admission (a thesis conceded, a charge dropped) is checked on the wording of the provisions
-    // before it stays (admission-check.ts; a live case: the GDPR thesis conceded for companies).
-    if (pleadingAsked && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
-      const conceded = admissions(modelOutput);
-      if (conceded.length) {
-        step("MODEL", `przyznanie w piśmie (${conceded.length}): sprawdzenie przesłanek na brzmieniu przepisów`);
-        const cited = citedProvisions([...conceded, modelOutput].join("\n"));
-        const wordings = this.verificationToolFactory
-          ? await provisionWordings(cited, (calls) => this.verificationToolFactory!(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => [])
-          : [];
-        const ethics = offline ? [] : await ethicsWordings([...conceded, modelOutput].join("\n")).catch(() => []);
-        let text = "";
-        try {
-          const corrected = await this.providers.stream(request.provider, {
-            model: request.model,
-            ...correctingRound(modelOutput, admissionCorrection(conceded, wordings, ethics)),
-            accountContinuity: "none",
-            reasoning: "none"
-          });
-          text = corrected.fullText.trim();
-        } catch {
-          text = "";
-        }
-        const accepted = text.length > modelOutput.length * 0.6;
-        audit.record("gate", "ADMISSION_CHECK", accepted ? "OK" : "DEGRADED", {
-          admissions: conceded.length,
-          provisions: wordings.map((item) => `${item.claim}:${item.status}`),
-          ethics: ethics.length,
-          remaining: accepted ? admissions(text).length : conceded.length
-        });
-        if (accepted) {
-          corrections.push(answerCorrection("STRENGTH", conceded.map((item) => `przyznanie sprawdzone na brzmieniu przepisów: ${item.slice(0, 80)}`), modelOutput, text));
-          modelOutput = text;
-        }
-      }
-    }
-
-    // A deadline the pleading adopts from a provision: its wording on the event date first (a live case
-    // plan, point 9: art. 88a Pr. adw., 7 or 14 days). Event dates from the question and the decisions.
-    if (pleadingAsked && !offline && this.verificationToolFactory && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
-      const provisions = deadlineProvisions(modelOutput);
-      const eventText = [
-        pathFacts.query,
-        ...recognisedDocuments
-          .filter((document) => document.category === "ORZECZENIE")
-          .map((document) => attachments.find((attachment) => attachment.documentId === document.documentId)?.chunks.map((chunk) => chunk.text).join("\n").slice(0, 3_000) ?? "")
-      ].join("\n");
-      const dates = provisions.length ? eventDates(eventText, todayWarsaw()).slice(-2) : [];
-      if (provisions.length && dates.length) {
-        step("MODEL", `termin w piśmie: brzmienie ${provisions.map((item) => item.claim).join(", ")} na dzień zdarzenia`);
-        const wordings = await deadlineWordings(provisions, dates, (calls) => this.verificationToolFactory!(new VerificationLedger(), { localModel: false }).runTools(calls)).catch(() => []);
-        const changed = wordings.filter((item) => item.result !== "SAME");
-        audit.record("gate", "DEADLINE_WORDING", changed.length ? "DEGRADED" : "OK", { items: wordings.map((item) => `${item.claim}@${item.asOf}:${item.result}`) });
-        if (changed.length) {
-          let text = "";
-          try {
-            const corrected = await this.providers.stream(request.provider, {
-              model: request.model,
-              ...correctingRound(modelOutput, deadlineCorrection(wordings)),
-              accountContinuity: "none",
-              reasoning: "none"
-            });
-            text = corrected.fullText.trim();
-          } catch {
-            text = "";
-          }
-          if (text.length > modelOutput.length * 0.6) {
-            corrections.push(answerCorrection("STRENGTH", changed.map((item) => `termin według brzmienia ${item.claim} na ${item.asOf}`), modelOutput, text));
-            modelOutput = text;
-          }
-        }
       }
     }
 
@@ -5243,7 +5332,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             systemPrompt: JUDGE_SYSTEM,
             messages: [{ role: "user", content: semanticJudgePrompt(topic, documents, { roles: true }) }],
             accountContinuity: "none",
-            reasoning: "none"
+                        reasoning: "none"
           });
           return parseSemanticVerdicts(verdict.fullText, documents);
         } catch {
@@ -5295,7 +5384,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                 systemPrompt: STATUTE_JUDGE_SYSTEM,
                 messages: [{ role: "user", content: statuteJudgePrompt(batch) }],
                 accountContinuity: "none",
-                reasoning: "none"
+                                reasoning: "none"
               });
               return statuteProblems(parseStatuteVerdicts(verdict.fullText, batch));
             } catch {
@@ -5326,7 +5415,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         first.caseReview.semantic.some((item) => item.claim === "UNSUPPORTED" || item.topic === "NO_MATCH") ||
         first.statutes.problems.some((item) => item.claim === "UNSUPPORTED");
       // A document AST is checked as its text lines; the model's rewrite would not be in that form.
-      if (first.size && needsRewrite && !astLines) {
+      if (first.size && needsRewrite && !astLines && !roundsExhausted("kontrola ze źródłami")) {
         step(
           "MODEL",
           `kontrola odpowiedzi ze źródłami: ${[
@@ -5351,23 +5440,35 @@ export class SafeSessionExecutor implements SessionExecutor {
           ...pathSections
         ].join("\n\n");
         let corrected = "";
+        let pointEdits = 0;
         try {
-          corrected = (
+          // Point edits, not a rewrite of the whole answer (minutes on an account model); a model
+          // that still returns the whole answer is taken under the same rejection rules.
+          const reply = (
             await this.providers.stream(request.provider, {
               model: request.model,
-              ...correctingRound(modelOutput, instruction, correctionPrompt),
+              ...correctingRound(modelOutput, instruction, correctionPrompt, POINT_EDITS_FORM),
               accountContinuity: "none",
               reasoning: "none"
             })
           ).fullText.trim();
+          const edited = applyPointEdits(modelOutput, reply);
+          pointEdits = edited.applied;
+          corrected = edited.applied ? edited.text : /^\s*\{/u.test(reply) ? "" : reply;
         } catch {
           corrected = "";
         }
-        if (corrected && !emptyDeferral(corrected)) {
+        const rejected = corrected ? rewriteRejection(modelOutput, corrected) : "brak poprawek do naniesienia";
+        if (pointEdits) audit.record("gate", "SOURCE_CHECK_POINT_EDITS", "OK", { applied: pointEdits });
+        if (rejected) audit.record("gate", "SOURCE_CHECK_REWRITE", "DEGRADED", { rejected });
+        if (!rejected) {
           const before = modelOutput;
           modelOutput = splitTrailingDisclaimer(withOneClosingDisclaimer(corrected)).body;
           await verifyDraft();
-          const second = await detect();
+          // Only quotes were wrong and fixed by point edits: checked again locally, the provisions and
+          // rulings judged on the first text stand (re-judging all of them took most of 353 s, live run).
+          const quotesOnly = pointEdits > 0 && first.size === first.quotes.length;
+          const second = quotesOnly ? { ...first, quotes: checkQuotes(modelOutput), size: checkQuotes(modelOutput).length } : await detect();
           if (second.size < first.size) {
             if (first.caseReview.semantic.length + first.caseReview.lexical.length + first.caseReview.courts.length) {
               corrections.push(

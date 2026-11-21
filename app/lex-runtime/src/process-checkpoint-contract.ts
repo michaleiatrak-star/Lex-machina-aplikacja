@@ -272,3 +272,50 @@ export function checkpointModuleNames(): Map<string, ProcessPleadingCheckpoint> 
   }
   return names;
 }
+
+
+/**
+ * The section of each checkpoint in one answer that did several (AUTO, W1): from the first line
+ * naming it in a heading ("## [CP-1b] …") or a checkpoint frame to the next one's; a checkpoint
+ * not found, or found out of order, has no section (it runs as its own turn).
+ */
+export function checkpointSections(answer: string, checkpoints: readonly ProcessPleadingCheckpoint[]): Map<ProcessPleadingCheckpoint, string> {
+  const lines = answer.split("\n");
+  const starts: Array<{ checkpoint: ProcessPleadingCheckpoint; line: number }> = [];
+  let from = 0;
+  for (const checkpoint of checkpoints) {
+    const escaped = checkpoint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const mention = new RegExp(`\\[${escaped}(?![\\w-])`, "u");
+    const at = lines.findIndex((line, index) => index >= from && /^\s*(?:#{1,4}\s|\*\*|[✅⚠️⛔]|CHECKPOINT)/u.test(line) && mention.test(line));
+    if (at < 0) break;
+    starts.push({ checkpoint, line: at });
+    from = at + 1;
+  }
+  const sections = new Map<ProcessPleadingCheckpoint, string>();
+  starts.forEach((start, index) => {
+    const end = starts[index + 1]?.line ?? lines.length;
+    sections.set(start.checkpoint, lines.slice(index === 0 ? 0 : start.line, end).join("\n").trim());
+  });
+  return sections;
+}
+
+
+/**
+ * A checkpoint done ahead in a shared AUTO answer closes only when its own section shows the work
+ * done and closed (user 2026-11-21: "weryfikacja, czy faktycznie wszystko zrobiono i zamknięto", as
+ * CP-GATE and the step register require in the chat): the contract's report (evaluateCheckpointOutput)
+ * and a closing status for this checkpoint — ZAMKNIĘTY / WYKONANY / ✅, or N/A of a conditional one —
+ * with no open, waiting or stopped status for it. Otherwise it runs as its own turn.
+ */
+export function aheadSectionVerdict(checkpoint: ProcessPleadingCheckpoint, text: string): { closed: boolean; missing: string[] } {
+  const report = evaluateCheckpointOutput(checkpoint, text);
+  const missing = [...report.missing];
+  const escaped = checkpoint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const mention = new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, "iu");
+  const lines = text.split("\n").filter((line) => mention.test(line) || /CHECKPOINT|STATUS/iu.test(line));
+  const closing = lines.some((line) => /(?:ZAMKNIĘT|WYKONAN|CLOSED|✅)/u.test(line) || (report.notApplicable !== null && /N\/A|NIE\s+DOTYCZY/iu.test(line)));
+  const open = lines.some((line) => mention.test(line) && /(?:OTWART|OCZEKUJE|○|⛔|GATE-STOP|BLOKUJ|NIEZAMKNIĘT|NIE\s+ZAMKNIĘT|DO\s+WYKONANIA)/iu.test(line));
+  if (!closing) missing.push(`STATUS_ZAMKNIECIA_${checkpoint}`);
+  if (open) missing.push(`STATUS_OTWARTY_${checkpoint}`);
+  return { closed: missing.length === 0, missing };
+}
