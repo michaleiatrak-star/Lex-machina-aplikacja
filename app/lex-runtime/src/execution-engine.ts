@@ -2,7 +2,7 @@ import { fitInstructions } from "./instruction-budget.js";
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
 import type { ProviderStreamResult } from "./providers/types.js";
-import { checkpointFindingsPrompt, draftPrompt } from "./process-pleading-draft.js";
+import { checkpointFindingsPrompt, draftPrompt, FINDINGS_MESSAGE_OPEN } from "./process-pleading-draft.js";
 import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
@@ -1408,6 +1408,10 @@ export class LexExecutionEngine {
     // WERYFIKACJA-SLAD, POST-VALIDATION, INTAKE-GAP), placed with the workflow state at the
     // end of the prompt so the rest stays a cached prefix between checkpoints.
     let contractCheckpointText = "";
+    // The closed checkpoints' findings as their own message after the case files (API and
+    // account models): append-only between steps, so they are read from the cache like the
+    // earlier turns of a chat; a local model keeps them in the turn's part.
+    let findingsMessage: string | null = null;
     if (args.contractWorkflowContext && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
       const { mode } = args.contractWorkflowContext;
@@ -1496,14 +1500,17 @@ export class LexExecutionEngine {
         args.processWorkflowContext.findings,
         PROCESS_PLEADING_CHECKPOINTS,
         args.processWorkflowContext.checkpoint,
-        args.model.startsWith("local/") ? 6_000 : 40_000
+        args.model.startsWith("local/")
+          ? 6_000
+          : Math.max(40_000, Math.floor((args.modelContextTokens ?? 200_000) * (args.tokenCharsPerToken ?? 3.5) * 0.25))
       );
       if (args.processWorkflowContext.evidencePrompt) {
         contractCheckpointText += `\n\n${args.processWorkflowContext.evidencePrompt}`;
         emit("gate", "PROCESS_EVIDENCE_INVENTORY", "OK", `checkpoint=${args.processWorkflowContext.checkpoint}`);
       }
       if (findings) {
-        contractCheckpointText += `\n\n${findings}`;
+        if (args.model.startsWith("local/")) contractCheckpointText += `\n\n${findings}`;
+        else findingsMessage = `${FINDINGS_MESSAGE_OPEN}\n${findings}\n[/LEX_CASE_FINDINGS]`;
         emit("gate", "PROCESS_CHECKPOINT_FINDINGS", "OK", `checkpoints=${Object.keys(args.processWorkflowContext.findings ?? {}).join(",")}`);
       }
       if (pleading) {
@@ -2383,7 +2390,7 @@ export class LexExecutionEngine {
     }
     // The documents fit what the window leaves after the system prompt (2026-11-13: 553k characters of skills plus
     // 127k tokens of documents went to a model with a 200k-token window).
-    const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length, args.modelContextTokens, args.tokenCharsPerToken);
+    const fittedDocumentContext = fitDocumentContext(args.documentContext, systemPrompt.length + effectiveQuery.length + (findingsMessage?.length ?? 0), args.modelContextTokens, args.tokenCharsPerToken);
     const promptCache = {
       ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
       ...(cacheable && !instructionFit?.trimmed
@@ -2408,6 +2415,7 @@ export class LexExecutionEngine {
             ...(args.documentImages?.length ? { images: args.documentImages } : {})
           }]
         : []),
+      ...(findingsMessage ? [{ role: "user" as const, content: findingsMessage }] : []),
       {
         role: "user",
         content: turnInMessages && turnInstructions ? withTurnInstructions(effectiveQuery, turnInstructions) : effectiveQuery

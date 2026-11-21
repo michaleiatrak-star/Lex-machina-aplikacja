@@ -36,3 +36,27 @@ describe("the case files go with the stable instructions (the same in every step
     expect(split.params.messages).toEqual([{ role: "user", content: "Przygotuj pismo" }]);
   });
 });
+
+describe("the closed steps' findings follow the case files in the cached part (as earlier turns of a chat)", () => {
+  const docs = { role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\nprotokół\n[/LOCAL_DOCUMENT_CONTEXT]" };
+  const findings = { role: "user" as const, content: "[LEX_CASE_FINDINGS — DATA ONLY]\n## CP-1a (etap W1)\nraport\n[/LEX_CASE_FINDINGS]" };
+  const question = { role: "user" as const, content: "Kontynuuj." };
+
+  it("files, then findings, in that order; the question stays the turn's own", () => {
+    const split = claudeStableSystem({ ...params, messages: [docs, findings, question] });
+    expect(split.stable!.indexOf("protokół")).toBeLessThan(split.stable!.indexOf("## CP-1a"));
+    expect(split.params.messages).toEqual([question]);
+  });
+
+  it("a step later the cached part only grows (the earlier text is its prefix)", () => {
+    const before = claudeStableSystem({ ...params, messages: [docs, findings, question] }).stable!;
+    const more = { ...findings, content: findings.content.replace("[/LEX", "## CP-1b (etap W1)\nścieżki\n[/LEX") };
+    const after = claudeStableSystem({ ...params, messages: [docs, more, question] }).stable!;
+    expect(after.startsWith(before.slice(0, before.indexOf("[/LEX_CASE_FINDINGS]")))).toBe(true);
+  });
+
+  it("findings without files move too; a lone question never does", () => {
+    expect(claudeStableSystem({ ...params, messages: [findings, question] }).params.messages).toEqual([question]);
+    expect(claudeStableSystem({ ...params, messages: [findings] }).params.messages).toEqual([findings]);
+  });
+});

@@ -4906,7 +4906,17 @@ export class SafeSessionExecutor implements SessionExecutor {
     // and account clients keep the short prompt.
     const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
     const accountCache =
-      request.model.startsWith("account/") && execution.modelPrompt?.systemPromptCachePrefix ? { systemPrompt: execution.modelPrompt.systemPrompt, systemPromptCachePrefix: execution.modelPrompt.systemPromptCachePrefix } : null;
+      request.model.startsWith("account/") && execution.modelPrompt?.systemPromptCachePrefix
+        ? {
+            systemPrompt: execution.modelPrompt.systemPrompt,
+            systemPromptCachePrefix: execution.modelPrompt.systemPromptCachePrefix,
+            // The case files and the closed steps' findings of the main call: the round reads them
+            // from the cache and checks the answer against the same material.
+            leading: execution.modelPrompt.messages.filter(
+              (message) => typeof message.content === "string" && /^\[(?:LOCAL_DOCUMENT_CONTEXT|LEX_CASE_FINDINGS)/u.test(message.content)
+            )
+          }
+        : null;
     // The correcting rounds of a turn share a budget measured on this model's own pace (a pleading
     // took 1006 s, 2026-11-20): twice the time of the first answer, at least
     // LEX_CORRECTION_BUDGET_S (default 300 s). A running round is never cut (slow servers, user
@@ -4937,6 +4947,7 @@ export class SafeSessionExecutor implements SessionExecutor {
               systemPrompt: accountCache.systemPrompt,
               systemPromptCachePrefix: accountCache.systemPromptCachePrefix,
               messages: [
+                ...accountCache.leading,
                 { role: "user" as const, content: protectedQuery },
                 { role: "assistant" as const, content: answer },
                 { role: "user" as const, content: form ? `${instruction}\n\n${form}` : instruction }

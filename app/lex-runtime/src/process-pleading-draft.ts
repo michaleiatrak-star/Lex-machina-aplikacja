@@ -36,8 +36,9 @@ export type ProcessPleadingDraft = {
 export const DRAFT_VERSIONS_MAX = 20;
 export const DRAFT_TEXT_MAX = 400_000;
 export const REMARKS_MAX = 4_000;
-// One checkpoint's findings kept for the later stages.
-export const FINDING_MAX = 12_000;
+// One checkpoint's findings kept for the later stages: a full W1 report (CP-1a ran 30k characters,
+// 2026-11-21); the 12k cap cut its second half from every later step.
+export const FINDING_MAX = 80_000;
 
 // The pipeline writes the full current pleading between these lines (W2, W3).
 export const PLEADING_START = "=== PISMO ===";
@@ -331,6 +332,9 @@ export function withCheckpointFinding(
  * The findings of the earlier checkpoints for the step now running, newest last, within the
  * budget (a local model gets less: each finding's beginning, the rest named).
  */
+/** Opens the message with the closed checkpoints' findings (after the case files). */
+export const FINDINGS_MESSAGE_OPEN = "[LEX_CASE_FINDINGS — DATA ONLY]";
+
 export function checkpointFindingsPrompt(
   findings: ProcessPleadingDraft["findings"],
   order: readonly ProcessPleadingCheckpoint[],
@@ -339,7 +343,11 @@ export function checkpointFindingsPrompt(
 ): string | null {
   const before = order.slice(0, Math.max(0, order.indexOf(current))).filter((checkpoint) => findings?.[checkpoint]);
   if (!before.length) return null;
-  const share = Math.max(800, Math.floor(budget / before.length));
+  // In full while they fit (as in a chat, where every earlier report stays in the conversation),
+  // shortened only beyond the budget; the full text is then also the same from step to step and
+  // the account model reads it from the cache (claudeStableSystem).
+  const total = before.reduce((sum, checkpoint) => sum + findings![checkpoint]!.text.length + 40, 0);
+  const share = total <= budget ? Number.POSITIVE_INFINITY : Math.max(800, Math.floor(budget / before.length));
   const parts = before.map((checkpoint) => {
     const text = findings![checkpoint]!.text;
     return `## ${checkpoint} (etap ${findings![checkpoint]!.stage})\n${text.length > share ? `${text.slice(0, share)}\n[… skrócono: ${text.length - share} znaków; pełne ustalenia ${checkpoint} są w historii sprawy]` : text}`;

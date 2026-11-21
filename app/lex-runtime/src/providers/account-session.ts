@@ -3657,11 +3657,20 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
   if (claudeSystemFileUnsupported || split < 4_000 || split >= params.systemPrompt.length) return { stable: undefined, params };
   // The case files (the first message, the same in every step of a pleading) after the stable
   // instructions: the steps of one matter read them from the cache too.
-  const [first, ...rest] = params.messages;
-  const documents = first && first.role === "user" && !first.images?.length && typeof first.content === "string" && first.content.startsWith("[LOCAL_DOCUMENT_CONTEXT") ? first.content : null;
+  // Then the closed checkpoints' findings (append-only from step to step): as in a chat, the
+  // earlier steps are read from the cache, only the new one is processed.
+  const leading: string[] = [];
+  const plain = (index: number) => {
+    const message = params.messages[index];
+    return message && message.role === "user" && !message.images?.length && typeof message.content === "string" ? message.content : "";
+  };
+  if (plain(0).startsWith("[LOCAL_DOCUMENT_CONTEXT")) leading.push(plain(0));
+  if (plain(leading.length).startsWith("[LEX_CASE_FINDINGS")) leading.push(plain(leading.length));
+  // The last message (the question) always stays the turn's own.
+  if (leading.length >= params.messages.length) leading.length = Math.max(0, params.messages.length - 1);
   return {
-    stable: [params.systemPrompt.slice(0, split).trimEnd(), ...(documents ? [documents] : [])].join("\n\n"),
-    params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(documents ? { messages: rest } : {}) }
+    stable: [params.systemPrompt.slice(0, split).trimEnd(), ...leading].join("\n\n"),
+    params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages: params.messages.slice(leading.length) } : {}) }
   };
 }
 /** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */

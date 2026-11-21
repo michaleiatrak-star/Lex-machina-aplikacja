@@ -19,4 +19,12 @@ describe("findings of the pipeline's gates, by stages", () => {
     expect(local).not.toContain("później");
     expect(checkpointFindingsPrompt(draft.findings, PROCESS_PLEADING_CHECKPOINTS, "CP-1a", 1_000)).toBeNull();
   });
+  it("in full while they fit the budget: a long report is not cut for a large window", () => {
+    let draft = emptyProcessPleadingDraft(CASE);
+    draft = withCheckpointFinding(draft, "CP-1a", "W1", `RAPORT ${"x".repeat(30_000)}`);
+    draft = withCheckpointFinding(draft, "CP-1b", "W1", "ścieżki");
+    const full = checkpointFindingsPrompt(draft.findings, PROCESS_PLEADING_CHECKPOINTS, "CP-PEER", 175_000)!;
+    expect(full).not.toContain("[… skrócono:");
+    expect(full).toContain("x".repeat(30_000));
+  });
 });
