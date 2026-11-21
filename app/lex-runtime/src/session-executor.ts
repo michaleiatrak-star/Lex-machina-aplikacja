@@ -4930,7 +4930,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             // The case files and the closed steps' findings of the main call: the round reads them
             // from the cache and checks the answer against the same material.
             leading: execution.modelPrompt.messages.filter(
-              (message) => typeof message.content === "string" && /^\[(?:LOCAL_DOCUMENT_CONTEXT|LEX_CASE_FINDINGS)/u.test(message.content)
+              (message) => typeof message.content === "string" && /^\[(?:LEX_STAGE_MODULES|LOCAL_DOCUMENT_CONTEXT|LEX_CASE_FINDINGS)/u.test(message.content)
             )
           }
         : null;

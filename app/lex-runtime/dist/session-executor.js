@@ -3672,7 +3672,7 @@ export class SafeSessionExecutor {
                 systemPromptCachePrefix: execution.modelPrompt.systemPromptCachePrefix,
                 // The case files and the closed steps' findings of the main call: the round reads them
                 // from the cache and checks the answer against the same material.
-                leading: execution.modelPrompt.messages.filter((message) => typeof message.content === "string" && /^\[(?:LOCAL_DOCUMENT_CONTEXT|LEX_CASE_FINDINGS)/u.test(message.content))
+                leading: execution.modelPrompt.messages.filter((message) => typeof message.content === "string" && /^\[(?:LEX_STAGE_MODULES|LOCAL_DOCUMENT_CONTEXT|LEX_CASE_FINDINGS)/u.test(message.content))
             }
             : null;
         // The correcting rounds of a turn share a budget measured on this model's own pace (a pleading

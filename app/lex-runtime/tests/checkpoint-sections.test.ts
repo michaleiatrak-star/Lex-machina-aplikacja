@@ -40,3 +40,34 @@ describe("a checkpoint closed from a shared answer must show it was done and clo
     expect(aheadSectionVerdict("CP-1b", "## [CP-1b] Wybór strategii\n✅ CHECKPOINT [CP-1b] — ZAMKNIĘTY\n[CP-1b] ○ OCZEKUJE na decyzję").closed).toBe(false);
   });
 });
+
+describe("testimony in the files: SW-INW in CP-1a, SW-TARCZKA in CP-ATAK (SKILL.md W1.2c-SW, W2.4c)", () => {
+  it("detects the witness case from the hearing records", async () => {
+    const { witnessTestimonyCase } = await import("../src/process-checkpoint-contract.js");
+    const record = "PROTOKÓŁ ROZPRAWY\nŚwiadek zeznaje: ...";
+    expect(witnessTestimonyCase(`${record}\n\n---\n\n${record}`, "Przygotuj pismo")).toBe(true);
+    expect(witnessTestimonyCase(record, "Przygotuj pismo o sprzecznościach w zeznaniach")).toBe(true);
+    expect(witnessTestimonyCase(record, "Przygotuj pismo")).toBe(false);
+    expect(witnessTestimonyCase("Umowa najmu", "Przygotuj pismo")).toBe(false);
+  });
+  it("requires the table and the defence, a reasoned N/A counts", async () => {
+    const { evaluateCheckpointOutput } = await import("../src/process-checkpoint-contract.js");
+    const facts = { witnessTestimony: true };
+    expect(evaluateCheckpointOutput("CP-1a", "## [CP-1a]\nraport", facts).missing.some((item) => item.startsWith("W1.2c-SW"))).toBe(true);
+    expect(evaluateCheckpointOutput("CP-1a", "## [CP-1a]\nSW-INW: tabela", facts).missing.some((item) => item.startsWith("W1.2c-SW"))).toBe(false);
+    expect(evaluateCheckpointOutput("CP-ATAK", "RAPORT D\nSW-TARCZKA: nie dotyczy — brak naszego świadka", facts).missing.some((item) => item.startsWith("W2.4c"))).toBe(false);
+    expect(evaluateCheckpointOutput("CP-ATAK", "RAPORT D", facts).missing.some((item) => item.startsWith("W2.4c"))).toBe(true);
+    expect(evaluateCheckpointOutput("CP-1a", "## [CP-1a]\nraport").missing.some((item) => item.startsWith("W1.2c-SW"))).toBe(false);
+  });
+});
+
+describe("analiza-sadowa-v6: each checkpoint's message holds its pass", () => {
+  it("names what is missing, nothing for a complete message or the final report", async () => {
+    const { courtCheckpointGaps } = await import("../src/process-checkpoint-contract.js");
+    expect(courtCheckpointGaps("PASS_II_SOURCES_VERIFIED", "Kwalifikacja bez tabeli")).toHaveLength(1);
+    expect(courtCheckpointGaps("PASS_II_SOURCES_VERIFIED", "MACIERZ FAKT-NORMA\n| F-01 | art. 52 KP |")).toEqual([]);
+    expect(courtCheckpointGaps("FINAL_GATE_APPROVED", "GATE: ZATWIERDZONE TAK")).toEqual([]);
+    expect(courtCheckpointGaps("FINAL_VERIFICATION_COMPLETE", "P1 ✓ | P5 ✓")).toHaveLength(1);
+    expect(courtCheckpointGaps("FINAL_REPORT_PRESENTED", "cokolwiek")).toEqual([]);
+  });
+});

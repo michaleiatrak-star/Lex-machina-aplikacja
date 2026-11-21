@@ -3,6 +3,7 @@ import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
 import type { ProviderStreamResult } from "./providers/types.js";
 import { checkpointFindingsPrompt, draftPrompt, FINDINGS_MESSAGE_OPEN } from "./process-pleading-draft.js";
+import { rewriteRejection } from "./answer-corrections.js";
 import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
@@ -25,7 +26,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
-import { checkpointCorrectionPrompt, checkpointModuleNames, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
+import { checkpointCorrectionPrompt, checkpointModuleNames, courtCheckpointGaps, witnessTestimonyCase, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -2232,6 +2233,11 @@ export class LexExecutionEngine {
           ]
         : [])
     ];
+    // The account's Claude (one system file, prefix cache): a pleading's stage modules (W1/W2/W3), the
+    // same for every checkpoint of the stage, go as their own message before the case files; the
+    // file puts them in its cached part (written once per stage, read by the other checkpoints) instead
+    // of the turn's part sent again with every checkpoint. API models keep the shared prefix.
+    const stageInStable = Boolean(stageModulesText) && Boolean(args.processWorkflowContext) && args.model.startsWith("account/anthropic");
     const stableParts = [
       stableSkillPrompt,
       coreResourcePrompt,
@@ -2343,7 +2349,7 @@ export class LexExecutionEngine {
     if (!workflowStateParts.length && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\nGdy potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}.`);
     }
-    const turnTail = [stageTailPrompt(stageTail?.sections ?? []), turnContextText, stageModulesText, contractCheckpointText, ...workflowStateParts].filter((part): part is string => Boolean(part));
+    const turnTail = [stageTailPrompt(stageTail?.sections ?? []), turnContextText, stageInStable ? "" : stageModulesText, contractCheckpointText, ...workflowStateParts].filter((part): part is string => Boolean(part));
     const stableText = stableParts.join("\n\n");
     // API models (prefix cache): the turn's own part (stage sections, turn state, the modules of
     // this question, the checkpoint) goes right before the latest user message instead of the
@@ -2408,6 +2414,7 @@ export class LexExecutionEngine {
 
     // The application's own answer (a question it asks without the model, e.g. for the material).
     const workflowMessages: LlmMessage[] = [
+      ...(stageInStable ? [{ role: "user" as const, content: `[LEX_STAGE_MODULES — INSTRUKCJE ETAPU]\n${stageModulesText}\n[/LEX_STAGE_MODULES]` }] : []),
       ...(args.documentContext
         ? [{
             role: "user" as const,
@@ -2483,7 +2490,8 @@ export class LexExecutionEngine {
     let output = response.fullText;
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpoint = args.processWorkflowContext.checkpoint;
-      const first = evaluateCheckpointOutput(checkpoint, output);
+      const caseFacts = { witnessTestimony: witnessTestimonyCase(args.documentContext, moduleTriggerText) };
+      const first = evaluateCheckpointOutput(checkpoint, output, caseFacts);
       if (waitsForUser(output) || (checkpoint === "CP-1a" && reductionOffer(output))) {
         emit("gate", "PROCESS_CHECKPOINT_WAITING_FOR_USER", "OK", `checkpoint=${checkpoint}`);
       } else if (first.result === "BLOCKED") {
@@ -2494,9 +2502,8 @@ export class LexExecutionEngine {
             systemPrompt,
             ...promptCache,
             messages: [
-              ...(args.documentContext
-                ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + fittedDocumentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
-                : []),
+              // The main call's stage modules, case files and findings (the same cached part).
+              ...workflowMessages.slice(0, -1).filter((message) => !message.images?.length),
               { role: "user", content: effectiveQuery },
               { role: "assistant", content: output },
               { role: "user", content: checkpointCorrectionPrompt(checkpoint, first.missing) }
@@ -2505,8 +2512,9 @@ export class LexExecutionEngine {
           });
           const text = corrected.fullText.trim();
           if (text) {
-            const second = evaluateCheckpointOutput(checkpoint, text);
-            if (second.missing.length < first.missing.length) {
+            const second = evaluateCheckpointOutput(checkpoint, text, caseFacts);
+            // A rewrite that lost the report (a preamble, a shortened text) is not taken (answer-corrections.ts).
+            if (second.missing.length < first.missing.length && !rewriteRejection(output, text)) {
               output = text;
               remaining = second.missing;
             }
@@ -2520,6 +2528,47 @@ export class LexExecutionEngine {
           remaining.length ? "BLOCKED" : "OK",
           `checkpoint=${checkpoint};missing=${first.missing.join(",")};remaining=${remaining.join(",")}`
         );
+      }
+    }
+
+    // analiza-sadowa-v6: the checkpoint's message holds what its pass requires (one completing round,
+    // as for a pleading's checkpoint; a rewrite that lost the message is not taken).
+    if (args.courtWorkflowContext && workflowPlan.id === "COURT_ANALYSIS_V1" && !waitsForUser(output)) {
+      const checkpoint = args.courtWorkflowContext.checkpoint;
+      const gaps = courtCheckpointGaps(checkpoint, output);
+      if (gaps.length) {
+        let remaining = gaps;
+        try {
+          const corrected = await this.providers.stream(args.provider, {
+            model: args.model,
+            systemPrompt,
+            ...promptCache,
+            messages: [
+              ...workflowMessages.slice(0, -1).filter((message) => !message.images?.length),
+              { role: "user", content: effectiveQuery },
+              { role: "assistant", content: output },
+              {
+                role: "user",
+                content: [
+                  `Wiadomość kroku ${checkpoint} nie zawiera elementów, których wymaga skill analiza-sadowa-v6 (aplikacja): ${gaps.join("; ")}.`,
+                  "Podaj pełną wiadomość ponownie, z tą samą treścią, uzupełnioną o brakujące elementy w formacie skilla. Nie przechodź do następnego przejścia."
+                ].join("\n")
+              }
+            ],
+            reasoning: "none"
+          });
+          const text = corrected.fullText.trim();
+          if (text && !rewriteRejection(output, text)) {
+            const after = courtCheckpointGaps(checkpoint, text);
+            if (after.length < gaps.length) {
+              output = text;
+              remaining = after;
+            }
+          }
+        } catch {
+          remaining = gaps;
+        }
+        emit("gate", "COURT_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${gaps.join(",")};remaining=${remaining.join(",")}`);
       }
     }
 

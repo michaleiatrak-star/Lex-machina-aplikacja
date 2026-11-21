@@ -3664,7 +3664,11 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
     const message = params.messages[index];
     return message && message.role === "user" && !message.images?.length && typeof message.content === "string" ? message.content : "";
   };
-  if (plain(0).startsWith("[LOCAL_DOCUMENT_CONTEXT")) leading.push(plain(0));
+  // The stage's modules (the same within W1, W2, W3) first, then the case files.
+  const stageAt = plain(0).startsWith("[LEX_STAGE_MODULES") ? 0 : -1;
+  if (stageAt === 0) leading.push(plain(0));
+  const docsAt = plain(leading.length).startsWith("[LOCAL_DOCUMENT_CONTEXT") ? leading.length : -1;
+  if (docsAt >= 0) leading.push(plain(docsAt));
   const findingsAt = plain(leading.length).startsWith("[LEX_CASE_FINDINGS") ? leading.length : -1;
   // The thread's earlier turns (the web sends them before the new message, "Użytkownik: …" /
   // "Asystent: …"): they only grow from turn to turn, so they go to the cached part too, after the
@@ -3676,7 +3680,7 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
   const history = earlier.length >= 2_000 ? `[WCZEŚNIEJSZA CZĘŚĆ TEJ ROZMOWY]\n${earlier}\n[/WCZEŚNIEJSZA CZĘŚĆ TEJ ROZMOWY]` : "";
   if (history) leading.push(history);
   if (findingsAt >= 0) leading.push(plain(findingsAt));
-  const consumed = (plain(0).startsWith("[LOCAL_DOCUMENT_CONTEXT") ? 1 : 0) + (findingsAt >= 0 ? 1 : 0);
+  const consumed = (stageAt >= 0 ? 1 : 0) + (docsAt >= 0 ? 1 : 0) + (findingsAt >= 0 ? 1 : 0);
   if (consumed >= params.messages.length) {
     return {
       stable: [params.systemPrompt.slice(0, split).trimEnd(), ...leading.slice(0, Math.max(0, params.messages.length - 1))].join("\n\n"),

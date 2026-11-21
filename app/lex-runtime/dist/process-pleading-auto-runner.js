@@ -1,9 +1,11 @@
 import { completeProcessExecution, requireProcessExecutionPermit } from "./process-pleading-execution-gate.js";
 import { validateProcessPleadingState } from "./process-pleading-state.js";
 export const PROCESS_AUTO_MAX_STEPS = 4;
-// W1 checkpoints done ahead of the active one in the same answer (0: one checkpoint per answer,
-// as in a chat; LEX_PROCESS_AHEAD for a comparison run).
-export const PROCESS_AUTO_AHEAD = Math.max(0, Math.min(2, Number(process.env.LEX_PROCESS_AHEAD ?? 1) || 0));
+// W1 checkpoints done ahead of the active one in the same answer. Default 0, one checkpoint per
+// answer as in a chat: XI P 27/26, 2026-11-21, one ahead 858 s but the reports thinner (theses 10
+// against 65, no CN gate); none 1213 s with the reports close to before (1429 s). LEX_PROCESS_AHEAD=1
+// trades the detail for speed.
+export const PROCESS_AUTO_AHEAD = Math.max(0, Math.min(2, Number(process.env.LEX_PROCESS_AHEAD ?? 0) || 0));
 function assertSameWorkflow(previous, next) {
     if (previous.caseId !== next.caseId ||
         previous.workflowId !== next.workflowId ||

@@ -7890,6 +7890,17 @@ export function createLexHttpApp(options) {
                     step.result.answer
                         .trim()
                 ].join("\n\n"));
+                // Usage of the whole sequence, not of its last step (live run 2026-11-21: five checkpoints
+                // reported as one model call with no cache reads).
+                const stepUsages = [...auto.steps.map((step) => step.result.usage), ...(auto.waitingResult && !auto.steps.some((step) => step.result === auto.waitingResult) ? [auto.waitingResult.usage] : [])].filter((usage) => Boolean(usage));
+                if (stepUsages.length > 1 && response.usage) {
+                    const total = { ...response.usage };
+                    for (const key of Object.keys(total)) {
+                        if (typeof total[key] === "number")
+                            total[key] = stepUsages.reduce((sum, usage) => sum + (Number(usage[key]) || 0), 0);
+                    }
+                    response.usage = total;
+                }
                 // The checkpoint that asked the user closes the answer: its questions are last.
                 if (auto.waitingResult?.answer?.trim() && successfulAnswers.length > 0) {
                     successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${auto.waitingResult.answer.trim()}`);

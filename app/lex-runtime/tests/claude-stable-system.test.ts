@@ -79,3 +79,21 @@ describe("the thread's earlier turns go to the cached part (they only grow, as i
     expect(split.params.messages).toEqual([{ role: "user", content: "Przygotuj pismo." }]);
   });
 });
+
+describe("a pleading stage's modules open the cached part (written once per stage)", () => {
+  it("stage modules, files, findings in this order", () => {
+    const split = claudeStableSystem({
+      ...params,
+      messages: [
+        { role: "user", content: "[LEX_STAGE_MODULES — INSTRUKCJE ETAPU]\n# MODUŁY ETAPU W1\n[/LEX_STAGE_MODULES]" },
+        { role: "user", content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\nprotokół\n[/LOCAL_DOCUMENT_CONTEXT]" },
+        { role: "user", content: "[LEX_CASE_FINDINGS — DATA ONLY]\n## CP-1a\n[/LEX_CASE_FINDINGS]" },
+        { role: "user", content: "Kontynuuj." }
+      ]
+    });
+    const stable = split.stable!;
+    expect(stable.indexOf("MODUŁY ETAPU W1")).toBeLessThan(stable.indexOf("protokół"));
+    expect(stable.indexOf("protokół")).toBeLessThan(stable.indexOf("## CP-1a"));
+    expect(split.params.messages).toEqual([{ role: "user", content: "Kontynuuj." }]);
+  });
+});

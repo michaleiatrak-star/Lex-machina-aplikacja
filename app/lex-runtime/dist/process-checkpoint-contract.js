@@ -160,8 +160,27 @@ const STATUS_NOT_APPLICABLE = /^[\s\]\)*:—–-]{0,8}(?:status\s*[:=]?\s*)?(?:�
 const DRAFT_STATUS = /STATUS\s+PISMA\s*[:=]?\s*⚠️?\s*DRAFT/iu;
 const FINAL_STATUS = /STATUS\s+PISMA\s*[:=]?\s*(?:✅\s*)?(?:FINAL|GOTOWE)/iu;
 /** What the checkpoint turn's answer must show (and an N/A of a conditional checkpoint). */
-export function evaluateCheckpointOutput(checkpoint, text) {
+/**
+ * The case's files hold a witness's testimony the pleading builds on: two or more hearing records with
+ * testimony, or one when the request is about testimony (SKILL.md W1.2c-SW, SW-DETECT-HARD).
+ */
+export function witnessTestimonyCase(documentContext, request) {
+    if (!documentContext)
+        return false;
+    const records = documentContext
+        .split(/\n\n---\n\n/u)
+        .filter((block) => /PROTOK[OÓ]Ł/iu.test(block) && /(?<!\p{L})(?:świad\p{L}*|zezna\p{L}*)/iu.test(block)).length;
+    return records >= 2 || (records >= 1 && /(?<!\p{L})(?:zezna\p{L}*|świad\p{L}*)/iu.test(request));
+}
+export function evaluateCheckpointOutput(checkpoint, text, facts = {}) {
     const missing = [];
+    // Testimony in the files: the SW-INW table in W1 (W1.2c-SW, "niewykonane = W1-SW-INW ✗") and the
+    // defence of our witness in W2 (W2.4c SW-TARCZKA, ZAKAZ-13); "nie dotyczy" with a reason counts.
+    // Live runs 2026-11-21: SW-INW in one answer of four.
+    if (facts.witnessTestimony && checkpoint === "CP-1a" && !/SW-INW/u.test(text))
+        missing.push("W1.2c-SW_TABELA_SW-INW (inwentarz zeznań świadka: MOD-ATAK-NA-SWIADKA FAZA 0-1A)");
+    if (facts.witnessTestimony && checkpoint === "CP-ATAK" && !/SW-TARCZKA/u.test(text))
+        missing.push("W2.4c_SW-TARCZKA (antycypacja ataku na naszego świadka albo „SW-TARCZKA: nie dotyczy — powód”)");
     const escaped = checkpoint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const mention = new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, "iu");
     const lines = text.split("\n").filter((line) => mention.test(line) || (/CHECKPOINT/iu.test(line) && CHECKPOINT_NAMES[checkpoint].test(line)));
@@ -286,4 +305,23 @@ export function aheadSectionVerdict(checkpoint, text) {
     if (open)
         missing.push(`STATUS_OTWARTY_${checkpoint}`);
     return { closed: missing.length === 0, missing };
+}
+/**
+ * analiza-sadowa-v6: what each checkpoint's message must hold (SKILL.md, "Format wyniku" of each pass).
+ * The final report keeps its own output gate (deterministic-workflow.ts); the earlier ones were closed on
+ * the audit alone, whatever the message held.
+ */
+const COURT_CHECKPOINT_PARTS = {
+    SD_VER_COMPLETE: [[/SD-(?:INW|REJ)/u, "SD-INW (rejestr plików D[id])"], [/SD-VER/u, "SD-VER (wszystkie D[id] odczytane)"]],
+    PASS_I_ISOLATION_CLEAN: [[/MAPA\s+FAKTYCZNA/iu, "MAPA FAKTYCZNA (chronologia, podmioty, kwoty/daty, dokumenty)"]],
+    PASS_II_SOURCES_VERIFIED: [[/MACIERZ\s+FAKT[\s-]*NORMA/iu, "MACIERZ FAKT-NORMA (normy z ELI, RZĄD 1)"]],
+    FIRST_VERIFICATION_COMPLETE: [[/(?<![\w-])W4(?![\w-])|WERYFIKACJA\s+PIERWSZA/iu, "WERYFIKACJA PIERWSZA W1-W4 (z listą korekt W4)"]],
+    FINAL_VERIFICATION_COMPLETE: [
+        [/(?<![\w-])P5(?![\w-])/u, "AUTOKOREKTA P1-P5"],
+        [/(?<![\w-])O5(?![\w-])|WERYFIKACJA\s+OSTATECZNA/iu, "WERYFIKACJA OSTATECZNA O1-O5"]
+    ],
+    FINAL_GATE_APPROVED: [[/GATE[^\n]{0,40}(?:TAK|NIE)/u, "GATE: ZATWIERDZONE TAK albo NIE z listą braków"]]
+};
+export function courtCheckpointGaps(checkpoint, text) {
+    return (COURT_CHECKPOINT_PARTS[checkpoint] ?? []).filter(([pattern]) => !pattern.test(text)).map(([, label]) => label);
 }
