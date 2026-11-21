@@ -933,7 +933,9 @@ export function geminiToolSettings(server) {
         tools: { exclude: GEMINI_HOST_TOOLS }
     });
 }
-export function claudeHeadlessArgs(systemPrompt, tail = []) {
+export function claudeHeadlessArgs(systemPrompt, tail = [], 
+// The Lex instructions' stable part with the system prompt, from a file (claudeStableSystem).
+systemPromptFile) {
     // stream-json + --verbose emits an init event before the API request and a
     // final `result` line; Lex settles on that line instead of waiting for the
     // process to exit (Windows child processes can keep claude.exe alive).
@@ -952,8 +954,7 @@ export function claudeHeadlessArgs(systemPrompt, tail = []) {
         "",
         "--disallowedTools",
         "mcp__*",
-        "--system-prompt",
-        systemPrompt,
+        ...(systemPromptFile ? ["--system-prompt-file", systemPromptFile] : ["--system-prompt", systemPrompt]),
         "--system-prompt-snapshot",
         "off",
         ...tail
@@ -965,7 +966,7 @@ export function claudeHeadlessArgs(systemPrompt, tail = []) {
  * allowed) and the Lex runtime tools over one MCP server. No shell, no web,
  * no writes, no MCP servers of the account.
  */
-export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = []) {
+export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = [], systemPromptFile) {
     return [
         "-p",
         "--output-format",
@@ -984,8 +985,7 @@ export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = []) {
         "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
         "--permission-mode",
         "dontAsk",
-        "--system-prompt",
-        systemPrompt,
+        ...(systemPromptFile ? ["--system-prompt-file", systemPromptFile] : ["--system-prompt", systemPrompt]),
         "--system-prompt-snapshot",
         "off",
         ...tail
@@ -2369,6 +2369,34 @@ export function messageImages(params) {
     return params.messages.flatMap((message) => message.images ?? []);
 }
 /** The Lex instructions and conversation for a native corpus run (sent on stdin). */
+// The account's Claude caches what repeats exactly up to a cache mark (2026-11-20: a pleading's four
+// calls wrote about 500 thousand tokens to the cache and read none). The whole Lex prompt went as one
+// user message, ending with the question and the step, so no call ever matched another. The stable
+// part the engine marks (systemPromptCachePrefix: skills, modules, rules) now goes as the system
+// prompt from a file — the same text in every call of a matter — and only the rest as the message.
+let claudeSystemFileUnsupported = false;
+export function claudeStableSystem(params) {
+    const split = params.systemPromptCachePrefix ?? 0;
+    if (claudeSystemFileUnsupported || split < 4_000 || split >= params.systemPrompt.length)
+        return { stable: undefined, params };
+    return {
+        stable: params.systemPrompt.slice(0, split).trimEnd(),
+        params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart() }
+    };
+}
+/** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */
+export function claudeSystemFileRejected(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/system-prompt-file/iu.test(message) || !/unknown|unrecogni|nieznan/iu.test(message))
+        return false;
+    claudeSystemFileUnsupported = true;
+    return true;
+}
+async function writeClaudeSystemFile(directory, lexSystemPrompt, stable) {
+    const file = path.join(directory, "lex-system.md");
+    await fsp.writeFile(file, `${lexSystemPrompt}\n\n${stable}`, { mode: 0o600 });
+    return file;
+}
 export function buildCorpusPrompt(params) {
     return [
         "You are the semantic model inside Lex Machina.",
@@ -2752,11 +2780,12 @@ export class AccountSessionManager {
                 "Use the mcp__lex tools for legal verification, case law and legal sources. Do not access anything else. " +
                 "A resumed host session is continuity context only: never reuse facts from earlier host turns unless they are also in the current Lex Machina request.";
             const input = claudeInput(args.prompt, args.images);
+            const systemFile = args.stableSystem ? await writeClaudeSystemFile(workDir, systemPrompt, args.stableSystem) : undefined;
             const run = (tail) => runCli("anthropic", claudeCorpusArgs(systemPrompt, mcpConfig, [
                 ...input.args,
                 ...(args.clientModel ? ["--model", args.clientModel] : []),
                 ...tail
-            ]), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, {
+            ], systemFile), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, {
                 settleOnStdout: claudeResultReady,
                 firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS,
                 ...(args.onText ? { onStdoutLine: claudeStdoutLines(args.onText) } : {})
@@ -2904,7 +2933,9 @@ export class AccountSessionManager {
     // recorded thread (self-contained router and document-generator calls).
     fresh = false, 
     // Claude: the answer's text while it is written (chat preview).
-    onText) {
+    onText, 
+    // Claude: the stable part of the Lex instructions as the system prompt (cached between calls).
+    stableSystem) {
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-session-"));
         const allowExternalTakeover = !fresh &&
             (!continuityKey ||
@@ -3041,12 +3072,13 @@ export class AccountSessionManager {
                 "anthropic") {
                 const lexSystemPrompt = "You are the semantic model inside Lex Machina. Lex Machina owns privacy gates, legal-source verification and all tool execution. Current Lex Machina instructions override prior host-session instructions. A resumed host session is continuity context only: never reuse, reveal or infer facts from earlier host turns unless those facts are also present in the current Lex Machina request. Do not access local files, external services or tools.";
                 const input = claudeInput(prompt, images);
+                const systemFile = stableSystem ? await writeClaudeSystemFile(workDir, lexSystemPrompt, stableSystem) : undefined;
                 const commonArgs = claudeHeadlessArgs(lexSystemPrompt, [
                     ...input.args,
                     ...(clientModel
                         ? ["--model", clientModel]
                         : [])
-                ]);
+                ], systemFile);
                 const hostCwd = workDir;
                 const runClaude = async (tail) => {
                     const run = await runCli(provider, [
@@ -3237,12 +3269,16 @@ async function streamAccountSessionText(manager, provider, params) {
     const live = provider === "anthropic" ? liveTextSink(params.callbacks) : undefined;
     if (provider === "anthropic" && params.nativeCorpus && params.runTools) {
         const onToolCall = params.callbacks?.onToolCallStart;
-        const text = await manager.runClaudeWithCorpus({
-            prompt: buildCorpusPrompt(params),
+        const first = claudeStableSystem(params);
+        const nativeCorpus = params.nativeCorpus;
+        const runTools = params.runTools;
+        const runCorpus = (cached) => manager.runClaudeWithCorpus({
+            prompt: buildCorpusPrompt(cached.params),
+            ...(cached.stable ? { stableSystem: cached.stable } : {}),
             images: messageImages(params),
-            corpus: params.nativeCorpus,
+            corpus: nativeCorpus,
             tools: params.tools ?? [],
-            runTools: params.runTools,
+            runTools,
             ...(onToolCall || live
                 ? {
                     onToolCall: (call) => {
@@ -3257,6 +3293,15 @@ async function streamAccountSessionText(manager, provider, params) {
             clientModel: accountSessionClientModel(provider, params.model),
             fresh: params.accountContinuity === "none"
         });
+        let text;
+        try {
+            text = await runCorpus(first);
+        }
+        catch (error) {
+            if (!first.stable || !claudeSystemFileRejected(error))
+                throw error;
+            text = await runCorpus({ stable: undefined, params });
+        }
         if (!text.trim())
             throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
         if (live)
@@ -3305,7 +3350,10 @@ async function streamAccountSessionText(manager, provider, params) {
     const maxIterations = Math.max(1, Math.min(params.maxIterations ?? 10, 12));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
         let emptyRetried = false;
-        const runOnce = () => manager.runText(provider, buildAccountPrompt(params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none", live?.push);
+        const runOnce = () => {
+            const cached = provider === "anthropic" ? claudeStableSystem(params) : { stable: undefined, params };
+            return manager.runText(provider, buildAccountPrompt(cached.params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none", live?.push, cached.stable);
+        };
         let output;
         for (let attempt = 0;; attempt += 1) {
             try {
@@ -3313,6 +3361,9 @@ async function streamAccountSessionText(manager, provider, params) {
                 break;
             }
             catch (error) {
+                // An older Claude CLI without --system-prompt-file: once more with the whole prompt as the message.
+                if (provider === "anthropic" && claudeSystemFileRejected(error))
+                    continue;
                 // A run that ended without any text (Codex: the turn completed with reasoning
                 // only, e.g. the output limit spent on a long prompt) is repeated once with a
                 // request for the text; the second empty run is reported with its summary.

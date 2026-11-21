@@ -3624,6 +3624,7 @@ export class SafeSessionExecutor {
         // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
         // and account clients keep the short prompt.
         const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
+        const accountCache = request.model.startsWith("account/") && execution.modelPrompt?.systemPromptCachePrefix ? { systemPrompt: execution.modelPrompt.systemPrompt, systemPromptCachePrefix: execution.modelPrompt.systemPromptCachePrefix } : null;
         // The correcting rounds of a turn share a budget measured on this model's own pace (a pleading
         // took 1006 s, 2026-11-20): twice the time of the first answer, at least
         // LEX_CORRECTION_BUDGET_S (default 300 s). A running round is never cut (slow servers, user
@@ -3646,20 +3647,33 @@ export class SafeSessionExecutor {
                 ...(reusable.tools?.length ? { toolChoice: "none" } : {}),
                 messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }]
             }
-            : {
-                systemPrompt: systemPrompt ??
-                    [
-                        ...(placeholderKey ? [placeholderKey] : []),
-                        identityPrompt,
-                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-                        ...pathSections
-                    ].join("\n\n"),
-                messages: [
-                    { role: "user", content: protectedQuery },
-                    { role: "assistant", content: answer },
-                    { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }
-                ]
-            };
+            : accountCache
+                ? {
+                    // An account model: the main call's system prompt (its stable part is cached by the
+                    // account's Claude since it goes as the system prompt, providers/account-session.ts),
+                    // without tools; the round's own messages after it.
+                    systemPrompt: accountCache.systemPrompt,
+                    systemPromptCachePrefix: accountCache.systemPromptCachePrefix,
+                    messages: [
+                        { role: "user", content: protectedQuery },
+                        { role: "assistant", content: answer },
+                        { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }
+                    ]
+                }
+                : {
+                    systemPrompt: systemPrompt ??
+                        [
+                            ...(placeholderKey ? [placeholderKey] : []),
+                            identityPrompt,
+                            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                            ...pathSections
+                        ].join("\n\n"),
+                    messages: [
+                        { role: "user", content: protectedQuery },
+                        { role: "assistant", content: answer },
+                        { role: "user", content: form ? `${instruction}\n\n${form}` : instruction }
+                    ]
+                };
         const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
         if ((missingGates.length || supervisedMissing.length) && !roundsExhausted("ścieżka obowiązkowa")) {
             step("MODEL", `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`);
