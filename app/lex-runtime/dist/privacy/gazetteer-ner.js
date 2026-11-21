@@ -188,9 +188,13 @@ export class CompositeRecognizer {
                 return spans;
             }, (error) => {
                 const reason = error instanceof Error ? error.message : String(error);
-                reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
                 recognizerDown.set(name, reason.replace(/\s+/g, " ").slice(0, 200));
                 process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
+                // Part of the text recognized: those names stay protected, only the gap is reported.
+                const partial = error.spans;
+                if (Array.isArray(partial))
+                    return partial;
+                reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
                 return [];
             });
         }));

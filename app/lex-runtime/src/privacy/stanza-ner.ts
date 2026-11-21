@@ -98,7 +98,7 @@ implements NamedEntityRecognizer {
       this.cache.delete(key);
       this.cache.set(key, spans);
     } else {
-      spans = this.persistent && this.backoff.usable() ? await this.viaWorker(text) : await this.oneShot(text);
+      spans = await this.inParts(text);
       this.cache.set(key, spans);
       while (this.cache.size > CACHE_ENTRIES) this.cache.delete(this.cache.keys().next().value!);
     }
@@ -120,6 +120,37 @@ implements NamedEntityRecognizer {
           ? { confidence: span.confidence }
           : {})
       }));
+  }
+
+  // A long document in parts (2026-11-21, another user's computer: one request with the whole
+  // document ran past the time limit under load and every name Stanza would have found was lost).
+  // Each part has its own time limit; a part that does not finish is tried once more on a fresh
+  // worker; what the other parts found is kept, and the gap is reported (PartialRecognitionError).
+  private async inParts(text: string): Promise<WorkerSpan[]> {
+    const parts = stanzaParts(text);
+    const spans: WorkerSpan[] = [];
+    let failed = 0;
+    let lastError: unknown = null;
+    for (const part of parts) {
+      let found: WorkerSpan[] | null = null;
+      for (let attempt = 0; attempt < 2 && !found; attempt += 1) {
+        try {
+          found = this.persistent && this.backoff.usable() ? await this.viaWorker(part.text) : await this.oneShot(part.text);
+        } catch (error) {
+          lastError = error;
+          // Only a part that ran out of time is tried again (a crash would only crash again).
+          if (!/timeout/iu.test(error instanceof Error ? error.message : String(error))) break;
+        }
+      }
+      if (!found) {
+        failed += 1;
+        continue;
+      }
+      for (const span of found) spans.push({ ...span, start: span.start + part.start, end: span.end + part.start });
+    }
+    if (failed === parts.length) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    if (failed) throw new PartialRecognitionError(`TIMEOUT_PARTIAL: ${failed} z ${parts.length} części tekstu bez odpowiedzi (${lastError instanceof Error ? lastError.message : String(lastError)})`, spans.filter((span) => text.slice(span.start, span.end) === span.value).map((span) => ({ start: span.start, end: span.end, kind: "PERSON" as const, value: span.value, ...(span.confidence !== undefined ? { confidence: span.confidence } : {}) })));
+    return spans;
   }
 
   // One text at a time through the long-running worker.
@@ -303,3 +334,30 @@ implements NamedEntityRecognizer {
 }
 
 class WorkerStartError extends Error {}
+
+/** Some parts of the text were recognized, some not: the spans found are kept by the caller. */
+export class PartialRecognitionError extends Error {
+  constructor(message: string, readonly spans: PiiSpan[]) {
+    super(message);
+  }
+}
+
+const PART_CHARS = 4_000;
+
+/** The text in parts at paragraph (then line, then sentence) boundaries, each at most PART_CHARS. */
+export function stanzaParts(text: string): Array<{ start: number; text: string }> {
+  if (text.length <= PART_CHARS) return [{ start: 0, text }];
+  const parts: Array<{ start: number; text: string }> = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(text.length, start + PART_CHARS);
+    if (end < text.length) {
+      const window = text.slice(start, end);
+      const cut = Math.max(window.lastIndexOf("\n\n"), window.lastIndexOf("\n"), window.lastIndexOf(". "));
+      if (cut > PART_CHARS / 2) end = start + cut + 1;
+    }
+    parts.push({ start, text: text.slice(start, end) });
+    start = end;
+  }
+  return parts;
+}

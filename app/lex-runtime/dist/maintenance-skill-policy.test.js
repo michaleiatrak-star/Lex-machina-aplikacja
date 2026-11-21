@@ -8,10 +8,10 @@ function sha256(bytes) {
 }
 function discoveryResult(indexBytes, signatureBytes) {
     return {
-        currentVersion: "0.2.6",
+        currentVersion: "0.2.7",
         status: "AVAILABLE",
         checkedAt: "2026-09-18T09:00:00.000Z",
-        latestVersion: "0.2.7",
+        latestVersion: "0.2.8",
         skillsBundle: {
             name: "LexMachina-Skills-0.2.4.zip",
             url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.2.4/LexMachina-Skills-0.2.4.zip",
@@ -40,7 +40,7 @@ function verifiedIndex(args) {
             schemaVersion: 1,
             kind: "LEX_MACHINA_SKILLS_INDEX",
             version: args?.version ??
-                "0.2.7",
+                "0.2.8",
             bundle: {
                 filename: "LexMachina-Skills-0.2.4.zip",
                 sha256: "a".repeat(64),
@@ -48,7 +48,7 @@ function verifiedIndex(args) {
             },
             compatibility: {
                 minAppVersion: args?.minAppVersion ??
-                    "0.2.6",
+                    "0.2.7",
                 ...(args?.maxAppVersion
                     ? {
                         maxAppVersion: args.maxAppVersion
@@ -139,7 +139,7 @@ describe("signed skill update compatibility policy", () => {
     });
     it("rejects a signed index whose release version does not match the discovered release before downloading the ZIP", async () => {
         const { maintenance, bundleFetch } = service(verifiedIndex({
-            version: "0.2.8"
+            version: "0.2.9"
         }));
         await expect(maintenance
             .applySkillUpdate()).rejects.toThrow("SKILL_UPDATE_INDEX_RELEASE_VERSION_MISMATCH");

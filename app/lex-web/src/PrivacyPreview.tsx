@@ -51,6 +51,7 @@ export function recognizerReason(reason: string): string {
   if (/No module named '?stanza/iu.test(reason)) return t("brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji");
   if (/No module named/iu.test(reason)) return t("brak składnika Pythona - uruchom naprawę instalacji");
   if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return t("nie znaleziono Pythona - uruchom naprawę instalacji");
+  if (/TIMEOUT_PARTIAL/u.test(reason)) return t("część tekstu nie została sprawdzona na czas (komputer obciążony) - nazwiska z pozostałej części są zakryte; sprawdź resztę ręcznie albo spróbuj ponownie");
   if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return t("nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie");
   if (/SELF_TEST_NO_PERSON/u.test(reason)) return t("uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji");
   if (/MemoryError|out of memory/iu.test(reason)) return t("za mało pamięci");
