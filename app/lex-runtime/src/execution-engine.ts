@@ -2149,7 +2149,9 @@ export class LexExecutionEngine {
                 ? [
                     `In this turn execute, in this order: ${[args.processWorkflowContext.checkpoint, ...aheadIncluded].join(", ")}. Start each with its own heading line "## [<checkpoint>]" and end each with its own checkpoint report and the status line "✅ CHECKPOINT [<checkpoint>] — ZAMKNIĘTY" (or "ZAMKNIĘTY Z BRAKAMI", or "[<checkpoint>] N/A — <reason>" for a conditional one); the runtime verifies and closes each from its own section only.`,
                     "If a checkpoint needs the user's answer, stop after its report (the later ones run after the answer). Do not continue beyond the last checkpoint listed.",
-                    "Keep each report to what the next steps need: findings, statuses and open questions, without repeating earlier sections."
+                    // A "keep it short" line here cut the W1 reports by 63% and dropped CV-ALT and SW-TARCZKA
+                    // (live run 2026-11-21): each checkpoint is done in full, as in its own turn.
+                    "Do each checkpoint in full, exactly as its own turn would: every section its contract and its modules require, verification included. Sharing the answer is no reason to shorten or defer any of them."
                   ]
                 : ["Execute only the active checkpoint in this turn.", "Do not continue to a later checkpoint or later stage."]),
               "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",

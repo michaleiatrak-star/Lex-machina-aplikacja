@@ -12063,7 +12063,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             };
           };
 
-        // AUTO, stage W1: one model call does the active checkpoint and the next open ones (up to two),
+        // AUTO, stage W1: one model call does the active checkpoint and the next open one (one: three in
+        // one answer shortened the reports, live run 2026-11-21),
         // each with its own report; the later ones close from their sections without another call
         // (2026-11-21: 16 checkpoints, each a model call of 4-5 minutes). A section that does not pass
         // the checkpoint's contract runs as its own turn, as before.
@@ -12074,7 +12075,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         const aheadOf = (checkpoint: AheadCheckpoint, state: { stage: string; mode: string; checkpoints: Record<string, string> }): AheadCheckpoint[] => {
           if (state.mode !== "AUTO" || state.stage !== "W1" || !W1_CHECKPOINTS.has(checkpoint)) return [];
           const order = [...W1_CHECKPOINTS];
-          return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(2, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
+          return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(1, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
         };
         const auto =
           await runBoundedProcessAutoSequence<
