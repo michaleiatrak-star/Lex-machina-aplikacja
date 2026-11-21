@@ -3665,12 +3665,29 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
     return message && message.role === "user" && !message.images?.length && typeof message.content === "string" ? message.content : "";
   };
   if (plain(0).startsWith("[LOCAL_DOCUMENT_CONTEXT")) leading.push(plain(0));
-  if (plain(leading.length).startsWith("[LEX_CASE_FINDINGS")) leading.push(plain(leading.length));
-  // The last message (the question) always stays the turn's own.
-  if (leading.length >= params.messages.length) leading.length = Math.max(0, params.messages.length - 1);
+  const findingsAt = plain(leading.length).startsWith("[LEX_CASE_FINDINGS") ? leading.length : -1;
+  // The thread's earlier turns (the web sends them before the new message, "Użytkownik: …" /
+  // "Asystent: …"): they only grow from turn to turn, so they go to the cached part too, after the
+  // files and before the findings (which grow with every closed step), as in a chat.
+  const lastIndex = params.messages.length - 1;
+  const last = plain(lastIndex);
+  const turnStart = last.lastIndexOf("\n\nUżytkownik: ");
+  const earlier = turnStart > 0 && /^(?:Użytkownik: |\[Wcześniejsza część rozmowy)/u.test(last) ? last.slice(0, turnStart) : "";
+  const history = earlier.length >= 2_000 ? `[WCZEŚNIEJSZA CZĘŚĆ TEJ ROZMOWY]\n${earlier}\n[/WCZEŚNIEJSZA CZĘŚĆ TEJ ROZMOWY]` : "";
+  if (history) leading.push(history);
+  if (findingsAt >= 0) leading.push(plain(findingsAt));
+  const consumed = (plain(0).startsWith("[LOCAL_DOCUMENT_CONTEXT") ? 1 : 0) + (findingsAt >= 0 ? 1 : 0);
+  if (consumed >= params.messages.length) {
+    return {
+      stable: [params.systemPrompt.slice(0, split).trimEnd(), ...leading.slice(0, Math.max(0, params.messages.length - 1))].join("\n\n"),
+      params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), messages: params.messages.slice(Math.max(0, params.messages.length - 1)) }
+    };
+  }
+  const rest = params.messages.slice(consumed);
+  const messages = history ? [...rest.slice(0, -1), { ...rest[rest.length - 1]!, content: last.slice(turnStart + 2) }] : rest;
   return {
     stable: [params.systemPrompt.slice(0, split).trimEnd(), ...leading].join("\n\n"),
-    params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages: params.messages.slice(leading.length) } : {}) }
+    params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages } : {}) }
   };
 }
 /** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */

@@ -84,3 +84,29 @@ export function describeMatterComplexity(value) {
         return "sprawa prosta: router v3 i jedna domena DR";
     return `pełna ścieżka (${value.reasons.map((reason) => REASON_LABELS[reason]).join(", ")})`;
 }
+// An opinion or a view asked for in a few words ("co sądzisz o…", "jak oceniasz…", "czy Twoim
+// zdaniem…", "w skrócie"): answered from the matter's material, not by an executive skill's procedure.
+const OPINION = /(?<!\p{L})(?:co (?:o tym |o tej \p{L}+ |o \p{L}+ )?(?:s[aą]dzisz|my[sś]lisz|uwa[zż]asz)|jak (?:to |t[eę] \p{L}+ )?(?:oceniasz|widzisz)|jakie (?:jest )?(?:twoje|pana|pani) zdanie|jaka (?:jest )?(?:twoja|pana|pani) opini|twoim zdaniem|(?:wed[lł]ug|zdaniem) ciebie|w skr[oó]cie|kr[oó]tko[,:]? )/iu;
+// The work products and analyses an executive skill exists for ("przeanalizuj", "oceń zeznania",
+// "szanse i ryzyka"): never the short form.
+const ANALYSIS_ASKED = /(?<!\p{L})(?:przeanalizuj|zanalizuj|analiz\p{L}*|oce[nń](?!ia(?:sz|cie))|zbadaj|szans\p{L}*|ryzyk\p{L}*|kompleksow\p{L}*|ca[lł]o[sś]ciow\p{L}*|szczeg[oó][lł]ow\p{L}*)/iu;
+/**
+ * A question in the simple form, also in a matter with files: one short legal question (the
+ * SIMPLE level without counting the files) or an opinion asked for in a few words. The turn is
+ * answered in the light profile without an executive skill leading it; the files, ELI verification,
+ * the criminal qualifier and every hard gate stay (user 2026-11-21).
+ */
+/** An opinion or a view asked for in a few words. */
+export function opinionAsked(text) {
+    return OPINION.test(latestUserTurn(text));
+}
+export function simpleFormQuestion(text) {
+    const raw = latestUserTurn(text).normalize("NFKC").replace(/\s+/g, " ").trim();
+    if (!raw || raw.length > SIMPLE_MAX_CHARS || ANALYSIS_ASKED.test(raw) || WORK_PRODUCT.test(raw) && !OPINION.test(raw))
+        return false;
+    if (/(?<!\p{L})(?:napisz|sporz[aą]d[zź]|przygotuj|zredaguj|popraw|wygeneruj)/iu.test(raw))
+        return false;
+    if (OPINION.test(raw))
+        return (raw.match(/\?/g) ?? []).length <= SIMPLE_MAX_QUESTIONS;
+    return assessMatterComplexity({ query: raw }).level === "SIMPLE";
+}

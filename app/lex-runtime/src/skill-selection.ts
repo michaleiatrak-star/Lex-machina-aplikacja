@@ -408,6 +408,8 @@ const DRAFTING: readonly RegExp[] = [
   /\b(?:odpowiedz|pismo|stanowisko|replik[a-z]*) do sadu\b/
 ];
 
+const PLEADING_QUESTION_START = /^(?:czy|jak[a-z]*|ile|kiedy|kto|komu|co|gdzie|dlaczego|czemu|czym|jaki[a-z]*|ktor[a-z]*|od kiedy|do kiedy|w jakim|na jakiej) /;
+
 function explicitExecutionSkillHints(
   query: string,
   candidates: readonly LexSkillRecord[]
@@ -432,7 +434,12 @@ function explicitExecutionSkillHints(
     )
     .map((rule) => rule.skill);
 
-  let resolved = matched;
+  // A question naming a pleading ("Jaki jest termin na apelację?", "Co powinno zawierać pismo
+  // przygotowawcze?") is a legal question, not a request to draft one: the name alone does not start
+  // the pleading pipeline (user 2026-11-21: work without a letter must not default to it).
+  const drafting = DRAFTING.some((pattern) => pattern.test(normalized));
+  const question = /\?\s*$/u.test(query.trim()) || PLEADING_QUESTION_START.test(normalized);
+  let resolved = question && !drafting ? matched.filter((skill) => skill !== "pisma-procesowe-v3") : matched;
   // Every letter or reply the user asks to draft runs the pleading path (pisma-procesowe-v3, with its
   // validation before the file), unless it is one of the simple letters pisma-proste-v2 names, or a
   // contract (user 2026-11-19: "Przygotuj odpowiedź do sądu … protokół … sprzeczności" ran the

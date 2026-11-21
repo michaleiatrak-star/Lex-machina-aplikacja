@@ -12,6 +12,7 @@ import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./sk
 import { decodePromptBudget } from "./prompt-budget.js";
 import { checkpointOwned, checkpointsReading } from "./process-checkpoint-contract.js";
 import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences, refreshVerMarkerDates, softenRemainingBlockers } from "./finalization-gate.js";
+import { opinionAsked, simpleFormQuestion } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
@@ -1695,7 +1696,7 @@ export class SafeSessionExecutor {
         const verification = legalTurn && classifyTask(this.taskRoutes(), taskQuery)?.route.id === "11";
         const profile = pathProfile({
             mode: request.modeDecision?.mode ?? request.mode,
-            simple: request.matterComplexity?.level === "SIMPLE",
+            simple: request.matterComplexity?.level === "SIMPLE" || (legalTurn && Boolean(request.modelSelectsSkills) && !request.processWorkflowContext && simpleFormQuestion(pathFacts.query)),
             criminal: pathFacts.criminal,
             documentGeneration: pathFacts.documentGeneration,
             verification,
@@ -2799,6 +2800,19 @@ export class SafeSessionExecutor {
                         break;
                     }
                 }
+            }
+            // A short question or an opinion asked for ("co sądzisz o…", "jaki jest termin na
+            // apelację?"): no executive skill leads it, also with the matter's files (the light form).
+            // A question about a delivered document ("Co mam zrobić z tym?" + a judgment, "Czy mogę podpisać
+            // tę umowę?"), case law, a letter and the named outputs keep their skill; an opinion and a short
+            // question routed only by the evidence or witness skill go without it.
+            const lightable = taskRoute &&
+                !/^(?:pisma-|orzeczenia-|analizator-umow|analizator-przepisow|chronologia-|raport-)/u.test(taskRoute.primary) &&
+                (opinionAsked(pathFacts.query) || taskRoute.primary === "analizator-dowodow-v3" || taskRoute.primary === "przesluchanie-swiadkow-v2-min90");
+            if (taskRoute && lightable && !taskRoute.reason.startsWith("kontynuacja") && simpleFormQuestion(pathFacts.query)) {
+                audit.record("gate", "SIMPLE_FORM_QUESTION", "OK", { detail: `skipped=${taskRoute.primary}` });
+                step("SKILLS", "pytanie w prostej formie: odpowiedź bez procedury skilla wykonawczego");
+                taskRoute = null;
             }
             const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
             if (taskRoute && record) {

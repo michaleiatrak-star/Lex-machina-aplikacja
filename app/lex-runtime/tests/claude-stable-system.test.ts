@@ -60,3 +60,22 @@ describe("the closed steps' findings follow the case files in the cached part (a
     expect(claudeStableSystem({ ...params, messages: [findings] }).params.messages).toEqual([findings]);
   });
 });
+
+describe("the thread's earlier turns go to the cached part (they only grow, as in a chat)", () => {
+  const earlier = `Użytkownik: Przygotuj pismo.\n\nAsystent: ${"raport CP-1a ".repeat(300)}`;
+  const docs = { role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\nprotokół\n[/LOCAL_DOCUMENT_CONTEXT]" };
+  const findings = { role: "user" as const, content: "[LEX_CASE_FINDINGS — DATA ONLY]\n## CP-1a\nraport\n[/LEX_CASE_FINDINGS]" };
+
+  it("files, earlier turns, findings in this order; only the new message stays the turn's own", () => {
+    const split = claudeStableSystem({ ...params, messages: [docs, findings, { role: "user", content: `${earlier}\n\nUżytkownik: Kontynuuj.` }] });
+    const stable = split.stable!;
+    expect(stable.indexOf("protokół")).toBeLessThan(stable.indexOf("raport CP-1a"));
+    expect(stable.indexOf("raport CP-1a")).toBeLessThan(stable.indexOf("## CP-1a"));
+    expect(split.params.messages).toEqual([{ role: "user", content: "Użytkownik: Kontynuuj." }]);
+  });
+
+  it("a single message without earlier turns stays as it is", () => {
+    const split = claudeStableSystem({ ...params, messages: [{ role: "user", content: "Przygotuj pismo." }] });
+    expect(split.params.messages).toEqual([{ role: "user", content: "Przygotuj pismo." }]);
+  });
+});
