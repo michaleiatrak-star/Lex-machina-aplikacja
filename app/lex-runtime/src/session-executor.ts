@@ -5134,7 +5134,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       // In the pipeline the answer must hold the letter itself: a CP-1a validation report was "fixed" for a
       // missing petitum (live run 2026-11-20, 292 s).
       const letterInAnswer = answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput);
-      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" || (letterInAnswer && !request.processWorkflowContext.draft) : true;
+      // A working list of motions in CP-1a ran the round twice in one AUTO batch (live run 2026-11-21).
+      const draftStep = request.processWorkflowContext ? request.processWorkflowContext.checkpoint === "CP-ATAK" : true;
       const draftLetter = draftStep && (request.processWorkflowContext ? letterInAnswer : pleadingAsked || answerLetterMarkup(modelOutput) !== null || /(?<![\p{L}])(?:wnosz[ęe]|wnosi\s+o|wnoszą)(?![\p{L}])/iu.test(modelOutput));
       const [admission, deadline] = draftLetter && pleadingAsked ? await Promise.all([admissionFindings(modelOutput), deadlineFindings(modelOutput)]) : [null, null];
       const extraBlocks = [admission?.instruction, deadline?.instruction].filter((item): item is string => Boolean(item));

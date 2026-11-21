@@ -12,7 +12,7 @@ describe("the account's Claude caches the stable Lex instructions as its system 
   });
 
   it("no prefix (short or trimmed prompt): the whole prompt stays in the message", () => {
-    expect(claudeStableSystem({ ...params, systemPromptCachePrefix: undefined }).stable).toBeUndefined();
+    expect(claudeStableSystem({ model: params.model, systemPrompt: params.systemPrompt, messages: [] }).stable).toBeUndefined();
   });
 
   it("with a system file the CLI gets --system-prompt-file instead of the inline prompt", () => {
