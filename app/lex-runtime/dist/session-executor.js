@@ -1906,6 +1906,26 @@ export class SafeSessionExecutor {
                 audit.record("gate", "ISSUE_PASSAGES", "OK", { passages: passages.map((passage) => `${passage.documentId}:${passage.chunkIndex}`) });
             }
         }
+        // The provisions the question and the files cite by article and act ("art. 233 § 1 k.p.c."): read
+        // from ELI before the answer, into this turn's verification register (live run 2026-11-21: the model
+        // stopped for verify_legal_reference and wrote the whole answer again, about 240 s).
+        if (legalTurn && !offline && this.verificationToolFactory) {
+            const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n").slice(0, 200_000);
+            const cited = citedProvisions(`${latestUserTurn(protectedQuery)}\n${fileText}`, 8);
+            if (cited.length) {
+                const wordings = await provisionWordings(cited, (calls) => this.verificationToolFactory(ledger, { localModel: false }).runTools(calls)).catch(() => []);
+                const read = wordings.filter((item) => item.status === "VERIFIED");
+                if (read.length) {
+                    pathSections.push([
+                        "# PRZEPISY POWOŁANE W PYTANIU I W AKTACH — ODCZYTANE PRZEZ APLIKACJĘ Z ELI PRZED ODPOWIEDZIĄ",
+                        "Brzmienie poniżej jest już w rejestrze weryfikacji tej tury: nie wywołuj ponownie narzędzia dla tych przepisów; inne przepisy weryfikuj jak dotąd.",
+                        ...read.map((item) => `## ${item.claim}${item.source ? ` (${item.source})` : ""}\n${item.text}`)
+                    ].join("\n\n"));
+                }
+                audit.record("gate", "STATUTE_PREFETCH", read.length === cited.length ? "OK" : "DEGRADED", { provisions: wordings.map((item) => `${item.claim}:${item.status}`) });
+                step("VERIFY", `przepisy z pytania i akt odczytane przed odpowiedzią: ${read.length} z ${cited.length}`);
+            }
+        }
         if (ethicsResults.length) {
             pathSections.push(ethicsPrompt(ethicsResults));
             audit.record("gate", "ETHICS_CODE_PREFETCH", ethicsResults.every((result) => result.status === "FOUND") ? "OK" : "DEGRADED", {

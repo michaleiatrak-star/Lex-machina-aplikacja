@@ -164,8 +164,14 @@ export function rewriteRejection(before, after) {
     const marks = (value) => (value.match(DOCUMENT_MARK) ?? []).length;
     if (marks(original) >= 4 && marks(text) < marks(original) / 2)
         return "utracone odwołania do akt";
+    // A drafted document (a contract by analizator-umow, a letter by pisma-proste, a pleading): its
+    // units — paragraphs (§), articles, numbered points — may not go missing in a correcting round.
+    const units = (value) => (value.match(DOCUMENT_UNIT) ?? []).length;
+    if (units(original) >= 4 && units(text) < units(original) * 0.7)
+        return "utracone jednostki dokumentu (paragrafy, artykuły, punkty)";
     return null;
 }
+const DOCUMENT_UNIT = /^[ \t>*#]*(?:§\s*\d+[a-z]?|Art(?:ykuł|\.)\s*\d+[a-z]?|\d{1,3}[.)])(?=\s)/gmu;
 // Point corrections (2026-11-20, a pleading's checks took 1006 s: each round rewrote the whole
 // letter): for a wrong quote or a provision described otherwise than its wording the model returns
 // only the fragments to replace; the application applies them to the answer.

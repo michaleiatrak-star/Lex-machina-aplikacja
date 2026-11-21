@@ -14,7 +14,8 @@ import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
-import { evaluateCheckpointOutput, processStepDone } from "../process-checkpoint-contract.js";
+import { aheadSectionVerdict, checkpointSections, evaluateCheckpointOutput, processStepDone } from "../process-checkpoint-contract.js";
+import { PROCESS_PLEADING_CHECKPOINTS } from "../process-pleading-state.js";
 import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
 import { PERSON_CASES } from "../privacy/person-morphology.js";
 import { FORMAT_MEDIA_TYPE, LocalOfficeEditor, editableMediaType } from "../office-edit.js";
@@ -7688,6 +7689,20 @@ export function createLexHttpApp(options) {
                         checked
                     };
                 };
+                // AUTO, stage W1: one model call does the active checkpoint and the next open ones (up to two),
+                // each with its own report; the later ones close from their sections without another call
+                // (2026-11-21: 16 checkpoints, each a model call of 4-5 minutes). A section that does not pass
+                // the checkpoint's contract runs as its own turn, as before.
+                const W1_CHECKPOINTS = new Set(PROCESS_PLEADING_CHECKPOINTS.slice(0, PROCESS_PLEADING_CHECKPOINTS.indexOf("CP-W1") + 1));
+                const aheadSections = new Map();
+                // Steps left in this request (PROCESS_AUTO_MAX_STEPS): work ahead beyond them would be thrown away.
+                let autoStepsRun = 0;
+                const aheadOf = (checkpoint, state) => {
+                    if (state.mode !== "AUTO" || state.stage !== "W1" || !W1_CHECKPOINTS.has(checkpoint))
+                        return [];
+                    const order = [...W1_CHECKPOINTS];
+                    return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(2, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
+                };
                 const auto = await runBoundedProcessAutoSequence({
                     initialState: processContext.state,
                     prepareState: async (expected) => await options
@@ -7757,6 +7772,10 @@ export function createLexHttpApp(options) {
                         });
                     }),
                     execute: async (permit, current) => {
+                        const prepared = aheadSections.get(permit.checkpoint);
+                        aheadSections.delete(permit.checkpoint);
+                        autoStepsRun += 1;
+                        const ahead = prepared ? [] : aheadOf(permit.checkpoint, current);
                         const nodeRequest = {
                             ...request,
                             processWorkflowContext: {
@@ -7764,12 +7783,29 @@ export function createLexHttpApp(options) {
                                 checkpoint: permit.checkpoint,
                                 mode: permit.mode,
                                 register: processCheckpointRegister(current),
-                                ...(await pleadingDraftContext(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint))
+                                ...(await pleadingDraftContext(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint)),
+                                ...(ahead.length ? { ahead } : {})
                             }
                         };
-                        const nodeResult = await completePleadingAnswer(nodeRequest, await options
-                            .sessionExecutor
-                            .execute(nodeRequest));
+                        // A checkpoint done ahead in the previous call: its section, checked by its own contract.
+                        const verdict = prepared ? aheadSectionVerdict(permit.checkpoint, prepared.text) : null;
+                        const usePrepared = Boolean(prepared && verdict?.closed);
+                        const nodeResult = usePrepared
+                            ? { ...prepared.result, answer: prepared.text }
+                            : await completePleadingAnswer(nodeRequest, await options
+                                .sessionExecutor
+                                .execute(nodeRequest));
+                        if (!usePrepared && ahead.length && typeof nodeResult.answer === "string" && nodeResult.waitingForUser !== true) {
+                            const sections = checkpointSections(nodeResult.answer, [permit.checkpoint, ...ahead]);
+                            if (sections.size > 1) {
+                                nodeResult.answer = sections.get(permit.checkpoint);
+                                for (const next of ahead) {
+                                    const text = sections.get(next);
+                                    if (text)
+                                        aheadSections.set(next, { result: nodeResult, text });
+                                }
+                            }
+                        }
                         await refreshCitations(nodeResult);
                         const commit = nodeResult.status ===
                             "DRAFT_PRESENTABLE" &&

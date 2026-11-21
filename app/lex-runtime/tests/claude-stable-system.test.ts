@@ -22,3 +22,17 @@ describe("the account's Claude caches the stable Lex instructions as its system 
     expect(claudeHeadlessArgs("Lex")).toContain("--system-prompt");
   });
 });
+
+describe("the case files go with the stable instructions (the same in every step of a pleading)", () => {
+  it("the document message moves to the system part; the question stays", () => {
+    const split = claudeStableSystem({
+      ...params,
+      messages: [
+        { role: "user", content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\nprotokół\n[/LOCAL_DOCUMENT_CONTEXT]" },
+        { role: "user", content: "Przygotuj pismo" }
+      ]
+    });
+    expect(split.stable).toContain("protokół");
+    expect(split.params.messages).toEqual([{ role: "user", content: "Przygotuj pismo" }]);
+  });
+});

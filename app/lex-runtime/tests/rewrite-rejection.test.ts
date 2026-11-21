@@ -44,3 +44,11 @@ describe("point edits instead of a rewrite of the whole answer", () => {
     expect(applyPointEdits(answer, '{"bylo": " Art. 233 § 2 k.p.c. dotyczy odmowy przedstawienia dowodu.", "ma_byc": ""}').text).not.toContain("Art. 233");
   });
 });
+
+describe("drafted documents keep their units through a correcting round", () => {
+  const contract = ["UMOWA", ...Array.from({ length: 8 }, (_, index) => `§ ${index + 1}\nTreść paragrafu ${index + 1} umowy o świadczenie usług, ze szczegółami obowiązków stron.`)].join("\n");
+  it("a contract that lost paragraphs is rejected; the same contract corrected is accepted", () => {
+    expect(rewriteRejection(contract, contract.split("§ 6")[0]!.padEnd(contract.length, " "))).toBe("utracone jednostki dokumentu (paragrafy, artykuły, punkty)");
+    expect(rewriteRejection(contract, contract.replace("świadczenie usług", "świadczenie usług prawnych"))).toBeNull();
+  });
+});

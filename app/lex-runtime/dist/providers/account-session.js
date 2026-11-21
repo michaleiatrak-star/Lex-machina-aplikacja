@@ -2379,9 +2379,13 @@ export function claudeStableSystem(params) {
     const split = params.systemPromptCachePrefix ?? 0;
     if (claudeSystemFileUnsupported || split < 4_000 || split >= params.systemPrompt.length)
         return { stable: undefined, params };
+    // The case files (the first message, the same in every step of a pleading) after the stable
+    // instructions: the steps of one matter read them from the cache too.
+    const [first, ...rest] = params.messages;
+    const documents = first && first.role === "user" && !first.images?.length && typeof first.content === "string" && first.content.startsWith("[LOCAL_DOCUMENT_CONTEXT") ? first.content : null;
     return {
-        stable: params.systemPrompt.slice(0, split).trimEnd(),
-        params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart() }
+        stable: [params.systemPrompt.slice(0, split).trimEnd(), ...(documents ? [documents] : [])].join("\n\n"),
+        params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(documents ? { messages: rest } : {}) }
     };
 }
 /** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */

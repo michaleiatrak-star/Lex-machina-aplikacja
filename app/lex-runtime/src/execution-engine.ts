@@ -538,6 +538,8 @@ export class LexExecutionEngine {
       remarks?: string;
       findings?: Partial<Record<ProcessPleadingCheckpoint, { text: string; stage: ProcessPleadingStage; at: string }>>;
       evidencePrompt?: string;
+      // AUTO, stage W1: the next checkpoints done in the same answer, each with its own report.
+      ahead?: ProcessPleadingCheckpoint[];
     };
     courtWorkflowContext?: {
       stage: Exclude<
@@ -1457,6 +1459,9 @@ export class LexExecutionEngine {
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
     // (CP-REJESTR) and what its report must show, with the case's register, and the
     // pleading's current draft; at the end of the prompt like the AU checkpoint.
+    // The checkpoints done ahead in this answer: only those whose files are all loaded here (the
+    // application then knows every one of them was read for its step).
+    const aheadIncluded: ProcessPleadingCheckpoint[] = [];
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpointFiles = loadCheckpointResources(
         this.registry,
@@ -1471,6 +1476,16 @@ export class LexExecutionEngine {
         `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`
       );
       contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+      // The next W1 checkpoints of an AUTO turn (2026-11-21: each was a whole model call of 4-5 minutes):
+      // their files and contracts too; the application closes each from its own report.
+      for (const next of args.processWorkflowContext.ahead ?? []) {
+        const nextFiles = loadCheckpointResources(this.registry, next, new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? []), ...checkpointFiles.loaded.map((item) => item.resource)]));
+        if (nextFiles.toRead.length) break;
+        aheadIncluded.push(next);
+        for (const item of nextFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint-ahead");
+        contractCheckpointText += `\n\n${checkpointPrompt(next, nextFiles)}`;
+      }
+      if (aheadIncluded.length) emit("gate", "PROCESS_CHECKPOINT_AHEAD", "OK", `checkpoints=${aheadIncluded.join(",")}`);
       const pleading = draftPrompt({
         checkpoint: args.processWorkflowContext.checkpoint,
         draft: args.processWorkflowContext.draft ? { ...args.processWorkflowContext.draft, createdAt: "" } : null,
@@ -2130,8 +2145,13 @@ export class LexExecutionEngine {
               `Stage: ${args.processWorkflowContext.stage}.`,
               `Active checkpoint: ${args.processWorkflowContext.checkpoint}.`,
               `Mode: ${args.processWorkflowContext.mode}.`,
-              "Execute only the active checkpoint in this turn.",
-              "Do not continue to a later checkpoint or later stage.",
+              ...(aheadIncluded.length
+                ? [
+                    `In this turn execute, in this order: ${[args.processWorkflowContext.checkpoint, ...aheadIncluded].join(", ")}. Start each with its own heading line "## [<checkpoint>]" and end each with its own checkpoint report and the status line "✅ CHECKPOINT [<checkpoint>] — ZAMKNIĘTY" (or "ZAMKNIĘTY Z BRAKAMI", or "[<checkpoint>] N/A — <reason>" for a conditional one); the runtime verifies and closes each from its own section only.`,
+                    "If a checkpoint needs the user's answer, stop after its report (the later ones run after the answer). Do not continue beyond the last checkpoint listed.",
+                    "Keep each report to what the next steps need: findings, statuses and open questions, without repeating earlier sections."
+                  ]
+                : ["Execute only the active checkpoint in this turn.", "Do not continue to a later checkpoint or later stage."]),
               "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",
               "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it.",
               args.processWorkflowContext.mode === "AUTO" ? WAIT_FOR_USER_INSTRUCTION : WAIT_FOR_USER_CHECKPOINT_INSTRUCTION
