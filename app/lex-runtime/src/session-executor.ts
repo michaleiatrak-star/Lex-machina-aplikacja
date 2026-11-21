@@ -3006,9 +3006,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     // The provisions the question and the files cite by article and act ("art. 233 § 1 k.p.c."): read
     // from ELI before the answer, into this turn's verification register (live run 2026-11-21: the model
     // stopped for verify_legal_reference and wrote the whole answer again, about 240 s).
-    if (legalTurn && !offline && this.verificationToolFactory) {
+    // Only for current law: a question about the legal state on a past date (or naming one) leaves the
+    // wording on that date to the model's asOf verification (G19: the current text was read for 2020).
+    const prefetchQuestion = latestUserTurn(protectedQuery);
+    const pastLegalState =
+      /(?:stan\p{L}*\s+prawn\p{L}*|w\s+brzmieniu|obowiązując\p{L}*\s+(?:w|na|do|od)|na\s+dzień|według\s+stanu|uchylon\p{L}*|\d{1,2}[.\-/]\d{1,2}[.\-/](?:19|20)\d{2}|(?:19|20)\d{2}-\d{2}-\d{2})/iu.test(prefetchQuestion) ||
+      [...prefetchQuestion.matchAll(/(?<!\d)((?:19|20)\d{2})(?!\d)/gu)].some((match) => Number(match[1]) < Number(todayWarsaw().slice(0, 4)));
+    if (legalTurn && !offline && this.verificationToolFactory && !pastLegalState) {
       const fileText = attachments.flatMap((attachment) => attachment.chunks.map((chunk) => chunk.text)).join("\n").slice(0, 200_000);
-      const cited = citedProvisions(`${latestUserTurn(protectedQuery)}\n${fileText}`, 8);
+      const cited = citedProvisions(`${prefetchQuestion}\n${fileText}`, 8);
       if (cited.length) {
         const wordings = await provisionWordings(cited, (calls) => this.verificationToolFactory!(ledger, { localModel: false }).runTools(calls)).catch(() => []);
         const read = wordings.filter((item) => item.status === "VERIFIED");
