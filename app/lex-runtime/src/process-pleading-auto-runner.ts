@@ -9,6 +9,9 @@ import {
 } from "./process-pleading-state.js";
 
 export const PROCESS_AUTO_MAX_STEPS = 4;
+// W1 checkpoints done ahead of the active one in the same answer (0: one checkpoint per answer,
+// as in a chat; LEX_PROCESS_AHEAD for a comparison run).
+export const PROCESS_AUTO_AHEAD = Math.max(0, Math.min(2, Number(process.env.LEX_PROCESS_AHEAD ?? 1) || 0));
 
 export type ProcessAutoNodeOutcome<T> = {
   result: T;

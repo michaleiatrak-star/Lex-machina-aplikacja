@@ -87,7 +87,7 @@ import { isFactCorrection, isNonLegalMessage, registryFlashRoutes } from "../tur
 import { assessMatterComplexity, describeMatterComplexity } from "../matter-complexity.js";
 import { createDeterministicWorkflowPlan } from "../deterministic-workflow.js";
 import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
-import { PROCESS_AUTO_MAX_STEPS, runBoundedProcessAutoSequence } from "../process-pleading-auto-runner.js";
+import { PROCESS_AUTO_MAX_STEPS, PROCESS_AUTO_AHEAD, runBoundedProcessAutoSequence } from "../process-pleading-auto-runner.js";
 import { applyDeterministicProcessApplicability, evidenceInventoryFromUploads } from "../process-pleading-applicability.js";
 import { createCourtAnalysisState, nextCourtAnalysisCheckpoint } from "../court-analysis-state.js";
 import { completeCourtAnalysisExecution, requireCourtAnalysisExecutionPermit } from "../court-analysis-execution-gate.js";
@@ -7703,7 +7703,7 @@ export function createLexHttpApp(options) {
                     if (state.mode !== "AUTO" || state.stage !== "W1" || !W1_CHECKPOINTS.has(checkpoint))
                         return [];
                     const order = [...W1_CHECKPOINTS];
-                    return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(1, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
+                    return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(PROCESS_AUTO_AHEAD, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
                 };
                 const auto = await runBoundedProcessAutoSequence({
                     initialState: processContext.state,

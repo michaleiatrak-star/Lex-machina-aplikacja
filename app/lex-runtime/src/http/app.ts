@@ -253,6 +253,7 @@ import {
 } from "../process-pleading-execution-gate.js";
 import {
   PROCESS_AUTO_MAX_STEPS,
+  PROCESS_AUTO_AHEAD,
   runBoundedProcessAutoSequence
 } from "../process-pleading-auto-runner.js";
 import {
@@ -12075,7 +12076,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         const aheadOf = (checkpoint: AheadCheckpoint, state: { stage: string; mode: string; checkpoints: Record<string, string> }): AheadCheckpoint[] => {
           if (state.mode !== "AUTO" || state.stage !== "W1" || !W1_CHECKPOINTS.has(checkpoint)) return [];
           const order = [...W1_CHECKPOINTS];
-          return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(1, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
+          return order.slice(order.indexOf(checkpoint) + 1).filter((item) => state.checkpoints[item] === "OPEN").slice(0, Math.max(0, Math.min(PROCESS_AUTO_AHEAD, PROCESS_AUTO_MAX_STEPS - autoStepsRun - 1)));
         };
         const auto =
           await runBoundedProcessAutoSequence<
