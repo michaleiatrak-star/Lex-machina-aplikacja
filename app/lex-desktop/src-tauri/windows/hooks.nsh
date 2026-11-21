@@ -139,6 +139,33 @@ lex_runtime_selftest:
     MessageBox MB_ICONSTOP|MB_OK "Lex Machina: lokalny self-test nie powiódł się.$\r$\n$1" /SD IDOK
     Abort
   ${EndIf}
+
+  ; Docker Desktop for the local web search and the browser for reading pages (Chromium): asked once,
+  ; installed through winget on consent; the application sets both up at its first start. Optional:
+  ; a failure or a refusal never stops the installation (silent installs and updates do not ask).
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\install-container-engine.ps1" -Mode Check'
+  Pop $0
+  Pop $1
+  ${If} $0 == 12
+    MessageBox MB_ICONQUESTION|MB_YESNO "Lex Machina: zainstalować Docker Desktop?$\r$\n$\r$\nDocker uruchamia na tym komputerze lokalną wyszukiwarkę internetową (SearXNG) i przeglądarkę Chromium do czytania stron sądów i urzędów. Aplikacja działa także bez niego, ale wyszukuje wtedy przez serwisy zewnętrzne.$\r$\n$\r$\nInstalacja wymaga zgody administratora i może wymagać ponownego uruchomienia komputera (WSL 2). Docker Desktop jest bezpłatny dla firm do 250 osób i do 10 mln USD rocznego przychodu; większe potrzebują płatnej subskrypcji Docker." /SD IDNO IDYES lex_docker_install
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\install-container-engine.ps1" -Mode Decline'
+    Pop $0
+    Pop $1
+    Goto lex_docker_done
+lex_docker_install:
+    DetailPrint "Lex Machina: instalacja Docker Desktop (może potrwać kilka minut)..."
+    !insertmacro LEX_BAR_MARQUEE 1
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\runtime\bootstrap\install-container-engine.ps1" -Mode Install'
+    !insertmacro LEX_BAR_MARQUEE 0
+    Pop $0
+    Pop $1
+    ${If} $0 == 1
+      MessageBox MB_ICONEXCLAMATION|MB_OK "Lex Machina: Docker Desktop nie zainstalował się. Aplikacja działa bez niego; Docker można doinstalować później w Ustawieniach (Wyszukiwarka internetowa). Szczegóły: $LOCALAPPDATA\LexMachina\container-engine-install.log" /SD IDOK
+    ${Else}
+      DetailPrint "Lex Machina: Docker Desktop zainstalowany; wyszukiwarka i przeglądarka Chromium zostaną przygotowane przy pierwszym uruchomieniu aplikacji (po ewentualnym ponownym uruchomieniu komputera)."
+    ${EndIf}
+lex_docker_done:
+  ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

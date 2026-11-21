@@ -92,8 +92,8 @@ import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
 import { configureDomainFallback } from "../domain-fallback.js";
 import { configureLocalOfflineMode } from "../local-offline-mode.js";
-import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
-import { autostartLocalSearxng, hideDockerDashboardOnStart } from "../searxng-local.js";
+import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, searxngUrlForced, setSearxngUrl, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
+import { autostartLocalSearxng, firstRunLocalSearch, hideDockerDashboardOnStart, LOCAL_SEARXNG_URL } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
@@ -1291,7 +1291,16 @@ if (
   // Docker Desktop started at sign-in opens its dashboard too: turned off once, the app uses the engine only.
   if (process.platform !== "linux") hideDockerDashboardOnStart();
   if (searchDirectory && process.env.LEX_SEARXNG_AUTOSTART !== "0") {
-    void autostartLocalSearxng({ directory: path.join(searchDirectory, "searxng"), searxngUrl: webSearchSettings().searxngUrl })
+    // First start with a container engine here (Docker installed with the application): the local
+    // SearXNG and the browser for reading pages are set up once without the settings.
+    const searxngDirectory = path.join(searchDirectory, "searxng");
+    const searxngUrl = webSearchSettings().searxngUrl;
+    void firstRunLocalSearch({ directory: searxngDirectory, searxngUrl })
+      .then((result) => {
+        if (!result) return autostartLocalSearxng({ directory: searxngDirectory, searxngUrl });
+        if (result.reachable && result.url === LOCAL_SEARXNG_URL && !searxngUrl.trim() && !searxngUrlForced()) setSearxngUrl(result.url);
+        return result;
+      })
       .then((result) => {
         if (result) process.stderr.write(`LEX_SEARXNG_AUTOSTART:${result.reachable ? "OK" : result.error ?? "NOT_ANSWERING"}\n`);
       })

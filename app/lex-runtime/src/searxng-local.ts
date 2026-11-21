@@ -476,3 +476,50 @@ export async function autostartLocalSearxng(args: {
   if (/^\s{2}browser:/mu.test(fs.readFileSync(compose, "utf8"))) return setupLocalSearxng({ ...rest, start: true, install: false, target: "browser" });
   return null;
 }
+
+/**
+ * First start after the application's installation (user 2026-11-21: Docker and Chromium installed
+ * with the application): when a container engine is on this computer and the local search was never
+ * set up, SearXNG and the browser for reading pages (Chromium, chromedp/headless-shell) are set up and
+ * started without a visit to the settings; a user of another SearXNG gets the browser alone. Once:
+ * a marker stays in the directory, later starts go through autostartLocalSearxng. Nothing is installed.
+ */
+export async function firstRunLocalSearch(args: {
+  directory: string;
+  searxngUrl: string;
+  run?: Runner;
+  fetcher?: Fetcher;
+  launch?: Launcher;
+  platform?: NodeJS.Platform;
+}): Promise<LocalSearxngResult | null> {
+  const marker = path.join(args.directory, ".lex-first-run-setup");
+  if (fs.existsSync(path.join(args.directory, "docker-compose.yml")) || fs.existsSync(marker)) return null;
+  const run = args.run ?? defaultRunner;
+  const cwd = path.dirname(args.directory);
+  // Docker Desktop installed with the application: its command is on the PATH only after a new sign-in.
+  const cli = dockerAfterInstall(args.platform ?? process.platform);
+  if (cli !== "docker" && !(process.env.PATH ?? "").includes(path.dirname(cli))) {
+    process.env.PATH = `${path.dirname(cli)}${path.delimiter}${process.env.PATH ?? ""}`;
+  }
+  let found = false;
+  for (const candidate of ["docker", "podman"]) {
+    if ((await run(candidate, ["compose", "version"], cwd, 20_000)).code === 0) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) return null;
+  fs.mkdirSync(args.directory, { recursive: true });
+  fs.writeFileSync(marker, `${new Date().toISOString()}\n`);
+  const own = !args.searxngUrl.trim() || args.searxngUrl.replace(/\/+$/u, "") === LOCAL_SEARXNG_URL;
+  return setupLocalSearxng({
+    directory: args.directory,
+    start: true,
+    install: false,
+    ...(own ? {} : { target: "browser" as const }),
+    ...(args.run ? { run: args.run } : {}),
+    ...(args.fetcher ? { fetcher: args.fetcher } : {}),
+    ...(args.launch ? { launch: args.launch } : {}),
+    ...(args.platform ? { platform: args.platform } : {})
+  });
+}
