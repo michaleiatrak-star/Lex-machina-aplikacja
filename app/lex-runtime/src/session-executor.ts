@@ -1270,6 +1270,11 @@ export type SessionExecutionResponse = {
     violations?: string[];
     // Zdarzenia BLOCKED: typ, cel i kod przyczyny, bez treści odpowiedzi i danych sprawy.
     blockedEvents?: string[];
+    // Task 10B: each skill resource read in this turn and who read it: the application
+    // (runtime-preload) or the model itself (a native Read or a read tool).
+    reads?: Array<{ resource: string; by: "APLIKACJA" | "MODEL" }>;
+    // AUTO sequence: the reads of every step, not only of the last one.
+    readsBySteps?: Array<{ checkpoint: string; reads: Array<{ resource: string; by: "APLIKACJA" | "MODEL" }> }>;
   };
   workflow?: {
     id: string;
@@ -7123,6 +7128,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         result: completeness.result,
         eventCount: completeness.eventCount,
         closed: audit.isClosed,
+        reads: resourceReadOrigins(audit.events),
         missing: [...completeness.missing],
         violations: [...completeness.violations],
         blockedEvents: audit.events
@@ -7222,4 +7228,15 @@ export function routerRulesOnly(skill: string): string {
   const parts = skill.split(/(?<!-->)\n(?=(?:<!--[^\n]*-->\n)?## )/u);
   const kept = parts.filter((part, index) => index === 0 || keep.test(part.replace(/^<!--[^\n]*-->\n/u, "")));
   return `${kept.join("\n")}\n\n> Pominięte w kroku potoku (wykonuje aplikacja): sekwencja główna, adapter runtime, widgety, pokrycie dziedzinowe.`;
+}
+
+/** Task 10B: the resources read in the turn and who read them (the first read of each counts). */
+export function resourceReadOrigins(events: ReadonlyArray<{ type: string; target: string; status: string; detail?: Record<string, unknown> }>): Array<{ resource: string; by: "APLIKACJA" | "MODEL" }> {
+  const seen = new Map<string, "APLIKACJA" | "MODEL">();
+  for (const event of events) {
+    if (event.type !== "resource_read" || event.status !== "OK" || seen.has(event.target)) continue;
+    const detail = JSON.stringify(event.detail ?? {});
+    seen.set(event.target, /runtime-preload/u.test(detail) ? "APLIKACJA" : "MODEL");
+  }
+  return [...seen].map(([resource, by]) => ({ resource, by }));
 }

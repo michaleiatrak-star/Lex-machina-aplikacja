@@ -12469,6 +12469,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             );
         }
 
+        // Task 10B: who read which module in every AUTO step, not only in the last one.
+        response.audit = {
+          ...response.audit,
+          readsBySteps: auto.steps.map((step) => ({ checkpoint: step.permit.checkpoint, reads: step.result.audit?.reads ?? [] }))
+        };
         response.processAuto = {
           maxSteps:
             PROCESS_AUTO_MAX_STEPS,
