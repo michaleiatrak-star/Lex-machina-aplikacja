@@ -10933,6 +10933,29 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
         }
       }
+      // The case's fact matrices (task 12.3): read from and written to its encrypted memory, so the
+      // next question in the case does not build them again (after a restart or six hours).
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+        const caseId = knowledge.caseId;
+        const memoryStore = options.caseMemoryStore;
+        const access = options.caseAccessService;
+        const actor = responseAuthContext(res);
+        request.caseMatrixStore = {
+          read: async (key) => {
+            const caseView = access.openCase(actor, caseId);
+            const memory = await access.withCaseDataKey(actor, caseId, "ANALYZE", (caseDataKey) =>
+              memoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion })
+            );
+            return memory.factMatrices?.[key]?.value ?? null;
+          },
+          write: async (key, value) => {
+            const caseView = access.openCase(actor, caseId);
+            await access.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) =>
+              memoryStore.saveCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion, factMatrix: { key, value } })
+            );
+          }
+        };
+      }
       // A case's documents name its court (a court's letter, a judgment): found once and kept,
       // the documents of this turn first, then the case's files by a court's head and signature.
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA" && caseCourt?.zrodlo !== "UZYTKOWNIK") {

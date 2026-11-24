@@ -399,7 +399,12 @@ export type SessionDocumentAttachment = {
   }>;
 };
 
+/** Fact matrices kept with the case (task 12.3); the key is the model and the documents' text. */
+export type CaseMatrixStore = { read(key: string): Promise<unknown | null>; write(key: string, value: unknown): Promise<void> };
+
 export type SessionExecutionRequest = {
+  // The case's record of fact matrices (encrypted case memory), when the turn belongs to a case (task 12.3).
+  caseMatrixStore?: CaseMatrixStore;
   query: string;
   // The case's shared key: names in the message get the documents' symbols.
   privacySeed?: PseudonymizationVaultSnapshot;
@@ -1738,17 +1743,36 @@ export class SafeSessionExecutor implements SessionExecutor {
   // (2026-11-20: each AUTO step rebuilt them, 75 s and more per step). Key: the model and the
   // documents' text; matrices with facts are kept, for six hours.
   private readonly matrixCache = new Map<string, { at: number; value: unknown }>();
-  private async cachedMatrix<T extends { failures: unknown[]; facts: unknown[] }>(key: string, compute: () => Promise<T>): Promise<T> {
+  private async cachedMatrix<T extends { failures: unknown[]; facts: unknown[] }>(
+    key: string,
+    compute: () => Promise<T>,
+    // The case's own record (encrypted case memory, task 12.3): kept past a restart and six hours.
+    caseStore?: CaseMatrixStore,
+    onCaseHit?: () => void
+  ): Promise<T> {
     const now = Date.now();
     for (const [stored, entry] of this.matrixCache) if (now - entry.at > 6 * 3_600_000) this.matrixCache.delete(stored);
     const hit = this.matrixCache.get(key);
     if (hit) return hit.value as T;
+    if (caseStore) {
+      try {
+        const stored = (await caseStore.read(key)) as T | null;
+        if (stored && Array.isArray(stored.facts) && stored.facts.length) {
+          this.matrixCache.set(key, { at: now, value: stored });
+          onCaseHit?.();
+          return stored;
+        }
+      } catch {
+        // The case record cannot be read: the matrix is built as before.
+      }
+    }
     const value = await compute();
     // A matrix with facts is kept even when a part failed (its register shows the gap); rebuilding it
     // at the next step cost 150 s and more (live run 2026-11-20).
     if (value.facts.length) {
       this.matrixCache.set(key, { at: now, value });
       while (this.matrixCache.size > 50) this.matrixCache.delete(this.matrixCache.keys().next().value!);
+      if (caseStore) await caseStore.write(key, value).catch(() => undefined);
     }
     return value;
   }
@@ -3210,6 +3234,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         // Documents the witness matrix has read (its facts by document): the document matrix reads the rest.
         const witnessFactsByDocument = new Map<string, number>();
         // A model call taken in a stream: the text received so far stays when the time is up.
+        // A matrix read from the case's record instead of built (task 12.3).
+        const fromCaseRecord = () => {
+          audit.record("gate", "FACT_MATRIX_CASE_RECORD", "OK", { detail: "macierz z zapisu sprawy" });
+          step("PREPARE", "macierz faktów z zapisu sprawy (bez ponownego odczytu dokumentów)");
+        };
         const streamedCall: ModelCall = async (system, user, timeoutMs) => {
           let text = "";
           let failure = "";
@@ -3256,7 +3285,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             const started = Date.now();
             const described = await this.cachedMatrix(
               `witness:${request.model}:${createHash("sha256").update(JSON.stringify(list.map((item) => [item.heading, item.text]))).digest("hex")}`,
-              () => stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 })
+              () => stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 }),
+              request.caseMatrixStore,
+              fromCaseRecord
             );
             dumpMatrix("fact-matrix", { witness, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
             const factRowList = factRows(described.facts);
@@ -3332,7 +3363,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                       ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
                       : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`
                   )
-              }))
+              }), request.caseMatrixStore, fromCaseRecord)
             : { facts: [], dropped: 0, topics: [], failures: [], coverage: [] as MatrixCoverage[] };
           dumpMatrix("document-matrix", { documents: toRead.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped, coverage: described.coverage });
           documentRegister = buildRegister(registerDocuments, [...witnessCoverage, ...described.coverage], challenged);
