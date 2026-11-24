@@ -4651,6 +4651,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
 
     transferExecutionEvents(execution.events, audit);
+    // What did not fit the model's window, in the progress in Polish (task 02).
+    for (const event of execution.events.filter((item) => item.type === "gate" && item.target === "CONTEXT_BUDGET")) {
+      const trimmed = /trimmed=([^;]*)/u.exec(event.detail ?? "")?.[1]?.split(",").filter(Boolean) ?? [];
+      if (trimmed.length) step("PREPARE", `nie zmieściło się w oknie modelu (do odczytu przez model): ${trimmed.map((item) => path.basename(item, ".md")).join(", ")}`);
+    }
 
     // A client or situation report without its blueprint would end as a technical block
     // although the model wrote the report: one repair call with only the report tool.

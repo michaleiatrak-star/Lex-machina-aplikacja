@@ -2077,7 +2077,7 @@ export default function MatterChatApp({
   const conversationChars =
     localModelSelected
       ? LOCAL_CONVERSATION_CHARS
-      : conversationBudgetChars(runtimeProvider, model);
+      : conversationBudgetChars(runtimeProvider, model, models.find((item) => item.id === model)?.contextWindow);
   // Files per message: 20 for a hosted model, 4 for a local one (server decides).
   const documentLimit =
     documentFit?.limit ?? (localModelSelected ? 4 : 20);

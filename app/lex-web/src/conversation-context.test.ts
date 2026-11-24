@@ -115,6 +115,10 @@ describe(
     it("sizes the history to the model window; local models keep the small budget", () => {
       expect(conversationBudgetChars("anthropic", "claude-x")).toBe(300_000);
       expect(conversationBudgetChars("openai", "account/openai/default")).toBe(150_000);
+      // The model's own window, when the runtime knows it (task 02): half of it for the history.
+      expect(conversationBudgetChars("anthropic", "claude-x", 1_000_000)).toBe(1_500_000);
+      expect(conversationBudgetChars("openai", "gpt-x", 128_000)).toBe(192_000);
+      expect(conversationBudgetChars("local", "local/bielik", 1_000_000)).toBe(28_000);
       expect(conversationBudgetChars("openai", "local/bielik")).toBe(LOCAL_CONVERSATION_CHARS);
       expect(conversationBudgetChars("local", "mistral")).toBe(LOCAL_CONVERSATION_CHARS);
     });

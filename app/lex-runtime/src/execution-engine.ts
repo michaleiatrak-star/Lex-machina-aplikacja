@@ -23,7 +23,7 @@ import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { loadModules, modulesPrompt, skillModules, windowModuleBudget } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { orderedCheckpointGaps } from "./ordered-checkpoint-contract.js";
@@ -1385,6 +1385,10 @@ export class LexExecutionEngine {
           stage: args.processWorkflowContext?.stage ?? null
         }).filter((entry) => ownStep(entry.resource));
         const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
+        // The conditional modules' share of the model's window (20%; a local model keeps the fixed
+        // budget): Claude's 200k tokens take ~140k characters instead of 40k (real7: INTAKE-GAP and
+        // WERYFIKACJA-SLAD left to the model, unread).
+        const moduleBudget = windowModuleBudget(args.model, args.modelContextTokens, args.tokenCharsPerToken);
         const stageEntries = args.processWorkflowContext ? triggered.filter((entry) => entry.stage) : [];
         const stage = loadModules(this.registry, contract.skill, stageEntries, already);
         const modules = loadModules(
@@ -1392,8 +1396,17 @@ export class LexExecutionEngine {
           contract.skill,
           triggered.filter((entry) => !stageEntries.includes(entry)),
           new Set([...already, ...stage.loaded.map((item) => item.resource)]),
-          Math.max(0, MODULE_BUDGET_CHARS - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
+          Math.max(0, moduleBudget - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
         );
+        // What did not fit the window's share (task 02): recorded, and said in the progress.
+        if (modules.toRead.length || stage.toRead.length) {
+          emit(
+            "gate",
+            "CONTEXT_BUDGET",
+            "OK",
+            `part=modules;budget=${moduleBudget};trimmed=${[...modules.toRead, ...stage.toRead].map((item) => item.resource).join(",")}`
+          );
+        }
         if (modules.loaded.length || modules.toRead.length || stage.loaded.length || stage.toRead.length) {
           for (const item of [...modules.loaded, ...stage.loaded]) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
           emit(

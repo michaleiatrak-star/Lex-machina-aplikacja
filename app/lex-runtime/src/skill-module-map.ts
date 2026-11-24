@@ -344,6 +344,15 @@ export function skillModules(
 
 export const MODULE_BUDGET_CHARS = 40_000;
 
+/**
+ * The conditional modules' share of the model's window (task 02): 20% of it in characters; a local
+ * model keeps the fixed budget (long prompts make it slow), and no model gets less than that.
+ */
+export function windowModuleBudget(model: string, contextTokens?: number, charsPerToken?: number): number {
+  if (model.startsWith("local/")) return MODULE_BUDGET_CHARS;
+  return Math.max(MODULE_BUDGET_CHARS, Math.floor((contextTokens ?? 200_000) * (charsPerToken ?? 3.5) * 0.2));
+}
+
 /** Loads the triggered modules within the budget; the rest the model reads itself. */
 export function loadModules(
   registry: LexSkillRegistry,
