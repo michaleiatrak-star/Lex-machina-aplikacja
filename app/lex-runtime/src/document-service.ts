@@ -10,7 +10,8 @@ import { normalizeOcrPage } from "./ocr-correction.js";
 import { documentWork } from "./document-work.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
-import { correctWithVision, enoughMemoryForVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
+import { correctWithVision, enoughMemoryForVision, withoutLineCrops, type ReadLine, type ReadPage } from "./ocr-vision.js";
+import { lowConfidencePage } from "./ocr-page-quality.js";
 import {
   maskBoxes,
   protectedValues,
@@ -381,7 +382,11 @@ export type PublicDocumentReview = {
     review?: OcrReviewLine[];
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
+    // OCR read with low certainty (ocr-page-quality.ts): to check against the scan.
+    lowConfidence?: true;
   }>;
+  // The local vision model can read a low-certainty page again (installed and able to read pages).
+  visionReread?: true;
   suggestions: PublicPrivacySuggestion[];
   // Local recognizers down during the detection: what they find may be missing above.
   recognizerWarnings?: Array<{ name: string; reason: string }>;
@@ -439,6 +444,7 @@ export interface DocumentService {
   detect?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
   correct?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
   pageScan?(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<PageScan | null>;
+  visionReadPage?(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<{ page: number; text: string }>;
   editPage?(
     documentId: string,
     pageNumber: number,
@@ -636,7 +642,7 @@ implements DocumentService {
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
     private readonly registryForms?: RegistryFormsProvider,
     // The local vision model for doubtful OCR lines, when installed (null otherwise).
-    private readonly visionReader?: () => { readLine: ReadLine; stop(): void; modelBytes: number } | null,
+    private readonly visionReader?: () => { readLine: ReadLine; readPage?: ReadPage; stop(): void; modelBytes: number } | null,
     // The vision step: text models (Bielik) are stopped so the vision model has the memory.
     private readonly stopTextModels?: () => Promise<void>,
     // "z lokalnym AI": the text model is started right before the detection of personal data.
@@ -1131,10 +1137,38 @@ implements DocumentService {
           : {}),
         ...(page.review?.length
           ? { review: page.review }
-          : {})
+          : {}),
+        ...(lowConfidencePage(page) ? { lowConfidence: true as const } : {})
       })),
+      ...(source.pages.some((page) => lowConfidencePage(page)) && this.visionReader?.()?.readPage ? { visionReread: true as const } : {}),
       suggestions
     };
+  }
+
+  /**
+   * Task 06: the whole page read again by the local vision model from its scan. The reading is a
+   * proposal for the user (shown in the page's text field), nothing is saved here and nothing
+   * leaves the computer.
+   */
+  async visionReadPage(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<{ page: number; text: string }> {
+    if (!this.visionReader) throw new Error("VISION_MODEL_UNAVAILABLE");
+    const scan = await this.pageScan(documentId, pageNumber, security);
+    if (!scan) throw new Error("DOCUMENT_PAGE_SCAN_UNAVAILABLE");
+    const session = this.visionReader();
+    if (!session?.readPage) throw new Error("VISION_MODEL_UNAVAILABLE");
+    if (!enoughMemoryForVision(session.modelBytes)) throw new Error("VISION_MODEL_LOW_MEMORY");
+    const ocrText = scan.lines.map((line) => line.text).join("\n");
+    const read = async () => {
+      if (this.stopTextModels) await this.stopTextModels().catch(() => undefined);
+      try {
+        return await session.readPage!(scan.data, ocrText);
+      } finally {
+        session.stop();
+      }
+    };
+    const text = await (this.exclusiveTextModels ? this.exclusiveTextModels(read, () => { throw new Error("VISION_MODEL_BUSY"); }) : read());
+    if (!text.trim()) throw new Error("VISION_MODEL_EMPTY_READING");
+    return { page: pageNumber, text: text.replace(/\u0000/g, "").slice(0, MAX_EDITED_PAGE_CHARS) };
   }
 
   /**

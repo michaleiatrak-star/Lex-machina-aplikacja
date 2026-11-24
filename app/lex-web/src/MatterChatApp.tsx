@@ -5531,6 +5531,11 @@ export default function MatterChatApp({
             {...privacyPreview.request}
             busy={privacyPreviewBusy}
             confirmError={privacyPreviewError}
+            onSendPageImage={(image) =>
+              setDirectImages((current) =>
+                current.length >= MAX_DIRECT_IMAGES ? current : [...current, { id: crypto.randomUUID(), ...image }]
+              )
+            }
             onCancel={() => {
               privacyPreview.resolve(null);
               setPrivacyPreviewError("");

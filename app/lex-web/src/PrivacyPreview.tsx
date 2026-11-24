@@ -2,7 +2,9 @@ import { t } from "./i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   editDocumentPage,
+  getDocumentPageScan,
   keepAllDirectives,
+  visionReadDocumentPage,
   type DocumentReviewResponse,
   type PagePrivacyDirective,
   type PiiKind
@@ -14,6 +16,7 @@ import { isTranscript } from "./transcript.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
 import { keepOpenReview, replaceOcrLine } from "./ocr-line-fix.js";
+import { cloudPageImage, lowConfidencePages, type CloudPageImage } from "./ocr-page-actions.js";
 import { ScanSnippet } from "./ScanSnippet.js";
 
 /**
@@ -79,6 +82,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   onCancel: () => void;
   // The whole file in clear text, without anonymization (the user's explicit choice).
   onKeepClear?: (review: DocumentReviewResponse) => void;
+  // A low-certainty page's scan for the next message to a cloud model (after explicit consent).
+  onSendPageImage?: (image: CloudPageImage) => void;
 }) {
   const [review, setReview] = useState(props.review);
   const [directives, setDirectives] = useState<PagePrivacyDirective[]>(props.initialDirectives ?? []);
@@ -93,6 +98,11 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const [selection, setSelection] = useState<{ page: number; start: number; end: number } | null>(null);
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [error, setError] = useState("");
+  // Task 06: low-certainty pages; the page whose cloud consent is open; the page being re-read.
+  const lowPages = lowConfidencePages(review.pages);
+  const [cloudConsent, setCloudConsent] = useState<number | null>(null);
+  const [visionBusy, setVisionBusy] = useState<number | null>(null);
+  const [lowNotice, setLowNotice] = useState("");
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
   // The preview opens where the user is: a read file waited below the chat for a decision while
   // the user did not know what to wait for (user report 2026-11-06).
@@ -260,6 +270,38 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   }
 
   // The review and decisions after the save; null when the page was not saved.
+  async function rereadWithVision(page: number): Promise<void> {
+    setVisionBusy(page);
+    setError("");
+    setLowNotice("");
+    try {
+      const result = await visionReadDocumentPage(props.caseId, review.documentId, page);
+      // A proposal in the page's text field: saved only by "Zapisz tekst strony".
+      setEditing({ page, text: result.text });
+      showOnScan(page, null);
+    } catch (failure) {
+      setError(t("Model wizyjny nie odczytał strony: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
+    } finally {
+      setVisionBusy(null);
+    }
+  }
+
+  async function sendPageImage(page: number): Promise<void> {
+    setCloudConsent(null);
+    setError("");
+    try {
+      const image = cloudPageImage(true, await getDocumentPageScan(props.caseId, review.documentId, page), props.fileName);
+      if (!image) {
+        setError(t("Brak obrazu tej strony."));
+        return;
+      }
+      props.onSendPageImage?.(image);
+      setLowNotice(t("Obraz strony {page} dołączono do następnej wiadomości.", { page }));
+    } catch (failure) {
+      setError(t("Nie udało się pobrać obrazu strony: {failure}", { failure: failure instanceof Error ? failure.message : String(failure) }));
+    }
+  }
+
   async function savePage(
     target: { page: number; text: string } | null = editing
   ): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
@@ -429,6 +471,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           </button>
         </div>
         {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
+        {lowNotice ? <p className="ocr-low-page-notice" role="status">{lowNotice}</p> : null}
+        {lowPages.length > 0 ? (
+          <p className="ocr-low-page-summary">
+            {t("Strony odczytane niepewnie: {pages}. Sprawdź je ze skanem przed zatwierdzeniem.", { pages: lowPages.map((low) => low.page).join(", ") })}
+          </p>
+        ) : null}
       </header>
       {transcript ? <TranscriptEditor
           pages={review.pages}
@@ -683,6 +731,43 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               {pages.map((page) => (
                 <article key={page.page}>
                   <small>s. {page.page}</small>
+                  {lowPages.some((low) => low.page === page.page) ? (
+                    <div className="ocr-low-page" role="note">
+                      <span className="ocr-low-page-label">
+                        {(() => {
+                          const percent = lowPages.find((low) => low.page === page.page)?.percent;
+                          return percent === null || percent === undefined ? t("Niska pewność odczytu") : t("Niska pewność odczytu ({percent}%)", { percent });
+                        })()}
+                        <InfoTip>{t("Program OCR odczytał tę stronę niepewnie: porównaj tekst ze skanem. Możesz odczytać ją ponownie modelem wizyjnym na tym komputerze albo, za zgodą, wysłać obraz strony do modelu w chmurze.")}</InfoTip>
+                      </span>
+                      <button type="button" onClick={() => showOnScan(page.page, null, true)}>
+                        {t("Pokaż skan")}
+                      </button>
+                      {review.visionReread ? (
+                        <button type="button" disabled={visionBusy !== null || saving} onClick={() => void rereadWithVision(page.page)}>
+                          {visionBusy === page.page ? t("Odczytuję…") : t("Odczytaj ponownie modelem wizyjnym")}
+                        </button>
+                      ) : null}
+                      {props.onSendPageImage ? (
+                        <button type="button" onClick={() => setCloudConsent(page.page)}>
+                          {t("Wyślij obraz do modelu w chmurze")}
+                        </button>
+                      ) : null}
+                      {cloudConsent === page.page ? (
+                        <div className="ocr-low-page-consent" role="alertdialog" aria-label={t("Zgoda na wysłanie obrazu strony")}>
+                          <p>{t("Obraz strony {page} trafi do modelu w chmurze bez anonimizacji: widać na nim wszystkie dane osobowe z tej strony. Wyślij go tylko, jeśli się na to zgadzasz.", { page: page.page })}</p>
+                          <div className="ocr-low-page-consent-actions">
+                            <button type="button" onClick={() => setCloudConsent(null)}>
+                              {t("Anuluj")}
+                            </button>
+                            <button type="button" className="primary-button" onClick={() => void sendPageImage(page.page)}>
+                              {t("Zgadzam się, wyślij obraz")}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div
                     className="privacy-preview-text"
                     ref={(element) => {
