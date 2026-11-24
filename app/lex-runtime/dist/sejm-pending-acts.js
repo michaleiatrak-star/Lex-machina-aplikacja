@@ -60,13 +60,21 @@ export function billsAmending(name, processes, knownNames = []) {
         return false;
     });
 }
+/**
+ * The latest main stage ("I czytanie na posiedzeniu Sejmu"), dated by its latest step: a step such
+ * as "Głosowanie" or "Skierowanie" alone does not say where the bill is (druk 384, 2024-06-28).
+ */
 export function latestStage(stages) {
-    const flat = stages.flatMap((stage) => [stage, ...(stage.children ?? [])]).filter((stage) => stage.stageName);
-    const last = flat.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")).at(-1);
-    return last ? { name: last.stageName, date: last.date ?? null } : null;
+    const dated = stages
+        .filter((stage) => stage.stageName)
+        .map((stage) => ({ name: stage.stageName, date: [stage.date ?? "", ...(stage.children ?? []).map((child) => child.date ?? "")].sort().at(-1) || null }));
+    const last = dated.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")).at(-1);
+    return last ?? null;
 }
-export function pendingAmendmentLine(item) {
-    const stage = item.stage ? `, etap: ${item.stage}${item.stageDate ? ` (${item.stageDate})` : ""}` : "";
+const STALLED_MS = 365 * 24 * 60 * 60 * 1000;
+export function pendingAmendmentLine(item, now = Date.now()) {
+    const stalled = item.stageDate && now - Date.parse(item.stageDate) > STALLED_MS ? `, bez dalszych prac od ${item.stageDate}` : "";
+    const stage = item.stage ? `, etap: ${item.stage}${item.stageDate && !stalled ? ` (${item.stageDate})` : ""}${stalled}` : "";
     return `Prace legislacyjne: w Sejmie jest projekt zmiany aktu ${item.name} — druk nr ${item.number} (${item.term}. kadencja)${stage}. Do uchwalenia i wejścia zmian w życie obowiązuje brzmienie powołane wyżej.`;
 }
 /** Current term's processes, kept for 12 hours; a failure keeps the previous list (or none). */

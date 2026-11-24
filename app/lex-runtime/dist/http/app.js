@@ -108,7 +108,7 @@ import { checkWokanda, defaultFetchText, effectiveWokandaCourt, parseCommonSigna
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
-import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
+import { completeOrderedCaseExecution, withOrderedFinding, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
 import { isCourtPleading } from "../pleading-standard.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
@@ -7718,7 +7718,8 @@ export function createLexHttpApp(options) {
                     .orderedCaseWorkflowContext = {
                     workflowId,
                     checkpoint: permit.checkpoint,
-                    revision: permit.revision
+                    revision: permit.revision,
+                    ...(state.findings ? { findings: state.findings } : {})
                 };
                 orderedCaseContext = {
                     caseId: orderedCaseId,
@@ -7974,6 +7975,11 @@ export function createLexHttpApp(options) {
                     response.answer =
                         successfulAnswers.join("\n\n---\n\n");
                 }
+                // Task 10B: who read which module in every AUTO step, not only in the last one.
+                response.audit = {
+                    ...response.audit,
+                    readsBySteps: auto.steps.map((step) => ({ checkpoint: step.permit.checkpoint, reads: step.result.audit?.reads ?? [] }))
+                };
                 response.processAuto = {
                     maxSteps: PROCESS_AUTO_MAX_STEPS,
                     stopped: auto.stopped,
@@ -8111,11 +8117,12 @@ export function createLexHttpApp(options) {
                                 result
                             });
                             try {
-                                const next = completeOrderedCaseExecution(current, orderedCaseContext
+                                // The step's answer is kept for the later steps (task 03.4).
+                                const next = withOrderedFinding(completeOrderedCaseExecution(current, orderedCaseContext
                                     .permit, [
                                     auditArtifact
                                         .auditRef
-                                ]);
+                                ]), orderedCaseContext.permit.checkpoint, typeof result.answer === "string" ? result.answer : "");
                                 return await options
                                     .orderedCaseWorkflowStore
                                     .saveOrderedCaseWorkflowState({
