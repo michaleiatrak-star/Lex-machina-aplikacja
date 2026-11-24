@@ -241,6 +241,10 @@ export function evaluateCheckpointOutput(checkpoint, text, facts = {}) {
     // Live runs 2026-11-21: SW-INW in one answer of four.
     if (facts.witnessTestimony && checkpoint === "CP-1a" && !/SW-INW/u.test(text))
         missing.push("W1.2c-SW_TABELA_SW-INW (inwentarz zeznań świadka: MOD-ATAK-NA-SWIADKA FAZA 0-1A)");
+    // MOD-ELIMINACJA-TEZ is loaded at every CP-1a; its output is the ET-4 list (ET-Q2: "raport ET-4
+    // wygenerowany?"). Live run 2026-11-24 (real9): CP-1a closed without it, real7 had it.
+    if (checkpoint === "CP-1a" && !/\bET-4\b|WYELIMINOWAN\p{L}*/iu.test(text))
+        missing.push("W1.2a-POST_RAPORT_ET-4 (lista eliminacji żądań: zatwierdzone / ewentualne + CV-ALT / wyeliminowane, MOD-ELIMINACJA-TEZ)");
     if (facts.witnessTestimony && checkpoint === "CP-ATAK" && !/SW-TARCZKA/u.test(text))
         missing.push("W2.4c_SW-TARCZKA (antycypacja ataku na naszego świadka albo „SW-TARCZKA: nie dotyczy — powód”)");
     const escaped = checkpoint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

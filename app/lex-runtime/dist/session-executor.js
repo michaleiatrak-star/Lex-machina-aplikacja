@@ -1,4 +1,4 @@
-import { actName, pendingAmendmentLine, placeLegislativeNotes, sejmPendingActs } from "./sejm-pending-acts.js";
+import { actName, pendingAmendmentLine, placeLegislativeNotes, sejmPendingActs, stalledAmendment } from "./sejm-pending-acts.js";
 import { recordTurnUsage } from "./usage-log.js";
 import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck } from "./eli/law-source-sessions.js";
@@ -3961,7 +3961,10 @@ export class SafeSessionExecutor {
             }
             if (cited.size > 0) {
                 try {
-                    const pending = await pendingSource.forActs([...cited.keys()]);
+                    const found = await pendingSource.forActs([...cited.keys()]);
+                    // A bill with no step for over a year is noise in a pleading (live run 2026-11-24: two KPC
+                    // bills stalled since 2024): recorded in the audit only.
+                    const pending = found.filter((item) => !stalledAmendment(item));
                     if (pending.length > 0) {
                         const notes = pending.map((item) => ({
                             anchors: [...cited.entries()].filter(([title]) => actName(title) === item.act).flatMap(([, claims]) => claims),
@@ -3970,7 +3973,7 @@ export class SafeSessionExecutor {
                         modelOutput = placeLegislativeNotes(modelOutput, notes);
                         step("VERIFY", `prace legislacyjne w Sejmie: ${pending.map((item) => `druk ${item.number}`).join(", ")}`);
                     }
-                    audit.record("gate", "SEJM_PENDING_AMENDMENTS", "OK", { acts: [...cited.keys()].length, pending: pending.map((item) => `${item.act}:${item.term}/${item.number}`) });
+                    audit.record("gate", "SEJM_PENDING_AMENDMENTS", "OK", { acts: [...cited.keys()].length, pending: pending.map((item) => `${item.act}:${item.term}/${item.number}`), stalled: found.filter(stalledAmendment).map((item) => `${item.act}:${item.term}/${item.number}`) });
                 }
                 catch (error) {
                     audit.record("gate", "SEJM_PENDING_AMENDMENTS", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 120) : "SEJM_FAILED" });

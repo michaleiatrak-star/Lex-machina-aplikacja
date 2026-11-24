@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { affectedTrackedActs, eliSince, fetchEliChanges, nextEliSince } from "../src/eli-changes.js";
-import { actName, billsAmending, latestStage, pendingAmendmentLine, placeLegislativeNotes, SejmPendingActs } from "../src/sejm-pending-acts.js";
+import { actName, billsAmending, latestStage, pendingAmendmentLine, placeLegislativeNotes, SejmPendingActs, stalledAmendment, withoutRepeatedLegislativeNotes } from "../src/sejm-pending-acts.js";
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 
@@ -50,6 +50,16 @@ describe("pending bills for cited acts (task 08.4a)", () => {
     expect(stage).toEqual({ name: "I czytanie na posiedzeniu Sejmu", date: "2024-06-28" });
     const line = pendingAmendmentLine({ act: "kodeks pracy", name: "Kodeks pracy", number: "384", term: 10, stage: stage!.name, stageDate: stage!.date }, Date.parse("2026-11-24"));
     expect(line).toContain("etap: I czytanie na posiedzeniu Sejmu, bez dalszych prac od 2024-06-28");
+  });
+});
+
+describe("legislative notes in a pleading (live run 2026-11-24)", () => {
+  it("a bill without a step for a year is left out; a repeated note in AUTO steps stays once", () => {
+    const now = Date.parse("2026-11-24");
+    expect(stalledAmendment({ stageDate: "2024-11-07" }, now)).toBe(true);
+    expect(stalledAmendment({ stageDate: "2026-06-09" }, now)).toBe(false);
+    const note = "> Prace legislacyjne: w Sejmie jest projekt zmiany aktu Kodeks pracy — druk nr 2416";
+    expect(withoutRepeatedLegislativeNotes(`A\n\n${note}\n\n---\n\nB\n\n${note}\n\nC`)).toBe(`A\n\n${note}\n\n---\n\nB\n\nC`);
   });
 });
 

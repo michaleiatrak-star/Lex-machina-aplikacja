@@ -1,3 +1,4 @@
+import { withoutRepeatedLegislativeNotes } from "../sejm-pending-acts.js";
 import { readLetterLogo, readLetterSender } from "../letter-sender.js";
 import { usageOwner, usageSummary } from "../usage-log.js";
 import { executionAbort } from "../providers/gateway.js";
@@ -7972,8 +7973,7 @@ export function createLexHttpApp(options) {
                 if (response.status ===
                     "DRAFT_PRESENTABLE" &&
                     successfulAnswers.length > 0) {
-                    response.answer =
-                        successfulAnswers.join("\n\n---\n\n");
+                    response.answer = withoutRepeatedLegislativeNotes(successfulAnswers.join("\n\n---\n\n"));
                 }
                 // Task 10B: who read which module in every AUTO step, not only in the last one.
                 response.audit = {

@@ -93,6 +93,22 @@ export function latestStage(stages: SejmStage[]): { name: string; date: string |
 
 const STALLED_MS = 365 * 24 * 60 * 60 * 1000;
 
+/** No step of the bill for over a year. */
+export function stalledAmendment(item: Pick<PendingAmendment, "stageDate">, now: number = Date.now()): boolean {
+  return Boolean(item.stageDate) && now - Date.parse(item.stageDate!) > STALLED_MS;
+}
+
+/** The same legislative note once in an answer joined from several steps (AUTO): the first stays. */
+export function withoutRepeatedLegislativeNotes(text: string): string {
+  const seen = new Set<string>();
+  return text
+    .replace(/\n\n> Prace legislacyjne: [^\n]*/gu, (note) => {
+      if (seen.has(note)) return "";
+      seen.add(note);
+      return note;
+    });
+}
+
 export function pendingAmendmentLine(item: PendingAmendment, now: number = Date.now()): string {
   const stalled = item.stageDate && now - Date.parse(item.stageDate) > STALLED_MS ? `, bez dalszych prac od ${item.stageDate}` : "";
   const stage = item.stage ? `, etap: ${item.stage}${item.stageDate && !stalled ? ` (${item.stageDate})` : ""}${stalled}` : "";
