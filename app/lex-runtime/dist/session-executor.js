@@ -1,3 +1,4 @@
+import { actName, pendingAmendmentLine, placeLegislativeNotes, sejmPendingActs } from "./sejm-pending-acts.js";
 import { recordTurnUsage } from "./usage-log.js";
 import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck } from "./eli/law-source-sessions.js";
@@ -76,7 +77,7 @@ import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/comm
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case-issue.js";
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
-import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
+import { genderLegend, identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
 import { factMatrixGoalEvidence, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments } from "./fact-matrix.js";
 import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable } from "./document-register.js";
@@ -95,6 +96,8 @@ import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
+import { classifyRoute, routeAmbiguity } from "./route-classifier.js";
+import { requestIntent } from "./request-intent.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
 import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, removedSentences, rewriteRejection, applyPointEdits, POINT_EDITS_FORM } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
@@ -630,6 +633,11 @@ export function failedSourceResult(content) {
  */
 // Act modules of the case's second domains loaded with the prompt (one each, at most this).
 const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
+// The act modules the routing suggests for the case's own domain (a strong signal: the court's
+// division, the case's kind): read for the model, not left to it (real7: KP modules hinted, never read).
+const PRIMARY_DOMAIN_MODULES_BUDGET_CHARS = 40_000;
+// The skills whose answers get the model's correcting rounds (user 2026-11-21).
+const COMPLEX_ROUND_SKILLS = new Set(["pisma-procesowe-v3", "analizator-umow-v1", "analiza-sadowa-v6"]);
 export class DocumentAliasRegistry {
     prefixes = new Map();
     prefixFor(documentId) {
@@ -880,7 +888,9 @@ export class SafeSessionExecutor {
     // (2026-11-20: each AUTO step rebuilt them, 75 s and more per step). Key: the model and the
     // documents' text; matrices with facts are kept, for six hours.
     matrixCache = new Map();
-    async cachedMatrix(key, compute) {
+    async cachedMatrix(key, compute, 
+    // The case's own record (encrypted case memory, task 12.3): kept past a restart and six hours.
+    caseStore, onCaseHit) {
         const now = Date.now();
         for (const [stored, entry] of this.matrixCache)
             if (now - entry.at > 6 * 3_600_000)
@@ -888,6 +898,19 @@ export class SafeSessionExecutor {
         const hit = this.matrixCache.get(key);
         if (hit)
             return hit.value;
+        if (caseStore) {
+            try {
+                const stored = (await caseStore.read(key));
+                if (stored && Array.isArray(stored.facts) && stored.facts.length) {
+                    this.matrixCache.set(key, { at: now, value: stored });
+                    onCaseHit?.();
+                    return stored;
+                }
+            }
+            catch {
+                // The case record cannot be read: the matrix is built as before.
+            }
+        }
         const value = await compute();
         // A matrix with facts is kept even when a part failed (its register shows the gap); rebuilding it
         // at the next step cost 150 s and more (live run 2026-11-20).
@@ -895,6 +918,8 @@ export class SafeSessionExecutor {
             this.matrixCache.set(key, { at: now, value });
             while (this.matrixCache.size > 50)
                 this.matrixCache.delete(this.matrixCache.keys().next().value);
+            if (caseStore)
+                await caseStore.write(key, value).catch(() => undefined);
         }
         return value;
     }
@@ -2082,7 +2107,7 @@ export class SafeSessionExecutor {
                 };
                 const groups = samePersonGroups(personTokens(tokenText).slice(0, 400), restoreToken);
                 const asked = new Set(personTokens([protectedQuery]));
-                const legend = identityLegendPrompt(groups, asked);
+                const legend = [identityLegendPrompt(groups, asked), genderLegend(personTokens(tokenText), restoreToken)].filter(Boolean).join("\n\n");
                 // Facts of the files on the person the question names, under any of the person's symbols.
                 const userSymbols = [...new Set([...asked, ...groups.filter((group) => group.some((token) => asked.has(token))).flat()])];
                 strengthKeyFacts = personKeyFacts(attachments, userSymbols);
@@ -2116,6 +2141,11 @@ export class SafeSessionExecutor {
                 // Documents the witness matrix has read (its facts by document): the document matrix reads the rest.
                 const witnessFactsByDocument = new Map();
                 // A model call taken in a stream: the text received so far stays when the time is up.
+                // A matrix read from the case's record instead of built (task 12.3).
+                const fromCaseRecord = () => {
+                    audit.record("gate", "FACT_MATRIX_CASE_RECORD", "OK", { detail: "macierz z zapisu sprawy" });
+                    step("PREPARE", "macierz faktów z zapisu sprawy (bez ponownego odczytu dokumentów)");
+                };
                 const streamedCall = async (system, user, timeoutMs) => {
                     let text = "";
                     let failure = "";
@@ -2166,7 +2196,7 @@ export class SafeSessionExecutor {
                     if (!request.model.startsWith("local/")) {
                         step("PREPARE", `macierz faktów zeznań świadka etapami (${new Set(list.map((item) => item.documentId)).size} protokoły)`);
                         const started = Date.now();
-                        const described = await this.cachedMatrix(`witness:${request.model}:${createHash("sha256").update(JSON.stringify(list.map((item) => [item.heading, item.text]))).digest("hex")}`, () => stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 }));
+                        const described = await this.cachedMatrix(`witness:${request.model}:${createHash("sha256").update(JSON.stringify(list.map((item) => [item.heading, item.text]))).digest("hex")}`, () => stagedFactMatrix(list, contextFocus, "witness", streamedCall, { concurrency: 3 }), request.caseMatrixStore, fromCaseRecord);
                         dumpMatrix("fact-matrix", { witness, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped });
                         const factRowList = factRows(described.facts);
                         if (described.facts.length >= 4 && factRowList.some((row) => row.cells.length >= 2)) {
@@ -2237,7 +2267,7 @@ export class SafeSessionExecutor {
                             onPart: (progress) => step("PREPARE", progress.retry
                                 ? `odczyt ${progress.part}: kontrola pokrycia (${progress.facts} faktów)`
                                 : `odczyt ${progress.part}: gotowe (${progress.facts} faktów) · przeczytane ${progress.done} z ${progress.total} części, zostało ${progress.total - progress.done}`)
-                        }))
+                        }), request.caseMatrixStore, fromCaseRecord)
                         : { facts: [], dropped: 0, topics: [], failures: [], coverage: [] };
                     dumpMatrix("document-matrix", { documents: toRead.length, seconds: Math.round((Date.now() - started) / 1000), topics: described.topics, failures: described.failures, facts: described.facts.length, dropped: described.dropped, coverage: described.coverage });
                     documentRegister = buildRegister(registerDocuments, [...witnessCoverage, ...described.coverage], challenged);
@@ -2617,7 +2647,22 @@ export class SafeSessionExecutor {
                 audit.record("gate", "DOMAIN_HINT", "OK", {
                     detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
                 });
-                pathSections.push(domainHintPrompt(domains));
+                const primaryDomain = domains[0];
+                const primary = primaryDomain.strong
+                    ? loadActModules(this.registry, primaryDomain.modules.map((module) => ({ skill: primaryDomain.skill, resource: module.resource, rule: "NAZWA", why: module.why })), contextResources, PRIMARY_DOMAIN_MODULES_BUDGET_CHARS)
+                    : { loaded: [], toRead: [] };
+                for (const item of primary.loaded) {
+                    contextResources.add(item.resource);
+                    audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;domain-hint;primary-domain" });
+                }
+                pathSections.push(domainHintPrompt(domains, new Set(primary.loaded.map((item) => item.resource))));
+                if (primary.loaded.length) {
+                    pathSections.push([
+                        "# MODUŁY AKTU DZIEDZINY SPRAWY (wskazane przez aplikację i wczytane za ciebie — nie czytaj ich ponownie)",
+                        ...primary.loaded.map((item) => `## ${item.resource} (${item.why})\n\n${item.content}`)
+                    ].join("\n\n"));
+                    step("PREPARE", `moduły aktu dziedziny wczytane: ${primary.loaded.map((item) => path.basename(item.resource, ".md")).join(", ")}`);
+                }
                 step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
                 // A second domain the case's kind or its own phrase names: its act module goes in
                 // with the prompt, not as one more round of the model (the whole context again).
@@ -2649,7 +2694,7 @@ export class SafeSessionExecutor {
         const inactiveComponents = new Set([
             ...(appendsDisclaimer ? [] : ["DISCLAIMER"]),
             // show_widget (with template data) exists for every model except a local one.
-            ...(request.model.startsWith("local/") ? ["WIDGET-DANE"] : [])
+            ...(request.model.startsWith("local/") ? ["WIDGET-DANE", "WIDGET-HOST"] : [])
         ]);
         // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
         const stages = reachedStages(request.query);
@@ -2816,6 +2861,35 @@ export class SafeSessionExecutor {
                 audit.record("gate", "SIMPLE_FORM_QUESTION", "OK", { detail: `skipped=${taskRoute.primary}` });
                 step("SKILLS", "pytanie w prostej formie: odpowiedź bez procedury skilla wykonawczego");
                 taskRoute = null;
+            }
+            // Ambiguous by the patterns (a pleading named without a drafting verb, material and words
+            // pointing to different skills, a short question at an executive skill): one short call of
+            // the turn's model decides (task 05); a local model or a failure keeps the patterns.
+            if (!request.model.startsWith("local/") && !taskRoute?.reason.startsWith("kontynuacja")) {
+                // What the words alone ask for, by the explicit intents only ("przygotuj pytania do
+                // świadka", "napisz pozew"); a vague question ("co mam zrobić?") names no skill.
+                const wordsOnly = materials.length ? (requestIntent(taskQuery, (skill) => Boolean(this.registry.get(skill)))?.primary ?? null) : null;
+                const ambiguity = routeAmbiguity({
+                    question: pathFacts.query,
+                    decided: taskRoute?.primary ?? null,
+                    wordsOnly,
+                    simpleForm: simpleFormQuestion(pathFacts.query)
+                });
+                if (ambiguity) {
+                    const classified = await classifyRoute(this.providers, { provider: request.provider, model: request.model }, latestUserTurn(protectedQuery), materials.map((item) => item.label));
+                    const byModel = classified.choice ? (classified.choice.form === "PROSTA" ? "PROSTA" : classified.choice.skill) : null;
+                    audit.record("gate", "ROUTING_CLASSIFIER", classified.choice ? "OK" : "DEGRADED", {
+                        detail: `reason=${ambiguity};patterns=${taskRoute?.primary ?? "PROSTA"};model=${byModel ?? "brak"}${classified.cached ? ";cached" : ""}${classified.error ? `;${classified.error}` : ""}`
+                    });
+                    if (classified.choice?.form === "PROSTA" && taskRoute) {
+                        step("SKILLS", `klasyfikacja modelu: pytanie w prostej formie (wzorce: ${taskRoute.primary})`);
+                        taskRoute = null;
+                    }
+                    else if (classified.choice?.skill && classified.choice.skill !== taskRoute?.primary && this.registry.get(classified.choice.skill)) {
+                        step("SKILLS", `klasyfikacja modelu: ${classified.choice.skill} (wzorce: ${taskRoute?.primary ?? "prosta forma"})`);
+                        taskRoute = { source: "ROUTER", primary: classified.choice.skill, then: null, reason: `klasyfikacja modelu (${ambiguity})` };
+                    }
+                }
             }
             const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
             if (taskRoute && record) {
@@ -3097,6 +3171,9 @@ export class SafeSessionExecutor {
             ...(documentContext ? { documentContext } : {}),
             ...(request.modelContextTokens ? { modelContextTokens: request.modelContextTokens } : {}),
             ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
+            // Claude through the account: a simple question low, every other legal turn (a step, an
+            // analysis, a letter) high; a non-legal message keeps the CLI's own default (task 01).
+            ...(legalTurn ? { accountEffort: profile === "LEKKI" ? "low" : "high" } : {}),
             ...(modelImages.length ? { documentImages: modelImages } : {}),
             ...(placeholderKey ? { placeholderKey } : {}),
             ...(request.conversationalOnly
@@ -3127,6 +3204,29 @@ export class SafeSessionExecutor {
                             step("SKILLS", relativePath);
                         },
                         onMissing: (relativePath) => corpusTools.recordNativeMissing(relativePath),
+                        // The model's own web search (Settings, task 8.1): a lead only, R3 in the register; a
+                        // query with a symbol of the case ([PII:…]) is recorded as a breach of the query rule.
+                        onWebUse: (use) => {
+                            const symbol = /\[(?:LM)?PII:/u.test(`${use.query ?? ""} ${use.url ?? ""}`);
+                            audit.record("gate", "ACCOUNT_WEB_SEARCH", symbol ? "BLOCKED" : "OK", {
+                                detail: `${use.tool};${use.query ?? use.url ?? ""}`.slice(0, 300),
+                                ...(symbol ? { reason: "zapytanie z symbolem danych sprawy" } : {})
+                            });
+                            step("VERIFY", `${use.tool === "WebSearch" ? "wyszukiwanie modelu" : "strona otwarta przez model"} (trop): ${(use.query ?? use.url ?? "").slice(0, 120)}`);
+                            if (use.url && !auxiliarySources.some((item) => item.sourceUrl === use.url)) {
+                                auxiliarySources.push({
+                                    sourceUrl: use.url,
+                                    sourceTier: "R3",
+                                    classification: "CONSERVATIVE_R3",
+                                    classificationBasis: "strona otwarta przez model z konta (WebFetch): trop, nie źródło",
+                                    crossCheckStatus: "PENDING",
+                                    staleOrUndatedWarning: true,
+                                    higherTierCrossCheckSatisfied: false,
+                                    conflict: false,
+                                    instruction: "Treść, tezę i cytat ustal z dokumentu u źródła (verify_legal_reference, verify_case_*, fetch_auxiliary_legal_source)."
+                                });
+                            }
+                        },
                         missingQualifier: () => corpusTools.missingCriminalQualifier()
                     }
                 }
@@ -3282,6 +3382,12 @@ export class SafeSessionExecutor {
                 const reviewCalls = calls.filter((call) => independentReview?.handles(call.name) ?? false);
                 const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
                 const federationCalls = calls.filter((call) => federationTools?.handles(call.name) ?? false);
+                // The web search's query in the progress (task 8.2): the user sees what leaves for the search.
+                for (const call of federationCalls.filter((item) => item.name === "web_search")) {
+                    const query = typeof call.input.query === "string" ? String(call.input.query) : "";
+                    if (query)
+                        step("VERIFY", `zapytanie do wyszukiwarki: „${query.slice(0, 160)}”`);
+                }
                 const coreLawCalls = calls.filter((call) => coreLawTools?.handles(call.name) ?? false);
                 const verificationCalls = calls.filter((call) => !(coreLawTools?.handles(call.name) ?? false) &&
                     !corpusTools.handles(call.name) &&
@@ -3414,6 +3520,12 @@ export class SafeSessionExecutor {
             }
         });
         transferExecutionEvents(execution.events, audit);
+        // What did not fit the model's window, in the progress in Polish (task 02).
+        for (const event of execution.events.filter((item) => item.type === "gate" && item.target === "CONTEXT_BUDGET")) {
+            const trimmed = /trimmed=([^;]*)/u.exec(event.detail ?? "")?.[1]?.split(",").filter(Boolean) ?? [];
+            if (trimmed.length)
+                step("PREPARE", `nie zmieściło się w oknie modelu (do odczytu przez model): ${trimmed.map((item) => path.basename(item, ".md")).join(", ")}`);
+        }
         // A client or situation report without its blueprint would end as a technical block
         // although the model wrote the report: one repair call with only the report tool.
         const blueprintKind = execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
@@ -3684,7 +3796,20 @@ export class SafeSessionExecutor {
         const roundsStarted = Date.now();
         const roundBudgetMs = Math.max(Math.max(60, Number(process.env.LEX_CORRECTION_BUDGET_S) || 300) * 1000, firstAnswerMs * 2);
         const roundsLeftMs = () => roundBudgetMs - (Date.now() - roundsStarted);
+        // Correcting rounds of the model only in the complex tasks (user 2026-11-21): a pleading, a
+        // contract, a court analysis (and their pipelines). The simpler paths keep the checks, their
+        // result goes into the answer as marks and warnings, without one more generation. An answer
+        // with no substance (only "sprawdzę…") is useless on any path: that round stays.
+        const roundSkill = taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "";
+        const complexRounds = COMPLEX_ROUND_SKILLS.has(roundSkill) || Boolean(request.processWorkflowContext || request.contractWorkflowContext || request.courtWorkflowContext);
+        const skippedRounds = [];
         const roundsExhausted = (round) => {
+            if (!complexRounds && round !== "odpowiedź bez treści") {
+                skippedRounds.push(round);
+                audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `simple-path:${roundSkill || "brak"};${skippedRounds.join(",")}` });
+                step("MODEL", `runda „${round}” pominięta (ścieżka prosta: ${roundSkill || "pytanie"}); wynik kontroli zostaje w odpowiedzi`);
+                return true;
+            }
             if (roundsLeftMs() > 0)
                 return false;
             audit.record("gate", "CORRECTION_BUDGET", "DEGRADED", { skipped: round, budgetSeconds: Math.round(roundBudgetMs / 1000), firstAnswerSeconds: Math.round(firstAnswerMs / 1000) });
@@ -3776,6 +3901,9 @@ export class SafeSessionExecutor {
                 });
             }
         }
+        if ((missingGates.length || supervisedMissing.length) && skippedRounds.includes("ścieżka obowiązkowa")) {
+            modelOutput += `\n\n[ŚCIEŻKA OBOWIĄZKOWA — w odpowiedzi brak: ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}]`;
+        }
         // A bare article whose number this turn verified in several acts ("art. 11": KC and PrUp):
         // the application cannot tell which is meant, so one correcting round asks the model to name
         // the act at those citations only. Bare articles with one verified act are completed by the
@@ -3813,6 +3941,40 @@ export class SafeSessionExecutor {
             }
             catch (error) {
                 audit.record("gate", "ACT_NAME_CORRECTION", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED" });
+            }
+        }
+        if (ambiguous.length > 0 && skippedRounds.includes("nazwa aktu")) {
+            modelOutput += `\n\n[NAZWA AKTU DO SPRAWDZENIA: ${ambiguous.map((item) => `${item.claim} — ${item.acts.join(" albo ")}`).join("; ")}]`;
+        }
+        // Task 08.4a: a cited act with a bill amending it pending in the Sejm (print, stage).
+        const pendingSource = sejmPendingActs();
+        if (pendingSource && legalTurn && !request.documentAstOutput && this.coreLawIndex && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
+            const summaries = this.coreLawIndex.distinctSummaries();
+            const cited = new Map();
+            for (const record of ledger.all()) {
+                if (record.status !== "VERIFIED" || record.kind !== "statute")
+                    continue;
+                const eli = record.currentEli ?? /\/eli\/acts\/((?:DU|MP)\/\d{4}\/\d+)\//u.exec(record.sourceUrl ?? "")?.[1];
+                const act = eli ? summaries.find((item) => item.currentEli === eli || item.eli === eli) : undefined;
+                if (act?.title)
+                    cited.set(act.title, [...(cited.get(act.title) ?? []), record.claim]);
+            }
+            if (cited.size > 0) {
+                try {
+                    const pending = await pendingSource.forActs([...cited.keys()]);
+                    if (pending.length > 0) {
+                        const notes = pending.map((item) => ({
+                            anchors: [...cited.entries()].filter(([title]) => actName(title) === item.act).flatMap(([, claims]) => claims),
+                            line: pendingAmendmentLine(item)
+                        }));
+                        modelOutput = placeLegislativeNotes(modelOutput, notes);
+                        step("VERIFY", `prace legislacyjne w Sejmie: ${pending.map((item) => `druk ${item.number}`).join(", ")}`);
+                    }
+                    audit.record("gate", "SEJM_PENDING_AMENDMENTS", "OK", { acts: [...cited.keys()].length, pending: pending.map((item) => `${item.act}:${item.term}/${item.number}`) });
+                }
+                catch (error) {
+                    audit.record("gate", "SEJM_PENDING_AMENDMENTS", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 120) : "SEJM_FAILED" });
+                }
             }
         }
         // What the answer says a judgment or interpretation is about must come from the text read

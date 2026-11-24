@@ -4736,6 +4736,50 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    // Task 06: a low-certainty page read again by the local vision model; the text is a proposal
+    // the user saves through the page edit, nothing leaves the computer.
+    app.post("/api/documents/:documentId/pages/:page/vision-read", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
+        const documentService = options.documentService;
+        if (!documentService?.visionReadPage) {
+            res.status(503).json({ error: "VISION_MODEL_UNAVAILABLE" });
+            return;
+        }
+        const documentId = String(req.params.documentId ?? "").trim();
+        const page = Number(req.params.page);
+        const requestedCaseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !Number.isInteger(page) || page < 1 || (requestedCaseId && !/^case_[a-f0-9]{32}$/.test(requestedCaseId))) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PAGE" });
+            return;
+        }
+        try {
+            let result;
+            if (options.caseAccessService) {
+                const caseId = requestedCaseId || documentCaseIds.get(documentId);
+                if (!caseId)
+                    throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+                const context = responseAuthContext(res);
+                options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+                const caseView = options.caseAccessService.openCase(context, caseId);
+                result = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => await documentService.visionReadPage(documentId, page, { caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+            }
+            else {
+                result = await documentService.visionReadPage(documentId, page);
+            }
+            res.json(result);
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error)) {
+                const code = error instanceof Error ? error.message.split(":")[0] : "";
+                if (/^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_SCAN_UNAVAILABLE)$/.test(code)) {
+                    res.status(404).json({ error: code });
+                    return;
+                }
+                res.status(code.startsWith("VISION_MODEL_") ? 503 : 422).json({ error: code.startsWith("VISION_MODEL_") || code === "DOCUMENT_VAULT_CONTEXT_REQUIRED" ? code : "VISION_READ_FAILED" });
+            }
+        }
+    });
     app.post("/api/documents/:documentId/pages/:page/text", async (req, res) => {
         // Waits for the document work before it (one at a time, see document-work.ts).
         if (keepAliveRequested(req))
@@ -7013,6 +7057,25 @@ export function createLexHttpApp(options) {
                 catch (error) {
                     console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
                 }
+            }
+            // The case's fact matrices (task 12.3): read from and written to its encrypted memory, so the
+            // next question in the case does not build them again (after a restart or six hours).
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+                const caseId = knowledge.caseId;
+                const memoryStore = options.caseMemoryStore;
+                const access = options.caseAccessService;
+                const actor = responseAuthContext(res);
+                request.caseMatrixStore = {
+                    read: async (key) => {
+                        const caseView = access.openCase(actor, caseId);
+                        const memory = await access.withCaseDataKey(actor, caseId, "ANALYZE", (caseDataKey) => memoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                        return memory.factMatrices?.[key]?.value ?? null;
+                    },
+                    write: async (key, value) => {
+                        const caseView = access.openCase(actor, caseId);
+                        await access.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => memoryStore.saveCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion, factMatrix: { key, value } }));
+                    }
+                };
             }
             // A case's documents name its court (a court's letter, a judgment): found once and kept,
             // the documents of this turn first, then the case's files by a court's head and signature.

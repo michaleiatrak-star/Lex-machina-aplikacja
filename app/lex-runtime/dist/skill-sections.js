@@ -20,6 +20,12 @@ export const APP_COMPONENTS = {
     DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",
     "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi",
     "WIDGET-DANE": "widget z szablonu korpusu zasilany danymi (show_widget z path i data) oraz pasek eksportu/importu",
+    // Lines and sections the application runs before the model sees anything (task 11): the
+    // anonymizer's gate (local pseudonymization before sending), the mode detection (query-mode.ts)
+    // and the host's widget rendering (show_widget of the application, an isolated frame).
+    ANONIMIZER: "anonimizację (KROK 0A) wykonuje aplikacja lokalnie przed wysłaniem; tekst masz już po pseudonimizacji",
+    TRYB: "tryb LAIK/PRAWNIK ustala aplikacja (podany w instrukcji); nie wykrywaj go ponownie",
+    "WIDGET-HOST": "widgety: narzędzie show_widget aplikacji (renderowanie w izolowanej ramce)",
     "REJESTR-MODULOW": "rejestr modułów dziedziny: moduły aktów wskazanych w sprawie wczytuje aplikacja (MAPA-AKTOW), pozostałe czytasz narzędziem korpusu; poniżej indeks nazw",
     // Not a procedure: the file's change history, kept in the file for the audit.
     HISTORIA: "historia zmian pliku (metadane audytu)"
@@ -45,6 +51,9 @@ export function moduleIndex(section) {
     return index;
 }
 const MARK = /^<!--\s*lex:wykonuje-aplikacja:\s*([A-Z0-9-]+)\s*-->\s*$/u;
+// A line (or a quoted block, "> ...") inside a section that the application executes: the mark
+// stands right above it; the line is replaced, the section around it stays.
+const LINE_MARK = /^\s*<!--\s*lex:wykonuje-aplikacja-linia:\s*([A-Z0-9-]+)\s*-->\s*$/u;
 // Frontmatter keys the application reads from the registry itself (skill graph,
 // mandatory modules, version history, I/O description). Any other key stays:
 // `escalation`, `limitations` and skill-specific keys carry rules for the model.
@@ -119,9 +128,34 @@ export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCT
     text = front.text;
     if (!text.includes("lex:wykonuje-aplikacja") && !(reached && text.includes("lex:wczytaj-gdy")))
         return { text, compacted };
-    const lines = text.split("\n");
+    const lineNoted = new Set();
+    // A mark may also stand at the end of the line it marks ("## RENDEROWANIE WIDGETÓW <!-- lex:… -->",
+    // "2. view … <!-- lex:wykonuje-aplikacja-linia: … -->"): a router at its line budget gets no new lines.
+    const lines = text.split("\n").flatMap((line) => {
+        const trailing = /^(.*?\S)\s*(<!--\s*lex:wykonuje-aplikacja(?:-linia)?:\s*[A-Z0-9-]+\s*-->)\s*$/u.exec(line);
+        return trailing ? [trailing[2], trailing[1]] : [line];
+    });
     const out = [];
     for (let index = 0; index < lines.length; index += 1) {
+        const lineComponent = LINE_MARK.exec(lines[index])?.[1];
+        if (lineComponent) {
+            const runs = APP_COMPONENTS[lineComponent] && !inactive.has(lineComponent) && !OPT_IN_COMPONENTS.has(lineComponent);
+            if (!runs)
+                continue;
+            let end = index + 2;
+            if (/^\s*>/u.test(lines[index + 1] ?? ""))
+                while (end < lines.length && /^\s*>/u.test(lines[end]))
+                    end += 1;
+            const removed = lines.slice(index + 1, end).join("\n");
+            const indent = /^\s*(?:\d+\.\s+|[-*]\s+)?/u.exec(lines[index + 1] ?? "")?.[0] ?? "";
+            // One note per component in a file; further lines of it go without a trace.
+            if (!lineNoted.has(lineComponent))
+                out.push(`${indent}[wykonuje aplikacja: ${lineComponent}] ${APP_COMPONENTS[lineComponent]}`);
+            lineNoted.add(lineComponent);
+            compacted.push({ heading: removed.trim().slice(0, 90), component: lineComponent, chars: removed.length });
+            index = end - 1;
+            continue;
+        }
         const heading = /^(#{1,6})\s+(.*)$/u.exec(lines[index + 1] ?? "");
         const component = MARK.exec(lines[index])?.[1];
         const stage = reached ? STAGE_MARK.exec(lines[index])?.[1] : undefined;
@@ -162,13 +196,15 @@ export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCT
         else {
             out.push(...(component === "HISTORIA"
                 ? [`${heading[1]} ${heading[2]} [pominięte: ${APP_COMPONENTS[component]}]`, ""]
-                : component === "REJESTR-MODULOW"
-                    ? [`${heading[1]} ${heading[2]} [indeks; ${APP_COMPONENTS[component]}]`, ...moduleIndex(removed), ""]
-                    : [
-                        `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
-                        `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
-                        ""
-                    ]));
+                : component === "WIDGET-HOST"
+                    ? [`${heading[1]} ${heading[2]} [${APP_COMPONENTS[component]}]`, ""]
+                    : component === "REJESTR-MODULOW"
+                        ? [`${heading[1]} ${heading[2]} [indeks; ${APP_COMPONENTS[component]}]`, ...moduleIndex(removed), ""]
+                        : [
+                            `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
+                            `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
+                            ""
+                        ]));
             compacted.push({ heading: heading[2].slice(0, 90), component: component, chars: removed.length });
         }
         index = end - 1;

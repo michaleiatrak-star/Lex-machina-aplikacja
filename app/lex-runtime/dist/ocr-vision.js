@@ -329,6 +329,12 @@ async function freePort() {
         });
     });
 }
+const PAGE_PROMPT = [
+    "Obrazek to cała strona polskiego dokumentu prawnego (skan lub zdjęcie).",
+    "Program OCR odczytał ją niepewnie, tak:\n«{ocr}»",
+    "Przepisz całą stronę dokładnie tak, jak jest napisana na obrazku: linia po linii, z polskimi znakami, liczbami i interpunkcją.",
+    "Nie poprawiaj autora, nie streszczaj, nie dodawaj komentarzy. Fragment nieczytelny oznacz [nieczytelne]. Zwróć wyłącznie tekst strony."
+].join(" ");
 const PROMPT = [
     "Obrazek to jedna linia polskiego dokumentu prawnego (skan lub zdjęcie).",
     "Program OCR odczytał ją tak: «{ocr}». Odczyt może mieć błędne litery, brak polskich znaków lub zbędne słowa.",
@@ -398,7 +404,7 @@ export class LocalVisionLineReader {
         this.stop();
         throw new Error("VISION_MODEL_START_TIMEOUT");
     }
-    readLine = async (jpegBase64, ocrText) => {
+    async ask(jpegBase64, prompt, maxTokens) {
         await this.start();
         const timeoutMs = this.options.readTimeoutMs ?? 120_000;
         let response;
@@ -413,12 +419,12 @@ export class LocalVisionLineReader {
                             role: "user",
                             content: [
                                 { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
-                                { type: "text", text: PROMPT.replace("{ocr}", ocrText) }
+                                { type: "text", text: prompt }
                             ]
                         }
                     ],
                     temperature: 0,
-                    max_tokens: 200
+                    max_tokens: maxTokens
                 })
             });
         }
@@ -433,7 +439,9 @@ export class LocalVisionLineReader {
         const text = body.choices?.[0]?.message?.content ?? "";
         // Without the quotes the prompt puts around the OCR reading.
         return text.replace(/^```\w*\s*|\s*```$/gu, "").trim().replace(/^[«»"„”]+|[«»"„”]+$/gu, "").trim();
-    };
+    }
+    readLine = (jpegBase64, ocrText) => this.ask(jpegBase64, PROMPT.replace("{ocr}", ocrText), 200);
+    readPage = (jpegBase64, ocrText) => this.ask(jpegBase64, PAGE_PROMPT.replace("{ocr}", ocrText.slice(0, 6_000)), 3_000);
     stop() {
         this.child?.kill();
         this.child = null;

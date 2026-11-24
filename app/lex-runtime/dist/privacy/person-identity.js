@@ -1,3 +1,4 @@
+import { nameStem, transliterated } from "./identity-legend.js";
 // The same person written another way in one document: by OCR (a mark lost, a space lost, a
 // letter misread) or by the writer (a given name inflected, the surname not: "Panem Michałem
 // Kowalczyk"). The morphology reads each spelling as its own person; the model would then see
@@ -34,7 +35,7 @@ function distance(a, b) {
  */
 export function samePerson(value, own, known) {
     const surface = loose(value);
-    if (surface.length < 6)
+    if (surface.length < 6 && !/^\p{L}\.\s*\p{L}{3,}$/u.test(value.trim()))
         return null;
     const parts = words(value).map(loose);
     for (const person of known) {
@@ -53,6 +54,25 @@ export function samePerson(value, own, known) {
         }
         if (parts.length >= 2 && byPlace.length === parts.length && parts.every((word, place) => byPlace[place].has(word))) {
             return { entity: person };
+        }
+    }
+    // Another spelling of one person (2026-11-22: "Jurij Kast" and "Yurii Kast" in the protocols of
+    // one witness): a given name in another transliteration of the Cyrillic, or its initial ("J. Kast"),
+    // with the same surname in any case form. Only when one known person bears that surname: two
+    // persons of one surname stay apart, for the user to decide in the preview.
+    if (parts.length === 2) {
+        const [given, surname] = parts;
+        const bearers = known.filter((person) => {
+            if (person === own || person.type === "organization")
+                return false;
+            const named = words(person.canonical).map(loose);
+            return named.length === 2 && nameStem(named[1]) === nameStem(surname);
+        });
+        if (bearers.length === 1) {
+            const theirs = transliterated(nameStem(loose(words(bearers[0].canonical)[0])));
+            const mine = transliterated(nameStem(given));
+            if (mine === theirs || (given.length === 1 && theirs.startsWith(transliterated(given))))
+                return { entity: bearers[0] };
         }
     }
     // OCR: one letter off in a long name, the same number of words.

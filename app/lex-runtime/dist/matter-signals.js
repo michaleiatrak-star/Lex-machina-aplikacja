@@ -127,10 +127,24 @@ const PLAIN_LAY_CRIMINAL_WORDS = plainPattern(LAY_CRIMINAL_WORDS);
 // the user writes ("Dostałem taki wyrok"). Narrower than the message words: a contract or
 // a regulation mentioning a fine is not one.
 const CRIMINAL_DOCUMENT = /(?<![\p{L}])(?:oskarżon\p{L}*|akt\p{L}*\s+oskarżenia|podejrzan\p{L}*\s+o|postanowieni\p{L}*\s+o\s+przedstawieniu\s+zarzut\p{L}*|k\.\s?k\.|k\.\s?p\.\s?k\.|k\.\s?k\.\s?s\.|k\.\s?w\.)(?![\p{L}])/iu;
-export function criminalDocument(text) {
+// A witness or an expert cautioned in any protocol ("uprzedzony o odpowiedzialności karnej za
+// fałszywe zeznania z art. 233 § 1 kk", "pouczony o treści art. 233 k.k."): a formula of every
+// hearing, not a sign of a criminal case (live case 2026-11-22: a labour case read as criminal,
+// with the criminal qualifier and the full profile). The case is still criminal by its own
+// documents (indictment, charges, criminal judgment) or by what the user asks.
+const CAUTION_SPAN = String.raw `(?:[^.\n]|\.(?=\s*[\d\p{Ll}§]))`;
+const PROCEDURAL_CAUTION = new RegExp(String.raw `(?<![\p{L}])(?:[Uu]przedz\p{L}*|[Pp]ouczon\p{L}*|[Pp]ouczono|[Pp]ouczeni\p{L}*|[Oo]strzeżon\p{L}*|[Oo]strzeżeni\p{L}*)` +
+    String.raw `${CAUTION_SPAN}*?(?:[Oo]dpowiedzialnoś\p{L}*\s+karn\p{L}*|art\.?\s*233|[Ff]ałszyw\p{L}*\s+(?:zezna\p{L}*|opini\p{L}*))${CAUTION_SPAN}*`, "gu");
+/** The text without the cautions of witnesses and experts (see PROCEDURAL_CAUTION). */
+export function withoutProceduralCautions(text) {
+    return text.replace(PROCEDURAL_CAUTION, " ");
+}
+export function criminalDocument(rawText) {
+    const text = withoutProceduralCautions(rawText);
     return CRIMINAL_DOCUMENT.test(text) || CRIMINAL_ACT.test(provisionsForDetection(text));
 }
-export function criminalMatter(text) {
+export function criminalMatter(rawText) {
+    const text = withoutProceduralCautions(rawText);
     if (CRIMINAL_ACT.test(provisionsForDetection(text)) || CRIMINAL_WORDS.test(text) || LAY_CRIMINAL_WORDS.test(text))
         return true;
     const unaccented = plain(text);

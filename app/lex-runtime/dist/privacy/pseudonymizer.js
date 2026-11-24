@@ -1,9 +1,9 @@
 import { surnameMentions } from "./surname-propagation.js";
 import { samePerson } from "./person-identity.js";
 import { degradedRecognizers } from "./gazetteer-ner.js";
-import { detectPeselNames } from "./pesel-names.js";
+import { detectPeselNames, mayBePersonName } from "./pesel-names.js";
 import { detectStreetAddresses } from "./street-addresses.js";
-import { detectFirmNames } from "./firm-names.js";
+import { detectFirmNames, wholeFirmName } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
 import { findNameApproximately } from "./fuzzy-names.js";
@@ -1196,6 +1196,30 @@ export class LocalPolishPseudonymizer {
             }
             findings.sort((a, b) => a.start - b.start);
         }
+        // A firm's name whole or not at all (firm-names.ts wholeFirmName): a mention inside a trade
+        // chain grows to the chain, or, of common words only, is not masked.
+        for (let index = findings.length - 1; index >= 0; index -= 1) {
+            const finding = findings[index];
+            // A firm the firm rules found (legal form, business prefix) is already its whole name.
+            if (finding.kind !== "PERSON" || finding.source === "USER" || firms.some((firm) => firm.start === finding.start && firm.end === finding.end))
+                continue;
+            const whole = wholeFirmName(text, finding, mayBePersonName);
+            if (whole === undefined)
+                continue;
+            if (whole === null) {
+                findings.splice(index, 1);
+                continue;
+            }
+            if (whole.start === finding.start && whole.end === finding.end)
+                continue;
+            // Another finding in the chain (an owner's name after the firm's): the mention stays as found.
+            if (findings.some((other) => other !== finding && other.start < whole.end && whole.start < other.end))
+                continue;
+            finding.start = whole.start;
+            finding.end = whole.end;
+            finding.value = text.slice(whole.start, whole.end);
+        }
+        findings.sort((a, b) => a.start - b.start);
         // One person, one token: a mention the morphology read as another person ("MICHAL
         // KOWALCZYK" without its mark, "MICHAŁKOWALCZYK" without the space, "Michałem Kowalczyk" with
         // the surname not inflected, "Junreyoung Park" with a letter misread) is the person known

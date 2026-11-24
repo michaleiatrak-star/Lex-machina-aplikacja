@@ -18,6 +18,28 @@ import { validateChronologyState } from "./chronology-state.js";
 import { validateContractAnalysisState } from "./contract-analysis-state.js";
 import { validateOrderedCaseWorkflowState } from "./ordered-case-workflow-state.js";
 export const WORKSPACE_FOLDER_PURPOSES = ["TEMPLATES", "CASE_LAW", "RULES"];
+const FACT_MATRICES_MAX = 8;
+const FACT_MATRICES_MAX_CHARS = 4_000_000;
+function validFactMatrices(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return undefined;
+    const entries = Object.entries(value)
+        .filter((entry) => {
+        const item = entry[1];
+        return entry[0].length <= 200 && Boolean(item) && typeof item.at === "string" && item.value !== undefined;
+    })
+        .sort((a, b) => b[1].at.localeCompare(a[1].at))
+        .slice(0, FACT_MATRICES_MAX);
+    const kept = {};
+    let size = 0;
+    for (const [key, item] of entries) {
+        size += JSON.stringify(item).length;
+        if (size > FACT_MATRICES_MAX_CHARS)
+            break;
+        kept[key] = item;
+    }
+    return Object.keys(kept).length ? kept : undefined;
+}
 const CASE_ID = /^case_[a-f0-9]{32}$/;
 const FOLDER_ID = /^folder_[a-f0-9]{32}$/;
 const ITEM_ID = /^(?:upload|template)_[a-f0-9]{32}$/;
@@ -812,7 +834,9 @@ export class EncryptedCaseWorkspaceStore {
         const longDocument = validLongDocument(index.memory?.longDocument);
         const court = validCaseCourt(index.memory?.court);
         const answerDocument = validAnswerDocument(index.memory?.answerDocument);
+        const factMatrices = validFactMatrices(index.memory?.factMatrices);
         return {
+            ...(factMatrices ? { factMatrices } : {}),
             ...(court ? { court } : {}),
             ...(answerDocument ? { answerDocument } : {}),
             ...(work?.length ? { work } : {}),
@@ -828,6 +852,15 @@ export class EncryptedCaseWorkspaceStore {
     async saveCaseMemory(args) {
         const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
         const memory = { ...(index.memory ?? {}) };
+        if (args.factMatrix !== undefined) {
+            const merged = args.factMatrix === null
+                ? undefined
+                : validFactMatrices({ ...(memory.factMatrices ?? {}), [args.factMatrix.key]: { at: new Date().toISOString(), value: args.factMatrix.value } });
+            if (merged)
+                memory.factMatrices = merged;
+            else
+                delete memory.factMatrices;
+        }
         if (args.evidence !== undefined) {
             const evidence = args.evidence === null ? null : validThreadEvidence(args.evidence);
             if (args.evidence !== null && !evidence)

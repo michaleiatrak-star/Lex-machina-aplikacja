@@ -12,7 +12,7 @@ import { caseLawRepository, packageSource } from "../case-law-store.js";
 import { localOfflineMode, setLocalOfflineMode } from "../local-offline-mode.js";
 import { PublicWebSearch, resetSearxngEngineReport, searxngEngineReport } from "../web-search.js";
 import { runWebSearchBenchmark } from "../web-search-benchmark.js";
-import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, setStartpageSession, setStartpageSessionKeep, STARTPAGE_HOST, webSearchDataDirectory, webSearchSettings } from "../web-search-settings.js";
+import { SEARCH_ENGINES, effectiveSearchOrder, saveWebSearchTest, firecrawlKeyForced, searxngUrlForced, setFirecrawlApiKey, setSearxngUrl, setStartpageSession, setStartpageSessionKeep, STARTPAGE_HOST, webSearchDataDirectory, webSearchSettings, setAccountModelWebSearch } from "../web-search-settings.js";
 import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
@@ -587,6 +587,8 @@ export function registerMcpConnectorRoutes(app, dependencies) {
                 setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
             if (req.body && "startpageSession" in req.body)
                 setStartpageSession(req.body.startpageSession);
+            if (req.body && "accountModelWebSearch" in req.body)
+                setAccountModelWebSearch(req.body.accountModelWebSearch);
             if (req.body && "startpageSessionKeep" in req.body) {
                 setStartpageSessionKeep(req.body.startpageSessionKeep);
                 if (req.body.startpageSessionKeep === true)
