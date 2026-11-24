@@ -44,7 +44,12 @@ describe("pending bills for cited acts (task 08.4a)", () => {
   });
 
   it("latest stage across children", () => {
-    expect(latestStage([{ stageName: "A", date: "2026-01-01", children: [{ stageName: "B", date: "2026-03-01" }] }, { stageName: "C", date: "2026-02-01" }])).toEqual({ name: "B", date: "2026-03-01" });
+    expect(latestStage([{ stageName: "A", date: "2026-01-01", children: [{ stageName: "B", date: "2026-03-01" }] }, { stageName: "C", date: "2026-02-01" }])).toEqual({ name: "A", date: "2026-03-01" });
+    // Druk 384 (10. kadencja): after the first reading, a vote and a referral to committee, then nothing.
+    const stage = latestStage([{ stageName: "Projekt wpłynął do Sejmu", date: "2024-03-21" }, { stageName: "I czytanie na posiedzeniu Sejmu", date: "2024-06-28", children: [{ stageName: "Skierowanie", date: "2024-06-28" }, { stageName: "Głosowanie", date: "2024-06-28" }] }]);
+    expect(stage).toEqual({ name: "I czytanie na posiedzeniu Sejmu", date: "2024-06-28" });
+    const line = pendingAmendmentLine({ act: "kodeks pracy", name: "Kodeks pracy", number: "384", term: 10, stage: stage!.name, stageDate: stage!.date }, Date.parse("2026-11-24"));
+    expect(line).toContain("etap: I czytanie na posiedzeniu Sejmu, bez dalszych prac od 2024-06-28");
   });
 });
 
