@@ -4279,6 +4279,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(documentContext ? { documentContext } : {}),
       ...(request.modelContextTokens ? { modelContextTokens: request.modelContextTokens } : {}),
       ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
+      // Claude through the account: a simple question low, every other legal turn (a step, an
+      // analysis, a letter) high; a non-legal message keeps the CLI's own default (task 01).
+      ...(legalTurn ? { accountEffort: profile === "LEKKI" ? ("low" as const) : ("high" as const) } : {}),
       ...(modelImages.length ? { documentImages: modelImages } : {}),
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly

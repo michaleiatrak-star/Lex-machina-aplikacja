@@ -1,5 +1,7 @@
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
+export type AccountEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
 export type ReasoningLevel =
   | "none"
   | "low"
@@ -91,6 +93,12 @@ export type ProviderStreamParams = {
     calls: NormalizedToolCall[]
   ) => Promise<NormalizedToolResult[]>;
   reasoning?: ReasoningLevel;
+  /**
+   * Claude through the user's account (claude CLI --effort): the depth of the account model's work.
+   * A pleading's or an analysis's step and a check against sources: high; completing a step's
+   * contract: medium; a simple question: low. No effect on API models (task 01).
+   */
+  accountEffort?: AccountEffort;
   /**
    * Internal Lex local-runtime transport preference. Cloud/account adapters
    * ignore this field. "json" intentionally bypasses SSE for tiny local

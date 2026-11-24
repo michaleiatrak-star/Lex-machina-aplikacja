@@ -1,7 +1,7 @@
 import { fitInstructions } from "./instruction-budget.js";
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
-import type { ProviderStreamResult } from "./providers/types.js";
+import type { AccountEffort, ProviderStreamResult } from "./providers/types.js";
 import { checkpointFindingsPrompt, draftPrompt, FINDINGS_MESSAGE_OPEN } from "./process-pleading-draft.js";
 import { rewriteRejection } from "./answer-corrections.js";
 import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
@@ -480,6 +480,8 @@ export class LexExecutionEngine {
     documentContext?: string;
     // The model's window (tokens) and characters per token, for fitting the documents (fitDocumentContext).
     modelContextTokens?: number;
+    // Claude through the account: --effort of the turn's main call (task 01).
+    accountEffort?: AccountEffort;
     tokenCharsPerToken?: number;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -2460,6 +2462,7 @@ export class LexExecutionEngine {
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
+        ...(args.accountEffort ? { accountEffort: args.accountEffort } : {}),
         reasoning: "none"
       }
     );
@@ -2517,6 +2520,7 @@ export class LexExecutionEngine {
               { role: "assistant", content: output },
               { role: "user", content: checkpointCorrectionPrompt(checkpoint, first.missing) }
             ],
+            accountEffort: "medium",
             reasoning: "none"
           });
           const text = corrected.fullText.trim();
@@ -2564,6 +2568,7 @@ export class LexExecutionEngine {
                 ].join("\n")
               }
             ],
+            accountEffort: "medium",
             reasoning: "none"
           });
           const text = corrected.fullText.trim();
@@ -2607,6 +2612,7 @@ export class LexExecutionEngine {
                 ].join("\n")
               }
             ],
+            accountEffort: "medium",
             reasoning: "none"
           });
           const text = corrected.fullText.trim();
@@ -2929,6 +2935,7 @@ export class LexExecutionEngine {
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
+        ...(args.accountEffort ? { accountEffort: args.accountEffort } : {}),
         reasoning: "none"
       }
     );
