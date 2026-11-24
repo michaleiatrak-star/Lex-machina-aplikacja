@@ -23,7 +23,7 @@ describe("account model web search (task 8.1)", () => {
     const line = (name: string, input: Record<string, unknown>) =>
       JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name, input }] } });
     reportNativeReads(
-      { root: "/nonexistent", onWebUse: (use) => uses.push(use) } as never,
+      { root: "/nonexistent", onWebUse: (use: { tool: string; query?: string; url?: string }) => uses.push(use) } as never,
       [line("WebSearch", { query: "art. 415 kc wina" }), line("WebFetch", { url: "https://example.org/a" })].join("\n")
     );
     expect(uses).toEqual([

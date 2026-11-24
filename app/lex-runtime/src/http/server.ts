@@ -95,6 +95,7 @@ import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, searxngUrlForced, setSearxngUrl, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
 import { autostartLocalSearxng, firstRunLocalSearch, hideDockerDashboardOnStart, LOCAL_SEARXNG_URL } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
+import { containerEngineDeclined, startSystemBrowser, systemBrowserWanted } from "../system-browser.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
@@ -1305,8 +1306,11 @@ if (
       })
       .then((result) => {
         if (result) process.stderr.write(`LEX_SEARXNG_AUTOSTART:${result.reachable ? "OK" : result.error ?? "NOT_ANSWERING"}\n`);
+        return systemBrowserFallback(searchDirectory, result ? (result.error ?? null) : null, Boolean(result));
       })
       .catch((error: unknown) => process.stderr.write(`LEX_SEARXNG_AUTOSTART:${error instanceof Error ? error.message : String(error)}\n`));
+  } else if (searchDirectory) {
+    void systemBrowserFallback(searchDirectory, null, false);
   }
   // Desktop: the runtime ends with the application that started it. On macOS an app
   // that crashed or was force-quit left node and its Python workers running (a new
@@ -1315,5 +1319,17 @@ if (
     setInterval(() => {
       if (desktopParentGone()) process.exit(0);
     }, 5_000).unref();
+  }
+}
+
+/** Task 08.3: the system browser reads JavaScript pages when no container browser can come. */
+async function systemBrowserFallback(dataDirectory: string, autostartError: string | null, autostartRan: boolean): Promise<void> {
+  if (process.env.LEX_BROWSER_RENDER === "0" || process.env.LEX_SYSTEM_BROWSER === "0") return;
+  if (!systemBrowserWanted({ declined: containerEngineDeclined(), autostartError, autostartRan })) return;
+  try {
+    const result = await startSystemBrowser({ dataDirectory });
+    process.stderr.write(`LEX_SYSTEM_BROWSER:${result.started ? `OK:${path.basename(result.executable)}` : result.reason}\n`);
+  } catch (error) {
+    process.stderr.write(`LEX_SYSTEM_BROWSER:${error instanceof Error ? error.message : String(error)}\n`);
   }
 }
