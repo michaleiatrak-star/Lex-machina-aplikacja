@@ -445,9 +445,9 @@ export class LocalVisionLineReader {
     throw new Error("VISION_MODEL_START_TIMEOUT");
   }
 
-  private async ask(jpegBase64: string, prompt: string, maxTokens: number): Promise<string> {
+  private async ask(jpegBase64: string, prompt: string, maxTokens: number, minTimeoutMs = 0): Promise<string> {
     await this.start();
-    const timeoutMs = this.options.readTimeoutMs ?? 120_000;
+    const timeoutMs = Math.max(this.options.readTimeoutMs ?? 120_000, minTimeoutMs);
     let response: Response;
     try {
       response = await fetch(`http://127.0.0.1:${this.port}/v1/chat/completions`, {
@@ -482,7 +482,8 @@ export class LocalVisionLineReader {
 
   readonly readLine: ReadLine = (jpegBase64, ocrText) => this.ask(jpegBase64, PROMPT.replace("{ocr}", ocrText), 200);
 
-  readonly readPage: ReadPage = (jpegBase64, ocrText) => this.ask(jpegBase64, PAGE_PROMPT.replace("{ocr}", ocrText.slice(0, 6_000)), 3_000);
+  // A whole page on the processor took 234 s (Qwen2.5-VL 7B, 4 threads, 2026-11-24): not the line's limit.
+  readonly readPage: ReadPage = (jpegBase64, ocrText) => this.ask(jpegBase64, PAGE_PROMPT.replace("{ocr}", ocrText.slice(0, 6_000)), 3_000, 15 * 60_000);
 
   stop(): void {
     this.child?.kill();

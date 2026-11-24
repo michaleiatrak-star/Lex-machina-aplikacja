@@ -745,7 +745,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       </button>
                       {review.visionReread ? (
                         <button type="button" disabled={visionBusy !== null || saving} onClick={() => void rereadWithVision(page.page)}>
-                          {visionBusy === page.page ? t("Odczytuję…") : t("Odczytaj ponownie modelem wizyjnym")}
+                          {visionBusy === page.page ? t("Odczytuję stronę (na procesorze do kilku minut)…") : t("Odczytaj ponownie modelem wizyjnym")}
                         </button>
                       ) : null}
                       {props.onSendPageImage ? (
