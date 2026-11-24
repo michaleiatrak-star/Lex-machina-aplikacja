@@ -1379,6 +1379,9 @@ export type SessionExecutionResponse = {
  */
 // Act modules of the case's second domains loaded with the prompt (one each, at most this).
 const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
+// The act modules the routing suggests for the case's own domain (a strong signal: the court's
+// division, the case's kind): read for the model, not left to it (real7: KP modules hinted, never read).
+const PRIMARY_DOMAIN_MODULES_BUDGET_CHARS = 40_000;
 
 export class DocumentAliasRegistry {
   private readonly prefixes = new Map<string, string>();
@@ -3711,7 +3714,29 @@ export class SafeSessionExecutor implements SessionExecutor {
         audit.record("gate", "DOMAIN_HINT", "OK", {
           detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
         });
-        pathSections.push(domainHintPrompt(domains));
+        const primaryDomain = domains[0]!;
+        const primary = primaryDomain.strong
+          ? loadActModules(
+              this.registry,
+              primaryDomain.modules.map((module) => ({ skill: primaryDomain.skill, resource: module.resource, rule: "NAZWA" as const, why: module.why })),
+              contextResources,
+              PRIMARY_DOMAIN_MODULES_BUDGET_CHARS
+            )
+          : { loaded: [], toRead: [] };
+        for (const item of primary.loaded) {
+          contextResources.add(item.resource);
+          audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;domain-hint;primary-domain" });
+        }
+        pathSections.push(domainHintPrompt(domains, new Set(primary.loaded.map((item) => item.resource))));
+        if (primary.loaded.length) {
+          pathSections.push(
+            [
+              "# MODUŁY AKTU DZIEDZINY SPRAWY (wskazane przez aplikację i wczytane za ciebie — nie czytaj ich ponownie)",
+              ...primary.loaded.map((item) => `## ${item.resource} (${item.why})\n\n${item.content}`)
+            ].join("\n\n")
+          );
+          step("PREPARE", `moduły aktu dziedziny wczytane: ${primary.loaded.map((item) => path.basename(item.resource, ".md")).join(", ")}`);
+        }
         step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
         // A second domain the case's kind or its own phrase names: its act module goes in
         // with the prompt, not as one more round of the model (the whole context again).
