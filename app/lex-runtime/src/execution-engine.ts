@@ -27,6 +27,7 @@ import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from ".
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { orderedCheckpointGaps } from "./ordered-checkpoint-contract.js";
+import { CHECKPOINT_BUDGET_CHARS } from "./process-checkpoint-contract.js";
 import { checkpointCorrectionPrompt, checkpointModuleNames, courtCheckpointGaps, witnessTestimonyCase, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
@@ -1472,9 +1473,16 @@ export class LexExecutionEngine {
       const checkpointFiles = loadCheckpointResources(
         this.registry,
         args.processWorkflowContext.checkpoint,
-        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])])
+        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]),
+        // The step's files from the model's window (task 02): a large window takes the carried modules too.
+        args.model.startsWith("local/")
+          ? CHECKPOINT_BUDGET_CHARS
+          : Math.max(CHECKPOINT_BUDGET_CHARS, Math.floor((args.modelContextTokens ?? 200_000) * (args.tokenCharsPerToken ?? 3.5) * 0.15)),
+        { witnessTestimony: witnessTestimonyCase(args.documentContext, moduleTriggerText), documents: Boolean(args.documentContext?.trim()) }
       );
-      for (const item of checkpointFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
+      for (const item of checkpointFiles.loaded) {
+        emit("resource_read", item.resource, "OK", item.carriedFrom ? `runtime-preload;carried-from:${item.carriedFrom}` : "runtime-preload;process-checkpoint");
+      }
       emit(
         "gate",
         "PROCESS_CHECKPOINT_RESOURCES",

@@ -100,18 +100,79 @@ const CHECKPOINT_NAMES: Readonly<Record<ProcessPleadingCheckpoint, RegExp>> = {
 export const CHECKPOINT_BUDGET_CHARS = 45_000;
 
 /** The checkpoint's files that exist, loaded within the budget; the rest for the model to read. */
+// Modules a later step applies that an earlier step read (task 04): in the chat a module read stays
+// in the conversation; here each step gets its own files. Read from the skill's state machine
+// (references/AUTOMAT-STANOW.md): the "view …" lines of a checkpoint's block ("→ … [CP-ATAK]" up to
+// "[CP-ATAK] →"), with the condition of their "ROZSZERZENIE … (gdy …)" header.
+export type CarriedResource = { resource: string; condition: string; from: ProcessPleadingCheckpoint | null };
+const carriedCache = new Map<string, Map<string, CarriedResource[]>>();
+
+export function carriedCheckpointResources(registry: LexSkillRegistry, checkpoint: ProcessPleadingCheckpoint): CarriedResource[] {
+  const file = registry.resolveResource("pisma-procesowe-v3", "pisma-procesowe-v3/references/AUTOMAT-STANOW.md");
+  if (!file) return [];
+  let byCheckpoint = carriedCache.get(file);
+  if (!byCheckpoint) {
+    byCheckpoint = new Map();
+    let text = "";
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      text = "";
+    }
+    const lines = text.split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      const opens = /→[^\n]*\[(CP-[\w.-]+)\]\s*$/u.exec(lines[index]!);
+      if (!opens) continue;
+      const owner = opens[1]! as ProcessPleadingCheckpoint;
+      if (!(owner in CHECKPOINT_RESOURCES)) continue;
+      const entries: CarriedResource[] = [];
+      let condition = "";
+      for (let at = index + 1; at < lines.length && at < index + 80; at += 1) {
+        const line = lines[at]!;
+        if (new RegExp(`^\\s*\\[${owner}\\]\\s*→`, "u").test(line)) break;
+        const extension = /ROZSZERZENIE[^\n]*\((gdy[^)]*)\)/u.exec(line);
+        if (extension) condition = extension[1]!;
+        const view = /view\s+((?:shared|pisma-procesowe-v3)\/[\w./-]+\.md)/u.exec(line);
+        if (!view || CHECKPOINT_RESOURCES[owner].includes(view[1]!)) continue;
+        const readers = checkpointsReading(view[1]!).filter((reader) => reader !== owner);
+        entries.push({ resource: view[1]!, condition, from: readers[0] ?? null });
+      }
+      byCheckpoint.set(owner, entries);
+    }
+    carriedCache.set(file, byCheckpoint);
+  }
+  return byCheckpoint.get(checkpoint) ?? [];
+}
+
+/** Whether the case meets a carried module's condition ("gdy ≥1 ogniwo = zeznanie", "gdy znany materiał"). */
+export function carriedConditionMet(condition: string, facts: CheckpointCaseFacts & { documents?: boolean }): boolean {
+  if (!condition) return true;
+  if (/zeznani|świad/iu.test(condition)) return Boolean(facts.witnessTestimony);
+  if (/materiał|łańcuch|dowod/iu.test(condition)) return Boolean(facts.documents);
+  return false;
+}
+
 export function loadCheckpointResources(
   registry: LexSkillRegistry,
   checkpoint: ProcessPleadingCheckpoint,
   inContext: ReadonlySet<string>,
-  budget = CHECKPOINT_BUDGET_CHARS
-): { loaded: Array<{ resource: string; content: string }>; toRead: string[] } {
-  const loaded: Array<{ resource: string; content: string }> = [];
+  budget = CHECKPOINT_BUDGET_CHARS,
+  facts?: CheckpointCaseFacts & { documents?: boolean }
+): { loaded: Array<{ resource: string; content: string; carriedFrom?: string }>; toRead: string[] } {
+  const loaded: Array<{ resource: string; content: string; carriedFrom?: string }> = [];
   const toRead: string[] = [];
   let left = budget;
+  // The narrowest condition first (testimony in the files: the module the skill makes a critical
+  // gap of, ZAKAZ-13), then the rest while the budget lasts.
+  const carried = facts
+    ? carriedCheckpointResources(registry, checkpoint)
+        .filter((item) => carriedConditionMet(item.condition, facts))
+        .sort((a, b) => Number(/zeznani|świad/iu.test(b.condition)) - Number(/zeznani|świad/iu.test(a.condition)))
+    : [];
   // The checkpoint's own files, then the skill's modules run at this step (LATER_STEP_RESOURCES): all
-  // of them in the checkpoint's part, after the cached prefix every step shares.
-  for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? [])]) {
+  // of them in the checkpoint's part, after the cached prefix every step shares; then the modules an
+  // earlier step read that this one applies (carried).
+  for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? []), ...carried.map((item) => item.resource)]) {
     if (inContext.has(resource)) continue;
     const file = registry.resolveResource("pisma-procesowe-v3", resource);
     let content = "";
@@ -126,7 +187,8 @@ export function loadCheckpointResources(
       continue;
     }
     left -= content.length;
-    loaded.push({ resource, content });
+    const from = carried.find((item) => item.resource === resource);
+    loaded.push({ resource, content, ...(from ? { carriedFrom: from.from ?? "W1" } : {}) });
   }
   return { loaded, toRead };
 }
