@@ -4356,7 +4356,13 @@ export type WebSearchSettings = {
   startpageSessionKeep: boolean;
   startpageSessionSaved: boolean;
   startpageSessionActive?: boolean;
+  /** Claude through the account: its own WebSearch/WebFetch (identifying data blocked). */
+  accountModelWebSearch?: boolean;
 };
+
+export function setAccountModelWebSearch(accountModelWebSearch: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ accountModelWebSearch }) });
+}
 
 export function setStartpageSession(startpageSession: boolean): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ startpageSession }) });

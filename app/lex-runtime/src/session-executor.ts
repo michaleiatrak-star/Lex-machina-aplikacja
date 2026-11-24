@@ -4343,6 +4343,29 @@ export class SafeSessionExecutor implements SessionExecutor {
                 step("SKILLS", relativePath);
               },
               onMissing: (relativePath: string) => corpusTools.recordNativeMissing(relativePath),
+              // The model's own web search (Settings, task 8.1): a lead only, R3 in the register; a
+              // query with a symbol of the case ([PII:…]) is recorded as a breach of the query rule.
+              onWebUse: (use: { tool: "WebSearch" | "WebFetch"; query?: string; url?: string }) => {
+                const symbol = /\[(?:LM)?PII:/u.test(`${use.query ?? ""} ${use.url ?? ""}`);
+                audit.record("gate", "ACCOUNT_WEB_SEARCH", symbol ? "BLOCKED" : "OK", {
+                  detail: `${use.tool};${use.query ?? use.url ?? ""}`.slice(0, 300),
+                  ...(symbol ? { reason: "zapytanie z symbolem danych sprawy" } : {})
+                });
+                step("VERIFY", `${use.tool === "WebSearch" ? "wyszukiwanie modelu" : "strona otwarta przez model"} (trop): ${(use.query ?? use.url ?? "").slice(0, 120)}`);
+                if (use.url && !auxiliarySources.some((item) => item.sourceUrl === use.url)) {
+                  auxiliarySources.push({
+                    sourceUrl: use.url,
+                    sourceTier: "R3",
+                    classification: "CONSERVATIVE_R3",
+                    classificationBasis: "strona otwarta przez model z konta (WebFetch): trop, nie źródło",
+                    crossCheckStatus: "PENDING",
+                    staleOrUndatedWarning: true,
+                    higherTierCrossCheckSatisfied: false,
+                    conflict: false,
+                    instruction: "Treść, tezę i cytat ustal z dokumentu u źródła (verify_legal_reference, verify_case_*, fetch_auxiliary_legal_source)."
+                  });
+                }
+              },
               missingQualifier: () => corpusTools.missingCriminalQualifier()
             }
           }
@@ -4523,6 +4546,11 @@ export class SafeSessionExecutor implements SessionExecutor {
               call.name
             ) ?? false
         );
+        // The web search's query in the progress (task 8.2): the user sees what leaves for the search.
+        for (const call of federationCalls.filter((item) => item.name === "web_search")) {
+          const query = typeof (call.input as { query?: unknown }).query === "string" ? String((call.input as { query: string }).query) : "";
+          if (query) step("VERIFY", `zapytanie do wyszukiwarki: „${query.slice(0, 160)}”`);
+        }
         const coreLawCalls = calls.filter(
           (call) =>
             coreLawTools?.handles(

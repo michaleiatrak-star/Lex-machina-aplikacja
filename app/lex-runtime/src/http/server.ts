@@ -108,6 +108,7 @@ import { CompleteDocumentIngestor } from "../document-ingestion.js";
 import { PdfJsDocumentPageSource } from "../pdf-document-page-source.js";
 import { LocalPaddleOcrEngine } from "../ocr/paddle-ocr-engine.js";
 import { LocalPaddleImageOcrEngine } from "../ocr/paddle-image-ocr-engine.js";
+import { configureAccountModelWebSearch } from "../providers/account-session.js";
 import { CompleteImageIngestor } from "../image-ingestion.js";
 import { LocalStanzaNamedEntityRecognizer } from "../privacy/stanza-ner.js";
 import {
@@ -777,6 +778,7 @@ export async function startLocalServer(options?: {
       // Daily ELI check while the application runs, not only at start.
       coreLawIndex.startSchedule();
       // The local database of rulings (case-law-db.ts): on in server mode, or LEX_CASE_LAW_SYNC=1.
+      configureAccountModelWebSearch(() => webSearchSettings().accountModelWebSearch);
       startCaseLawSync({
         isServerMode: () => serverMode.isEnabled(),
         snFetcher: snFetch as unknown as SyncFetch,

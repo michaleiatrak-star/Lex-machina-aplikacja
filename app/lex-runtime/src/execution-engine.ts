@@ -501,6 +501,7 @@ export class LexExecutionEngine {
       root: string;
       onRead: (relativePath: string) => void;
       onMissing?: (relativePath: string) => void;
+      onWebUse?: (use: { tool: "WebSearch" | "WebFetch"; query?: string; url?: string }) => void;
       missingQualifier: () => string | null;
     };
     // AUTO bez natywnego korpusu: router v3 i fasada prawo-polskie-v2 są podawane
@@ -2944,7 +2945,7 @@ export class LexExecutionEngine {
         messages: mainMessages,
         tools: args.tools,
         runTools: args.runTools,
-        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}), ...(native.onWebUse ? { onWebUse: native.onWebUse } : {}) } } : {}),
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
@@ -3019,7 +3020,7 @@ export class LexExecutionEngine {
         ],
         tools: args.tools,
         runTools: args.runTools,
-        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}), ...(native.onWebUse ? { onWebUse: native.onWebUse } : {}) } } : {}),
         reasoning: "none"
       }).catch(() => null);
       const text = followed?.fullText.trim() ?? "";

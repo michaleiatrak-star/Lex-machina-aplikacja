@@ -8,7 +8,7 @@ describe("raport silników SearXNG", () => {
       { results: [{ url: "https://sn.pl/b", title: "B", engines: ["brave"] }], unresponsive_engines: [["duckduckgo", "CAPTCHA"]] }
     ];
     const fetchImpl = (async () => new Response(JSON.stringify(replies.shift()), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
-    const settings = () => ({ searxngUrl: "http://127.0.0.1:8888", order: [], lastTest: null, firecrawlConfigured: false, startpageSession: false, startpageSessionKeep: false, startpageSessionSaved: false });
+    const settings = () => ({ searxngUrl: "http://127.0.0.1:8888", order: [], lastTest: null, firecrawlConfigured: false, startpageSession: false, startpageSessionKeep: false, startpageSessionSaved: false, accountModelWebSearch: false });
     resetSearxngEngineReport();
     const search = new PublicWebSearch({}, fetchImpl, undefined, 0, settings);
     await search.searchEngine("searxng", "kara umowna", 5, settings());

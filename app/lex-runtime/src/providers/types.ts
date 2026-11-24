@@ -122,6 +122,8 @@ export type NativeCorpusAccess = {
   onRead?: (relativePath: string) => void;
   // A Read of a corpus file that does not exist (wrong name, version or folder).
   onMissing?: (relativePath: string) => void;
+  // The account model's own web search or page fetch (task 8.1): a lead, recorded as R3.
+  onWebUse?: (use: { tool: "WebSearch" | "WebFetch"; query?: string; url?: string }) => void;
 };
 
 export type ProviderStreamResult = {

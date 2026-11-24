@@ -309,7 +309,8 @@ export const SOURCES_BY_KIND = [
   "- Interpretacje KIS: eureka → verify_interpretation. Interpretacje ZUS: najpierw search_case_law source=BAZA bases=[ZUS] (kopia BIP ZUS), bez trafień web_search site:zus.pl → fetch_auxiliary_legal_source. Interpretacje ogólne i objaśnienia podatkowe MF: web_search site:gov.pl → fetch_auxiliary_legal_source na tej domenie.",
   "- Decyzje i stanowiska organów: UODO (uodo), UOKiK (site:uokik.gov.pl), PIP, KNF, URE, UKE, RPO, EROD (site:edpb.europa.eu): web_search z site: domeny organu → dokument z domeny organu. Status: stanowisko organu, nie prawo powszechnie obowiązujące.",
   "- Podmiot: krs, ceidg, wl (biała lista VAT); kursy: nbp.",
-  "- Wyszukiwarka (web_search): tylko trop — sygnatura, numer, tytuł, adres; treść, tezę i cytat bierz z dokumentu u źródła. Frazy ogólne, nigdy fakty sprawy ani symbole [PII].",
+  "- Wyszukiwarka (web_search): tylko trop — sygnatura, numer, tytuł, adres; treść, tezę i cytat bierz z dokumentu u źródła. W zapytaniu wolno podać niejawne elementy sprawy: instytucję prawną, rodzaj sprawy, przepis, branżę, nazwę organu (np. „wypowiedzenie umowy o pracę ciąża orzeczenie SN”); nigdy danych z symboli [PII:…]/[LMPII:…], nazwisk, dat i kwot z akt.",
+  "- Wyszukiwanie modelu z konta (WebSearch/WebFetch, gdy włączone w Ustawieniach): ta sama reguła — tylko trop, zapytanie bez symboli [PII:…]/[LMPII:…]; treść, tezę i cytat ustal z dokumentu u źródła (verify_legal_reference, verify_case_*, fetch_auxiliary_legal_source). Aplikacja zapisuje każde użycie jako źródło pomocnicze R3.",
   "- Pusty wynik lub odmowa źródła (captcha, 403, limit czasu): inna fraza, następne źródło z tej listy, web_search, federated_legal_coverage; nigdy wniosek „nie ma”. Napisz, które źródło zawiodło."
 ].join("\n");
 

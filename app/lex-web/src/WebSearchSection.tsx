@@ -8,6 +8,7 @@ import {
   setFirecrawlApiKey,
   setSearxngUrl,
   setStartpageSession,
+  setAccountModelWebSearch,
   setStartpageSessionKeep,
   setupLocalBrowser,
   setupLocalSearxng,
@@ -326,6 +327,19 @@ export function WebSearchSection({ admin }: { admin: boolean }) {
               </button>
             </div>
       <small>{t("Gemini + Google: wyszukiwanie Google przez Twój klucz Google z ustawień modeli; ponad darmowy limit płatne według cennika Google.")}</small>
+
+      <label className="core-law-auto">
+        <input
+          type="checkbox"
+          checked={Boolean(settings.accountModelWebSearch)}
+          disabled={!admin || Boolean(busy)}
+          onChange={(event) => void saveStartpage(() => setAccountModelWebSearch(event.target.checked))}
+        />
+        <span>{t("Wyszukiwanie własne Claude (konto)")}</span>
+        <InfoTip>
+          {t("Claude przez konto może sam wyszukiwać i otwierać strony w internecie. Zapytania z danymi identyfikującymi są blokowane, każde zapytanie widać w postępie, a otwarte strony trafiają do źródeł pomocniczych do sprawdzenia.")}
+        </InfoTip>
+      </label>
 
       <label className="core-law-auto">
         <input

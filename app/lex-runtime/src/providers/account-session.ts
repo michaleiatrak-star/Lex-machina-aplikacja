@@ -1506,7 +1506,9 @@ export function claudeCorpusArgs(
   systemPrompt: string,
   mcpConfigPath: string,
   tail: string[] = [],
-  systemPromptFile?: string
+  systemPromptFile?: string,
+  // The account model's own web search as a source of leads (Settings, off by default; task 8.1).
+  webSearch = false
 ): string[] {
   return [
     "-p",
@@ -1519,11 +1521,11 @@ export function claudeCorpusArgs(
     "--mcp-config",
     mcpConfigPath,
     "--tools",
-    "Read,Glob,Grep",
+    webSearch ? "Read,Glob,Grep,WebSearch,WebFetch" : "Read,Glob,Grep",
     "--allowedTools",
-    "Read,Glob,Grep,mcp__lex",
+    webSearch ? "Read,Glob,Grep,WebSearch,WebFetch,mcp__lex" : "Read,Glob,Grep,mcp__lex",
     "--disallowedTools",
-    "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
+    webSearch ? "Bash,Write,Edit,NotebookEdit" : "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
     "--permission-mode",
     "dontAsk",
     ...(systemPromptFile ? ["--system-prompt-file", systemPromptFile] : ["--system-prompt", systemPrompt]),
@@ -1568,6 +1570,14 @@ export function claudeToolUses(
  */
 export function reportNativeReads(corpus: NativeCorpusAccess, stdout: string): void {
   for (const use of claudeToolUses(stdout)) {
+    if (use.name === "WebSearch" || use.name === "WebFetch") {
+      corpus.onWebUse?.({
+        tool: use.name,
+        ...(typeof use.input.query === "string" ? { query: use.input.query } : {}),
+        ...(typeof use.input.url === "string" ? { url: use.input.url } : {})
+      });
+      continue;
+    }
     if (use.name !== "Read") continue;
     const relative = corpusRelativePath(corpus.root, use.input.file_path);
     if (!relative) continue;
@@ -3695,6 +3705,19 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
     params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages } : {}) }
   };
 }
+// The account model's web search (Settings > Wyszukiwarka internetowa, task 8.1): read at each run.
+let accountWebSearchSetting: () => boolean = () => false;
+export function configureAccountModelWebSearch(read: () => boolean): void {
+  accountWebSearchSetting = read;
+}
+function accountModelWebSearchAllowed(): boolean {
+  try {
+    return accountWebSearchSetting();
+  } catch {
+    return false;
+  }
+}
+
 // Claude CLI --effort (task 01). An older CLI that rejects the option: once without it, remembered.
 let claudeEffortUnsupported = false;
 export function claudeEffortArgs(effort: AccountEffort | undefined): string[] {
@@ -4291,7 +4314,7 @@ export class AccountSessionManager {
             ...(args.clientModel ? ["--model", args.clientModel] : []),
             ...claudeEffortArgs(args.effort),
             ...tail
-          ], systemFile),
+          ], systemFile, accountModelWebSearchAllowed()),
           input.stdin,
           COMMAND_TIMEOUT_MS,
           args.corpus.root,
