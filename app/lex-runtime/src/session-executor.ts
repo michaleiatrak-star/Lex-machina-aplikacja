@@ -406,6 +406,8 @@ export type CaseMatrixStore = { read(key: string): Promise<unknown | null>; writ
 export type SessionExecutionRequest = {
   // The case's record of fact matrices (encrypted case memory), when the turn belongs to a case (task 12.3).
   caseMatrixStore?: CaseMatrixStore;
+  // The user's choice in the case card (Claude through the account): default medium.
+  effort?: "low" | "medium" | "high";
   query: string;
   // The case's shared key: names in the message get the documents' symbols.
   privacySeed?: PseudonymizationVaultSnapshot;
@@ -4319,7 +4321,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
       // Claude through the account: a simple question low, every other legal turn (a step, an
       // analysis, a letter) high; a non-legal message keeps the CLI's own default (task 01).
-      ...(legalTurn ? { accountEffort: profile === "LEKKI" ? ("low" as const) : ("high" as const) } : {}),
+      // Medium by default (user 2026-11-24); low on the light path; the user's choice wins.
+      ...(legalTurn ? { accountEffort: request.effort ?? (profile === "LEKKI" ? ("low" as const) : ("medium" as const)) } : {}),
       ...(modelImages.length ? { documentImages: modelImages } : {}),
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly

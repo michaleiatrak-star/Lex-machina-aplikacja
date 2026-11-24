@@ -3327,6 +3327,8 @@ export function executeSession(input: {
   primarySkill: string;
   auxiliaryText?: string;
   mode?: "LAIK" | "PRAWNIK";
+  // Claude through the account: reasoning effort (medium by default).
+  effort?: "low" | "medium" | "high";
   attachments?: DocumentAttachmentSelection[];
   // Page images as evidence: photos (default) or also pages with text.
   evidenceImages?: "photos" | "all";

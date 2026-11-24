@@ -10978,6 +10978,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
         }
       }
+      // The reasoning effort chosen in the case card (Claude through the account).
+      if (req.body?.effort === "low" || req.body?.effort === "medium" || req.body?.effort === "high") request.effort = req.body.effort;
       // The case's fact matrices (task 12.3): read from and written to its encrypted memory, so the
       // next question in the case does not build them again (after a restart or six hours).
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
