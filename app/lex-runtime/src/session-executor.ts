@@ -238,6 +238,8 @@ import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
+import { classifyRoute, routeAmbiguity } from "./route-classifier.js";
+import { requestIntent } from "./request-intent.js";
 import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
 import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, removedSentences, rewriteRejection, applyPointEdits, POINT_EDITS_FORM, type AnswerCorrection } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
@@ -3955,6 +3957,39 @@ export class SafeSessionExecutor implements SessionExecutor {
         audit.record("gate", "SIMPLE_FORM_QUESTION", "OK", { detail: `skipped=${taskRoute.primary}` });
         step("SKILLS", "pytanie w prostej formie: odpowiedź bez procedury skilla wykonawczego");
         taskRoute = null;
+      }
+      // Ambiguous by the patterns (a pleading named without a drafting verb, material and words
+      // pointing to different skills, a short question at an executive skill): one short call of
+      // the turn's model decides (task 05); a local model or a failure keeps the patterns.
+      if (!request.model.startsWith("local/") && !taskRoute?.reason.startsWith("kontynuacja")) {
+        // What the words alone ask for, by the explicit intents only ("przygotuj pytania do
+        // świadka", "napisz pozew"); a vague question ("co mam zrobić?") names no skill.
+        const wordsOnly = materials.length ? (requestIntent(taskQuery, (skill) => Boolean(this.registry.get(skill)))?.primary ?? null) : null;
+        const ambiguity = routeAmbiguity({
+          question: pathFacts.query,
+          decided: taskRoute?.primary ?? null,
+          wordsOnly,
+          simpleForm: simpleFormQuestion(pathFacts.query)
+        });
+        if (ambiguity) {
+          const classified = await classifyRoute(
+            this.providers,
+            { provider: request.provider, model: request.model },
+            latestUserTurn(protectedQuery),
+            materials.map((item) => item.label)
+          );
+          const byModel = classified.choice ? (classified.choice.form === "PROSTA" ? "PROSTA" : classified.choice.skill!) : null;
+          audit.record("gate", "ROUTING_CLASSIFIER", classified.choice ? "OK" : "DEGRADED", {
+            detail: `reason=${ambiguity};patterns=${taskRoute?.primary ?? "PROSTA"};model=${byModel ?? "brak"}${classified.cached ? ";cached" : ""}${classified.error ? `;${classified.error}` : ""}`
+          });
+          if (classified.choice?.form === "PROSTA" && taskRoute) {
+            step("SKILLS", `klasyfikacja modelu: pytanie w prostej formie (wzorce: ${taskRoute.primary})`);
+            taskRoute = null;
+          } else if (classified.choice?.skill && classified.choice.skill !== taskRoute?.primary && this.registry.get(classified.choice.skill)) {
+            step("SKILLS", `klasyfikacja modelu: ${classified.choice.skill} (wzorce: ${taskRoute?.primary ?? "prosta forma"})`);
+            taskRoute = { source: "ROUTER", primary: classified.choice.skill, then: null, reason: `klasyfikacja modelu (${ambiguity})` };
+          }
+        }
       }
       const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
