@@ -219,7 +219,7 @@ import { commonCourtIssuePrompt, commonCourtRulingsByIssue } from "./courts/comm
 import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePassage } from "./case-issue.js";
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
-import { identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
+import { genderLegend, identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
 import { factMatrixGoalEvidence, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments, type DocumentCoverage as MatrixCoverage, type FactRow, type MatrixTopic, type ModelCall } from "./fact-matrix.js";
 import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable, type RegisterEntry } from "./document-register.js";
@@ -3176,7 +3176,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         };
         const groups = samePersonGroups(personTokens(tokenText).slice(0, 400), restoreToken);
         const asked = new Set(personTokens([protectedQuery]));
-        const legend = identityLegendPrompt(groups, asked);
+        const legend = [identityLegendPrompt(groups, asked), genderLegend(personTokens(tokenText), restoreToken)].filter(Boolean).join("\n\n");
         // Facts of the files on the person the question names, under any of the person's symbols.
         const userSymbols = [...new Set([...asked, ...groups.filter((group) => group.some((token) => asked.has(token))).flat()])];
         strengthKeyFacts = personKeyFacts(attachments, userSymbols);

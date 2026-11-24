@@ -127,6 +127,16 @@ const NAME = /\p{Lu}[\p{Ll}’'-]+(?:-\p{Lu}[\p{Ll}’'-]+)?/u;
 // After these a name is a patron, a street or an institution's, not a person in the case.
 const NOT_A_PERSON_BEFORE = /(?:\bim\.|\bimienia|\bul\.|\bulic\p{L}*|\bal\.|\bpl\.|\bos\.|\bSzpital\p{L}*|\bSzkoł\p{L}*|\bfundacj\p{L}*)\s*$/iu;
 
+/**
+ * A word that may be a person's name (a given name or a surname in the PESEL registers, any
+ * case form). Without the registers every word may be one: nothing is unmasked on a guess.
+ */
+export function mayBePersonName(word: string): boolean {
+  if (!peselRegistersAvailable()) return true;
+  const { given, surnames } = registers();
+  return best(given, word) >= GIVEN_MIN || best(surnames, word) >= GIVEN_MIN;
+}
+
 export function peselRegistersAvailable(): boolean {
   const { given, surnames } = registers();
   return given.available && surnames.available;
