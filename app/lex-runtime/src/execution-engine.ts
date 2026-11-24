@@ -26,6 +26,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { orderedCheckpointGaps } from "./ordered-checkpoint-contract.js";
 import { checkpointCorrectionPrompt, checkpointModuleNames, courtCheckpointGaps, witnessTestimonyCase, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
@@ -2569,6 +2570,49 @@ export class LexExecutionEngine {
           remaining = gaps;
         }
         emit("gate", "COURT_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${gaps.join(",")};remaining=${remaining.join(",")}`);
+      }
+    }
+
+    // analizator-dowodow-v3 and przesluchanie-swiadkow-v2-min90: the step's message holds what its
+    // SKILL.md names (ordered-checkpoint-contract.ts); one completing round on the same messages,
+    // taken only when nothing was lost and fewer elements are missing. Never a block.
+    if (args.orderedCaseWorkflowContext && !waitsForUser(output)) {
+      const { workflowId, checkpoint } = args.orderedCaseWorkflowContext;
+      const skill = workflowId === "EVIDENCE_ANALYSIS_V1" ? "analizator-dowodow-v3" : "przesluchanie-swiadkow-v2-min90";
+      const gaps = orderedCheckpointGaps(workflowId, checkpoint, output);
+      if (gaps.length) {
+        let remaining = gaps;
+        try {
+          const corrected = await this.providers.stream(args.provider, {
+            model: args.model,
+            systemPrompt,
+            ...promptCache,
+            messages: [
+              ...workflowMessages.slice(0, -1).filter((message) => !message.images?.length),
+              { role: "user", content: effectiveQuery },
+              { role: "assistant", content: output },
+              {
+                role: "user",
+                content: [
+                  `Wiadomość kroku ${checkpoint} nie zawiera elementów, których wymaga skill ${skill} (aplikacja): ${gaps.join("; ")}.`,
+                  "Podaj pełną wiadomość ponownie, z tą samą treścią, uzupełnioną o brakujące elementy w formacie skilla. Nie przechodź do następnego kroku."
+                ].join("\n")
+              }
+            ],
+            reasoning: "none"
+          });
+          const text = corrected.fullText.trim();
+          if (text && !rewriteRejection(output, text)) {
+            const after = orderedCheckpointGaps(workflowId, checkpoint, text);
+            if (after.length < gaps.length) {
+              output = text;
+              remaining = after;
+            }
+          }
+        } catch {
+          remaining = gaps;
+        }
+        emit("gate", "ORDERED_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${gaps.join(",")};remaining=${remaining.join(",")}`);
       }
     }
 
