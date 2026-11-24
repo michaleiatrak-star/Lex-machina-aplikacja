@@ -251,9 +251,10 @@ describe("mandatory path in a session", () => {
     expect(result.mandatoryPath!.steps.some((step) => step.id === "SKILL:prawny-router-v3")).toBe(false);
     expect(result.modeDecision?.mode).toBe("PRAWNIK");
     expect(verified).toEqual(expect.arrayContaining(["art. 233 KK", "art. 234 KK", "art. 238 KK"]));
-    // PEŁNY without visible gate blocks: one correcting round, then a plain warning to the user.
-    expect(calls).toHaveLength(2);
-    expect(String(calls[1]!.messages.at(-1)!.content)).toContain("CN-GATE");
+    // PEŁNY without visible gate blocks on a simple path (a question about provisions): no
+    // correcting round (user 2026-11-21), the missing blocks named in the answer and a warning.
+    expect(calls).toHaveLength(1);
+    expect(result.answer).toMatch(/ŚCIEŻKA OBOWIĄZKOWA — w odpowiedzi brak: [^\]]*CN-GATE/u);
     expect(result.answer).toMatch(/^⚠️ Uwaga: nie wszystkie kroki kontroli zostały wykonane/u);
     expect(result.mandatoryPath!.degraded).toBe(true);
     // KROK 7 and KROK 3A by the application.

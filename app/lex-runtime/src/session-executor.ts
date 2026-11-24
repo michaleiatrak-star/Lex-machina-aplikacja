@@ -1382,6 +1382,8 @@ const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
 // The act modules the routing suggests for the case's own domain (a strong signal: the court's
 // division, the case's kind): read for the model, not left to it (real7: KP modules hinted, never read).
 const PRIMARY_DOMAIN_MODULES_BUDGET_CHARS = 40_000;
+// The skills whose answers get the model's correcting rounds (user 2026-11-21).
+const COMPLEX_ROUND_SKILLS = new Set(["pisma-procesowe-v3", "analizator-umow-v1", "analiza-sadowa-v6"]);
 
 export class DocumentAliasRegistry {
   private readonly prefixes = new Map<string, string>();
@@ -4968,7 +4970,21 @@ export class SafeSessionExecutor implements SessionExecutor {
     const roundsStarted = Date.now();
     const roundBudgetMs = Math.max(Math.max(60, Number(process.env.LEX_CORRECTION_BUDGET_S) || 300) * 1000, firstAnswerMs * 2);
     const roundsLeftMs = () => roundBudgetMs - (Date.now() - roundsStarted);
+    // Correcting rounds of the model only in the complex tasks (user 2026-11-21): a pleading, a
+    // contract, a court analysis (and their pipelines). The simpler paths keep the checks, their
+    // result goes into the answer as marks and warnings, without one more generation. An answer
+    // with no substance (only "sprawdzę…") is useless on any path: that round stays.
+    const roundSkill = taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "";
+    const complexRounds =
+      COMPLEX_ROUND_SKILLS.has(roundSkill) || Boolean(request.processWorkflowContext || request.contractWorkflowContext || request.courtWorkflowContext);
+    const skippedRounds: string[] = [];
     const roundsExhausted = (round: string) => {
+      if (!complexRounds && round !== "odpowiedź bez treści") {
+        skippedRounds.push(round);
+        audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `simple-path:${roundSkill || "brak"};${skippedRounds.join(",")}` });
+        step("MODEL", `runda „${round}” pominięta (ścieżka prosta: ${roundSkill || "pytanie"}); wynik kontroli zostaje w odpowiedzi`);
+        return true;
+      }
       if (roundsLeftMs() > 0) return false;
       audit.record("gate", "CORRECTION_BUDGET", "DEGRADED", { skipped: round, budgetSeconds: Math.round(roundBudgetMs / 1000), firstAnswerSeconds: Math.round(firstAnswerMs / 1000) });
       step("MODEL", `czas rund poprawczych wyczerpany: ${round} pominięta, zostaje wersja z oznaczeniami`);
@@ -5072,6 +5088,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         });
       }
     }
+    if ((missingGates.length || supervisedMissing.length) && skippedRounds.includes("ścieżka obowiązkowa")) {
+      modelOutput += `\n\n[ŚCIEŻKA OBOWIĄZKOWA — w odpowiedzi brak: ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}]`;
+    }
 
     // A bare article whose number this turn verified in several acts ("art. 11": KC and PrUp):
     // the application cannot tell which is meant, so one correcting round asks the model to name
@@ -5110,6 +5129,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       } catch (error) {
         audit.record("gate", "ACT_NAME_CORRECTION", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED" });
       }
+    }
+    if (ambiguous.length > 0 && skippedRounds.includes("nazwa aktu")) {
+      modelOutput += `\n\n[NAZWA AKTU DO SPRAWDZENIA: ${ambiguous.map((item) => `${item.claim} — ${item.acts.join(" albo ")}`).join("; ")}]`;
     }
 
     // What the answer says a judgment or interpretation is about must come from the text read

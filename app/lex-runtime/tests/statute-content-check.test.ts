@@ -129,14 +129,13 @@ async function run(model: string, correction: string) {
 }
 
 describe("kontrola treści przepisów", () => {
-  it("teza sprzeczna z brzmieniem: runda korekty, poprawiona odpowiedź z ✅ (także model lokalny)", async () => {
+  it("teza sprzeczna z brzmieniem na ścieżce prostej: bez rundy korekty, ostrzeżenie z brzmieniem przepisu", async () => {
     const { result, calls } = await run("local/bielik-11b-v3-q4km", RIGHT);
     const answer = result.answer ?? "";
-    expect(calls).toContain("correction");
-    expect(answer).toContain("aresztu, ograniczenia wolności albo grzywny");
-    expect(answer).not.toContain("dożywotniego");
-    expect(answer).toMatch(/art\. 51 § 1 KW[^\n]*✅ \[VER:/u);
-    expect(result.corrections?.some((item) => item.round === "STATUTE_CONTENT")).toBe(true);
+    expect(calls).not.toContain("correction");
+    expect(answer).toContain("⚠️ [PRZEPIS ODCZYTANY, TEZA NIEPOTWIERDZONA:");
+    expect(answer).not.toMatch(/dożywotniego[^\n]*✅ \[VER:/u);
+    expect(result.corrections?.some((item) => item.round === "STATUTE_CONTENT")).toBeFalsy();
   }, 60_000);
 
   it("korekta nie pomogła: zamiast ✅ ostrzeżenie z brzmieniem przepisu", async () => {

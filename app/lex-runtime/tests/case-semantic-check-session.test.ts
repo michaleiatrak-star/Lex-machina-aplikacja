@@ -60,17 +60,15 @@ async function run(options: { correction: string; secondVerdict: string; firstQu
 }
 
 describe("semantic check of a cited judgment in a turn", () => {
-  it("the connected model judges in a clean context; the correction replaces the reversed thesis", async () => {
+  it("the connected model judges in a clean context; on a simple path the reversed thesis is marked, not rewritten", async () => {
     const { result, calls, judged, gate } = await run({ correction: RIGHT, secondVerdict: verdict("SUPPORTED", "konieczna jest ocena okoliczności konkretnej sprawy") });
-    expect(judged).toHaveLength(2);
+    expect(judged).toHaveLength(1);
     expect(judged[0]!.model).toBe("account/openai/default");
     expect(judged[0]!.tools ?? []).toEqual([]);
     expect(String(judged[0]!.messages[0]!.content)).toContain("CO ODPOWIEDŹ MÓWI O NIM:\nUchwała SN I KZP 3/24 (siedmiu sędziów): każde orzeczenie");
-    const correction = calls.find((call) => String(call.messages.at(-1)?.content).startsWith("KONTROLA ZGODNOŚCI Z PYTANIEM"));
-    expect(String(correction?.messages.at(-1)?.content)).toContain("Tekst dokumentu: „nie powoduje automatycznie nieważności orzeczenia”");
-    expect(result.answer).toContain("nie powoduje automatycznie nieważności");
-    expect(result.answer).not.toContain("Kontrola aplikacji");
-    expect(gate?.status).toBe("OK");
+    expect(calls.some((call) => String(call.messages.at(-1)?.content).startsWith("KONTROLA ZGODNOŚCI Z PYTANIEM"))).toBe(false);
+    expect(result.answer).toContain("⚠️ Kontrola aplikacji: I KZP 3/24 dotyczy pytania; opis w odpowiedzi nie w pełni wynika z jego tekstu.");
+    expect(gate?.status).toBe("DEGRADED");
   }, 60_000);
 
   it("the user is warned when the corrected answer still misstates the judgment", async () => {
