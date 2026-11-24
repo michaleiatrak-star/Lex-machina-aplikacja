@@ -3780,7 +3780,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const inactiveComponents = new Set([
       ...(appendsDisclaimer ? [] : ["DISCLAIMER"]),
       // show_widget (with template data) exists for every model except a local one.
-      ...(request.model.startsWith("local/") ? ["WIDGET-DANE"] : [])
+      ...(request.model.startsWith("local/") ? ["WIDGET-DANE", "WIDGET-HOST"] : [])
     ]);
     // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
     const stages = reachedStages(request.query);
