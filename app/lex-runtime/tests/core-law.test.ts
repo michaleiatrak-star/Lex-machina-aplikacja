@@ -51,10 +51,16 @@ const KK_HTML =
   "<p>Art. 148a. § 1. Kto zabija człowieka ze szczególnym okrucieństwem</p></body></html>";
 
 function fakeEli(
-  options: { deny?: boolean; references?: Record<string, unknown>; emptyKkHtml?: boolean; amendmentText?: boolean } = {}
+  options: { deny?: boolean; references?: Record<string, unknown>; emptyKkHtml?: boolean; amendmentText?: boolean; changes?: unknown[] } = {}
 ) {
   const requested: string[] = [];
+  // The ELI changes feed (task 08.4b) apart: unavailable unless the test gives its items.
+  const changes: string[] = [];
   const fetcher = async (url: string) => {
+    if (url.includes("/eli/changes/acts")) {
+      changes.push(url);
+      return options.changes ? Response.json({ items: options.changes, totalCount: options.changes.length }) : new Response("", { status: 503 });
+    }
     requested.push(url);
     if (options.deny) return new Response("", { status: 403 });
     const references = /\/acts\/(DU\/\d+\/\d+)\/references$/.exec(url);
@@ -89,7 +95,7 @@ function fakeEli(
       truncated: false
     })
   };
-  return { fetcher, pdf, requested };
+  return { fetcher, pdf, requested, changes };
 }
 
 describe("core law index", () => {
@@ -265,6 +271,24 @@ describe("core law index", () => {
     index.load(corpus());
     return { eli, index };
   }
+
+  it("follows the ELI changes feed: unchanged acts wait for the weekly check, a changed one is checked now", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    // The first run after the copy sets the feed's starting point only.
+    const quiet = later(store, start + DAY, { changes: [] });
+    await quiet.index.refresh();
+    expect(quiet.eli.changes[0]).toContain("since=2026-09-23T12%3A00%3A00");
+    // A fresh feed: the daily per-act check waits for the weekly one.
+    const next = later(store, start + 2 * DAY + 2 * 3_600_000, { changes: [] });
+    await next.index.refresh();
+    expect(next.eli.requested.filter((url) => url.endsWith("/references"))).toEqual([]);
+    // The feed names the Kodeks karny t.j. as changed: only its relations are checked.
+    const changed = later(store, start + 2 * DAY + 4 * 3_600_000, { changes: [{ ELI: "DU/2026/1700", changeDate: "2026-09-25T10:00:00", references: { "Akty zmienione": [{ id: "DU/2025/383" }] } }] });
+    await changed.index.refresh();
+    expect(changed.eli.requested.filter((url) => url.endsWith("/references"))).toEqual(["https://api.sejm.gov.pl/eli/acts/DU/2025/383/references"]);
+  });
 
   it("downloads each text once and afterwards only checks ELI relations", async () => {
     const store = tempDir("lex-core-store-");

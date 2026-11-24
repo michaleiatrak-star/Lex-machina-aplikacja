@@ -96,6 +96,7 @@ import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionS
 import { autostartLocalSearxng, firstRunLocalSearch, hideDockerDashboardOnStart, LOCAL_SEARXNG_URL } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
 import { containerEngineDeclined, startSystemBrowser, systemBrowserWanted } from "../system-browser.js";
+import { configureSejmPendingActs, SejmPendingActs } from "../sejm-pending-acts.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
@@ -455,6 +456,12 @@ export async function startLocalServer(options?: {
   configureUsageLog(path.join(caseFileStore.rootDir, "usage"));
   // Pages built by JavaScript or behind a bot check: read through the local browser (Docker, next
   // to SearXNG) when it runs; LEX_BROWSER_RENDER=0 turns it off.
+  if (process.env.LEX_SEJM_PENDING !== "0") {
+    const pending = new SejmPendingActs();
+    configureSejmPendingActs(pending);
+    // The current term's bills load in the background, so the first answer need not wait for them.
+    void pending.ready(0);
+  }
   if (process.env.LEX_BROWSER_RENDER !== "0") configurePageRenderer(new CdpPageRenderer(process.env.LEX_BROWSER_URL?.trim() || undefined));
   // Startpage on the user's session: the cookies kept (sealed) across restarts when the user chose it.
   configureLawSourceSessionStore(startpageSessionStore);

@@ -29,6 +29,7 @@ import {
   pdfArticleAnchors
 } from "./source-anchor.js";
 import { activeJurisdictionPack, jurisdictionDomainMap, isDomainSkill, listJurisdictions } from "./jurisdiction.js";
+import { affectedTrackedActs, eliSince, fetchEliChanges, nextEliSince } from "./eli-changes.js";
 import { catalogDue, catalogFile, catalogRefs, loadCatalog, refreshEliCatalog } from "./eli-catalog.js";
 
 // The whole catalogue of in-force acts with a t.j. (eli-catalog.ts), not only those of the DR maps.
@@ -240,6 +241,11 @@ const ELI_API = "https://api.sejm.gov.pl/eli";
 // Texts are downloaded once. Consolidated texts are re-checked (ELI relations
 // only, no text) at most once a day for new amendments or a newer t.j.
 const CHECK_AFTER_MS = 24 * 60 * 60 * 1000;
+// Following /eli/changes/acts, a full per-act check once a week (user's proposal, task 08.4).
+const FULL_CHECK_AFTER_MS = 7 * CHECK_AFTER_MS;
+// The feed counts as followed when it answered within two days.
+const CHANGES_FRESH_MS = 2 * CHECK_AFTER_MS;
+const CHANGES_EVERY_MS = 60 * 60 * 1000;
 const RETRY_AFTER_BLOCK_MS = 60 * 60 * 1000;
 const SCHEDULE_TICK_MS = 60 * 60 * 1000;
 const REQUEST_GAP_MS = 750;
@@ -748,6 +754,8 @@ type IndexState = {
   changes?: CoreLawChange[];
   // Akty spoza map DR dołączone po weryfikacji w źródle (ELI t.j. i tytuł).
   adopted?: AdoptedAct[];
+  // Task 08.4b: the ELI changes feed. With a fresh feed every act is checked in full once a week.
+  eliChanges?: { since: string; checkedAt: string | null; error?: string | null };
 };
 
 type AdoptedAct = {
@@ -1422,6 +1430,43 @@ export class CoreLawIndex {
     }
   }
 
+  /** Daily per-act checks, or weekly while the ELI changes feed is followed. */
+  private checkAfterMs(): number {
+    const feed = this.state.eliChanges?.checkedAt;
+    return feed && this.now() - Date.parse(feed) < CHANGES_FRESH_MS ? FULL_CHECK_AFTER_MS : CHECK_AFTER_MS;
+  }
+
+  /**
+   * Acts changed in ELI since the previous look (at most hourly): those touching the copy are
+   * checked in this run. The first run only sets the starting point; the daily check covers it.
+   */
+  private async followEliChanges(): Promise<void> {
+    const startedAt = eliSince(new Date(this.now()));
+    const feed = this.state.eliChanges;
+    if (!feed) {
+      this.state.eliChanges = { since: startedAt, checkedAt: null };
+      this.saveState();
+      return;
+    }
+    if (feed.checkedAt && this.now() - Date.parse(feed.checkedAt) < CHANGES_EVERY_MS) return;
+    try {
+      const changed = await fetchEliChanges(feed.since, this.fetcher);
+      const tracked = this.refs.map((ref) => ({ eli: ref.eli, currentEli: this.state.acts[ref.eli]?.currentEli }));
+      for (const eli of affectedTrackedActs(changed, tracked)) {
+        const state = this.state.acts[eli];
+        if (state) {
+          state.checkedAt = null;
+          state.relationsCheckedAt = null;
+        }
+      }
+      this.state.eliChanges = { since: nextEliSince(changed, startedAt), checkedAt: new Date(this.now()).toISOString(), error: null };
+    } catch (error) {
+      // The feed down: the daily per-act check takes over (checkAfterMs) until it answers again.
+      this.state.eliChanges = { ...feed, error: error instanceof Error ? error.message.slice(0, 120) : "ELI_CHANGES_FAILED" };
+    }
+    this.saveState();
+  }
+
   /** Background refresh; returns immediately when one is already running. */
   refresh(options: RefreshOptions = {}): Promise<void> {
     // A requested check/apply runs after the one in progress, not instead of it.
@@ -1476,7 +1521,7 @@ export class CoreLawIndex {
     const acts = this.summaries().map((act): CoreLawActStatus => {
       const due =
         act.consolidated &&
-        (!act.relationsCheckedAt || this.now() - Date.parse(act.relationsCheckedAt) >= CHECK_AFTER_MS);
+        (!act.relationsCheckedAt || this.now() - Date.parse(act.relationsCheckedAt) >= this.checkAfterMs());
       const state: CoreLawActStatus["state"] =
         act.articleCount === 0 && !act.fetchedAt && act.unavailable
           ? "UNAVAILABLE"
@@ -1692,6 +1737,7 @@ export class CoreLawIndex {
     ) {
       return;
     }
+    if (!options.only?.length) await this.followEliChanges();
     let consecutiveFailures = 0;
     let anchorUpgrades = 0;
     for (const ref of this.refs) {
@@ -1712,7 +1758,7 @@ export class CoreLawIndex {
         ref.consolidated &&
         (options.force ||
           !state.checkedAt ||
-          this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
+          this.now() - Date.parse(state.checkedAt) >= this.checkAfterMs());
       if (downloaded && !checkDue && !upgrade) {
         // Pobrany inną drogą (np. nowelizacja ściągnięta przy sprawdzaniu t.j.): bez stanu
         // akt na liście wyglądałby na niepobrany (DU/2026/184 przy t.j. 2023/501).

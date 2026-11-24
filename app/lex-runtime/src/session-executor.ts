@@ -1,3 +1,4 @@
+import { actName, pendingAmendmentLine, placeLegislativeNotes, sejmPendingActs } from "./sejm-pending-acts.js";
 import { recordTurnUsage } from "./usage-log.js";
 import { currentPortalSearch, portalSearchPrompt, portalSignatures, searchOfficialPortals } from "./official-portal-search.js";
 import { lawSourceWithCheck, registerPageCheck, type VerifiedLawSource } from "./eli/law-source-sessions.js";
@@ -5234,6 +5235,35 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     if (ambiguous.length > 0 && skippedRounds.includes("nazwa aktu")) {
       modelOutput += `\n\n[NAZWA AKTU DO SPRAWDZENIA: ${ambiguous.map((item) => `${item.claim} — ${item.acts.join(" albo ")}`).join("; ")}]`;
+    }
+
+    // Task 08.4a: a cited act with a bill amending it pending in the Sejm (print, stage).
+    const pendingSource = sejmPendingActs();
+    if (pendingSource && legalTurn && !request.documentAstOutput && this.coreLawIndex && !pausesForUser(modelOutput, answerLetterMarkup(modelOutput) !== null)) {
+      const summaries = this.coreLawIndex.distinctSummaries();
+      const cited = new Map<string, string[]>();
+      for (const record of ledger.all()) {
+        if (record.status !== "VERIFIED" || record.kind !== "statute") continue;
+        const eli = record.currentEli ?? /\/eli\/acts\/((?:DU|MP)\/\d{4}\/\d+)\//u.exec(record.sourceUrl ?? "")?.[1];
+        const act = eli ? summaries.find((item) => item.currentEli === eli || item.eli === eli) : undefined;
+        if (act?.title) cited.set(act.title, [...(cited.get(act.title) ?? []), record.claim]);
+      }
+      if (cited.size > 0) {
+        try {
+          const pending = await pendingSource.forActs([...cited.keys()]);
+          if (pending.length > 0) {
+            const notes = pending.map((item) => ({
+              anchors: [...cited.entries()].filter(([title]) => actName(title) === item.act).flatMap(([, claims]) => claims),
+              line: pendingAmendmentLine(item)
+            }));
+            modelOutput = placeLegislativeNotes(modelOutput, notes);
+            step("VERIFY", `prace legislacyjne w Sejmie: ${pending.map((item) => `druk ${item.number}`).join(", ")}`);
+          }
+          audit.record("gate", "SEJM_PENDING_AMENDMENTS", "OK", { acts: [...cited.keys()].length, pending: pending.map((item) => `${item.act}:${item.term}/${item.number}`) });
+        } catch (error) {
+          audit.record("gate", "SEJM_PENDING_AMENDMENTS", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 120) : "SEJM_FAILED" });
+        }
+      }
     }
 
     // What the answer says a judgment or interpretation is about must come from the text read
