@@ -321,6 +321,7 @@ import {
 } from "../workflow-audit-artifact.js";
 import {
   completeOrderedCaseExecution,
+  withOrderedFinding,
   createOrderedCaseWorkflowState,
   nextOrderedCaseCheckpoint,
   requireOrderedCaseExecutionPermit,
@@ -12073,7 +12074,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             checkpoint:
               permit.checkpoint,
             revision:
-              permit.revision
+              permit.revision,
+            ...(state.findings ? { findings: state.findings } : {})
           };
         orderedCaseContext = {
           caseId:
@@ -12675,7 +12677,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     });
 
                   try {
-                    const next =
+                    // The step's answer is kept for the later steps (task 03.4).
+                    const next = withOrderedFinding(
                       completeOrderedCaseExecution(
                         current,
                         orderedCaseContext!
@@ -12684,7 +12687,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                           auditArtifact
                             .auditRef
                         ]
-                      );
+                      ),
+                      orderedCaseContext!.permit.checkpoint,
+                      typeof result.answer === "string" ? result.answer : ""
+                    );
                     return await options
                       .orderedCaseWorkflowStore!
                       .saveOrderedCaseWorkflowState({

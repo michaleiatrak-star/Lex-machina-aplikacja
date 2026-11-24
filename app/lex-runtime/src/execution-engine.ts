@@ -1,3 +1,4 @@
+import { orderedFindingsPrompt } from "./ordered-case-workflow-state.js";
 import { fitInstructions } from "./instruction-budget.js";
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
@@ -586,6 +587,7 @@ export class LexExecutionEngine {
         OrderedCaseWorkflowId;
       checkpoint: string;
       revision: number;
+    findings?: Record<string, { text: string; at: string }>;
     };
     tools?: NormalizedToolSchema[];
     toolSystemPromptAppendix?: string;
@@ -1547,6 +1549,21 @@ export class LexExecutionEngine {
           "OK",
           `draft=${args.processWorkflowContext.draft?.version ?? "none"};source=${args.processWorkflowContext.draft?.source ?? "none"};remarks=${args.processWorkflowContext.remarks ? "yes" : "no"}`
         );
+      }
+    }
+    // Task 03.4: the earlier steps' findings of the evidence and witness procedures.
+    if (args.orderedCaseWorkflowContext?.findings) {
+      const findings = orderedFindingsPrompt(
+        { workflowId: args.orderedCaseWorkflowContext.workflowId, findings: args.orderedCaseWorkflowContext.findings },
+        args.orderedCaseWorkflowContext.checkpoint,
+        args.model.startsWith("local/")
+          ? 6_000
+          : Math.max(40_000, Math.floor((args.modelContextTokens ?? 200_000) * (args.tokenCharsPerToken ?? 3.5) * 0.25))
+      );
+      if (findings) {
+        if (args.model.startsWith("local/")) contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}${findings}`;
+        else findingsMessage = `${FINDINGS_MESSAGE_OPEN}\n${findings}\n[/LEX_CASE_FINDINGS]`;
+        emit("gate", "ORDERED_CHECKPOINT_FINDINGS", "OK", `checkpoints=${Object.keys(args.orderedCaseWorkflowContext.findings).join(",")}`);
       }
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.

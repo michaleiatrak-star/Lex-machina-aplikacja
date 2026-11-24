@@ -534,6 +534,7 @@ export type SessionExecutionRequest = {
       OrderedCaseWorkflowId;
     checkpoint: string;
     revision: number;
+    findings?: Record<string, { text: string; at: string }>;
   };
 };
 
