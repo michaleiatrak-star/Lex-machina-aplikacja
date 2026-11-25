@@ -21,7 +21,8 @@ import {
   verifiedLedgerMarkers,
   markUnverifiedReferences,
   refreshVerMarkerDates,
-  softenRemainingBlockers
+  softenRemainingBlockers,
+  tidyMarkerLayout
 } from "./finalization-gate.js";
 import { opinionAsked, simpleFormQuestion, type MatterComplexity } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
@@ -5951,7 +5952,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       remarkedText = softened.text;
     }
     if (softenedClaims.length) audit.record("gate", "HARD_GATE_SOFTENED", "DEGRADED", { claims: softenedClaims.slice(0, 20) });
-    remarkedText = qualifyCompleteVerificationClaims(remarkedText);
+    remarkedText = tidyMarkerLayout(qualifyCompleteVerificationClaims(remarkedText));
     const processedDocumentCitations =
       remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
     const statusConsistency =

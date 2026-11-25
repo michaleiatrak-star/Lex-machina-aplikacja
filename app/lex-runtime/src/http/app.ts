@@ -1,4 +1,5 @@
 import { withoutRepeatedLegislativeNotes } from "../sejm-pending-acts.js";
+import { joinStepCitations, withSingleStepFooter } from "../document-citations.js";
 import { readLetterLogo, readLetterSender } from "../letter-sender.js";
 import { usageOwner, usageSummary } from "../usage-log.js";
 import { executionAbort } from "../providers/gateway.js";
@@ -12426,24 +12427,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           );
         }
 
-        const successfulAnswers =
-          auto.steps
-            .filter(
-              (step) =>
-                typeof step.result
-                  .answer ===
-                  "string" &&
-                step.result.answer
-                  .trim()
-            )
-            .map(
-              (step) =>
-                [
-                  `## ${step.permit.checkpoint}`,
-                  step.result.answer!
-                    .trim()
-                ].join("\n\n")
-            );
+        const answeredSteps = auto.steps.filter(
+          (step) => typeof step.result.answer === "string" && step.result.answer.trim()
+        );
+        const waitingAnswer =
+          auto.waitingResult?.answer?.trim() && answeredSteps.length > 0 && !answeredSteps.some((step) => step.result === auto.waitingResult)
+            ? auto.waitingResult
+            : null;
+        // One numbering of the links over all the steps, with every step's citations.
+        const joinedCitations = joinStepCitations([
+          ...answeredSteps.map((step) => ({ text: step.result.answer!.trim(), citations: step.result.documentCitations ?? [] })),
+          ...(waitingAnswer ? [{ text: waitingAnswer.answer!.trim(), citations: waitingAnswer.documentCitations ?? [] }] : [])
+        ]);
+        // The register and the disclaimers once, after the last step, not after each.
+        const stepParts = withSingleStepFooter(joinedCitations.texts);
+        const successfulAnswers = answeredSteps.map((step, index) =>
+          [`## ${step.permit.checkpoint}`, stepParts.bodies[index]!].join("\n\n")
+        );
 
         // Usage of the whole sequence, not of its last step (live run 2026-11-21: five checkpoints
         // reported as one model call with no cache reads).
@@ -12458,9 +12458,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           response.usage = total;
         }
         // The checkpoint that asked the user closes the answer: its questions are last.
-        if (auto.waitingResult?.answer?.trim() && successfulAnswers.length > 0) {
-          successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${auto.waitingResult.answer.trim()}`);
+        if (waitingAnswer) {
+          successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${stepParts.bodies.at(-1)!}`);
         }
+        if (stepParts.footer && successfulAnswers.length > 0) successfulAnswers.push(stepParts.footer);
         if (
           response.status ===
             "DRAFT_PRESENTABLE" &&
@@ -12471,6 +12472,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               "\n\n---\n\n"
             )
           );
+          if (joinedCitations.citations.length > 0) response.documentCitations = joinedCitations.citations;
         }
 
         // Task 10B: who read which module in every AUTO step, not only in the last one.

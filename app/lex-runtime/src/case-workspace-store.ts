@@ -281,7 +281,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
 
-  const citations = (input.documentCitations ?? []).slice(0, 64).map((citation) => {
+  const citations = (input.documentCitations ?? []).slice(0, 400).map((citation) => {
     if (
       typeof citation.citationId !== "string" ||
       citation.citationId.length > 96 ||

@@ -294,12 +294,18 @@ function lastMatchEnd(pattern: RegExp, text: string): number {
 // statute's wording although "Umowa" stands before it (contract test 2026-11-08).
 const STATUTE_RIGHT_AFTER = /^[\s)]*(?:⚠️\s*\[[^\]]*\]\s*)?[,;(–—-]?\s*(?:\(?\s*)?(?:art\.|§)\s*\d/u;
 
+const ANTICIPATED_ARGUMENT =
+  /(?:(?:(?<![\p{L}])atak\p{L}*|(?<![\p{L}])kontrargument\p{L}*|(?<![\p{L}])zarzut\p{L}*\s+(?:możliw\p{L}*|spodziewan\p{L}*))(?:\s+(?:ze\s+strony\s+)?(?:pozwan\p{L}*|powod\p{L}*|powód|stron\p{L}*(?:\s+przeciwn\p{L}*)?|przeciwnik\p{L}*))?|(?<![\p{L}])moż\p{L}+\s+(?:podnieść|twierdzić|zarzucić|argumentować|odpowiedzieć)|(?<![\p{L}])spodziewan\p{L}*|(?<![\p{L}])antycyp\p{L}*|(?<![\p{L}])przewidywan\p{L}*\s+(?:zarzut|argument))/giu;
+
 function attributedToDocument(text: string, quoteStart: number, quoteEnd = quoteStart): boolean {
   if (STATUTE_RIGHT_AFTER.test(text.slice(quoteEnd, quoteEnd + 120))) return false;
   const paragraphStart = Math.max(text.lastIndexOf("\n\n", quoteStart), quoteStart - 300, 0);
   const before = text.slice(paragraphStart, quoteStart);
   const attribution = lastMatchEnd(DOCUMENT_ATTRIBUTION, before);
   if (attribution < 0) return false;
+  // An argument the answer expects from the other side ("Atak pozwanej: „to w istocie pismo
+  // przygotowawcze”"), not a quote from the files (real11, 2026-11-25).
+  if (lastMatchEnd(ANTICIPATED_ARGUMENT, before) >= attribution) return false;
   // "pozwany powołuje art. 6 k.c., który stanowi: „…”": the nearer cue decides.
   return lastMatchEnd(NON_DOCUMENT_SOURCE, before) < attribution;
 }
@@ -756,4 +762,52 @@ export function processDocumentCitationMarkers(
       unsourced: linked.unsourced
     }
   };
+}
+
+/**
+ * AUTO steps joined into one answer: each step numbers its links from docref_1, so the joined
+ * text gets one numbering and all the steps' citations (real11, 2026-11-25: the first step's
+ * links 1-33 opened the last step's passages and 34 on stayed raw markers).
+ */
+export function joinStepCitations(
+  steps: Array<{ text: string; citations: PublicDocumentCitation[] }>
+): { texts: string[]; citations: PublicDocumentCitation[] } {
+  const citations: PublicDocumentCitation[] = [];
+  const texts = steps.map((step) => {
+    const renamed = new Map<string, string>();
+    for (const citation of step.citations) {
+      const citationId = `docref_${citations.length + 1}`;
+      const marker = `[[LEXDOCREF:${citationId}]]`;
+      renamed.set(citation.citationId, citationId);
+      citations.push({ ...citation, citationId, marker });
+    }
+    // A marker with no citation in its own step cannot open anything: dropped.
+    return step.text.replace(/\[\[LEXDOCREF:([^\]\r\n]{1,96})\]\]/gu, (_whole, id: string) => {
+      const next = renamed.get(id);
+      return next ? `[[LEXDOCREF:${next}]]` : "";
+    });
+  });
+  return { texts, citations };
+}
+
+// The application's register and the disclaimers close each step's answer; joined, they repeated
+// after every step (real11: four registers and eight disclaimers in one answer).
+const STEP_FOOTER_START = /\n(?:-{3,}\s*\n+)?(?=(?:REJESTR DOKUMENTÓW \(prowadzony przez aplikację\)|REJESTR KROKÓW \(ST-FINAL|⚖️ \*\*Zastrzeżenie:\*\*|⚖️ Zastrzeżenie:))/u;
+
+/** Each step's body, and the last register and disclaimers once, after all the steps. */
+export function withSingleStepFooter(texts: string[]): { bodies: string[]; footer: string } {
+  let footer = "";
+  let registerFooter = "";
+  const bodies = texts.map((text) => {
+    const match = STEP_FOOTER_START.exec(text);
+    if (!match) return text;
+    const tail = text.slice(match.index).replace(/^\n(?:-{3,}\s*\n+)?/u, "").trim();
+    footer = tail;
+    if (tail.includes("REJESTR DOKUMENTÓW (prowadzony przez aplikację)")) registerFooter = tail;
+    return text.slice(0, match.index).replace(/\n-{3,}\s*$/u, "").trimEnd();
+  });
+  // The register is the application's own record of the turn: kept even when a later step has
+  // only the disclaimers.
+  const chosen = registerFooter && !footer.includes("REJESTR DOKUMENTÓW") ? `${registerFooter.split(/\n(?=⚖️)/u)[0]!.trimEnd()}\n\n${footer}` : footer;
+  return { bodies, footer: chosen };
 }
