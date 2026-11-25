@@ -332,7 +332,7 @@ import {
   type OrderedCaseWorkflowState
 } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
-import { isCourtPleading } from "../pleading-standard.js";
+import { continuesPipeline, isCourtPleading } from "../pleading-standard.js";
 
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
@@ -11271,7 +11271,35 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         Boolean(options.registry.get("pisma-procesowe-v3")) &&
         (materialSkills[0] ?? routerExecutive) === "pisma-procesowe-v3" &&
         isCourtPleading(turnMessage);
-      const previewPlan = pleadingRouted
+      // A continuation of the pleading the case has started goes on in its pipeline, whatever
+      // the attached files' kinds suggest (XI P 27/26, 2026-11-25: after the AUTO batch limit
+      // "Kontynuuj." went to analizator-dowodow-v3 and the model wrote the letter outside it).
+      let pleadingContinued = false;
+      if (
+        keywordPlan.id !== "PROCESS_PLEADING_V1" &&
+        pleadingCase &&
+        continuesPipeline(turnMessage) &&
+        options.caseAccessService &&
+        options.processWorkflowStore &&
+        options.registry.get("pisma-procesowe-v3")
+      ) {
+        const continuedCaseId =
+          knowledge.caseId ??
+          [...new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean))][0];
+        if (continuedCaseId) {
+          try {
+            const actor = responseAuthContext(res);
+            const view = options.caseAccessService.openCase(actor, continuedCaseId);
+            const started = await options.caseAccessService.withCaseDataKey(actor, continuedCaseId, "READ", (caseDataKey) =>
+              options.processWorkflowStore!.getProcessPleadingState({ caseId: continuedCaseId, caseDataKey, keyVersion: view.keyVersion })
+            );
+            pleadingContinued = Boolean(started && started.stage !== "FINAL" && started.stage !== "CG_ACCEPTANCE");
+          } catch {
+            pleadingContinued = false;
+          }
+        }
+      }
+      const previewPlan = pleadingRouted || pleadingContinued
         ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
         : contractQuestion ||
         pleadingRedaction ||
