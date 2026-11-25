@@ -637,6 +637,9 @@ const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
 // division, the case's kind): read for the model, not left to it (real7: KP modules hinted, never read).
 const PRIMARY_DOMAIN_MODULES_BUDGET_CHARS = 40_000;
 // The skills whose answers get the model's correcting rounds (user 2026-11-21).
+// Steps of the pleading pipeline that write or finally check the letter itself: the only ones whose
+// answer gets the correcting rounds (frame, draft and red team, parties, quality, final audit, review).
+export const PIPELINE_LETTER_STEPS = new Set(["CP-W1", "CP-PRE-W2", "CP-ATAK", "CP-PODMIOT", "CP-QUALITY", "CP-AUDYT", "CP-PEER"]);
 const COMPLEX_ROUND_SKILLS = new Set(["pisma-procesowe-v3", "analizator-umow-v1", "analiza-sadowa-v6"]);
 export class DocumentAliasRegistry {
     prefixes = new Map();
@@ -3804,7 +3807,20 @@ export class SafeSessionExecutor {
         const roundSkill = taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "";
         const complexRounds = COMPLEX_ROUND_SKILLS.has(roundSkill) || Boolean(request.processWorkflowContext || request.contractWorkflowContext || request.courtWorkflowContext);
         const skippedRounds = [];
+        // A pleading pipeline's working steps (scan, matrices, chains, anomalies, checks of the start):
+        // their reports are working material for the letter, which is rewritten and checked again in the
+        // steps that write it (frame, draft, quality, final audit). A rewrite of such a report costs
+        // minutes and changes nothing in the file: the checks stay, their result stays as marks (user
+        // 2026-11-25: correcting rounds only where they are needed).
+        const pipelineStep = request.processWorkflowContext?.checkpoint;
+        const pipelineWorkingStep = Boolean(pipelineStep) && !PIPELINE_LETTER_STEPS.has(pipelineStep);
         const roundsExhausted = (round) => {
+            if (pipelineWorkingStep && round !== "odpowiedź bez treści") {
+                skippedRounds.push(round);
+                audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `pipeline-working-step:${pipelineStep};${skippedRounds.join(",")}` });
+                step("MODEL", `runda „${round}” pominięta (krok roboczy ${pipelineStep}: pismo jest sprawdzane w krokach, które je piszą); wynik kontroli zostaje w odpowiedzi`);
+                return true;
+            }
             if (!complexRounds && round !== "odpowiedź bez treści") {
                 skippedRounds.push(round);
                 audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `simple-path:${roundSkill || "brak"};${skippedRounds.join(",")}` });

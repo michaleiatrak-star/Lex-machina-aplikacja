@@ -188,3 +188,14 @@ export function evidenceMotionGaps(answer: string): SchemaGap[] {
   }
   return gaps;
 }
+
+// A reply that only moves the started pleading on: the chat's own "Kontynuuj." after a batch of
+// steps, the decision bar's approval, a bare "tak" / "dalej" (XI P 27/26, 2026-11-25: "Kontynuuj."
+// with the case files attached went to the evidence analysis and the pleading was dropped).
+const CONTINUATION =
+  /^(?:kontynuuj(?:\s+(?:pismo|dalej|prac[eę]))?|dalej|tak|ok|zatwierdzam(?:\s+[^\n]{0,160})?|zgoda|akceptuj[eę](?:\s+[^\n]{0,120})?|idź\s+dalej|przejdź\s+dalej)[\s.!]*$/iu;
+
+/** The message continues the pipeline already running in the case (no new request). */
+export function continuesPipeline(message: string): boolean {
+  return CONTINUATION.test(message.trim());
+}
