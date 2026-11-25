@@ -18,7 +18,8 @@ import type {
   NativeCorpusAccess,
   NormalizedToolSchema,
   NormalizedToolResult,
-  StreamCallbacks
+  StreamCallbacks,
+  AccountEffort
 } from "./types.js";
 
 const COMMAND_TIMEOUT_MS = 20 * 60 * 1000;
@@ -1505,7 +1506,9 @@ export function claudeCorpusArgs(
   systemPrompt: string,
   mcpConfigPath: string,
   tail: string[] = [],
-  systemPromptFile?: string
+  systemPromptFile?: string,
+  // The account model's own web search as a source of leads (Settings, off by default; task 8.1).
+  webSearch = false
 ): string[] {
   return [
     "-p",
@@ -1518,11 +1521,11 @@ export function claudeCorpusArgs(
     "--mcp-config",
     mcpConfigPath,
     "--tools",
-    "Read,Glob,Grep",
+    webSearch ? "Read,Glob,Grep,WebSearch,WebFetch" : "Read,Glob,Grep",
     "--allowedTools",
-    "Read,Glob,Grep,mcp__lex",
+    webSearch ? "Read,Glob,Grep,WebSearch,WebFetch,mcp__lex" : "Read,Glob,Grep,mcp__lex",
     "--disallowedTools",
-    "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
+    webSearch ? "Bash,Write,Edit,NotebookEdit" : "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
     "--permission-mode",
     "dontAsk",
     ...(systemPromptFile ? ["--system-prompt-file", systemPromptFile] : ["--system-prompt", systemPrompt]),
@@ -1567,6 +1570,14 @@ export function claudeToolUses(
  */
 export function reportNativeReads(corpus: NativeCorpusAccess, stdout: string): void {
   for (const use of claudeToolUses(stdout)) {
+    if (use.name === "WebSearch" || use.name === "WebFetch") {
+      corpus.onWebUse?.({
+        tool: use.name,
+        ...(typeof use.input.query === "string" ? { query: use.input.query } : {}),
+        ...(typeof use.input.url === "string" ? { url: use.input.url } : {})
+      });
+      continue;
+    }
     if (use.name !== "Read") continue;
     const relative = corpusRelativePath(corpus.root, use.input.file_path);
     if (!relative) continue;
@@ -3694,6 +3705,34 @@ export function claudeStableSystem(params: ProviderStreamParams): { stable: stri
     params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages } : {}) }
   };
 }
+// The account model's web search (Settings > Wyszukiwarka internetowa, task 8.1): read at each run.
+let accountWebSearchSetting: () => boolean = () => false;
+export function configureAccountModelWebSearch(read: () => boolean): void {
+  accountWebSearchSetting = read;
+}
+function accountModelWebSearchAllowed(): boolean {
+  try {
+    return accountWebSearchSetting();
+  } catch {
+    return false;
+  }
+}
+
+// Claude CLI --effort (task 01). An older CLI that rejects the option: once without it, remembered.
+let claudeEffortUnsupported = false;
+export function claudeEffortArgs(effort: AccountEffort | undefined): string[] {
+  return effort && !claudeEffortUnsupported ? ["--effort", effort] : [];
+}
+export function claudeEffortRejected(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (claudeEffortUnsupported || !/--effort|\beffort\b/iu.test(message) || !/unknown|unrecogni|nieznan|invalid/iu.test(message)) return false;
+  claudeEffortUnsupported = true;
+  return true;
+}
+/** Test seam: the CLI supports --effort again. */
+export function resetClaudeEffortSupport(): void {
+  claudeEffortUnsupported = false;
+}
 /** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */
 export function claudeSystemFileRejected(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -4223,6 +4262,7 @@ export class AccountSessionManager {
     onText?: (text: string) => void;
     // The stable part of the Lex instructions, sent as the system prompt (cached between calls).
     stableSystem?: string;
+    effort?: AccountEffort;
   }): Promise<string> {
     await assertSubscriptionAccount("anthropic", args.abortSignal);
     const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-corpus-"));
@@ -4272,8 +4312,9 @@ export class AccountSessionManager {
           claudeCorpusArgs(systemPrompt, mcpConfig, [
             ...input.args,
             ...(args.clientModel ? ["--model", args.clientModel] : []),
+            ...claudeEffortArgs(args.effort),
             ...tail
-          ], systemFile),
+          ], systemFile, accountModelWebSearchAllowed()),
           input.stdin,
           COMMAND_TIMEOUT_MS,
           args.corpus.root,
@@ -4476,7 +4517,9 @@ export class AccountSessionManager {
     // Claude: the answer's text while it is written (chat preview).
     onText?: (text: string) => void,
     // Claude: the stable part of the Lex instructions as the system prompt (cached between calls).
-    stableSystem?: string
+    stableSystem?: string,
+    // Claude: --effort (task 01).
+    effort?: AccountEffort
   ): Promise<string> {
     const workDir = await fsp.mkdtemp(
       path.join(os.tmpdir(), "lex-account-session-")
@@ -4768,7 +4811,8 @@ export class AccountSessionManager {
               ...input.args,
               ...(clientModel
                 ? ["--model", clientModel]
-                : [])
+                : []),
+              ...claudeEffortArgs(effort)
             ],
             systemFile
           );
@@ -5064,6 +5108,7 @@ async function streamAccountSessionText(
     const runTools = params.runTools;
     const runCorpus = (cached: ReturnType<typeof claudeStableSystem>) => manager.runClaudeWithCorpus({
       prompt: buildCorpusPrompt(cached.params),
+      ...(params.accountEffort ? { effort: params.accountEffort } : {}),
       ...(cached.stable ? { stableSystem: cached.stable } : {}),
       images: messageImages(params),
       corpus: nativeCorpus,
@@ -5087,8 +5132,9 @@ async function streamAccountSessionText(
     try {
       text = await runCorpus(first);
     } catch (error) {
-      if (!first.stable || !claudeSystemFileRejected(error)) throw error;
-      text = await runCorpus({ stable: undefined, params });
+      if (claudeEffortRejected(error)) text = await runCorpus(first);
+      else if (!first.stable || !claudeSystemFileRejected(error)) throw error;
+      else text = await runCorpus({ stable: undefined, params });
     }
     if (!text.trim()) throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
     if (live) live.push(text);
@@ -5160,7 +5206,8 @@ async function streamAccountSessionText(
         accountSessionClientModel(provider, params.model),
         params.accountContinuity === "none",
         live?.push,
-        cached.stable
+        cached.stable,
+        provider === "anthropic" ? params.accountEffort : undefined
       );
     };
     let output: string;
@@ -5170,7 +5217,7 @@ async function streamAccountSessionText(
         break;
       } catch (error) {
         // An older Claude CLI without --system-prompt-file: once more with the whole prompt as the message.
-        if (provider === "anthropic" && claudeSystemFileRejected(error)) continue;
+        if (provider === "anthropic" && (claudeSystemFileRejected(error) || claudeEffortRejected(error))) continue;
         // A run that ended without any text (Codex: the turn completed with reasoning
         // only, e.g. the output limit spent on a long prompt) is repeated once with a
         // request for the text; the second empty run is reported with its summary.

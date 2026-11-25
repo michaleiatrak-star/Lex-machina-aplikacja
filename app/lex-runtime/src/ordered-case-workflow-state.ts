@@ -88,7 +88,38 @@ export type OrderedCaseWorkflowState = {
     OrderedCaseWorkflowEvent[];
   createdAt: string;
   updatedAt: string;
+  // What each closed step established (its answer), for the later steps (task 03.4): a local
+  // model with a short history does not lose the earlier steps.
+  findings?: Record<string, { text: string; at: string }>;
 };
+
+const FINDING_MAX = 12_000;
+const FINDINGS_MAX = 16;
+
+/** The closed step's answer kept for the later steps (the disclaimer dropped, bounded). */
+export function withOrderedFinding(input: OrderedCaseWorkflowState, checkpoint: string, answer: string, at = new Date().toISOString()): OrderedCaseWorkflowState {
+  const text = answer.replace(/\n-{3,}\n⚖️[\s\S]*$/u, "").replace(/\n{3,}/gu, "\n\n").trim().slice(0, FINDING_MAX);
+  if (!text || input.findings?.[checkpoint]?.text === text) return input;
+  const entries = Object.entries({ ...(input.findings ?? {}), [checkpoint]: { text, at } }).slice(-FINDINGS_MAX);
+  return { ...input, findings: Object.fromEntries(entries) };
+}
+
+/** The earlier steps' findings for the step now running, in the workflow's order, within the budget. */
+export function orderedFindingsPrompt(state: Pick<OrderedCaseWorkflowState, "workflowId" | "findings">, current: string, budget: number): string | null {
+  const order = ORDERED_CASE_WORKFLOW_SEQUENCES[state.workflowId] as readonly string[];
+  const before = order.slice(0, Math.max(0, order.indexOf(current))).filter((checkpoint) => state.findings?.[checkpoint]);
+  if (!before.length) return null;
+  const total = before.reduce((sum, checkpoint) => sum + state.findings![checkpoint]!.text.length + 40, 0);
+  const share = total <= budget ? Number.POSITIVE_INFINITY : Math.max(800, Math.floor(budget / before.length));
+  return [
+    "# USTALENIA Z ZAMKNIĘTYCH KROKÓW TEJ SPRAWY (zapisane przez aplikację)",
+    "Wyniki wcześniejszych kroków tej procedury: opieraj na nich ten krok; nie ustalaj ich od nowa i nie pomijaj; rozbieżność z dokumentami wskaż wprost.",
+    ...before.map((checkpoint) => {
+      const text = state.findings![checkpoint]!.text;
+      return `## ${checkpoint}\n${text.length > share ? `${text.slice(0, share)}\n[… skrócono: ${text.length - share} znaków]` : text}`;
+    })
+  ].join("\n\n");
+}
 
 export type OrderedCaseExecutionPermit = {
   workflowId:

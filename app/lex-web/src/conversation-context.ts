@@ -14,12 +14,21 @@ const HOSTED_CONVERSATION_CHARS: Record<string, number> = {
   google: 300_000
 };
 
+// With the model's own window known (the runtime's model list): half of it for the history, ~3
+// characters per token (task 02: a 1M-token model was cut to the 200k default).
+const HISTORY_SHARE = 0.5;
+const CHARS_PER_TOKEN = 3;
+
 export function conversationBudgetChars(
   provider: string,
-  model: string
+  model: string,
+  contextWindow?: number
 ): number {
   if (provider === "local" || model.startsWith("local/")) {
     return LOCAL_CONVERSATION_CHARS;
+  }
+  if (contextWindow && contextWindow > 0) {
+    return Math.max(LOCAL_CONVERSATION_CHARS, Math.floor(contextWindow * CHARS_PER_TOKEN * HISTORY_SHARE));
   }
   return HOSTED_CONVERSATION_CHARS[provider] ?? LOCAL_CONVERSATION_CHARS;
 }

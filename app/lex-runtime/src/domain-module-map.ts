@@ -601,7 +601,10 @@ function rankByPhrases(
     .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0]!.why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
 }
 
-export function domainHintPrompt(domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong?: boolean }>): string {
+export function domainHintPrompt(
+  domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong?: boolean }>,
+  loaded: ReadonlySet<string> = new Set()
+): string {
   // Several domains of one case: the ones its kind or a phrase of its own names are read
   // (or set aside in a sentence); one shared word only lets the model reach for a domain.
   const secondary = domains.slice(1);
@@ -612,7 +615,11 @@ export function domainHintPrompt(domains: Array<{ skill: string; matched: string
     ...domains.map(
       (domain) =>
         `- ${domain.skill}: sygnały ${domain.matched.map((phrase) => `„${phrase}”`).join(", ")}` +
-        (domain.modules.length ? `; moduły aktu dla tej sprawy: ${domain.modules.map((module) => `${module.resource} (${module.why})`).join("; ")}` : "")
+        (domain.modules.length
+          ? `; moduły aktu dla tej sprawy: ${domain.modules
+              .map((module) => `${module.resource} (${module.why})${loaded.has(module.resource) ? " — wczytany przez aplikację poniżej, nie czytaj go ponownie" : ""}`)
+              .join("; ")}`
+          : "")
     ),
     "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy.",
     ...(required.length

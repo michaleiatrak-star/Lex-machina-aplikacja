@@ -966,7 +966,9 @@ systemPromptFile) {
  * allowed) and the Lex runtime tools over one MCP server. No shell, no web,
  * no writes, no MCP servers of the account.
  */
-export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = [], systemPromptFile) {
+export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = [], systemPromptFile, 
+// The account model's own web search as a source of leads (Settings, off by default; task 8.1).
+webSearch = false) {
     return [
         "-p",
         "--output-format",
@@ -978,11 +980,11 @@ export function claudeCorpusArgs(systemPrompt, mcpConfigPath, tail = [], systemP
         "--mcp-config",
         mcpConfigPath,
         "--tools",
-        "Read,Glob,Grep",
+        webSearch ? "Read,Glob,Grep,WebSearch,WebFetch" : "Read,Glob,Grep",
         "--allowedTools",
-        "Read,Glob,Grep,mcp__lex",
+        webSearch ? "Read,Glob,Grep,WebSearch,WebFetch,mcp__lex" : "Read,Glob,Grep,mcp__lex",
         "--disallowedTools",
-        "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
+        webSearch ? "Bash,Write,Edit,NotebookEdit" : "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch",
         "--permission-mode",
         "dontAsk",
         ...(systemPromptFile ? ["--system-prompt-file", systemPromptFile] : ["--system-prompt", systemPrompt]),
@@ -1025,6 +1027,14 @@ export function claudeToolUses(stdout) {
  */
 export function reportNativeReads(corpus, stdout) {
     for (const use of claudeToolUses(stdout)) {
+        if (use.name === "WebSearch" || use.name === "WebFetch") {
+            corpus.onWebUse?.({
+                tool: use.name,
+                ...(typeof use.input.query === "string" ? { query: use.input.query } : {}),
+                ...(typeof use.input.url === "string" ? { url: use.input.url } : {})
+            });
+            continue;
+        }
         if (use.name !== "Read")
             continue;
         const relative = corpusRelativePath(corpus.root, use.input.file_path);
@@ -2422,6 +2432,35 @@ export function claudeStableSystem(params) {
         params: { ...params, systemPrompt: params.systemPrompt.slice(split).trimStart(), ...(leading.length ? { messages } : {}) }
     };
 }
+// The account model's web search (Settings > Wyszukiwarka internetowa, task 8.1): read at each run.
+let accountWebSearchSetting = () => false;
+export function configureAccountModelWebSearch(read) {
+    accountWebSearchSetting = read;
+}
+function accountModelWebSearchAllowed() {
+    try {
+        return accountWebSearchSetting();
+    }
+    catch {
+        return false;
+    }
+}
+// Claude CLI --effort (task 01). An older CLI that rejects the option: once without it, remembered.
+let claudeEffortUnsupported = false;
+export function claudeEffortArgs(effort) {
+    return effort && !claudeEffortUnsupported ? ["--effort", effort] : [];
+}
+export function claudeEffortRejected(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (claudeEffortUnsupported || !/--effort|\beffort\b/iu.test(message) || !/unknown|unrecogni|nieznan|invalid/iu.test(message))
+        return false;
+    claudeEffortUnsupported = true;
+    return true;
+}
+/** Test seam: the CLI supports --effort again. */
+export function resetClaudeEffortSupport() {
+    claudeEffortUnsupported = false;
+}
 /** An older Claude CLI without --system-prompt-file: the whole prompt goes as the message again. */
 export function claudeSystemFileRejected(error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -2822,8 +2861,9 @@ export class AccountSessionManager {
             const run = (tail) => runCli("anthropic", claudeCorpusArgs(systemPrompt, mcpConfig, [
                 ...input.args,
                 ...(args.clientModel ? ["--model", args.clientModel] : []),
+                ...claudeEffortArgs(args.effort),
                 ...tail
-            ], systemFile), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, {
+            ], systemFile, accountModelWebSearchAllowed()), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, {
                 settleOnStdout: claudeResultReady,
                 firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS,
                 ...(args.onText ? { onStdoutLine: claudeStdoutLines(args.onText) } : {})
@@ -2973,7 +3013,9 @@ export class AccountSessionManager {
     // Claude: the answer's text while it is written (chat preview).
     onText, 
     // Claude: the stable part of the Lex instructions as the system prompt (cached between calls).
-    stableSystem) {
+    stableSystem, 
+    // Claude: --effort (task 01).
+    effort) {
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-session-"));
         const allowExternalTakeover = !fresh &&
             (!continuityKey ||
@@ -3115,7 +3157,8 @@ export class AccountSessionManager {
                     ...input.args,
                     ...(clientModel
                         ? ["--model", clientModel]
-                        : [])
+                        : []),
+                    ...claudeEffortArgs(effort)
                 ], systemFile);
                 const hostCwd = workDir;
                 const runClaude = async (tail) => {
@@ -3312,6 +3355,7 @@ async function streamAccountSessionText(manager, provider, params) {
         const runTools = params.runTools;
         const runCorpus = (cached) => manager.runClaudeWithCorpus({
             prompt: buildCorpusPrompt(cached.params),
+            ...(params.accountEffort ? { effort: params.accountEffort } : {}),
             ...(cached.stable ? { stableSystem: cached.stable } : {}),
             images: messageImages(params),
             corpus: nativeCorpus,
@@ -3336,9 +3380,12 @@ async function streamAccountSessionText(manager, provider, params) {
             text = await runCorpus(first);
         }
         catch (error) {
-            if (!first.stable || !claudeSystemFileRejected(error))
+            if (claudeEffortRejected(error))
+                text = await runCorpus(first);
+            else if (!first.stable || !claudeSystemFileRejected(error))
                 throw error;
-            text = await runCorpus({ stable: undefined, params });
+            else
+                text = await runCorpus({ stable: undefined, params });
         }
         if (!text.trim())
             throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
@@ -3390,7 +3437,7 @@ async function streamAccountSessionText(manager, provider, params) {
         let emptyRetried = false;
         const runOnce = () => {
             const cached = provider === "anthropic" ? claudeStableSystem(params) : { stable: undefined, params };
-            return manager.runText(provider, buildAccountPrompt(cached.params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none", live?.push, cached.stable);
+            return manager.runText(provider, buildAccountPrompt(cached.params, toolTranscript) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none", live?.push, cached.stable, provider === "anthropic" ? params.accountEffort : undefined);
         };
         let output;
         for (let attempt = 0;; attempt += 1) {
@@ -3400,7 +3447,7 @@ async function streamAccountSessionText(manager, provider, params) {
             }
             catch (error) {
                 // An older Claude CLI without --system-prompt-file: once more with the whole prompt as the message.
-                if (provider === "anthropic" && claudeSystemFileRejected(error))
+                if (provider === "anthropic" && (claudeSystemFileRejected(error) || claudeEffortRejected(error)))
                     continue;
                 // A run that ended without any text (Codex: the turn completed with reasoning
                 // only, e.g. the output limit spent on a long prompt) is repeated once with a

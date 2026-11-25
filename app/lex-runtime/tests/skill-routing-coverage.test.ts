@@ -126,7 +126,9 @@ describe("drafting a letter vs analysing one", () => {
 describe("pipeline stages: shared modules named in stage headings", () => {
   it("pisma-procesowe-v3 W1 requires its strategy and red-team modules", () => {
     const w1 = moduleMap(registry, "pisma-procesowe-v3").filter((entry) => entry.stage === "W1" && entry.always).map((entry) => entry.resource);
-    expect(w1).toEqual(expect.arrayContaining(["shared/MOD-STRATEGIA-WYBOR.md", "shared/MOD-WARIANTY-POZWU.md", "shared/MOD-RED-TEAM-WLASNY.md"]));
+    expect(w1).toEqual(expect.arrayContaining(["shared/MOD-STRATEGIA-WYBOR.md", "shared/MOD-RED-TEAM-WLASNY.md"]));
+    // Called inside MOD-STRATEGIA-WYBOR; SKILL.md: "Nie wywołuj MOD-WARIANTY-POZWU samodzielnie".
+    expect(w1).not.toContain("shared/MOD-WARIANTY-POZWU.md");
   });
 });
 

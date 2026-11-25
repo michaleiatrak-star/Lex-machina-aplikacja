@@ -1,3 +1,4 @@
+import { withoutRepeatedLegislativeNotes } from "../sejm-pending-acts.js";
 import { readLetterLogo, readLetterSender } from "../letter-sender.js";
 import { usageOwner, usageSummary } from "../usage-log.js";
 import { executionAbort } from "../providers/gateway.js";
@@ -108,7 +109,7 @@ import { checkWokanda, defaultFetchText, effectiveWokandaCourt, parseCommonSigna
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
-import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
+import { completeOrderedCaseExecution, withOrderedFinding, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
 import { isCourtPleading } from "../pleading-standard.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
@@ -4736,6 +4737,50 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    // Task 06: a low-certainty page read again by the local vision model; the text is a proposal
+    // the user saves through the page edit, nothing leaves the computer.
+    app.post("/api/documents/:documentId/pages/:page/vision-read", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
+        const documentService = options.documentService;
+        if (!documentService?.visionReadPage) {
+            res.status(503).json({ error: "VISION_MODEL_UNAVAILABLE" });
+            return;
+        }
+        const documentId = String(req.params.documentId ?? "").trim();
+        const page = Number(req.params.page);
+        const requestedCaseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !Number.isInteger(page) || page < 1 || (requestedCaseId && !/^case_[a-f0-9]{32}$/.test(requestedCaseId))) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PAGE" });
+            return;
+        }
+        try {
+            let result;
+            if (options.caseAccessService) {
+                const caseId = requestedCaseId || documentCaseIds.get(documentId);
+                if (!caseId)
+                    throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+                const context = responseAuthContext(res);
+                options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+                const caseView = options.caseAccessService.openCase(context, caseId);
+                result = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => await documentService.visionReadPage(documentId, page, { caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+            }
+            else {
+                result = await documentService.visionReadPage(documentId, page);
+            }
+            res.json(result);
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error)) {
+                const code = error instanceof Error ? error.message.split(":")[0] : "";
+                if (/^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_SCAN_UNAVAILABLE)$/.test(code)) {
+                    res.status(404).json({ error: code });
+                    return;
+                }
+                res.status(code.startsWith("VISION_MODEL_") ? 503 : 422).json({ error: code.startsWith("VISION_MODEL_") || code === "DOCUMENT_VAULT_CONTEXT_REQUIRED" ? code : "VISION_READ_FAILED" });
+            }
+        }
+    });
     app.post("/api/documents/:documentId/pages/:page/text", async (req, res) => {
         // Waits for the document work before it (one at a time, see document-work.ts).
         if (keepAliveRequested(req))
@@ -7014,6 +7059,28 @@ export function createLexHttpApp(options) {
                     console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
                 }
             }
+            // The reasoning effort chosen in the case card (Claude through the account).
+            if (req.body?.effort === "low" || req.body?.effort === "medium" || req.body?.effort === "high")
+                request.effort = req.body.effort;
+            // The case's fact matrices (task 12.3): read from and written to its encrypted memory, so the
+            // next question in the case does not build them again (after a restart or six hours).
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+                const caseId = knowledge.caseId;
+                const memoryStore = options.caseMemoryStore;
+                const access = options.caseAccessService;
+                const actor = responseAuthContext(res);
+                request.caseMatrixStore = {
+                    read: async (key) => {
+                        const caseView = access.openCase(actor, caseId);
+                        const memory = await access.withCaseDataKey(actor, caseId, "ANALYZE", (caseDataKey) => memoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                        return memory.factMatrices?.[key]?.value ?? null;
+                    },
+                    write: async (key, value) => {
+                        const caseView = access.openCase(actor, caseId);
+                        await access.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => memoryStore.saveCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion, factMatrix: { key, value } }));
+                    }
+                };
+            }
             // A case's documents name its court (a court's letter, a judgment): found once and kept,
             // the documents of this turn first, then the case's files by a court's head and signature.
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA" && caseCourt?.zrodlo !== "UZYTKOWNIK") {
@@ -7655,7 +7722,8 @@ export function createLexHttpApp(options) {
                     .orderedCaseWorkflowContext = {
                     workflowId,
                     checkpoint: permit.checkpoint,
-                    revision: permit.revision
+                    revision: permit.revision,
+                    ...(state.findings ? { findings: state.findings } : {})
                 };
                 orderedCaseContext = {
                     caseId: orderedCaseId,
@@ -7908,9 +7976,13 @@ export function createLexHttpApp(options) {
                 if (response.status ===
                     "DRAFT_PRESENTABLE" &&
                     successfulAnswers.length > 0) {
-                    response.answer =
-                        successfulAnswers.join("\n\n---\n\n");
+                    response.answer = withoutRepeatedLegislativeNotes(successfulAnswers.join("\n\n---\n\n"));
                 }
+                // Task 10B: who read which module in every AUTO step, not only in the last one.
+                response.audit = {
+                    ...response.audit,
+                    readsBySteps: auto.steps.map((step) => ({ checkpoint: step.permit.checkpoint, reads: step.result.audit?.reads ?? [] }))
+                };
                 response.processAuto = {
                     maxSteps: PROCESS_AUTO_MAX_STEPS,
                     stopped: auto.stopped,
@@ -8048,11 +8120,12 @@ export function createLexHttpApp(options) {
                                 result
                             });
                             try {
-                                const next = completeOrderedCaseExecution(current, orderedCaseContext
+                                // The step's answer is kept for the later steps (task 03.4).
+                                const next = withOrderedFinding(completeOrderedCaseExecution(current, orderedCaseContext
                                     .permit, [
                                     auditArtifact
                                         .auditRef
-                                ]);
+                                ]), orderedCaseContext.permit.checkpoint, typeof result.answer === "string" ? result.answer : "");
                                 return await options
                                     .orderedCaseWorkflowStore
                                     .saveOrderedCaseWorkflowState({

@@ -1,7 +1,8 @@
+import { orderedFindingsPrompt } from "./ordered-case-workflow-state.js";
 import { fitInstructions } from "./instruction-budget.js";
 import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
-import type { ProviderStreamResult } from "./providers/types.js";
+import type { AccountEffort, ProviderStreamResult } from "./providers/types.js";
 import { checkpointFindingsPrompt, draftPrompt, FINDINGS_MESSAGE_OPEN } from "./process-pleading-draft.js";
 import { rewriteRejection } from "./answer-corrections.js";
 import { PROCESS_PLEADING_CHECKPOINTS } from "./process-pleading-state.js";
@@ -23,9 +24,11 @@ import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { loadModules, modulesPrompt, skillModules, windowModuleBudget } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { orderedCheckpointGaps } from "./ordered-checkpoint-contract.js";
+import { CHECKPOINT_BUDGET_CHARS } from "./process-checkpoint-contract.js";
 import { checkpointCorrectionPrompt, checkpointModuleNames, courtCheckpointGaps, witnessTestimonyCase, checkpointOwned, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
@@ -478,6 +481,8 @@ export class LexExecutionEngine {
     documentContext?: string;
     // The model's window (tokens) and characters per token, for fitting the documents (fitDocumentContext).
     modelContextTokens?: number;
+    // Claude through the account: --effort of the turn's main call (task 01).
+    accountEffort?: AccountEffort;
     tokenCharsPerToken?: number;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -497,6 +502,7 @@ export class LexExecutionEngine {
       root: string;
       onRead: (relativePath: string) => void;
       onMissing?: (relativePath: string) => void;
+      onWebUse?: (use: { tool: "WebSearch" | "WebFetch"; query?: string; url?: string }) => void;
       missingQualifier: () => string | null;
     };
     // AUTO bez natywnego korpusu: router v3 i fasada prawo-polskie-v2 są podawane
@@ -581,6 +587,7 @@ export class LexExecutionEngine {
         OrderedCaseWorkflowId;
       checkpoint: string;
       revision: number;
+    findings?: Record<string, { text: string; at: string }>;
     };
     tools?: NormalizedToolSchema[];
     toolSystemPromptAppendix?: string;
@@ -1381,6 +1388,10 @@ export class LexExecutionEngine {
           stage: args.processWorkflowContext?.stage ?? null
         }).filter((entry) => ownStep(entry.resource));
         const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
+        // The conditional modules' share of the model's window (20%; a local model keeps the fixed
+        // budget): Claude's 200k tokens take ~140k characters instead of 40k (real7: INTAKE-GAP and
+        // WERYFIKACJA-SLAD left to the model, unread).
+        const moduleBudget = windowModuleBudget(args.model, args.modelContextTokens, args.tokenCharsPerToken);
         const stageEntries = args.processWorkflowContext ? triggered.filter((entry) => entry.stage) : [];
         const stage = loadModules(this.registry, contract.skill, stageEntries, already);
         const modules = loadModules(
@@ -1388,8 +1399,17 @@ export class LexExecutionEngine {
           contract.skill,
           triggered.filter((entry) => !stageEntries.includes(entry)),
           new Set([...already, ...stage.loaded.map((item) => item.resource)]),
-          Math.max(0, MODULE_BUDGET_CHARS - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
+          Math.max(0, moduleBudget - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
         );
+        // What did not fit the window's share (task 02): recorded, and said in the progress.
+        if (modules.toRead.length || stage.toRead.length) {
+          emit(
+            "gate",
+            "CONTEXT_BUDGET",
+            "OK",
+            `part=modules;budget=${moduleBudget};trimmed=${[...modules.toRead, ...stage.toRead].map((item) => item.resource).join(",")}`
+          );
+        }
         if (modules.loaded.length || modules.toRead.length || stage.loaded.length || stage.toRead.length) {
           for (const item of [...modules.loaded, ...stage.loaded]) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
           emit(
@@ -1471,9 +1491,16 @@ export class LexExecutionEngine {
       const checkpointFiles = loadCheckpointResources(
         this.registry,
         args.processWorkflowContext.checkpoint,
-        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])])
+        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]),
+        // The step's files from the model's window (task 02): a large window takes the carried modules too.
+        args.model.startsWith("local/")
+          ? CHECKPOINT_BUDGET_CHARS
+          : Math.max(CHECKPOINT_BUDGET_CHARS, Math.floor((args.modelContextTokens ?? 200_000) * (args.tokenCharsPerToken ?? 3.5) * 0.15)),
+        { witnessTestimony: witnessTestimonyCase(args.documentContext, moduleTriggerText), documents: Boolean(args.documentContext?.trim()) }
       );
-      for (const item of checkpointFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
+      for (const item of checkpointFiles.loaded) {
+        emit("resource_read", item.resource, "OK", item.carriedFrom ? `runtime-preload;carried-from:${item.carriedFrom}` : "runtime-preload;process-checkpoint");
+      }
       emit(
         "gate",
         "PROCESS_CHECKPOINT_RESOURCES",
@@ -1522,6 +1549,21 @@ export class LexExecutionEngine {
           "OK",
           `draft=${args.processWorkflowContext.draft?.version ?? "none"};source=${args.processWorkflowContext.draft?.source ?? "none"};remarks=${args.processWorkflowContext.remarks ? "yes" : "no"}`
         );
+      }
+    }
+    // Task 03.4: the earlier steps' findings of the evidence and witness procedures.
+    if (args.orderedCaseWorkflowContext?.findings) {
+      const findings = orderedFindingsPrompt(
+        { workflowId: args.orderedCaseWorkflowContext.workflowId, findings: args.orderedCaseWorkflowContext.findings },
+        args.orderedCaseWorkflowContext.checkpoint,
+        args.model.startsWith("local/")
+          ? 6_000
+          : Math.max(40_000, Math.floor((args.modelContextTokens ?? 200_000) * (args.tokenCharsPerToken ?? 3.5) * 0.25))
+      );
+      if (findings) {
+        if (args.model.startsWith("local/")) contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}${findings}`;
+        else findingsMessage = `${FINDINGS_MESSAGE_OPEN}\n${findings}\n[/LEX_CASE_FINDINGS]`;
+        emit("gate", "ORDERED_CHECKPOINT_FINDINGS", "OK", `checkpoints=${Object.keys(args.orderedCaseWorkflowContext.findings).join(",")}`);
       }
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
@@ -2451,6 +2493,7 @@ export class LexExecutionEngine {
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
+        ...(args.accountEffort ? { accountEffort: args.accountEffort } : {}),
         reasoning: "none"
       }
     );
@@ -2508,6 +2551,7 @@ export class LexExecutionEngine {
               { role: "assistant", content: output },
               { role: "user", content: checkpointCorrectionPrompt(checkpoint, first.missing) }
             ],
+            accountEffort: "medium",
             reasoning: "none"
           });
           const text = corrected.fullText.trim();
@@ -2555,6 +2599,7 @@ export class LexExecutionEngine {
                 ].join("\n")
               }
             ],
+            accountEffort: "medium",
             reasoning: "none"
           });
           const text = corrected.fullText.trim();
@@ -2569,6 +2614,50 @@ export class LexExecutionEngine {
           remaining = gaps;
         }
         emit("gate", "COURT_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${gaps.join(",")};remaining=${remaining.join(",")}`);
+      }
+    }
+
+    // analizator-dowodow-v3 and przesluchanie-swiadkow-v2-min90: the step's message holds what its
+    // SKILL.md names (ordered-checkpoint-contract.ts); one completing round on the same messages,
+    // taken only when nothing was lost and fewer elements are missing. Never a block.
+    if (args.orderedCaseWorkflowContext && !waitsForUser(output)) {
+      const { workflowId, checkpoint } = args.orderedCaseWorkflowContext;
+      const skill = workflowId === "EVIDENCE_ANALYSIS_V1" ? "analizator-dowodow-v3" : "przesluchanie-swiadkow-v2-min90";
+      const gaps = orderedCheckpointGaps(workflowId, checkpoint, output);
+      if (gaps.length) {
+        let remaining = gaps;
+        try {
+          const corrected = await this.providers.stream(args.provider, {
+            model: args.model,
+            systemPrompt,
+            ...promptCache,
+            messages: [
+              ...workflowMessages.slice(0, -1).filter((message) => !message.images?.length),
+              { role: "user", content: effectiveQuery },
+              { role: "assistant", content: output },
+              {
+                role: "user",
+                content: [
+                  `Wiadomość kroku ${checkpoint} nie zawiera elementów, których wymaga skill ${skill} (aplikacja): ${gaps.join("; ")}.`,
+                  "Podaj pełną wiadomość ponownie, z tą samą treścią, uzupełnioną o brakujące elementy w formacie skilla. Nie przechodź do następnego kroku."
+                ].join("\n")
+              }
+            ],
+            accountEffort: "medium",
+            reasoning: "none"
+          });
+          const text = corrected.fullText.trim();
+          if (text && !rewriteRejection(output, text)) {
+            const after = orderedCheckpointGaps(workflowId, checkpoint, text);
+            if (after.length < gaps.length) {
+              output = text;
+              remaining = after;
+            }
+          }
+        } catch {
+          remaining = gaps;
+        }
+        emit("gate", "ORDERED_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${gaps.join(",")};remaining=${remaining.join(",")}`);
       }
     }
 
@@ -2873,10 +2962,11 @@ export class LexExecutionEngine {
         messages: mainMessages,
         tools: args.tools,
         runTools: args.runTools,
-        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}), ...(native.onWebUse ? { onWebUse: native.onWebUse } : {}) } } : {}),
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
+        ...(args.accountEffort ? { accountEffort: args.accountEffort } : {}),
         reasoning: "none"
       }
     );
@@ -2947,7 +3037,7 @@ export class LexExecutionEngine {
         ],
         tools: args.tools,
         runTools: args.runTools,
-        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}), ...(native.onWebUse ? { onWebUse: native.onWebUse } : {}) } } : {}),
         reasoning: "none"
       }).catch(() => null);
       const text = followed?.fullText.trim() ?? "";

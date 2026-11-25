@@ -621,7 +621,11 @@ export type DocumentReviewResponse = {
     review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" | "LAYER_MISMATCH" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
+    // OCR read with low certainty: to check against the scan.
+    lowConfidence?: true;
   }>;
+  // The local vision model can read a low-certainty page again.
+  visionReread?: true;
   // Local recognizers down during the detection (Morfeusz, Stanza): their finds may be missing.
   recognizerWarnings?: Array<{ name: string; reason: string }>;
   // Health data (art. 9 RODO), not masked unless the user masks them.
@@ -3323,6 +3327,8 @@ export function executeSession(input: {
   primarySkill: string;
   auxiliaryText?: string;
   mode?: "LAIK" | "PRAWNIK";
+  // Claude through the account: reasoning effort (medium by default).
+  effort?: "low" | "medium" | "high";
   attachments?: DocumentAttachmentSelection[];
   // Page images as evidence: photos (default) or also pages with text.
   evidenceImages?: "photos" | "all";
@@ -3753,6 +3759,15 @@ export async function getDocumentPageScan(caseId: string, documentId: string, pa
     if (failure instanceof ApiError && failure.status === 404) return null;
     throw failure;
   }
+}
+
+/** The page read again by the local vision model: a proposal, saved only through editDocumentPage. */
+export function visionReadDocumentPage(caseId: string, documentId: string, page: number): Promise<{ page: number; text: string }> {
+  return json(`/api/documents/${documentId}/pages/${page}/vision-read`, {
+    method: "POST",
+    headers: { "X-Lex-Keep-Alive": "1" },
+    body: JSON.stringify({ caseId })
+  });
 }
 
 export function editDocumentPage(
@@ -4356,7 +4371,13 @@ export type WebSearchSettings = {
   startpageSessionKeep: boolean;
   startpageSessionSaved: boolean;
   startpageSessionActive?: boolean;
+  /** Claude through the account: its own WebSearch/WebFetch (identifying data blocked). */
+  accountModelWebSearch?: boolean;
 };
+
+export function setAccountModelWebSearch(accountModelWebSearch: boolean): Promise<WebSearchSettings> {
+  return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ accountModelWebSearch }) });
+}
 
 export function setStartpageSession(startpageSession: boolean): Promise<WebSearchSettings> {
   return json("/api/settings/web-search", { method: "PUT", body: JSON.stringify({ startpageSession }) });

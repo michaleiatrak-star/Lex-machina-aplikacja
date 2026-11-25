@@ -58,18 +58,18 @@ async function run(correction: string) {
 }
 
 describe("case content grounding in a turn", () => {
-  it("a correcting round replaces the fabricated description", async () => {
+  it("a simple path (a search for a judgment) gets no correcting round: the fabricated description is marked", async () => {
     const { result, calls, gate } = await run(HONEST);
     // The semantic judge (a separate call) is not part of the answer's calls.
     const answerCalls = calls.filter((call) => !String(call.systemPrompt).startsWith(SEMANTIC_JUDGE_SYSTEM));
-    expect(answerCalls).toHaveLength(2);
-    expect(String(answerCalls[1]!.messages.at(-1)?.content)).toContain("sygn. II SAB/Po 175/26: w pobranym tekście nie ma: AI");
-    expect(result.answer).toContain("dotyczy bezczynności burmistrza");
-    expect(result.answer).not.toContain("Kontrola aplikacji");
+    expect(answerCalls).toHaveLength(1);
+    expect(result.answer).toContain("⚠️ Kontrola aplikacji: w tekście orzeczenia sygn. II SAB/Po 175/26");
     // 0.1.27: the model's shortened disclaimer stayed; the canonical LAIK text replaces it.
     expect(result.answer).not.toContain("Informacja ma charakter edukacyjny");
     expect(result.answer).toContain("Niniejsza analiza ma charakter wyłącznie informacyjny");
-    expect(gate?.status).toBe("OK");
+    expect(gate?.status).toBe("DEGRADED");
+    const skipped = (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? []).find((event) => event.target === "CORRECTION_ROUNDS_SKIPPED");
+    expect(String(skipped?.detail?.detail)).toMatch(/^simple-path:.*kontrola ze źródłami/u);
   }, 60_000);
 
   it("the user is warned when the model keeps the fabricated description", async () => {

@@ -8,6 +8,7 @@ import { documentWork } from "./document-work.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
 import { correctWithVision, enoughMemoryForVision, withoutLineCrops } from "./ocr-vision.js";
+import { lowConfidencePage } from "./ocr-page-quality.js";
 import { maskBoxes, protectedValues, wantsImage } from "./document-evidence.js";
 import { createHash } from "node:crypto";
 import { chunkDocumentPages } from "./document-ingestion.js";
@@ -622,10 +623,44 @@ export class LocalPrivateDocumentService {
                     : {}),
                 ...(page.review?.length
                     ? { review: page.review }
-                    : {})
+                    : {}),
+                ...(lowConfidencePage(page) ? { lowConfidence: true } : {})
             })),
+            ...(source.pages.some((page) => lowConfidencePage(page)) && this.visionReader?.()?.readPage ? { visionReread: true } : {}),
             suggestions
         };
+    }
+    /**
+     * Task 06: the whole page read again by the local vision model from its scan. The reading is a
+     * proposal for the user (shown in the page's text field), nothing is saved here and nothing
+     * leaves the computer.
+     */
+    async visionReadPage(documentId, pageNumber, security) {
+        if (!this.visionReader)
+            throw new Error("VISION_MODEL_UNAVAILABLE");
+        const scan = await this.pageScan(documentId, pageNumber, security);
+        if (!scan)
+            throw new Error("DOCUMENT_PAGE_SCAN_UNAVAILABLE");
+        const session = this.visionReader();
+        if (!session?.readPage)
+            throw new Error("VISION_MODEL_UNAVAILABLE");
+        if (!enoughMemoryForVision(session.modelBytes))
+            throw new Error("VISION_MODEL_LOW_MEMORY");
+        const ocrText = scan.lines.map((line) => line.text).join("\n");
+        const read = async () => {
+            if (this.stopTextModels)
+                await this.stopTextModels().catch(() => undefined);
+            try {
+                return await session.readPage(scan.data, ocrText);
+            }
+            finally {
+                session.stop();
+            }
+        };
+        const text = await (this.exclusiveTextModels ? this.exclusiveTextModels(read, () => { throw new Error("VISION_MODEL_BUSY"); }) : read());
+        if (!text.trim())
+            throw new Error("VISION_MODEL_EMPTY_READING");
+        return { page: pageNumber, text: text.replace(/\u0000/g, "").slice(0, MAX_EDITED_PAGE_CHARS) };
     }
     /**
      * The user's own correction of a page's text (a poor scan the OCR got wrong). The page

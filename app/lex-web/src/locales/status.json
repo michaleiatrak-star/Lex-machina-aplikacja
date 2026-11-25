@@ -4075,7 +4075,7 @@
   },
   {
    "component": "MatterChatApp",
-   "translatable": 650,
+   "translatable": 661,
    "notYetTranslatable": 1,
    "translated": {
     "ca": 606,
@@ -4660,7 +4660,7 @@
   },
   {
    "component": "PrivacyPreview",
-   "translatable": 71,
+   "translatable": 86,
    "notYetTranslatable": 0,
    "translated": {
     "ca": 70,
@@ -6025,7 +6025,7 @@
   },
   {
    "component": "WebSearchSection",
-   "translatable": 105,
+   "translatable": 107,
    "notYetTranslatable": 0,
    "translated": {
     "ca": 81,

@@ -69,6 +69,8 @@ import { configureLocalOfflineMode } from "../local-offline-mode.js";
 import { configureGeminiSearchKey, configureWebSearchSettings, startpageSessionStore, searxngUrlForced, setSearxngUrl, webSearchDataDirectory, webSearchSettings, wokandaSessionDiskStore } from "../web-search-settings.js";
 import { autostartLocalSearxng, firstRunLocalSearch, hideDockerDashboardOnStart, LOCAL_SEARXNG_URL } from "../searxng-local.js";
 import { CdpPageRenderer, configurePageRenderer } from "../browser-render.js";
+import { containerEngineDeclined, startSystemBrowser, systemBrowserWanted } from "../system-browser.js";
+import { configureSejmPendingActs, SejmPendingActs } from "../sejm-pending-acts.js";
 import { commonCourtsCandidates, configureCommonCourtsReader, configureCommonCourtsSearch } from "../case-law-search.js";
 import { configureWokandaSessionStore } from "../courts/wokanda.js";
 import { configureBrowserSessionsFile, configureLawSourceSessionStore } from "../eli/law-source-sessions.js";
@@ -82,6 +84,7 @@ import { CompleteDocumentIngestor } from "../document-ingestion.js";
 import { PdfJsDocumentPageSource } from "../pdf-document-page-source.js";
 import { LocalPaddleOcrEngine } from "../ocr/paddle-ocr-engine.js";
 import { LocalPaddleImageOcrEngine } from "../ocr/paddle-image-ocr-engine.js";
+import { configureAccountModelWebSearch } from "../providers/account-session.js";
 import { CompleteImageIngestor } from "../image-ingestion.js";
 import { LocalStanzaNamedEntityRecognizer } from "../privacy/stanza-ner.js";
 import { CompositeRecognizer, LocalGazetteerRecognizer } from "../privacy/gazetteer-ner.js";
@@ -279,6 +282,12 @@ export async function startLocalServer(options) {
     configureUsageLog(path.join(caseFileStore.rootDir, "usage"));
     // Pages built by JavaScript or behind a bot check: read through the local browser (Docker, next
     // to SearXNG) when it runs; LEX_BROWSER_RENDER=0 turns it off.
+    if (process.env.LEX_SEJM_PENDING !== "0") {
+        const pending = new SejmPendingActs();
+        configureSejmPendingActs(pending);
+        // The current term's bills load in the background, so the first answer need not wait for them.
+        void pending.ready(0);
+    }
     if (process.env.LEX_BROWSER_RENDER !== "0")
         configurePageRenderer(new CdpPageRenderer(process.env.LEX_BROWSER_URL?.trim() || undefined));
     // Startpage on the user's session: the cookies kept (sealed) across restarts when the user chose it.
@@ -465,6 +474,7 @@ export async function startLocalServer(options) {
             // Daily ELI check while the application runs, not only at start.
             coreLawIndex.startSchedule();
             // The local database of rulings (case-law-db.ts): on in server mode, or LEX_CASE_LAW_SYNC=1.
+            configureAccountModelWebSearch(() => webSearchSettings().accountModelWebSearch);
             startCaseLawSync({
                 isServerMode: () => serverMode.isEnabled(),
                 snFetcher: snFetch,
@@ -889,8 +899,12 @@ if (process.argv[1] &&
             .then((result) => {
             if (result)
                 process.stderr.write(`LEX_SEARXNG_AUTOSTART:${result.reachable ? "OK" : result.error ?? "NOT_ANSWERING"}\n`);
+            return systemBrowserFallback(searchDirectory, result ? (result.error ?? null) : null, Boolean(result));
         })
             .catch((error) => process.stderr.write(`LEX_SEARXNG_AUTOSTART:${error instanceof Error ? error.message : String(error)}\n`));
+    }
+    else if (searchDirectory) {
+        void systemBrowserFallback(searchDirectory, null, false);
     }
     // Desktop: the runtime ends with the application that started it. On macOS an app
     // that crashed or was force-quit left node and its Python workers running (a new
@@ -900,5 +914,19 @@ if (process.argv[1] &&
             if (desktopParentGone())
                 process.exit(0);
         }, 5_000).unref();
+    }
+}
+/** Task 08.3: the system browser reads JavaScript pages when no container browser can come. */
+async function systemBrowserFallback(dataDirectory, autostartError, autostartRan) {
+    if (process.env.LEX_BROWSER_RENDER === "0" || process.env.LEX_SYSTEM_BROWSER === "0")
+        return;
+    if (!systemBrowserWanted({ declined: containerEngineDeclined(), autostartError, autostartRan }))
+        return;
+    try {
+        const result = await startSystemBrowser({ dataDirectory });
+        process.stderr.write(`LEX_SYSTEM_BROWSER:${result.started ? `OK:${path.basename(result.executable)}` : result.reason}\n`);
+    }
+    catch (error) {
+        process.stderr.write(`LEX_SYSTEM_BROWSER:${error instanceof Error ? error.message : String(error)}\n`);
     }
 }

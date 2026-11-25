@@ -84,14 +84,75 @@ const CHECKPOINT_NAMES = {
     "CP-PEER": /PEER-REVIEW|PEER-OK/iu
 };
 export const CHECKPOINT_BUDGET_CHARS = 45_000;
-/** The checkpoint's files that exist, loaded within the budget; the rest for the model to read. */
-export function loadCheckpointResources(registry, checkpoint, inContext, budget = CHECKPOINT_BUDGET_CHARS) {
+const carriedCache = new Map();
+export function carriedCheckpointResources(registry, checkpoint) {
+    const file = registry.resolveResource("pisma-procesowe-v3", "pisma-procesowe-v3/references/AUTOMAT-STANOW.md");
+    if (!file)
+        return [];
+    let byCheckpoint = carriedCache.get(file);
+    if (!byCheckpoint) {
+        byCheckpoint = new Map();
+        let text = "";
+        try {
+            text = fs.readFileSync(file, "utf8");
+        }
+        catch {
+            text = "";
+        }
+        const lines = text.split("\n");
+        for (let index = 0; index < lines.length; index += 1) {
+            const opens = /→[^\n]*\[(CP-[\w.-]+)\]\s*$/u.exec(lines[index]);
+            if (!opens)
+                continue;
+            const owner = opens[1];
+            if (!(owner in CHECKPOINT_RESOURCES))
+                continue;
+            const entries = [];
+            let condition = "";
+            for (let at = index + 1; at < lines.length && at < index + 80; at += 1) {
+                const line = lines[at];
+                if (new RegExp(`^\\s*\\[${owner}\\]\\s*→`, "u").test(line))
+                    break;
+                const extension = /ROZSZERZENIE[^\n]*\((gdy[^)]*)\)/u.exec(line);
+                if (extension)
+                    condition = extension[1];
+                const view = /view\s+((?:shared|pisma-procesowe-v3)\/[\w./-]+\.md)/u.exec(line);
+                if (!view || CHECKPOINT_RESOURCES[owner].includes(view[1]))
+                    continue;
+                const readers = checkpointsReading(view[1]).filter((reader) => reader !== owner);
+                entries.push({ resource: view[1], condition, from: readers[0] ?? null });
+            }
+            byCheckpoint.set(owner, entries);
+        }
+        carriedCache.set(file, byCheckpoint);
+    }
+    return byCheckpoint.get(checkpoint) ?? [];
+}
+/** Whether the case meets a carried module's condition ("gdy ≥1 ogniwo = zeznanie", "gdy znany materiał"). */
+export function carriedConditionMet(condition, facts) {
+    if (!condition)
+        return true;
+    if (/zeznani|świad/iu.test(condition))
+        return Boolean(facts.witnessTestimony);
+    if (/materiał|łańcuch|dowod/iu.test(condition))
+        return Boolean(facts.documents);
+    return false;
+}
+export function loadCheckpointResources(registry, checkpoint, inContext, budget = CHECKPOINT_BUDGET_CHARS, facts) {
     const loaded = [];
     const toRead = [];
     let left = budget;
+    // The narrowest condition first (testimony in the files: the module the skill makes a critical
+    // gap of, ZAKAZ-13), then the rest while the budget lasts.
+    const carried = facts
+        ? carriedCheckpointResources(registry, checkpoint)
+            .filter((item) => carriedConditionMet(item.condition, facts))
+            .sort((a, b) => Number(/zeznani|świad/iu.test(b.condition)) - Number(/zeznani|świad/iu.test(a.condition)))
+        : [];
     // The checkpoint's own files, then the skill's modules run at this step (LATER_STEP_RESOURCES): all
-    // of them in the checkpoint's part, after the cached prefix every step shares.
-    for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? [])]) {
+    // of them in the checkpoint's part, after the cached prefix every step shares; then the modules an
+    // earlier step read that this one applies (carried).
+    for (const resource of [...CHECKPOINT_RESOURCES[checkpoint], ...(LATER_STEP_RESOURCES[checkpoint] ?? []), ...carried.map((item) => item.resource)]) {
         if (inContext.has(resource))
             continue;
         const file = registry.resolveResource("pisma-procesowe-v3", resource);
@@ -109,7 +170,8 @@ export function loadCheckpointResources(registry, checkpoint, inContext, budget 
             continue;
         }
         left -= content.length;
-        loaded.push({ resource, content });
+        const from = carried.find((item) => item.resource === resource);
+        loaded.push({ resource, content, ...(from ? { carriedFrom: from.from ?? "W1" } : {}) });
     }
     return { loaded, toRead };
 }
@@ -179,6 +241,10 @@ export function evaluateCheckpointOutput(checkpoint, text, facts = {}) {
     // Live runs 2026-11-21: SW-INW in one answer of four.
     if (facts.witnessTestimony && checkpoint === "CP-1a" && !/SW-INW/u.test(text))
         missing.push("W1.2c-SW_TABELA_SW-INW (inwentarz zeznań świadka: MOD-ATAK-NA-SWIADKA FAZA 0-1A)");
+    // MOD-ELIMINACJA-TEZ is loaded at every CP-1a; its output is the ET-4 list (ET-Q2: "raport ET-4
+    // wygenerowany?"). Live run 2026-11-24 (real9): CP-1a closed without it, real7 had it.
+    if (checkpoint === "CP-1a" && !/\bET-4\b|WYELIMINOWAN\p{L}*/iu.test(text))
+        missing.push("W1.2a-POST_RAPORT_ET-4 (lista eliminacji żądań: zatwierdzone / ewentualne + CV-ALT / wyeliminowane, MOD-ELIMINACJA-TEZ)");
     if (facts.witnessTestimony && checkpoint === "CP-ATAK" && !/SW-TARCZKA/u.test(text))
         missing.push("W2.4c_SW-TARCZKA (antycypacja ataku na naszego świadka albo „SW-TARCZKA: nie dotyczy — powód”)");
     const escaped = checkpoint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

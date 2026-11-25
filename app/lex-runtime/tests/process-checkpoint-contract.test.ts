@@ -23,8 +23,13 @@ describe("pisma-procesowe-v3 checkpoint contract", () => {
   });
 
   it("requires the checkpoint report, by id or by its CP-REJESTR name", () => {
-    expect(evaluateCheckpointOutput("CP-1a", "Analiza twierdzeń.").missing).toEqual(["RAPORT_CP-1a"]);
-    expect(evaluateCheckpointOutput("CP-1a", "✅ CHECKPOINT CLAIM-VALIDATION — ZAKOŃCZONY").result).toBe("PASS");
+    expect(evaluateCheckpointOutput("CP-1a", "Analiza twierdzeń.\nRaport ET-4: zatwierdzone 3").missing).toEqual(["RAPORT_CP-1a"]);
+    expect(evaluateCheckpointOutput("CP-1a", "✅ CHECKPOINT CLAIM-VALIDATION — ZAKOŃCZONY\nRaport ET-4: zatwierdzone 3").result).toBe("PASS");
+  });
+
+  it("CP-1a needs the ET-4 elimination list of MOD-ELIMINACJA-TEZ", () => {
+    expect(evaluateCheckpointOutput("CP-1a", "[CP-1a] zakończony").missing).toEqual([expect.stringMatching(/^W1\.2a-POST_RAPORT_ET-4/u)]);
+    expect(evaluateCheckpointOutput("CP-1a", "[CP-1a] zakończony\nŻądania: 2 zatwierdzone, 1 wyeliminowane").result).toBe("PASS");
   });
 
   it("N/A only for a conditional checkpoint", () => {

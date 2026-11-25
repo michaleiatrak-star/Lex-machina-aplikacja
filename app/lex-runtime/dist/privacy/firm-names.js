@@ -344,3 +344,53 @@ export function detectFirmNames(text) {
     }
     return spans.sort((a, b) => a.start - b.start);
 }
+// A firm's name is masked whole or not at all (REGULY-ANONIMIZACJI [FIRMA]; live case 2026-11-22:
+// "Obróbki Cieplnej" masked out of "Zakład Obróbki Cieplnej", the rest left in the text). A
+// mention inside a chain "Zakład/Przedsiębiorstwo/Firma + capitalized words": with a word of the
+// firm's own (a brand: capitals, a digit, a hyphen, a non-inflected ending) the whole chain is one
+// span; of common words only (a department, a trade) nothing is masked - it identifies nobody and
+// the analysis needs it. A public body ("Zakład Ubezpieczeń Społecznych", "Zakład Karny") stays.
+const CHAIN_HEAD = /(?<![\p{L}])(?:Zakład(?:u|em|zie|y|ów)?|Przedsiębiorstw(?:o|a|u|em|ie)|Firm(?:a|y|ie|ę|ą)|Biur(?:o|a|em|ze)|Wytwórni(?:a)?|Fabryk(?:a|i|ę|ą|ce)|Huty|Huta|Hucie|Kopalni(?:a)?)\s+$/u;
+const PUBLIC_CHAIN = /^(?:Zakład\p{L}*\s+(?:Ubezpieczeń|Karn|Poprawcz|Opiekuńcz|Leczniczo|Medycyny|Higieny|Emerytaln|Unieszkodliwiania)|Przedsiębiorstw\p{L}*\s+Państwow)/u;
+const COMMON_ENDING = /(?:ej|ych|ich|ego|emu|ymi|imi|ów|ami|ach|om|owy|owa|owe|ny|na|ne|ki|ka|ko|ą|ę|i|y|a|u|e|o)$/u;
+const ownNameWord = (word) => /\d|-|^[„"»]/u.test(word) || (/^\p{Lu}{2,}$/u.test(word) && word.length >= 3) || !COMMON_ENDING.test(word.toLocaleLowerCase("pl"));
+/**
+ * The span a firm mention inside a trade chain stands for: the whole chain (with a word of its
+ * own), null (common words or a public body: not masked), or undefined (no chain: as found).
+ */
+export function wholeFirmName(text, span, 
+// A word that may be a person's name: a chain with one is never left unmasked (a sole trader).
+mayBePerson = () => false) {
+    const lineStart = Math.max(text.lastIndexOf("\n", span.start - 1) + 1, span.start - 80);
+    const before = text.slice(lineStart, span.start);
+    // Back over capitalized words to the chain's head.
+    const words = [...before.matchAll(/\S+\s+/gu)];
+    let head = -1;
+    for (let index = words.length - 1; index >= 0; index -= 1) {
+        if (CHAIN_HEAD.test(words[index][0])) {
+            head = index;
+            break;
+        }
+        if (!/^\p{Lu}/u.test(words[index][0]))
+            break;
+    }
+    if (head < 0)
+        return undefined;
+    const start = lineStart + words[head].index;
+    // Forward: the capitalized words after the mention, up to six words in the chain.
+    let end = span.end;
+    const after = text.slice(span.end, span.end + 80);
+    for (const match of after.matchAll(/\s+(\S+)/gu)) {
+        if (match.index !== (end - span.end) || !/^(?:\p{Lu}|\d)/u.test(match[1]))
+            break;
+        end = span.end + match.index + match[0].length;
+    }
+    end = start + text.slice(start, end).replace(/[\s,.;:)]+$/u, "").length;
+    const chain = text.slice(start, end);
+    const chainWords = chain.split(/\s+/u);
+    if (chainWords.length > 7 || PUBLIC_CHAIN.test(chain))
+        return chainWords.length > 7 ? undefined : null;
+    if (chainWords.slice(1).some(ownNameWord))
+        return { start, end };
+    return chainWords.slice(1).some((word) => mayBePerson(word.replace(/[^\p{L}-]/gu, ""))) ? { start, end } : null;
+}

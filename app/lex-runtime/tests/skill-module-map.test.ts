@@ -27,6 +27,15 @@ describe("module maps from SKILL.md", () => {
   });
 });
 
+describe("a module the skill forbids to call is not read (live case 2026-11-22)", () => {
+  it("MOD-WARIANTY-POZWU, called inside MOD-STRATEGIA-WYBOR, is not an always module of W1", () => {
+    const map = moduleMap(registry, "pisma-procesowe-v3");
+    const atW1 = triggeredModules(map, { text: "wniosek dowodowy w sprawie o odszkodowanie", stage: "W1" }).map((entry) => entry.resource);
+    expect(atW1).not.toContain("shared/MOD-WARIANTY-POZWU.md");
+    expect(map.filter((entry) => entry.resource === "shared/MOD-WARIANTY-POZWU.md" && entry.always)).toEqual([]);
+  });
+});
+
 describe("AUTO: modules of the chosen skill that the case triggers", () => {
   it("loads the lease module for a lease contract", async () => {
     const calls: ProviderStreamParams[] = [];

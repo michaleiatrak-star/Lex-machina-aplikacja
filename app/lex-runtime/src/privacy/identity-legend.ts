@@ -20,7 +20,7 @@ const fold = (text: string) =>
 
 // A case form to its stem: "Kowalczyka", "Kowalczykowi" -> "kowalczyk"; "Michała" -> "michal";
 // "Zawadzkiego" -> "zawadzki".
-function stem(word: string): string {
+export function nameStem(word: string): string {
   for (const ending of ["skiego", "skiemu", "skim", "ckiego", "ckiemu", "ckim", "dzkiego"]) {
     if (word.endsWith(ending)) return word.slice(0, word.length - ending.length + 3);
   }
@@ -41,7 +41,7 @@ export function personTokens(texts: readonly string[]): string[] {
  */
 export function samePersonGroups(tokens: readonly string[], restore: (token: string) => string | null): string[][] {
   const named = tokens
-    .map((token) => ({ token, words: fold(restore(token) ?? "").map(stem) }))
+    .map((token) => ({ token, words: fold(restore(token) ?? "").map(nameStem) }))
     .filter((item) => item.words.length > 0);
   const full = new Map<string, string[]>();
   for (const item of named.filter((entry) => entry.words.length >= 2)) {
@@ -61,6 +61,39 @@ export function samePersonGroups(tokens: readonly string[], restore: (token: str
   return [...full.values()].filter((group) => group.length >= 2).map((group) => [...new Set(group)]).filter((group) => group.length >= 2);
 }
 
+// The grammatical gender of a person's name, for the model to inflect a symbol right ("[PII:PERSON:0003]
+// zeznała" / "zeznał") without the name: the given name's ending, or the surname's (-ska / -ski).
+const MALE_IN_A = new Set(["kuba", "barnaba", "bonawentura", "kosma", "jarema", "nikita", "sasza", "misza", "grisza", "ilia", "ilja", "foma", "zosima"]);
+export function grammaticalGender(name: string): "męski" | "żeński" | null {
+  const words = fold(name);
+  if (!words.length) return null;
+  if (words.length >= 2) {
+    const given = words[0]!;
+    if (MALE_IN_A.has(given)) return "męski";
+    return /a$/u.test(given) ? "żeński" : "męski";
+  }
+  const surname = words[0]!;
+  if (/(?:ska|cka|dzka)$/u.test(surname)) return "żeński";
+  if (/(?:ski|cki|dzki)$/u.test(surname)) return "męski";
+  return null;
+}
+
+/** Persons' symbols by grammatical gender (names restored locally, never sent). */
+export function genderLegend(tokens: readonly string[], restore: (token: string) => string | null, limit = 120): string {
+  const byGender: Record<"męski" | "żeński", string[]> = { męski: [], żeński: [] };
+  for (const token of tokens.slice(0, limit)) {
+    const name = restore(token);
+    const gender = name ? grammaticalGender(name) : null;
+    if (gender) byGender[gender].push(token);
+  }
+  if (!byGender.męski.length && !byGender.żeński.length) return "";
+  return [
+    "# RODZAJ GRAMATYCZNY OSÓB POD SYMBOLAMI (ustalony lokalnie z imienia; do odmiany, nie do opisu osoby)",
+    ...(byGender.męski.length ? [`- męski: ${byGender.męski.join(", ")}`] : []),
+    ...(byGender.żeński.length ? [`- żeński: ${byGender.żeński.join(", ")}`] : [])
+  ].join("\n");
+}
+
 export function identityLegendPrompt(groups: readonly string[][], questionTokens: ReadonlySet<string> = new Set()): string {
   if (!groups.length) return "";
   return [
@@ -71,9 +104,11 @@ export function identityLegendPrompt(groups: readonly string[][], questionTokens
 }
 
 // Latin spellings of one Cyrillic name: y/j/i, kh/h/ch, ii/ij/iy at the end, doubled letters.
-function transliterated(word: string): string {
+export function transliterated(word: string): string {
   return word
     .replace(/^y/u, "j")
+    // "Iurii", "Iaroslav": the Ukrainian passport spelling of Ю/Я.
+    .replace(/^i(?=[aeou])/u, "j")
     .replace(/(?:ii|iy|ij|yj|yi)$/u, "ij")
     .replace(/kh|ch/gu, "h")
     .replace(/y/gu, "i")

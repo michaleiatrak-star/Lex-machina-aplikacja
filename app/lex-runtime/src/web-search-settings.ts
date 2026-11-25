@@ -71,6 +71,11 @@ export type WebSearchSettings = {
   startpageSessionKeep: boolean;
   /** A kept Startpage session is saved on disk. */
   startpageSessionSaved: boolean;
+  /**
+   * The search of Claude through the user's account (WebSearch/WebFetch of the CLI) as a source of
+   * leads, off by default (task 8.1): a lead only; text, thesis and quote from the source document.
+   */
+  accountModelWebSearch: boolean;
 };
 
 type SealedKey = { nonce: string; ciphertext: string; tag: string };
@@ -84,6 +89,7 @@ type StoredSettings = {
   startpageSession?: boolean;
   startpageSessionKeep?: boolean;
   startpageCookies?: SealedKey | undefined;
+  accountModelWebSearch?: boolean;
 };
 
 let settingsFile: string | null = null;
@@ -195,7 +201,8 @@ export function webSearchSettings(): WebSearchSettings {
     firecrawlConfigured: Boolean(firecrawlApiKey()),
     startpageSession: file.startpageSession === true,
     startpageSessionKeep: file.startpageSession === true && file.startpageSessionKeep === true,
-    startpageSessionSaved: file.startpageSession === true && file.startpageSessionKeep === true && Boolean(file.startpageCookies)
+    startpageSessionSaved: file.startpageSession === true && file.startpageSessionKeep === true && Boolean(file.startpageCookies),
+    accountModelWebSearch: file.accountModelWebSearch === true
   };
 }
 
@@ -239,6 +246,12 @@ export function setStartpageSession(enabled: unknown): WebSearchSettings {
 }
 
 /** Keep (or stop keeping, which removes the saved cookies) the Startpage session across restarts. */
+export function setAccountModelWebSearch(enabled: unknown): WebSearchSettings {
+  if (typeof enabled !== "boolean") throw new Error("WEB_SEARCH_ACCOUNT_MODEL_INVALID");
+  write({ accountModelWebSearch: enabled });
+  return webSearchSettings();
+}
+
 export function setStartpageSessionKeep(enabled: unknown): WebSearchSettings {
   if (typeof enabled !== "boolean") throw new Error("WEB_SEARCH_STARTPAGE_SESSION_KEEP_INVALID");
   write(enabled ? { startpageSessionKeep: true } : { startpageSessionKeep: false, startpageCookies: undefined });

@@ -18,6 +18,10 @@ import type {
   VerificationRecord
 } from "./verification-ledger.js";
 
+
+// Extracted texts of immutable ELI PDFs (see the fetch below); a few acts, the largest ~2.6 MB of text.
+const PDF_TEXT_CACHE_MAX = 12;
+
 export type LegalSourceFetch = (
   input: string | URL,
   init?: RequestInit
@@ -535,6 +539,9 @@ export class OfficialLegalSourceVerifier {
       new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true })
   ) {}
 
+  // Extracted texts of immutable ELI PDFs, per verifier (the server keeps one for its lifetime).
+  private readonly pdfTextCache = new Map<string, { body: string; pageTexts?: string[]; footnotes: Record<string, string> }>();
+
   supportsPdf(): boolean {
     return Boolean(this.pdfTextExtractor);
   }
@@ -571,8 +578,15 @@ export class OfficialLegalSourceVerifier {
       );
     }
 
+    // A Dz.U. text in ELI (api.sejm.gov.pl/eli/acts/DU/<year>/<pos>/text.pdf) never changes: its
+    // extracted text is kept, so the next provision of the same act needs no new download (live
+    // run 2026-11-24: the same KPC t.j. fetched four times, 9-15 s each).
+    const pdfCacheKey = host === "api.sejm.gov.pl" && /^\/eli\/acts\/(?:DU|MP)\/\d{4}\/\d+\/text\.pdf$/u.test(url.pathname) ? url.toString() : null;
+    const cachedPdf = pdfCacheKey ? this.pdfTextCache.get(pdfCacheKey) : undefined;
     let response: Response;
-    try {
+    if (cachedPdf) {
+      response = new Response(null, { status: 200, headers: { "content-type": "application/pdf" } });
+    } else try {
       response = await this.fetcher(url, {
         method: "GET",
         redirect: "error",
@@ -609,7 +623,11 @@ export class OfficialLegalSourceVerifier {
     let body: string;
     let pageTexts: string[] | undefined;
     let footnotes: Record<string, string> = {};
-    if (pdfSource) {
+    if (pdfSource && cachedPdf) {
+      body = cachedPdf.body;
+      pageTexts = cachedPdf.pageTexts;
+      footnotes = { ...cachedPdf.footnotes };
+    } else if (pdfSource) {
       if (!this.pdfTextExtractor) {
         throw new LegalSourceVerificationError(
           "Official PDF requires a configured local PDF text extractor.",
@@ -667,6 +685,10 @@ export class OfficialLegalSourceVerifier {
           "Official PDF could not be converted into verifiable text.",
           "PDF_EXTRACTION_FAILED"
         );
+      }
+      if (pdfCacheKey) {
+        if (this.pdfTextCache.size >= PDF_TEXT_CACHE_MAX) this.pdfTextCache.delete(this.pdfTextCache.keys().next().value!);
+        this.pdfTextCache.set(pdfCacheKey, { body, ...(pageTexts ? { pageTexts } : {}), footnotes: { ...footnotes } });
       }
     } else {
       if (

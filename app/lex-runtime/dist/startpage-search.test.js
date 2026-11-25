@@ -14,7 +14,7 @@ const RESULTS = `
 const ANUBIS = `<!doctype html><html><head><script src="/.within.website/x/cmd/anubis/static/js/main.mjs"></script></head><body>Verifying your request... Loading...</body></html>`;
 const SUSPENDED = `<html><body><h1>Dostęp tymczasowo zawieszony</h1>Aby zapobiec możliwemu nadużyciu naszego serwisu, Twoja możliwość połączenia się ze Startpage została tymczasowo zawieszona.</body></html>`;
 function settings(startpageSession) {
-    return () => ({ searxngUrl: "", order: [], lastTest: null, firecrawlConfigured: false, startpageSession, startpageSessionKeep: false, startpageSessionSaved: false });
+    return () => ({ searxngUrl: "", order: [], lastTest: null, firecrawlConfigured: false, startpageSession, startpageSessionKeep: false, startpageSessionSaved: false, accountModelWebSearch: false });
 }
 const DDG = '<div class="result"><a class="result__a" href="https://isap.sejm.gov.pl/x">Kodeks cywilny</a><a class="result__snippet">art. 415</a></div>';
 afterEach(() => clearLawSourceSession(HOST));

@@ -25,7 +25,8 @@ import {
   setStartpageSessionKeep,
   STARTPAGE_HOST,
   webSearchDataDirectory,
-  webSearchSettings
+  webSearchSettings,
+  setAccountModelWebSearch
 } from "../web-search-settings.js";
 import { clearLawSourceSession, keepLawSourceSession, lawSourceSessionHeaders } from "../eli/law-source-sessions.js";
 import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice, type DomainFallbackChoice } from "../domain-fallback.js";
@@ -692,6 +693,7 @@ export function registerMcpConnectorRoutes(
       if (req.body && "searxngUrl" in req.body) setSearxngUrl(req.body.searxngUrl ?? "");
       if (req.body && "firecrawlApiKey" in req.body) setFirecrawlApiKey(req.body.firecrawlApiKey ?? "");
       if (req.body && "startpageSession" in req.body) setStartpageSession(req.body.startpageSession);
+      if (req.body && "accountModelWebSearch" in req.body) setAccountModelWebSearch(req.body.accountModelWebSearch);
       if (req.body && "startpageSessionKeep" in req.body) {
         setStartpageSessionKeep(req.body.startpageSessionKeep);
         if (req.body.startpageSessionKeep === true) keepLawSourceSession(STARTPAGE_HOST);

@@ -2904,3 +2904,59 @@ textarea:focus {
   background: var(--lm-s1);
   font: inherit;
 }
+
+/* Task 06: an OCR page read with low certainty. */
+.ocr-low-page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--lm-t12);
+  border-radius: 6px;
+  background: var(--lm-s2);
+}
+
+.ocr-low-page-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--lm-t12);
+  font-weight: 600;
+}
+
+.ocr-low-page-consent {
+  display: grid;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 10px;
+  border: 1px solid var(--lm-l4);
+  border-radius: 8px;
+  background: var(--lm-t1);
+}
+
+.ocr-low-page-consent p {
+  margin: 0;
+}
+
+.ocr-low-page-summary,
+.ocr-low-page-notice {
+  margin: 0;
+  color: var(--lm-t12);
+}
+
+.ocr-low-page-notice {
+  color: var(--lm-t6);
+}
+
+.ocr-low-page-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ocr-low-page-consent-actions button {
+  width: auto;
+}

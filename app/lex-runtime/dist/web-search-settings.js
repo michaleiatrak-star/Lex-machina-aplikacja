@@ -126,7 +126,8 @@ export function webSearchSettings() {
         firecrawlConfigured: Boolean(firecrawlApiKey()),
         startpageSession: file.startpageSession === true,
         startpageSessionKeep: file.startpageSession === true && file.startpageSessionKeep === true,
-        startpageSessionSaved: file.startpageSession === true && file.startpageSessionKeep === true && Boolean(file.startpageCookies)
+        startpageSessionSaved: file.startpageSession === true && file.startpageSessionKeep === true && Boolean(file.startpageCookies),
+        accountModelWebSearch: file.accountModelWebSearch === true
     };
 }
 export function searxngUrlForced() {
@@ -170,6 +171,12 @@ export function setStartpageSession(enabled) {
     return webSearchSettings();
 }
 /** Keep (or stop keeping, which removes the saved cookies) the Startpage session across restarts. */
+export function setAccountModelWebSearch(enabled) {
+    if (typeof enabled !== "boolean")
+        throw new Error("WEB_SEARCH_ACCOUNT_MODEL_INVALID");
+    write({ accountModelWebSearch: enabled });
+    return webSearchSettings();
+}
 export function setStartpageSessionKeep(enabled) {
     if (typeof enabled !== "boolean")
         throw new Error("WEB_SEARCH_STARTPAGE_SESSION_KEEP_INVALID");

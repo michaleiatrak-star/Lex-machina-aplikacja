@@ -67,7 +67,7 @@ export function moduleMap(registry: LexSkillRegistry, skill: string): ModuleEntr
       heading = title[2]!.trim();
       continue;
     }
-    if (!inMap) continue;
+    if (!inMap || FORBIDS.test(line)) continue;
     for (const match of line.matchAll(RESOURCE)) {
       const raw = match[0];
       const resource = corpusPath(skill, raw);
@@ -209,6 +209,11 @@ function loadInstructions(registry: LexSkillRegistry, skill: string, lines: stri
   return entries;
 }
 
+// A line that forbids reading a module or says another module calls it ("Nie wywołuj
+// MOD-WARIANTY-POZWU samodzielnie", "NADRZĘDNY wobec X — wywołuje go wewnętrznie"): the mention
+// is no order to read it (live case 2026-11-22: 8,3 tys. znaków read in every W1).
+const FORBIDS = /(?<![\p{L}])(?:nie\s+(?:wywołuj|wczytuj|czytaj|ładuj|otwieraj|stosuj)\p{L}*|wywołuje\s+go\s+wewnętrznie|nadrzędn\p{L}*\s+wobec)(?![\p{L}])/iu;
+
 /**
  * Shared modules named without a path inside a pipeline stage ("### W1.2b —
  * MOD-STRATEGIA-WYBOR (obligatoryjna ...)", "W1.6 (MOD-RED-TEAM-WLASNY)"): steps of
@@ -219,6 +224,7 @@ function stageModuleNames(registry: LexSkillRegistry, skill: string, lines: stri
   let heading = "";
   let stage: string | null = null;
   let skip = false;
+  const forbidden = new Set<string>();
   for (const line of lines) {
     const title = /^#{1,5}\s+(.*)$/.exec(line);
     if (title) {
@@ -227,6 +233,10 @@ function stageModuleNames(registry: LexSkillRegistry, skill: string, lines: stri
       skip = /ADAPTER|CHANGELOG|PORTABILITY|HISTORIA ZMIAN/iu.test(heading);
     }
     if (!stage || skip) continue;
+    if (FORBIDS.test(line)) {
+      for (const match of line.matchAll(/(?<![\w/-])(MOD-[A-Z0-9]+(?:-[A-Z0-9]+)*)(?![\w.-])/gu)) forbidden.add(`${stage}|shared/${match[1]}.md`);
+      continue;
+    }
     for (const match of line.matchAll(/(?<![\w/-])(MOD-[A-Z0-9]+(?:-[A-Z0-9]+)*)(?![\w.-])/gu)) {
       const resource = `shared/${match[1]}.md`;
       if (!registry.resolveResource(skill, resource)) continue;
@@ -240,7 +250,7 @@ function stageModuleNames(registry: LexSkillRegistry, skill: string, lines: stri
       });
     }
   }
-  return entries;
+  return entries.filter((entry) => !forbidden.has(`${entry.stage}|${entry.resource}`));
 }
 
 // One group of variants per condition word ("najem" -> "naj", "najm").
@@ -333,6 +343,15 @@ export function skillModules(
 }
 
 export const MODULE_BUDGET_CHARS = 40_000;
+
+/**
+ * The conditional modules' share of the model's window (task 02): 20% of it in characters; a local
+ * model keeps the fixed budget (long prompts make it slow), and no model gets less than that.
+ */
+export function windowModuleBudget(model: string, contextTokens?: number, charsPerToken?: number): number {
+  if (model.startsWith("local/")) return MODULE_BUDGET_CHARS;
+  return Math.max(MODULE_BUDGET_CHARS, Math.floor((contextTokens ?? 200_000) * (charsPerToken ?? 3.5) * 0.2));
+}
 
 /** Loads the triggered modules within the budget; the rest the model reads itself. */
 export function loadModules(

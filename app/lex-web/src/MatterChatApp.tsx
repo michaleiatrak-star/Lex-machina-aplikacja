@@ -43,6 +43,7 @@ import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CompactSettingRow } from "./CompactSettingRow";
+import { loadModelEffort, saveModelEffort, type ModelEffort } from "./model-effort";
 import { CaseDocumentPreview } from "./CaseDocumentPreview";
 import { readFilesPanelOpen, saveFilesPanelOpen } from "./text-size.js";
 import { CASE_FILE_CATEGORIES, caseFileCategory } from "./case-file-categories.js";
@@ -2003,6 +2004,12 @@ export default function MatterChatApp({
   const [includeFirmKnowledge, setIncludeFirmKnowledge] = useState(true);
   // Photos go to image-capable models as evidence; pages with text too (personal data masked).
   const [imagesWithText, setImagesWithText] = useState(true);
+  // Claude through the account: the reasoning effort for this user (medium by default).
+  const [modelEffort, setModelEffortState] = useState<ModelEffort>(() => loadModelEffort(user.userId));
+  function setModelEffort(effort: ModelEffort): void {
+    setModelEffortState(effort);
+    saveModelEffort(user.userId, effort);
+  }
   // Firm know-how picked for this conversation (FirmKnowledgePicker); the firm's default folders count anyway.
   const [firmSelection, setFirmSelection] = useState<FirmKnowledgeSelection>({ folderIds: [], itemIds: [] });
   // Scans and photos the user chose to send to the model as they are (no OCR, no masking).
@@ -2077,7 +2084,7 @@ export default function MatterChatApp({
   const conversationChars =
     localModelSelected
       ? LOCAL_CONVERSATION_CHARS
-      : conversationBudgetChars(runtimeProvider, model);
+      : conversationBudgetChars(runtimeProvider, model, models.find((item) => item.id === model)?.contextWindow);
   // Files per message: 20 for a hosted model, 4 for a local one (server decides).
   const documentLimit =
     documentFit?.limit ?? (localModelSelected ? 4 : 20);
@@ -4673,6 +4680,7 @@ export default function MatterChatApp({
           trimmed,
         primarySkill: route,
         mode: "PRAWNIK",
+        effort: modelEffort,
         ...(sendAttachments.length > 0
           ? {
               attachments: sendAttachments,
@@ -5531,6 +5539,11 @@ export default function MatterChatApp({
             {...privacyPreview.request}
             busy={privacyPreviewBusy}
             confirmError={privacyPreviewError}
+            onSendPageImage={(image) =>
+              setDirectImages((current) =>
+                current.length >= MAX_DIRECT_IMAGES ? current : [...current, { id: crypto.randomUUID(), ...image }]
+              )
+            }
             onCancel={() => {
               privacyPreview.resolve(null);
               setPrivacyPreviewError("");
@@ -8072,6 +8085,28 @@ export default function MatterChatApp({
                     </small>
                   </span>
                 </label>
+              </div>
+            </CompactSettingRow>
+
+            <CompactSettingRow
+              title={t("Wysiłek modelu")}
+              summary={modelEffort === "low" ? t("niski") : modelEffort === "high" ? t("wysoki") : t("średni")}
+            >
+              <div className="session-knowledge" role="radiogroup" aria-label={t("Wysiłek modelu")}>
+                {([
+                  ["low", t("Niski"), t("Najszybciej: krótkie pytania i proste pisma.")],
+                  ["medium", t("Średni (zalecany)"), t("Zwykła praca nad sprawą: analiza akt i pisma.")],
+                  ["high", t("Wysoki"), t("Najdokładniej, ale wolniej i z większym zużyciem limitu konta: złożone sprawy.")]
+                ] as Array<[ModelEffort, string, string]>).map(([value, label, hint]) => (
+                  <label key={value} className="session-knowledge-option">
+                    <input type="radio" name="model-effort" checked={modelEffort === value} onChange={() => setModelEffort(value)} />
+                    <span>
+                      <strong>{label}</strong>
+                      <small>{hint}</small>
+                    </span>
+                  </label>
+                ))}
+                <small>{t("Dotyczy Claude przez konto; inne modele ustawiają rozumowanie same.")}</small>
               </div>
             </CompactSettingRow>
 
