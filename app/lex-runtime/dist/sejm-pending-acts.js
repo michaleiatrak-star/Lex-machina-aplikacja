@@ -74,7 +74,9 @@ export function latestStage(stages) {
 const STALLED_MS = 365 * 24 * 60 * 60 * 1000;
 /** No step of the bill for over a year. */
 export function stalledAmendment(item, now = Date.now()) {
-    return Boolean(item.stageDate) && now - Date.parse(item.stageDate) > STALLED_MS;
+    // Live run 2026-11-24 (real10): the stage of druk 728 not read, the bill shown although stalled.
+    const date = item.stageDate ?? item.changeDate?.slice(0, 10) ?? null;
+    return Boolean(date) && now - Date.parse(date) > STALLED_MS;
 }
 /** The same legislative note once in an answer joined from several steps (AUTO): the first stays. */
 export function withoutRepeatedLegislativeNotes(text) {
@@ -154,7 +156,7 @@ export class SejmPendingActs {
         for (const name of [...new Set(known)]) {
             for (const bill of billsAmending(name, processes, known).slice(0, 2)) {
                 const stage = await this.stageOf(bill.term ?? term, bill.number);
-                found.push({ act: name, name: display.get(name) || name, number: bill.number, term: bill.term ?? term, stage: stage?.name ?? null, stageDate: stage?.date ?? null });
+                found.push({ act: name, name: display.get(name) || name, number: bill.number, term: bill.term ?? term, stage: stage?.name ?? null, stageDate: stage?.date ?? null, changeDate: bill.changeDate ?? null });
             }
         }
         return found;
