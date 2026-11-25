@@ -12,7 +12,7 @@ import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { checkpointOwned, checkpointsReading } from "./process-checkpoint-contract.js";
-import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences, refreshVerMarkerDates, softenRemainingBlockers } from "./finalization-gate.js";
+import { FinalizationGate, expectedVerificationMarker, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences, refreshVerMarkerDates, softenRemainingBlockers, tidyMarkerLayout } from "./finalization-gate.js";
 import { opinionAsked, simpleFormQuestion } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
@@ -4580,7 +4580,7 @@ export class SafeSessionExecutor {
         }
         if (softenedClaims.length)
             audit.record("gate", "HARD_GATE_SOFTENED", "DEGRADED", { claims: softenedClaims.slice(0, 20) });
-        remarkedText = qualifyCompleteVerificationClaims(remarkedText);
+        remarkedText = tidyMarkerLayout(qualifyCompleteVerificationClaims(remarkedText));
         const processedDocumentCitations = remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
         const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
         const statusConsistencyBlocked = statusConsistency.result ===

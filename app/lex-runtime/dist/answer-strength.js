@@ -83,7 +83,7 @@ export function strengthGaps(answer, passages, rulings, required = []) {
     }
     const conceded = (answer.match(/[^\n]*(?:teza\s+trafna|bez\s+odpowiedzi)[^\n]*/giu) ?? []).slice(0, 6);
     if (conceded.length) {
-        gaps.push({ kind: "CONCEDED", label: `${conceded.length} tez rozstrzygnięcia oddanych bez odpowiedzi`, detail: conceded.join("\n") });
+        gaps.push({ kind: "CONCEDED", label: `${conceded.length === 1 ? "1 teza rozstrzygnięcia oddana" : conceded.length < 5 ? `${conceded.length} tezy rozstrzygnięcia oddane` : `${conceded.length} tez rozstrzygnięcia oddanych`} bez odpowiedzi`, detail: conceded.join("\n") });
     }
     return gaps;
 }
