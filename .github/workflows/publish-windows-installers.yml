@@ -391,6 +391,35 @@ jobs:
               release-assets/RELEASE-NOTES.md
           fi
 
+      # "Co nowego w tej wersji" in the app opens this page: it listed only the installers, no
+      # change (user report 2026-11-25). The changes since the previous release go first.
+      - name: Prepend changes since the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prev="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          {
+            echo "## Co nowego w ${TAG}"
+            echo
+            if [[ -n "$prev" && "$prev" != "$TAG" ]]; then
+              # A squash merge keeps each change as a "* ..." line of its message: the title, then those.
+              gh api "repos/${GITHUB_REPOSITORY}/compare/${prev}...${GITHUB_SHA}" --jq '.commits[] | select(.parents | length == 1) | .commit.message | split("\n") | ("- " + .[0]), (.[1:][] | select(startswith("* ")) | "  - " + ltrimstr("* "))' \
+                | grep -viE '^ *- *(build runtime|merge |bump )' \
+                | awk '!seen[$0]++' | head -n 80 || true
+              echo
+              echo "Pełna lista zmian: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${TAG}"
+            else
+              echo "- Pierwsze wydanie tej serii."
+            fi
+            echo
+            cat release-assets/RELEASE-NOTES.md
+          } > release-assets/RELEASE-NOTES.with-changes.md
+          mv release-assets/RELEASE-NOTES.with-changes.md release-assets/RELEASE-NOTES.md
+          head -n 20 release-assets/RELEASE-NOTES.md
+
       # A full release marked latest: the runtime's update check skips pre-releases by default
       # and GitHub's "Latest" pointed at v0.1.13 while every newer version was a pre-release.
       - name: Publish GitHub release (latest)
