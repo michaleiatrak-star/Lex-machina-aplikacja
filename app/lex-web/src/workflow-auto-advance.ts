@@ -1,4 +1,6 @@
 import type { SessionExecutionResponse } from "./api.js";
+import { checkpointLabel } from "./developer-mode.js";
+import { t } from "./i18n";
 
 // Checkpoint workflows (contract analysis, court analysis, chronology, evidence,
 // witness questioning, process pleading in AUTO and CHECKPOINT mode) go on to the next step by
@@ -166,8 +168,12 @@ export function autoAdvanceDecision(
   return { advance: true, next: progress.next, label, message: AUTO_ADVANCE_MESSAGE, meta: `automatycznie · ${progress.workflow} · krok ${label}` };
 }
 
-/** One line for the thread: what was done, and what comes next or why the chain stopped. */
-export function autoAdvanceNote(result: SessionExecutionResponse, decision: AutoAdvanceDecision): string | null {
+/**
+ * One line for the thread: what was done, what comes next, and what the user does now (user
+ * 2026-11-25: lead the user through the case with the system messages). `plain`: a lawyer's
+ * words, no step codes.
+ */
+export function autoAdvanceNote(result: SessionExecutionResponse, decision: AutoAdvanceDecision, plain = false): string | null {
   const progress = workflowProgress(result);
   if (!progress) return null;
   const long = result.longDocument?.id ? result.longDocument : null;
@@ -177,19 +183,52 @@ export function autoAdvanceNote(result: SessionExecutionResponse, decision: Auto
     if (decision.reason === "COMPLETE") return `${progress.workflow}: wszystkie ${long.parts} części sprawdzone i zapisane. Plik powstaje z całości.`;
     if (decision.reason === "NO_PROGRESS") return `${progress.workflow}:${problems} Poprawa nie pomogła: popraw część ręcznie albo napisz „Popraw część ${long.part} z ${long.parts}”.`;
   }
-  if (decision.advance) return `${progress.workflow}: zamknięte kroki ${progress.closed}. Następny krok: ${decision.label} — uruchamiam automatycznie.`;
+  const name = (checkpoint: string) => (plain && /^CP-/u.test(checkpoint) ? checkpointLabel(checkpoint) : stepLabel(checkpoint));
+  const decisionStep = pleadingDecision(result);
+  const toFile = decisionStep ? ` ${t("Do pliku .docx zostało {remaining} z {total} kroków.", { remaining: decisionStep.remaining, total: decisionStep.total })}` : "";
+  if (decision.advance) {
+    const label = plain && /^CP-/u.test(decision.next) ? checkpointLabel(decision.next) : decision.label;
+    return `${progress.workflow}: ${t("zamknięte kroki {closed}. Następny krok: {step} — uruchamiam automatycznie, nic nie musisz robić.", { closed: progress.closed, step: label })}`;
+  }
   switch (decision.reason) {
     case "WAITING_FOR_USER":
-      return `${progress.workflow}: krok czeka na Twoją odpowiedź.${progress.next ? ` Następny krok po odpowiedzi: ${stepLabel(progress.next)}.` : ""}`;
+      if (decisionStep) {
+        return `${progress.workflow}: ${t("potrzebna Twoja decyzja — {step}. Przeczytaj propozycję powyżej, potem kliknij „Zatwierdzam, przygotuj pismo” albo napisz, co zmienić.", { step: name(decisionStep.checkpoint) })}${toFile}`;
+      }
+      return `${progress.workflow}: ${t("krok czeka na Twoją odpowiedź. Odpowiedz na pytania powyżej albo napisz „Kontynuuj”, aby iść dalej na założeniach roboczych.")}${progress.next ? ` ${t("Następny krok po odpowiedzi: {step}.", { step: name(progress.next) })}` : ""}`;
     case "COMPLETE":
       return `${progress.workflow}: wszystkie kroki zakończone (${progress.closed}).`;
     case "NO_PROGRESS":
-      return `${progress.workflow}: krok nie został zamknięty, automatyczne przejście zatrzymane.${progress.next ? ` Aktualny krok: ${stepLabel(progress.next)}.` : ""}`;
+      return `${progress.workflow}: ${t("krok nie został zamknięty, automatyczne przejście zatrzymane.")}${progress.next ? ` ${t("Aktualny krok: {step}.", { step: name(progress.next) })}` : ""} ${t("Napisz „Kontynuuj”, aby spróbować ponownie, albo dopisz brakującą informację.")}`;
     case "LIMIT":
       return `${progress.workflow}: wykonano ${AUTO_ADVANCE_MAX_STEPS} kroków z rzędu. Napisz „Kontynuuj”, aby iść dalej.`;
     case "BLOCKED":
-      return progress.next ? `${progress.workflow}: automatyczne przejście zatrzymane. Aktualny krok: ${stepLabel(progress.next)}.` : null;
+      return progress.next ? `${progress.workflow}: ${t("automatyczne przejście zatrzymane. Aktualny krok: {step}. Napisz „Kontynuuj”, aby wznowić.", { step: name(progress.next) })}` : null;
     default:
       return null;
   }
+}
+
+// The pleading's decision steps (CP-1b, CP-PEER) wait for the user; this is what the "Zatwierdzam"
+// button sends: the model goes on with the proposed structure and its working assumptions.
+// Kept in Polish: a message the runtime and the model read as an instruction.
+export const PLEADING_APPROVE_MESSAGE = "Zatwierdzam proponowaną strukturę i założenia robocze. Kontynuuj do pisma.";
+
+export type PleadingDecision = { checkpoint: string; closed: number; remaining: number; total: number };
+
+/**
+ * A court pleading's step waiting for the user's decision, with how many steps are left to the
+ * file (user 2026-11-25: the chain stopped at CP-1b with no clear way on to the .docx).
+ */
+export function pleadingDecision(result: SessionExecutionResponse): PleadingDecision | null {
+  const pw = result.processWorkflow;
+  if (!pw || pw.stage === "FINAL" || pw.documentStatus === "FINAL") return null;
+  if (result.status !== "DRAFT_PRESENTABLE") return null;
+  const waiting = Boolean(pw.pendingCheckpoint) || result.waitingForUser === true || result.processAuto?.stopped === "WAITING_FOR_USER";
+  if (!waiting) return null;
+  const entries = Object.entries(pw.checkpoints);
+  const closed = entries.filter(([, status]) => status === "CLOSED" || status === "NA").length;
+  const checkpoint = pw.pendingCheckpoint ?? entries.find(([, status]) => status === "OPEN")?.[0];
+  if (!checkpoint) return null;
+  return { checkpoint, closed, remaining: entries.length - closed, total: entries.length };
 }

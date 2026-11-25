@@ -251,7 +251,7 @@ import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
 import { LawSourceVerification } from "./LawSourceVerification.js";
-import { AUTO_ADVANCE_MAX_STEPS, autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
+import { AUTO_ADVANCE_MAX_STEPS, autoAdvanceDecision, autoAdvanceNote, pleadingDecision, PLEADING_APPROVE_MESSAGE, workflowProgress, type PleadingDecision } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 import {
   DeveloperModeContext,
@@ -265,6 +265,7 @@ import {
   visibleContent,
   draftDisplayText
 } from "./developer-mode.js";
+import { PleadingDecisionBar } from "./PleadingDecisionBar.js";
 
 type TabId =
   | "home"
@@ -1955,6 +1956,8 @@ export default function MatterChatApp({
   // the message waits for the user's choice and is resent through contractRetry.
   // Escalation / reduction between the letter skills offered by the runtime, and a switch being sent.
   const [skillSwitchOffer, setSkillSwitchOffer] = useState<{ caseId: string; offer: SkillSwitchOffer } | null>(null);
+  // A court pleading's step waiting for the user's decision: approve and go on to the file, or change.
+  const [pleadingDecisionOffer, setPleadingDecisionOffer] = useState<({ caseId: string } & PleadingDecision) | null>(null);
   const [pendingSkillSwitch, setPendingSkillSwitch] = useState<{ caseId: string; action: DeterministicActionId; text: string; label: string } | null>(null);
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
     caseId: string; text: string; messageId: string; recovery: WorkflowRecovery;
@@ -4752,7 +4755,9 @@ export default function MatterChatApp({
       );
       const autoProgress = workflowProgress(result);
       if (autoProgress) workflowClosedRef.current[executionCaseId] = autoProgress.closed;
-      const autoNote = autoAdvanceNote(result, autoDecision);
+      const autoNote = autoAdvanceNote(result, autoDecision, !developerMode);
+      const decisionStep = !autoDecision.advance && autoDecision.reason === "WAITING_FOR_USER" ? pleadingDecision(result) : null;
+      setPleadingDecisionOffer(decisionStep && canWriteCase(selectedCase) ? { caseId: executionCaseId, ...decisionStep } : null);
       if (autoNote && activeCaseIdRef.current === executionCaseId) {
         setMessages((current) => [...current, { id: messageId(), role: "system", content: autoNote }]);
       }
@@ -7410,6 +7415,21 @@ export default function MatterChatApp({
                   </div>
                   <small>{t("Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą niezweryfikowanych powołań.")}</small>
                 </div>
+              ) : null}
+              {pleadingDecisionOffer && pleadingDecisionOffer.caseId === caseId && !executing ? (
+                <PleadingDecisionBar
+                  decision={pleadingDecisionOffer}
+                  developer={developerMode}
+                  onApprove={() => {
+                    const step = pleadingDecisionOffer.checkpoint;
+                    setPleadingDecisionOffer(null);
+                    void executeMessage(PLEADING_APPROVE_MESSAGE, { autoStep: 0, autoMeta: `zatwierdzenie · ${step}` });
+                  }}
+                  onChange={() => {
+                    setPleadingDecisionOffer(null);
+                    document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
+                  }}
+                />
               ) : null}
               {skillSwitchOffer && skillSwitchOffer.caseId === caseId && !executing ? (
                 <div className="chat-contract-mode" role="group" aria-label={t("Zmiana rodzaju pisma")}>
