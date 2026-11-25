@@ -3173,7 +3173,8 @@ export class SafeSessionExecutor {
             ...(request.tokenCharsPerToken ? { tokenCharsPerToken: request.tokenCharsPerToken } : {}),
             // Claude through the account: a simple question low, every other legal turn (a step, an
             // analysis, a letter) high; a non-legal message keeps the CLI's own default (task 01).
-            ...(legalTurn ? { accountEffort: profile === "LEKKI" ? "low" : "high" } : {}),
+            // Medium by default (user 2026-11-24); low on the light path; the user's choice wins.
+            ...(legalTurn ? { accountEffort: request.effort ?? (profile === "LEKKI" ? "low" : "medium") } : {}),
             ...(modelImages.length ? { documentImages: modelImages } : {}),
             ...(placeholderKey ? { placeholderKey } : {}),
             ...(request.conversationalOnly

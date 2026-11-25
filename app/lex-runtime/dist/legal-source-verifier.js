@@ -3,6 +3,8 @@ import { DEFAULT_PDF_MAX_BYTES, LocalPdfTextExtractor, PdfTextExtractionError } 
 import { articleWording, extractPageFootnotes } from "./core-law-footnotes.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { anchoredUrl, htmlUnitFragment, pageFragment, pdfArticlePage } from "./source-anchor.js";
+// Extracted texts of immutable ELI PDFs (see the fetch below); a few acts, the largest ~2.6 MB of text.
+const PDF_TEXT_CACHE_MAX = 12;
 const NSA_WSA_SNAPSHOT_HOSTS = new Set([
     "nsa.gov.pl",
     "orzeczenia.nsa.gov.pl"
@@ -367,6 +369,8 @@ export class OfficialLegalSourceVerifier {
         this.now = now;
         this.pdfTextExtractor = pdfTextExtractor;
     }
+    // Extracted texts of immutable ELI PDFs, per verifier (the server keeps one for its lifetime).
+    pdfTextCache = new Map();
     supportsPdf() {
         return Boolean(this.pdfTextExtractor);
     }
@@ -387,23 +391,32 @@ export class OfficialLegalSourceVerifier {
         if (!OFFICIAL_SOURCE_HOSTS.has(host)) {
             throw new LegalSourceVerificationError("Legal source host is not on the official-source allowlist.", "SOURCE_NOT_OFFICIAL");
         }
+        // A Dz.U. text in ELI (api.sejm.gov.pl/eli/acts/DU/<year>/<pos>/text.pdf) never changes: its
+        // extracted text is kept, so the next provision of the same act needs no new download (live
+        // run 2026-11-24: the same KPC t.j. fetched four times, 9-15 s each).
+        const pdfCacheKey = host === "api.sejm.gov.pl" && /^\/eli\/acts\/(?:DU|MP)\/\d{4}\/\d+\/text\.pdf$/u.test(url.pathname) ? url.toString() : null;
+        const cachedPdf = pdfCacheKey ? this.pdfTextCache.get(pdfCacheKey) : undefined;
         let response;
-        try {
-            response = await this.fetcher(url, {
-                method: "GET",
-                redirect: "error",
-                // A hung official server is an outage (ELI fallback), not a turn waiting forever;
-                // the same signal bounds reading the body (a large consolidated act as PDF).
-                signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
-                headers: {
-                    Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1"
-                }
-            });
+        if (cachedPdf) {
+            response = new Response(null, { status: 200, headers: { "content-type": "application/pdf" } });
         }
-        catch (error) {
-            // The cause (DNS, refused connection, a redirect, timeout) stays for diagnostics (G17).
-            throw new LegalSourceVerificationError("Official legal source could not be fetched without redirects.", "SOURCE_FETCH_FAILED", { cause: error });
-        }
+        else
+            try {
+                response = await this.fetcher(url, {
+                    method: "GET",
+                    redirect: "error",
+                    // A hung official server is an outage (ELI fallback), not a turn waiting forever;
+                    // the same signal bounds reading the body (a large consolidated act as PDF).
+                    signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
+                    headers: {
+                        Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1"
+                    }
+                });
+            }
+            catch (error) {
+                // The cause (DNS, refused connection, a redirect, timeout) stays for diagnostics (G17).
+                throw new LegalSourceVerificationError("Official legal source could not be fetched without redirects.", "SOURCE_FETCH_FAILED", { cause: error });
+            }
         if (!response.ok) {
             throw new LegalSourceVerificationError("Official legal source returned HTTP " + response.status + ".", "SOURCE_FETCH_FAILED");
         }
@@ -412,7 +425,12 @@ export class OfficialLegalSourceVerifier {
         let body;
         let pageTexts;
         let footnotes = {};
-        if (pdfSource) {
+        if (pdfSource && cachedPdf) {
+            body = cachedPdf.body;
+            pageTexts = cachedPdf.pageTexts;
+            footnotes = { ...cachedPdf.footnotes };
+        }
+        else if (pdfSource) {
             if (!this.pdfTextExtractor) {
                 throw new LegalSourceVerificationError("Official PDF requires a configured local PDF text extractor.", "UNSUPPORTED_SOURCE_CONTENT");
             }
@@ -443,6 +461,11 @@ export class OfficialLegalSourceVerifier {
                     throw new LegalSourceVerificationError("Official PDF exceeds the configured byte limit.", "SOURCE_TOO_LARGE");
                 }
                 throw new LegalSourceVerificationError("Official PDF could not be converted into verifiable text.", "PDF_EXTRACTION_FAILED");
+            }
+            if (pdfCacheKey) {
+                if (this.pdfTextCache.size >= PDF_TEXT_CACHE_MAX)
+                    this.pdfTextCache.delete(this.pdfTextCache.keys().next().value);
+                this.pdfTextCache.set(pdfCacheKey, { body, ...(pageTexts ? { pageTexts } : {}), footnotes: { ...footnotes } });
             }
         }
         else {

@@ -376,6 +376,21 @@ describe("OfficialLegalSourceVerifier: superscript units and a hung source", () 
     expect(result.record.evidence).not.toContain("nie mogą być zbyte");
   });
 
+  it("reads an ELI PDF once: the next provision of the same act comes from the kept text", async () => {
+    const fetcher = vi.fn(async () => new Response(new Uint8Array([37, 80, 68, 70]), { status: 200, headers: { "content-type": "application/pdf" } }));
+    const extract = vi.fn(async (data: Uint8Array) => ({ text: "Kodeks cywilny\nArt. 5. Pierwszy.\nArt. 6. Drugi.", pages: 1, bytes: data.byteLength }));
+    const verifier = new OfficialLegalSourceVerifier(fetcher, () => "2026-11-24T08:00:00.000Z", { extract });
+    const url = "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf";
+    const first = await verifier.verify({ claim: "art. 5 KC", kind: "statute", url, expectedTitle: "Kodeks cywilny", toolCallId: "t1" });
+    const second = await verifier.verify({ claim: "art. 6 KC", kind: "statute", url, expectedTitle: "Kodeks cywilny", toolCallId: "t2" });
+    expect(first.record.status).toBe("VERIFIED");
+    expect(second.record.status).toBe("VERIFIED");
+    expect(second.record.evidence).toContain("Drugi.");
+    expect(second.record.verificationMethod).toBe("web_fetch_pdf");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(extract).toHaveBeenCalledTimes(1);
+  });
+
   it("bounds the official fetch with a timeout signal", async () => {
     const fetcher = vi.fn(async (_input: unknown, init?: RequestInit) => {
       expect(init?.signal).toBeInstanceOf(AbortSignal);
