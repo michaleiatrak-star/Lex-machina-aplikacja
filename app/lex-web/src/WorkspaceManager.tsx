@@ -631,12 +631,20 @@ export function WorkspaceManager({
    * way. A file already read in the background goes straight to its correction and personal
    * data step; one not read yet is read before the others.
    */
-  async function processAll(items: WorkspaceItem[], clearConfirmed = false): Promise<void> {
+  async function processAll(
+    items: WorkspaceItem[],
+    clearConfirmed = false,
+    // The choice for the selected files ("Przetwórz zaznaczone"): it wins over each file's own,
+    // also in this same call (setModeByItem is not applied yet here; user report 2026-11-25:
+    // with "tylko OCR" for all, only the first file was read without anonymization).
+    chosen?: ReadonlyMap<string, DocumentProcessingMode>
+  ): Promise<void> {
+    const modeOf = (item: WorkspaceItem): DocumentProcessingMode => chosen?.get(item.itemId) ?? modeFor(item);
     const fresh = items.filter((item) => !decided(item));
     if (!fresh.length) return;
-    const modes = [...new Set(fresh.map(modeFor))];
+    const modes = [...new Set(fresh.map(modeOf))];
     for (const mode of modes) if (!(await modeReady(mode))) return;
-    const clear = fresh.filter((item) => processingModeKeepsClearText(modeFor(item)));
+    const clear = fresh.filter((item) => processingModeKeepsClearText(modeOf(item)));
     if (
       clear.length &&
       !clearConfirmed &&
@@ -649,7 +657,7 @@ export function WorkspaceManager({
     setError("");
     for (const item of fresh) queuedItems.current.set(item.itemId, item);
     setQueue((current) =>
-      enqueueFiles(current, fresh.map((item) => ({ itemId: item.itemId, filename: item.filename, mode: modeFor(item), approved: true })))
+      enqueueFiles(current, fresh.map((item) => ({ itemId: item.itemId, filename: item.filename, mode: modeOf(item), approved: true })))
     );
     runQueue();
   }
@@ -1027,7 +1035,7 @@ export function WorkspaceManager({
       return;
     }
     if (bulkMode) setModeByItem((current) => ({ ...current, ...Object.fromEntries(chosenPending.map((item) => [item.itemId, bulkMode])) }));
-    await processAll(chosenPending, true);
+    await processAll(chosenPending, true, modes);
   }
   async function moveChosen(folderId: string | null): Promise<void> {
     const items = chosenFiles;
