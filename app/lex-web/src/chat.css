@@ -5413,3 +5413,43 @@ mark.restored {
   .admin-users-table .admin-users-col-role,
   .admin-users-table .admin-users-col-kind { display: none; }
 }
+
+.deadline-calculator .deadline-field {
+  display: grid;
+  gap: 4px;
+}
+
+.deadline-calculator .deadline-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.deadline-result {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border, var(--lm-l37));
+  border-radius: 8px;
+}
+
+.deadline-end {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.deadline-steps {
+  font-size: 0.95rem;
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+.deadline-basis {
+  color: var(--lm-t4);
+  font-size: 0.9em;
+}
+
+.deadline-calculator > .chat-form-row {
+  margin-top: 14px;
+}

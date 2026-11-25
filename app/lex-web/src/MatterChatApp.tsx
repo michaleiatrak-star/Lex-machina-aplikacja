@@ -52,6 +52,7 @@ import { CaseListPage } from "./CaseListPage";
 import { ViewErrorBoundary } from "./ViewErrorBoundary";
 import { UsagePanel } from "./UsagePanel";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
+import { DeadlineCalculatorCard } from "./DeadlineCalculatorCard.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
   loadLastUsedModel,
@@ -7987,6 +7988,16 @@ export default function MatterChatApp({
                 )
               )}
             </CollapsibleCaseSection>
+
+            <DeadlineCalculatorCard
+              caseId={selectedCase?.caseId ?? null}
+              canWrite={canWriteCase(selectedCase)}
+              onAdded={(created) =>
+                setCaseSchedule((current) =>
+                  [...current, created].sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.createdAt.localeCompare(right.createdAt))
+                )
+              }
+            />
 
             <CaseContactsCard
               caseId={selectedCase?.caseId ?? null}
