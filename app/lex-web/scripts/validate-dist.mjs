@@ -131,7 +131,8 @@ const required = [
 // z localStorage albo bundle bez tych kluczy blokuje bramkę.
 // Język interfejsu (lex.language, src/i18n.ts): wybór na tym komputerze, bez danych sprawy.
 // web-search-setup-prompt.ts: the one-time "set up the web search" flag per user (0.1.83), no secret.
-const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts", "i18n.ts", "web-search-setup-prompt.ts"]);
+// model-effort.ts: the reasoning effort chosen per user (lex.modelEffort.<userId>), no secret, no case data.
+const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts", "i18n.ts", "web-search-setup-prompt.ts", "model-effort.ts"]);
 const sourceRoot = path.resolve(process.cwd(), "src");
 const localStorageSources = collect(sourceRoot)
   .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))
