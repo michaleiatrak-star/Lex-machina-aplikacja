@@ -327,6 +327,13 @@ export function contractDraftStepDone(result, checkpoints) {
         return true;
     return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
 }
+// The workflow's own gates, red for a draft that stopped only on marked citations.
+const DRAFT_WORKFLOW_GATES = /^G39[HI]_/u;
+/** The refused steps that hold a contract checkpoint (the workflow gates not, for a marked draft). */
+export function contractStepBlocks(result, draftDone) {
+    const steps = blockedAuditSteps(result);
+    return draftDone ? steps.filter((step) => !DRAFT_WORKFLOW_GATES.test(step)) : steps;
+}
 export function blockedAuditSteps(result) {
     return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
         .filter((event) => event.status === "BLOCKED" && !LOOKUP_REFUSALS.test(String(event.target)))
@@ -8282,7 +8289,10 @@ export function createLexHttpApp(options) {
                     result.waitingForUser !== true &&
                     // A step refused during the turn: the audit of the checkpoint cannot be closed
                     // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
-                    blockedAuditSteps(result).length === 0) {
+                    // A step taken as a marked draft: the workflow gates are red because of those marks
+                    // (live test 2026-11-26: G39I_WORKFLOW_CONTRACT, G39I_TURN_STATE, G39I_COMMON_LEGAL_INVARIANTS,
+                    // G39H_WORKFLOW_FINALIZATION held every such step); a refused step still holds it.
+                    contractStepBlocks(result, contractDraftStepDone(result, contractContext.permit.checkpoints)).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
