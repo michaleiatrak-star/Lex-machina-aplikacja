@@ -294,6 +294,24 @@ const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_
 // the whole analysis). The finalization gates (AU-HYBRID…AU-DISC) and the .docx still need PASS.
 const CONTRACT_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION", "TEMPORAL_FRESHNESS"]);
 const CONTRACT_FINAL_CHECKPOINTS = new Set(["AU-HYBRID", "AU-STRIP", "AU-POST", "AU-DISC", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED"]);
+/** The message with its skill envelope's workflow set (an envelope added when there is none). */
+export function withEnvelopeWorkflow(query, workflow) {
+    const prefix = `${SKILL_SELECTION_ENVELOPE_PREFIX} `;
+    if (query.startsWith(prefix)) {
+        const end = query.indexOf("\n");
+        const head = query.slice(prefix.length, end < 0 ? undefined : end);
+        try {
+            const parsed = JSON.parse(head);
+            // The engine takes the workflow only for a skill the turn selects: the skill goes to "manual" too.
+            const manual = Array.isArray(parsed.manual) ? [...new Set([...parsed.manual.filter((item) => typeof item === "string"), workflow])] : [workflow];
+            return `${prefix}${JSON.stringify({ ...parsed, manual, workflow })}${end < 0 ? "" : query.slice(end)}`;
+        }
+        catch {
+            return query;
+        }
+    }
+    return `${prefix}${JSON.stringify({ auto: true, manual: [workflow], workflow })}\n${query}`;
+}
 export function contractDraftStepDone(result, checkpoints) {
     if (result.finalization !== "DEGRADED")
         return false;
@@ -7356,6 +7374,11 @@ export function createLexHttpApp(options) {
                     }
                 }
             }
+            // The engine picks its workflow from the message's envelope: a continued contract analysis
+            // pins it there too, or the engine ran the general workflow with the contract state bound
+            // (422 G39I_CONTRACT_STATE_BINDING, live test 2026-11-26).
+            if (contractContinued)
+                request.query = withEnvelopeWorkflow(request.query, "analizator-umow-v1");
             const previewPlan = pleadingRouted || pleadingContinued
                 ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
                 : contractContinued
@@ -8239,6 +8262,9 @@ export function createLexHttpApp(options) {
                 const caseView = options.caseAccessService
                     .openCase(actor, contractContext.caseId);
                 let state = contractContext.state;
+                if (result.workflow?.id === "CONTRACT_ANALYSIS_V1" && result.status === "DRAFT_PRESENTABLE") {
+                    process.stderr.write(`CONTRACT_CHECKPOINT_CHECK:${JSON.stringify({ checkpoints: contractContext.permit.checkpoints, finalization: result.finalization, audit: result.audit.result, closed: result.audit.closed, workflow: result.workflow.result, marked: result.workflow.markedDraftOnly ?? null, draftDone: contractDraftStepDone(result, contractContext.permit.checkpoints), waiting: result.waitingForUser ?? null, blockedSteps: blockedAuditSteps(result) })}\n`);
+                }
                 if (result.status ===
                     "DRAFT_PRESENTABLE" &&
                     result.audit.closed ===

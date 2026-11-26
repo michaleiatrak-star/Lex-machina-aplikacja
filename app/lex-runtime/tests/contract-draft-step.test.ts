@@ -35,3 +35,14 @@ describe("contract analysis checkpoints over a marked draft", () => {
     expect(contractDraftStepDone({ ...mixed, workflow: { markedDraftOnly: true }, gateI: { checks: [...run7.gateI.checks, { id: "SOURCE_PROVENANCE", result: "BLOCKED" }] } }, analysis)).toBe(false);
   });
 });
+
+describe("a contract step taken as a marked draft is not held by its own red workflow gates", () => {
+  it("drops the G39H/G39I gates only when the draft rule passed", async () => {
+    const { contractStepBlocks } = (await import("../src/http/app.js")) as unknown as { contractStepBlocks: (r: unknown, d: boolean) => string[] };
+    const { SESSION_EXECUTION_INTERNAL } = await import("../src/session-executor.js");
+    const events = ["G39I_WORKFLOW_CONTRACT", "G39I_TURN_STATE", "G39H_WORKFLOW_FINALIZATION", "fetch_auxiliary_legal_source"].map((target) => ({ status: "BLOCKED", target }));
+    const result = { [SESSION_EXECUTION_INTERNAL]: { auditEvents: events } };
+    expect(contractStepBlocks(result, true)).toEqual(["fetch_auxiliary_legal_source"]);
+    expect(contractStepBlocks(result, false)).toHaveLength(4);
+  });
+});

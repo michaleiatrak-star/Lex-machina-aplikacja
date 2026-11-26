@@ -814,6 +814,24 @@ const LOOKUP_REFUSALS = /^(?:verify_legal_reference|search_case_law|search_case_
 const CONTRACT_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION", "TEMPORAL_FRESHNESS"]);
 const CONTRACT_FINAL_CHECKPOINTS = new Set(["AU-HYBRID", "AU-STRIP", "AU-POST", "AU-DISC", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED"]);
 
+/** The message with its skill envelope's workflow set (an envelope added when there is none). */
+export function withEnvelopeWorkflow(query: string, workflow: string): string {
+  const prefix = `${SKILL_SELECTION_ENVELOPE_PREFIX} `;
+  if (query.startsWith(prefix)) {
+    const end = query.indexOf("\n");
+    const head = query.slice(prefix.length, end < 0 ? undefined : end);
+    try {
+      const parsed = JSON.parse(head) as Record<string, unknown>;
+      // The engine takes the workflow only for a skill the turn selects: the skill goes to "manual" too.
+      const manual = Array.isArray(parsed.manual) ? [...new Set([...(parsed.manual as unknown[]).filter((item): item is string => typeof item === "string"), workflow])] : [workflow];
+      return `${prefix}${JSON.stringify({ ...parsed, manual, workflow })}${end < 0 ? "" : query.slice(end)}`;
+    } catch {
+      return query;
+    }
+  }
+  return `${prefix}${JSON.stringify({ auto: true, manual: [workflow], workflow })}\n${query}`;
+}
+
 export function contractDraftStepDone(
   result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }>; workflow?: { markedDraftOnly?: boolean } },
   checkpoints: readonly string[]
@@ -827,6 +845,15 @@ export function contractDraftStepDone(
   // warning to take the cautious mark) kept AU-F0 open for good (live test 2026-11-26).
   if (result.workflow?.markedDraftOnly === true) return true;
   return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
+}
+
+// The workflow's own gates, red for a draft that stopped only on marked citations.
+const DRAFT_WORKFLOW_GATES = /^G39[HI]_/u;
+
+/** The refused steps that hold a contract checkpoint (the workflow gates not, for a marked draft). */
+export function contractStepBlocks(result: SessionExecutionResponse, draftDone: boolean): string[] {
+  const steps = blockedAuditSteps(result);
+  return draftDone ? steps.filter((step) => !DRAFT_WORKFLOW_GATES.test(step)) : steps;
 }
 
 export function blockedAuditSteps(result: SessionExecutionResponse): string[] {
@@ -11332,6 +11359,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           }
         }
       }
+      // The engine picks its workflow from the message's envelope: a continued contract analysis
+      // pins it there too, or the engine ran the general workflow with the contract state bound
+      // (422 G39I_CONTRACT_STATE_BINDING, live test 2026-11-26).
+      if (contractContinued) request.query = withEnvelopeWorkflow(request.query, "analizator-umow-v1");
       const previewPlan = pleadingRouted || pleadingContinued
         ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
         : contractContinued
@@ -12841,6 +12872,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         let state =
           contractContext.state;
+        if (result.workflow?.id === "CONTRACT_ANALYSIS_V1" && result.status === "DRAFT_PRESENTABLE") {
+          process.stderr.write(
+            `CONTRACT_CHECKPOINT_CHECK:${JSON.stringify({ checkpoints: contractContext.permit.checkpoints, finalization: result.finalization, audit: result.audit.result, closed: result.audit.closed, workflow: result.workflow.result, marked: result.workflow.markedDraftOnly ?? null, draftDone: contractDraftStepDone(result, contractContext.permit.checkpoints), waiting: result.waitingForUser ?? null, blockedSteps: blockedAuditSteps(result) })}\n`
+          );
+        }
         if (
           result.status ===
             "DRAFT_PRESENTABLE" &&
@@ -12863,7 +12899,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.waitingForUser !== true &&
           // A step refused during the turn: the audit of the checkpoint cannot be closed
           // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
-          blockedAuditSteps(result).length === 0
+          // A step taken as a marked draft: the workflow gates are red because of those marks
+          // (live test 2026-11-26: G39I_WORKFLOW_CONTRACT, G39I_TURN_STATE, G39I_COMMON_LEGAL_INVARIANTS,
+          // G39H_WORKFLOW_FINALIZATION held every such step); a refused step still holds it.
+          contractStepBlocks(result, contractDraftStepDone(result, contractContext.permit.checkpoints)).length === 0
         ) {
           if (
             !options
