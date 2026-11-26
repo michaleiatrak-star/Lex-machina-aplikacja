@@ -1,3 +1,4 @@
+import { caseLawQuestion, statuteQuestion } from "./legal-question-kind.js";
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand, type SchemaEntry } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
@@ -418,7 +419,36 @@ export function decideTask(
   const decision = decideTaskByRows(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
   if (explicitHandoff(rawQuestion, () => true)) return decision;
   const known = (skill: string) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
-  return pleadingFirst(decision, requestOf(withoutRoutingMarkers(rawQuestion)), known);
+  const request = requestOf(withoutRoutingMarkers(rawQuestion));
+  return lawQuestionFirst(pleadingFirst(decision, request, known), request, materials, known);
+}
+
+// Skills a question about the law or case law is taken from when it has no document of its own:
+// the court-analysis, evidence and witness skills and a pleading named in a question (live probe
+// 2026-11-26: "Sprawdź, czy wyrok TK K 1/20 obowiązuje" -> analiza-sadowa-v6, "Jak sądy oceniają
+// zeznania świadka…" -> the witness skill, "Podaj przepisy dotyczące terminu na odwołanie" -> the
+// pleading pipeline, "Jaka jest podstawa prawna…" -> no skill).
+const YIELDS_TO_LAW_QUESTION: ReadonlySet<string> = new Set(["analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90", "pisma-procesowe-v3"]);
+
+export function lawQuestionFirst(
+  decision: TaskDecision | null,
+  question: string,
+  materials: DeliveredMaterial[],
+  known: (skill: string) => boolean
+): TaskDecision | null {
+  if (materials.length) return decision;
+  // A request to draft or for questions to a witness keeps its skill.
+  if (decision?.primary === "pisma-procesowe-v3" && !asksAbout(question) && /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|opracuj)/iu.test(question)) return decision;
+  if (decision?.primary === "przesluchanie-swiadkow-v2-min90" && WITNESS_QUESTIONS.test(question) && /(?<![\p{L}])(?:przygotuj|ułóż|napisz)/iu.test(question)) return decision;
+  if (decision && !YIELDS_TO_LAW_QUESTION.has(decision.primary)) return decision;
+  const target = caseLawQuestion(question) ? "orzeczenia-sadowe-v2" : statuteQuestion(question) ? "analizator-przepisow-v2" : null;
+  if (!target || !known(target)) return decision;
+  return {
+    source: decision?.source ?? "ROUTER",
+    primary: target,
+    then: null,
+    reason: `${target === "orzeczenia-sadowe-v2" ? "pytanie o orzecznictwo" : "pytanie o przepisy"}${decision ? ` (zamiast ${decision.primary})` : ""}`
+  };
 }
 
 function decideTaskByRows(
