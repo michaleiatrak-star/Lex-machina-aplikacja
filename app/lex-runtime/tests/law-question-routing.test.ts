@@ -61,3 +61,12 @@ describe("own documents, drafting and witness questions keep their skills", () =
   it("drafting an appeal is the pleading", () => expect(both("Napisz apelację od wyroku SN II PK 123/19")[0]).toBe("pisma-procesowe-v3"));
   it("questions for a witness are the witness skill", () => expect(both("Przygotuj pytania do świadka na rozprawę")[1]).toBe("przesluchanie-swiadkow-v2-min90"));
 });
+
+describe("editing a contract's clause is the contract skill, not the statute analysis a '§' picks", () => {
+  it.each(["Popraw § 5 tej umowy, kara umowna jest za wysoka", "Dodaj do umowy klauzulę o waloryzacji czynszu", "Przeredaguj umowę tak, żeby chroniła najemcę"])("%s", (q) => {
+    expect(decideTask(routes, matrix, q, [], redaction)?.primary).toBe("analizator-umow-v1");
+  });
+  it("a question about a statute's paragraph stays the statute analysis", () => {
+    expect(decideTask(routes, matrix, "Jak interpretować art. 233 § 1 kpc?", [], redaction)?.primary).toBe("analizator-przepisow-v2");
+  });
+});

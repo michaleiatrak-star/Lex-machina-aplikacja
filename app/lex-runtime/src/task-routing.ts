@@ -420,7 +420,17 @@ export function decideTask(
   if (explicitHandoff(rawQuestion, () => true)) return decision;
   const known = (skill: string) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
   const request = requestOf(withoutRoutingMarkers(rawQuestion));
-  return lawQuestionFirst(pleadingFirst(decision, request, known), request, materials, known);
+  return contractEditFirst(lawQuestionFirst(pleadingFirst(decision, request, known), request, materials, known), request, known);
+}
+
+// Editing a contract's clause ("Popraw § 5 tej umowy", "zmień karę umowną w umowie") is the contract
+// skill's redaction, not the statute analysis a "§" picks (probe 2026-11-26).
+const CONTRACT_EDIT = /(?<![\p{L}])(?:popraw|zmień|zmien|przeredaguj|zredaguj|dodaj|dopisz|usuń|usun|skreśl|wykreśl|uzupełnij|doprecyzuj)\p{L}*/iu;
+const CONTRACT_WORD = /(?<![\p{L}])(?:umow|aneks|porozumieni|regulamin)\p{L}*/iu;
+export function contractEditFirst(decision: TaskDecision | null, question: string, known: (skill: string) => boolean): TaskDecision | null {
+  if (decision && decision.primary !== "analizator-przepisow-v2") return decision;
+  if (!CONTRACT_EDIT.test(question) || !CONTRACT_WORD.test(question) || !known("analizator-umow-v1")) return decision;
+  return { source: decision?.source ?? "ROUTER", primary: "analizator-umow-v1", then: null, reason: `redakcja postanowienia umowy${decision ? ` (zamiast ${decision.primary})` : ""}` };
 }
 
 // Skills a question about the law or case law is taken from when it has no document of its own:
