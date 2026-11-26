@@ -42,199 +42,199 @@
  ],
  "totals": {
   "pl": {
-   "całość": 98,
+   "całość": 99,
    "częściowo": 0,
    "wcale": 0
   },
   "en": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "de": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "fr": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "it": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "es": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "pt": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "nl": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "ca": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "lb": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "sv": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "da": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "nb": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "fi": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "is": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "fo": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "et": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "lv": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "lt": {
    "całość": 69,
-   "częściowo": 27,
+   "częściowo": 28,
    "wcale": 2
   },
   "cs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "sk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "hu": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "sl": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "hr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "bs": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "sr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "cnr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "mk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "sq": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "ro": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "bg": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "el": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "mt": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "tr": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "uk": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "ka": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "hy": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "az": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   },
   "rw": {
    "całość": 2,
    "częściowo": 0,
-   "wcale": 96
+   "wcale": 97
   }
  },
  "components": [
@@ -2361,6 +2361,71 @@
     "et": "całość",
     "lv": "całość",
     "lt": "całość",
+    "cs": "wcale",
+    "sk": "wcale",
+    "hu": "wcale",
+    "sl": "wcale",
+    "hr": "wcale",
+    "bs": "wcale",
+    "sr": "wcale",
+    "cnr": "wcale",
+    "mk": "wcale",
+    "sq": "wcale",
+    "ro": "wcale",
+    "bg": "wcale",
+    "el": "wcale",
+    "mt": "wcale",
+    "tr": "wcale",
+    "uk": "wcale",
+    "ka": "wcale",
+    "hy": "wcale",
+    "az": "wcale",
+    "rw": "wcale"
+   }
+  },
+  {
+   "component": "DeadlineCalculatorCard",
+   "translatable": 26,
+   "notYetTranslatable": 0,
+   "translated": {
+    "ca": 3,
+    "da": 3,
+    "de": 3,
+    "en": 3,
+    "es": 3,
+    "et": 3,
+    "fi": 3,
+    "fr": 3,
+    "is": 3,
+    "it": 3,
+    "lb": 3,
+    "lt": 3,
+    "lv": 3,
+    "nb": 3,
+    "nl": 3,
+    "pt": 3,
+    "sv": 3
+   },
+   "state": {
+    "pl": "całość",
+    "en": "częściowo",
+    "de": "częściowo",
+    "fr": "częściowo",
+    "it": "częściowo",
+    "es": "częściowo",
+    "pt": "częściowo",
+    "nl": "częściowo",
+    "ca": "częściowo",
+    "lb": "częściowo",
+    "sv": "częściowo",
+    "da": "częściowo",
+    "nb": "częściowo",
+    "fi": "częściowo",
+    "is": "częściowo",
+    "fo": "wcale",
+    "et": "częściowo",
+    "lv": "częściowo",
+    "lt": "częściowo",
     "cs": "wcale",
     "sk": "wcale",
     "hu": "wcale",

@@ -32,7 +32,7 @@ describe("pending bills for cited acts (task 08.4a)", () => {
     };
     const source = new SejmPendingActs(fetcher as never);
     const found = await source.forActs(["Ustawa z dnia 26 czerwca 1974 r. – Kodeks pracy", "Ustawa z dnia 23 kwietnia 1964 r. – Kodeks cywilny"]);
-    expect(found).toEqual([{ act: "kodeks pracy", name: "Kodeks pracy", number: "2416", term: 10, stage: "I czytanie w komisjach", stageDate: "2026-11-05" }]);
+    expect(found).toEqual([{ act: "kodeks pracy", name: "Kodeks pracy", number: "2416", term: 10, stage: "I czytanie w komisjach", stageDate: "2026-11-05", changeDate: null }]);
     expect(pendingAmendmentLine(found[0]!)).toContain("aktu Kodeks pracy — druk nr 2416 (10. kadencja), etap: I czytanie w komisjach (2026-11-05)");
   });
 
@@ -58,6 +58,8 @@ describe("legislative notes in a pleading (live run 2026-11-24)", () => {
     const now = Date.parse("2026-11-24");
     expect(stalledAmendment({ stageDate: "2024-11-07" }, now)).toBe(true);
     expect(stalledAmendment({ stageDate: "2026-06-09" }, now)).toBe(false);
+    expect(stalledAmendment({ stageDate: null, changeDate: "2024-11-07T18:12:57" }, now)).toBe(true);
+    expect(stalledAmendment({ stageDate: null, changeDate: "2026-06-10T10:52:32" }, now)).toBe(false);
     const note = "> Prace legislacyjne: w Sejmie jest projekt zmiany aktu Kodeks pracy — druk nr 2416";
     expect(withoutRepeatedLegislativeNotes(`A\n\n${note}\n\n---\n\nB\n\n${note}\n\nC`)).toBe(`A\n\n${note}\n\n---\n\nB\n\nC`);
   });

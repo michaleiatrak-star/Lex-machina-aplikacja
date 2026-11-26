@@ -1,4 +1,5 @@
 import { withoutRepeatedLegislativeNotes } from "../sejm-pending-acts.js";
+import { joinStepCitations, withSingleStepFooter } from "../document-citations.js";
 import { readLetterLogo, readLetterSender } from "../letter-sender.js";
 import { usageOwner, usageSummary } from "../usage-log.js";
 import { executionAbort } from "../providers/gateway.js";
@@ -111,7 +112,7 @@ import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, withOrderedFinding, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 import { activeJurisdictionPack, isDomainSkill } from "../jurisdiction.js";
-import { isCourtPleading } from "../pleading-standard.js";
+import { continuesPipeline, isCourtPleading } from "../pleading-standard.js";
 // A local model's share of the case memory (register, overview, timeline) and the thread text
 // it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
 const LOCAL_CASE_MEMORY_CHARS = 4_000;
@@ -7301,7 +7302,31 @@ export function createLexHttpApp(options) {
                 Boolean(options.registry.get("pisma-procesowe-v3")) &&
                 (materialSkills[0] ?? routerExecutive) === "pisma-procesowe-v3" &&
                 isCourtPleading(turnMessage);
-            const previewPlan = pleadingRouted
+            // A continuation of the pleading the case has started goes on in its pipeline, whatever
+            // the attached files' kinds suggest (XI P 27/26, 2026-11-25: after the AUTO batch limit
+            // "Kontynuuj." went to analizator-dowodow-v3 and the model wrote the letter outside it).
+            let pleadingContinued = false;
+            if (keywordPlan.id !== "PROCESS_PLEADING_V1" &&
+                pleadingCase &&
+                continuesPipeline(turnMessage) &&
+                options.caseAccessService &&
+                options.processWorkflowStore &&
+                options.registry.get("pisma-procesowe-v3")) {
+                const continuedCaseId = knowledge.caseId ??
+                    [...new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean))][0];
+                if (continuedCaseId) {
+                    try {
+                        const actor = responseAuthContext(res);
+                        const view = options.caseAccessService.openCase(actor, continuedCaseId);
+                        const started = await options.caseAccessService.withCaseDataKey(actor, continuedCaseId, "READ", (caseDataKey) => options.processWorkflowStore.getProcessPleadingState({ caseId: continuedCaseId, caseDataKey, keyVersion: view.keyVersion }));
+                        pleadingContinued = Boolean(started && started.stage !== "FINAL" && started.stage !== "CG_ACCEPTANCE");
+                    }
+                    catch {
+                        pleadingContinued = false;
+                    }
+                }
+            }
+            const previewPlan = pleadingRouted || pleadingContinued
                 ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
                 : contractQuestion ||
                     pleadingRedaction ||
@@ -7947,17 +7972,18 @@ export function createLexHttpApp(options) {
                 if (!response) {
                     throw new Error("PROCESS_PLEADING_AUTO_RESULT_MISSING");
                 }
-                const successfulAnswers = auto.steps
-                    .filter((step) => typeof step.result
-                    .answer ===
-                    "string" &&
-                    step.result.answer
-                        .trim())
-                    .map((step) => [
-                    `## ${step.permit.checkpoint}`,
-                    step.result.answer
-                        .trim()
-                ].join("\n\n"));
+                const answeredSteps = auto.steps.filter((step) => typeof step.result.answer === "string" && step.result.answer.trim());
+                const waitingAnswer = auto.waitingResult?.answer?.trim() && answeredSteps.length > 0 && !answeredSteps.some((step) => step.result === auto.waitingResult)
+                    ? auto.waitingResult
+                    : null;
+                // One numbering of the links over all the steps, with every step's citations.
+                const joinedCitations = joinStepCitations([
+                    ...answeredSteps.map((step) => ({ text: step.result.answer.trim(), citations: step.result.documentCitations ?? [] })),
+                    ...(waitingAnswer ? [{ text: waitingAnswer.answer.trim(), citations: waitingAnswer.documentCitations ?? [] }] : [])
+                ]);
+                // The register and the disclaimers once, after the last step, not after each.
+                const stepParts = withSingleStepFooter(joinedCitations.texts);
+                const successfulAnswers = answeredSteps.map((step, index) => [`## ${step.permit.checkpoint}`, stepParts.bodies[index]].join("\n\n"));
                 // Usage of the whole sequence, not of its last step (live run 2026-11-21: five checkpoints
                 // reported as one model call with no cache reads).
                 const stepUsages = [...auto.steps.map((step) => step.result.usage), ...(auto.waitingResult && !auto.steps.some((step) => step.result === auto.waitingResult) ? [auto.waitingResult.usage] : [])].filter((usage) => Boolean(usage));
@@ -7970,13 +7996,17 @@ export function createLexHttpApp(options) {
                     response.usage = total;
                 }
                 // The checkpoint that asked the user closes the answer: its questions are last.
-                if (auto.waitingResult?.answer?.trim() && successfulAnswers.length > 0) {
-                    successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${auto.waitingResult.answer.trim()}`);
+                if (waitingAnswer) {
+                    successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${stepParts.bodies.at(-1)}`);
                 }
+                if (stepParts.footer && successfulAnswers.length > 0)
+                    successfulAnswers.push(stepParts.footer);
                 if (response.status ===
                     "DRAFT_PRESENTABLE" &&
                     successfulAnswers.length > 0) {
                     response.answer = withoutRepeatedLegislativeNotes(successfulAnswers.join("\n\n---\n\n"));
+                    if (joinedCitations.citations.length > 0)
+                        response.documentCitations = joinedCitations.citations;
                 }
                 // Task 10B: who read which module in every AUTO step, not only in the last one.
                 response.audit = {

@@ -1257,3 +1257,30 @@ export function tidyEvidenceMarkers(text) {
     })
         .join("\n");
 }
+const LAYOUT_MARKER = /\s*(?:✅\s*\[VER:[^\]\r\n]*\]|⚠️\s*\[NIEWERYFIKOWANE[^\]\r\n]*\]|\[\[LEXDOC(?:REF)?:[^\]\r\n]{1,200}\]\])/gu;
+/**
+ * Markers where they break the layout (real11, 2026-11-25): after a table row's last "|" (a cell
+ * the header has not, dropped when shown) they go into the last cell; in a checkpoint box (a code
+ * block drawn with "│") they go, the same provision keeps its marker in the answer's text.
+ */
+export function tidyMarkerLayout(text) {
+    let fenced = false;
+    return text
+        .split("\n")
+        .map((line) => {
+        if (/^\s*```/u.test(line)) {
+            fenced = !fenced;
+            return line;
+        }
+        if (fenced)
+            return line.includes("│") ? line.replace(LAYOUT_MARKER, "").replace(/[ \t]+$/u, "") : line;
+        if (!/^\s*\|/u.test(line))
+            return line;
+        const last = line.lastIndexOf("|");
+        const after = line.slice(last + 1);
+        if (!after.trim() || after.replace(LAYOUT_MARKER, "").trim())
+            return line;
+        return `${line.slice(0, last).trimEnd()} ${after.trim()} |`;
+    })
+        .join("\n");
+}

@@ -58,7 +58,7 @@ const RULES = [
     { kind: "FAKTURA", label: "faktura / rachunek", category: "DOWOD", evidence: true, patterns: [/\bfaktura(?:\s+vat)?\b/iu, /\bsprzedawca\b[\s\S]{0,400}\bnabywca\b/iu, /\b(?:kwota|razem)\s+(?:brutto|do\s+zapłaty)\b/iu], minHits: 2 },
     { kind: "EMAIL", label: "wiadomość e-mail", category: "KORESPONDENCJA", evidence: true, patterns: [/(?:^|\n)\s*(?:Od|From)\s*:/u, /(?:^|\n)\s*(?:Do|To)\s*:/u, /(?:^|\n)\s*(?:Temat|Subject)\s*:/u], minHits: 2 },
     { kind: "KOMUNIKATOR", label: "SMS / komunikator", category: "KORESPONDENCJA", evidence: true, patterns: [/\b(?:SMS|WhatsApp|Messenger|Signal|Telegram)\b/u, /(?:\n.{0,40}\b\d{1,2}:\d{2}\b.*){4,}/u] },
-    { kind: "ZASWIADCZENIE", label: "zaświadczenie / dokumentacja", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*ZAŚWIADCZENIE\b/u, /\b(?:karta\s+informacyjna|historia\s+choroby|epikryza)\b/iu] },
+    { kind: "ZASWIADCZENIE", label: "zaświadczenie / dokumentacja", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*ZAŚWIADCZENIE\b/u, /\b(?:karta\s+informacyjna|historia\s+choroby|epikryza|zaświadczeni\p{L}*\s+lekarski\p{L}*)\b/iu] },
     { kind: "OSWIADCZENIE_STRONY", label: "oświadczenie strony / świadka (pisemne)", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*OŚWIADCZENIE\b/iu, /\b(?:oświadczam,?\s+że|niniejszym\s+oświadczam|świadom\p{L}*\s+odpowiedzialności)\b/iu], minHits: 2 },
     { kind: "PELNOMOCNICTWO", label: "pełnomocnictwo", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*PEŁNOMOCNICTWO\b/u, /\budzielam\s+pełnomocnictwa\b/iu] },
     { kind: "OPINIA_PRAWNA", label: "cudza opinia / analiza prawna", category: "MATERIAL_PRAWNY", evidence: false, patterns: [/\bopinia\s+prawna\b/iu, /\bklucz\s+odpowiedzi\b/iu, /\banaliza\s+prawna\b/iu] }
@@ -118,8 +118,11 @@ function courtSummons(head) {
 const RECORD_HEADING = /(?:^|\n)[\s\d|]*(?:PROTOKÓŁ|Protokół)(?:\s+(?:ROZPRAWY|POSIEDZENIA|PRZESŁUCHANIA|rozprawy|posiedzenia|przesłuchania))?[\s:]*(?:\n|$)/u;
 const RECORD_MARK = /protokolant\p{L}*\s*:|uruchomiono\s+rejestrację|rozpraw\p{L}*\s+rozpoczęto|zakończono\s+rejestrację|zamknięto\s+o\s+godzinie|w\s+składzie\s*:/iu;
 const RECORD_TESTIMONY = /(?<![\p{L}])(?:świad\p{L}+|zezna\p{L}+|przesłuchan\p{L}+)/iu;
+// The app's PDF reader gives a page as one line: "Sygn. akt: XI P 27/26 PROTOKÓŁ Dnia 13 listopada
+// 2026 r. Sąd Okręgowy..." (real11, 2026-11-25: both hearing records read as "nierozpoznany").
+const RECORD_HEADING_INLINE = /(?<![\p{L}])PROTOKÓŁ(?:\s+(?:ROZPRAWY|POSIEDZENIA|PRZESŁUCHANIA))?\s+(?:Dnia|z\s+dnia|z\s+rozprawy|z\s+posiedzenia)\s/u;
 function courtRecord(head) {
-    const heading = RECORD_HEADING.exec(head);
+    const heading = RECORD_HEADING.exec(head) ?? RECORD_HEADING_INLINE.exec(head);
     const mark = RECORD_MARK.exec(head);
     if (!heading || !mark)
         return null;
