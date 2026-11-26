@@ -815,13 +815,17 @@ const CONTRACT_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FI
 const CONTRACT_FINAL_CHECKPOINTS = new Set(["AU-HYBRID", "AU-STRIP", "AU-POST", "AU-DISC", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED"]);
 
 export function contractDraftStepDone(
-  result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }> },
+  result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }>; workflow?: { markedDraftOnly?: boolean } },
   checkpoints: readonly string[]
 ): boolean {
   if (result.finalization !== "DEGRADED") return false;
   if (!checkpoints.length || checkpoints.some((checkpoint) => CONTRACT_FINAL_CHECKPOINTS.has(checkpoint))) return false;
   const checks = result.gateI?.checks ?? [];
   if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id))) return false;
+  // The workflow stopped only on marked citations (as a pleading's working step, processStepDone):
+  // one provision marked ✅ in one place and ⚠️ in another (STATUS_CONTRADICTS_LEDGER, shown with the
+  // warning to take the cautious mark) kept AU-F0 open for good (live test 2026-11-26).
+  if (result.workflow?.markedDraftOnly === true) return true;
   return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
 }
 
@@ -11299,8 +11303,39 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           }
         }
       }
+      // The same for a contract analysis the case has started (live test 2026-11-26: "Kontynuuj."
+      // after the first AU step went to LEGAL_QUERY_V1 and the whole analysis ran again, 350 s,
+      // while the contract workflow stayed at its first checkpoint).
+      let contractContinued = false;
+      if (
+        !pleadingContinued &&
+        keywordPlan.id !== "CONTRACT_ANALYSIS_V1" &&
+        pleadingCase &&
+        continuesPipeline(turnMessage) &&
+        options.caseAccessService &&
+        options.contractWorkflowStore &&
+        options.registry.get("analizator-umow-v1")
+      ) {
+        const continuedCaseId =
+          knowledge.caseId ??
+          [...new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean))][0];
+        if (continuedCaseId) {
+          try {
+            const actor = responseAuthContext(res);
+            const view = options.caseAccessService.openCase(actor, continuedCaseId);
+            const started = await options.caseAccessService.withCaseDataKey(actor, continuedCaseId, "READ", (caseDataKey) =>
+              options.contractWorkflowStore!.getContractAnalysisState({ caseId: continuedCaseId, caseDataKey, keyVersion: view.keyVersion })
+            );
+            contractContinued = Boolean(started && started.stage !== "COMPLETE");
+          } catch {
+            contractContinued = false;
+          }
+        }
+      }
       const previewPlan = pleadingRouted || pleadingContinued
         ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
+        : contractContinued
+        ? createDeterministicWorkflowPlan(options.registry, "analizator-umow-v1")
         : contractQuestion ||
         pleadingRedaction ||
         (routerExecutive !== undefined &&

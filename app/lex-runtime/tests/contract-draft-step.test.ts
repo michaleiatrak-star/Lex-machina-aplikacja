@@ -27,4 +27,11 @@ describe("contract analysis checkpoints over a marked draft", () => {
     expect(contractDraftStepDone(run7, ["AU-HYBRID"])).toBe(false);
     expect(contractDraftStepDone({ ...run7, finalization: "BLOCKED" }, analysis)).toBe(false);
   });
+
+  it("close when the workflow stopped only on marked citations, also with one provision marked twice differently (2026-11-26)", () => {
+    const mixed = { ...run7, blockedReferences: [...run7.blockedReferences, { status: "STATUS_CONTRADICTS_LEDGER" }] };
+    expect(contractDraftStepDone(mixed, analysis)).toBe(false);
+    expect(contractDraftStepDone({ ...mixed, workflow: { markedDraftOnly: true } }, analysis)).toBe(true);
+    expect(contractDraftStepDone({ ...mixed, workflow: { markedDraftOnly: true }, gateI: { checks: [...run7.gateI.checks, { id: "SOURCE_PROVENANCE", result: "BLOCKED" }] } }, analysis)).toBe(false);
+  });
 });

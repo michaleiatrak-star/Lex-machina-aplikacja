@@ -1,3 +1,4 @@
+import { caseLawQuestion, statuteQuestion } from "./legal-question-kind.js";
 import { parseFlashRouting, rankDomains } from "./domain-module-map.js";
 import { activeJurisdictionPack, domainSkillSource, isDomainSkill as isDomainSkillName } from "./jurisdiction.js";
 export const SKILL_SELECTION_ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
@@ -334,6 +335,15 @@ function explicitExecutionSkillHints(query, candidates) {
     if (resolved.includes("pisma-procesowe-v3") &&
         resolved.includes("pisma-proste-v2")) {
         resolved = resolved.filter((skill) => skill !== "pisma-proste-v2");
+    }
+    // A question about case law or about the law without a document of its own (legal-question-kind.ts):
+    // the case-law or the statute skill, not the court-analysis pipeline the word "wyrok" starts, nor the
+    // evidence or witness skill a word ("faktur", "świadka") picks (probe 2026-11-26).
+    if (!drafting && caseLawQuestion(query)) {
+        resolved = ["orzeczenia-sadowe-v2", ...resolved.filter((skill) => !["orzeczenia-sadowe-v2", "analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90", "pisma-procesowe-v3"].includes(skill))];
+    }
+    else if (!drafting && statuteQuestion(query) && !resolved.some((skill) => skill.startsWith("pisma-") || skill === "analizator-umow-v1")) {
+        resolved = ["analizator-przepisow-v2", ...resolved.filter((skill) => !["analizator-przepisow-v2", "analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90"].includes(skill))];
     }
     // A specific case-law research request (find/verify judgment,
     // jurisprudential line) must control the workflow instead of the

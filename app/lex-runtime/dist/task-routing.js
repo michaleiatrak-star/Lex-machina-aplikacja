@@ -1,3 +1,4 @@
+import { caseLawQuestion, statuteQuestion } from "./legal-question-kind.js";
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
@@ -340,7 +341,45 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
     if (explicitHandoff(rawQuestion, () => true))
         return decision;
     const known = (skill) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
-    return pleadingFirst(decision, requestOf(withoutRoutingMarkers(rawQuestion)), known);
+    const request = requestOf(withoutRoutingMarkers(rawQuestion));
+    return contractEditFirst(lawQuestionFirst(pleadingFirst(decision, request, known), request, materials, known), request, known);
+}
+// Editing a contract's clause ("Popraw § 5 tej umowy", "zmień karę umowną w umowie") is the contract
+// skill's redaction, not the statute analysis a "§" picks (probe 2026-11-26).
+const CONTRACT_EDIT = /(?<![\p{L}])(?:popraw|zmień|zmien|przeredaguj|zredaguj|dodaj|dopisz|usuń|usun|skreśl|wykreśl|uzupełnij|doprecyzuj)\p{L}*/iu;
+const CONTRACT_WORD = /(?<![\p{L}])(?:umow|aneks|porozumieni|regulamin)\p{L}*/iu;
+export function contractEditFirst(decision, question, known) {
+    if (decision && decision.primary !== "analizator-przepisow-v2")
+        return decision;
+    if (!CONTRACT_EDIT.test(question) || !CONTRACT_WORD.test(question) || !known("analizator-umow-v1"))
+        return decision;
+    return { source: decision?.source ?? "ROUTER", primary: "analizator-umow-v1", then: null, reason: `redakcja postanowienia umowy${decision ? ` (zamiast ${decision.primary})` : ""}` };
+}
+// Skills a question about the law or case law is taken from when it has no document of its own:
+// the court-analysis, evidence and witness skills and a pleading named in a question (live probe
+// 2026-11-26: "Sprawdź, czy wyrok TK K 1/20 obowiązuje" -> analiza-sadowa-v6, "Jak sądy oceniają
+// zeznania świadka…" -> the witness skill, "Podaj przepisy dotyczące terminu na odwołanie" -> the
+// pleading pipeline, "Jaka jest podstawa prawna…" -> no skill).
+const YIELDS_TO_LAW_QUESTION = new Set(["analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90", "pisma-procesowe-v3"]);
+export function lawQuestionFirst(decision, question, materials, known) {
+    if (materials.length)
+        return decision;
+    // A request to draft or for questions to a witness keeps its skill.
+    if (decision?.primary === "pisma-procesowe-v3" && !asksAbout(question) && /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|opracuj)/iu.test(question))
+        return decision;
+    if (decision?.primary === "przesluchanie-swiadkow-v2-min90" && WITNESS_QUESTIONS.test(question) && /(?<![\p{L}])(?:przygotuj|ułóż|napisz)/iu.test(question))
+        return decision;
+    if (decision && !YIELDS_TO_LAW_QUESTION.has(decision.primary))
+        return decision;
+    const target = caseLawQuestion(question) ? "orzeczenia-sadowe-v2" : statuteQuestion(question) ? "analizator-przepisow-v2" : null;
+    if (!target || !known(target))
+        return decision;
+    return {
+        source: decision?.source ?? "ROUTER",
+        primary: target,
+        then: null,
+        reason: `${target === "orzeczenia-sadowe-v2" ? "pytanie o orzecznictwo" : "pytanie o przepisy"}${decision ? ` (zamiast ${decision.primary})` : ""}`
+    };
 }
 function decideTaskByRows(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
     // A full case description: the closing request decides, without pasted routing markers.

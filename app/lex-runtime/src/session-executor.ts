@@ -5101,14 +5101,17 @@ export class SafeSessionExecutor implements SessionExecutor {
     // 2026-11-25: correcting rounds only where they are needed).
     const pipelineStep = request.processWorkflowContext?.checkpoint;
     const pipelineWorkingStep = Boolean(pipelineStep) && !PIPELINE_LETTER_STEPS.has(pipelineStep!);
-    const roundsExhausted = (round: string) => {
+    // allowOnSimplePath: the case-law path keeps one round for a ruling's content attributed wrongly
+    // (a party's argument or a lower court's view given as the court's, a ruling off the question,
+    // a wrong court) - rare and serious (user 2026-11-26).
+    const roundsExhausted = (round: string, allowOnSimplePath = false) => {
       if (pipelineWorkingStep && round !== "odpowiedź bez treści") {
         skippedRounds.push(round);
         audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `pipeline-working-step:${pipelineStep};${skippedRounds.join(",")}` });
         step("MODEL", `runda „${round}” pominięta (krok roboczy ${pipelineStep}: pismo jest sprawdzane w krokach, które je piszą); wynik kontroli zostaje w odpowiedzi`);
         return true;
       }
-      if (!complexRounds && round !== "odpowiedź bez treści") {
+      if (!complexRounds && round !== "odpowiedź bez treści" && !allowOnSimplePath) {
         skippedRounds.push(round);
         audit.record("gate", "CORRECTION_ROUNDS_SKIPPED", "OK", { detail: `simple-path:${roundSkill || "brak"};${skippedRounds.join(",")}` });
         step("MODEL", `runda „${round}” pominięta (ścieżka prosta: ${roundSkill || "pytanie"}); wynik kontroli zostaje w odpowiedzi`);
@@ -5657,7 +5660,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         first.caseReview.semantic.some((item) => item.claim === "UNSUPPORTED" || item.topic === "NO_MATCH") ||
         first.statutes.problems.some((item) => item.claim === "UNSUPPORTED");
       // A document AST is checked as its text lines; the model's rewrite would not be in that form.
-      if (first.size && needsRewrite && !astLines && !roundsExhausted("kontrola ze źródłami")) {
+      // Only an attribution error: the judge's reason names a party, an appellant, a lower court or a
+      // dissent as the author of what the answer gives as the court's view (AUTHORITY_RULE), or the
+      // court itself is wrong. A thesis read otherwise stays a mark on this path.
+      const ATTRIBUTION = /(?<![\p{L}])(?:stron\p{L}*|powod\p{L}*|powód|pozwan\p{L}*|skarżąc\p{L}*|skarżący|apelując\p{L}*|wnioskodawc\p{L}*|uczestnik\p{L}*|zarzut\p{L}*|argument\p{L}*|sąd\p{L}*\s+(?:niższej|pierwszej)\s+instancji|zdani\p{L}*\s+odrębn\p{L}*|relacjon\p{L}*|streszcz\p{L}*)/iu;
+      const caseLawAttribution =
+        roundSkill === "orzeczenia-sadowe-v2" &&
+        (first.caseReview.courts.length > 0 || first.caseReview.semantic.some((item) => item.claim === "UNSUPPORTED" && ATTRIBUTION.test(item.reason)));
+      if (caseLawAttribution) audit.record("gate", "CASE_LAW_ATTRIBUTION_ROUND", "OK", { detail: `courts=${first.caseReview.courts.length};semantic=${first.caseReview.semantic.length}` });
+      if (first.size && needsRewrite && !astLines && !roundsExhausted("kontrola ze źródłami", caseLawAttribution)) {
         step(
           "MODEL",
           `kontrola odpowiedzi ze źródłami: ${[

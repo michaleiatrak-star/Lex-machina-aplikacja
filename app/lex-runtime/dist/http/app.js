@@ -302,6 +302,11 @@ export function contractDraftStepDone(result, checkpoints) {
     const checks = result.gateI?.checks ?? [];
     if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id)))
         return false;
+    // The workflow stopped only on marked citations (as a pleading's working step, processStepDone):
+    // one provision marked ✅ in one place and ⚠️ in another (STATUS_CONTRADICTS_LEDGER, shown with the
+    // warning to take the cautious mark) kept AU-F0 open for good (live test 2026-11-26).
+    if (result.workflow?.markedDraftOnly === true)
+        return true;
     return (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
 }
 export function blockedAuditSteps(result) {
@@ -7326,21 +7331,48 @@ export function createLexHttpApp(options) {
                     }
                 }
             }
+            // The same for a contract analysis the case has started (live test 2026-11-26: "Kontynuuj."
+            // after the first AU step went to LEGAL_QUERY_V1 and the whole analysis ran again, 350 s,
+            // while the contract workflow stayed at its first checkpoint).
+            let contractContinued = false;
+            if (!pleadingContinued &&
+                keywordPlan.id !== "CONTRACT_ANALYSIS_V1" &&
+                pleadingCase &&
+                continuesPipeline(turnMessage) &&
+                options.caseAccessService &&
+                options.contractWorkflowStore &&
+                options.registry.get("analizator-umow-v1")) {
+                const continuedCaseId = knowledge.caseId ??
+                    [...new Set(sessionAttachments.filter((attachment) => !isFirmScope(attachment.sourceScope)).map((attachment) => attachment.caseId).filter(Boolean))][0];
+                if (continuedCaseId) {
+                    try {
+                        const actor = responseAuthContext(res);
+                        const view = options.caseAccessService.openCase(actor, continuedCaseId);
+                        const started = await options.caseAccessService.withCaseDataKey(actor, continuedCaseId, "READ", (caseDataKey) => options.contractWorkflowStore.getContractAnalysisState({ caseId: continuedCaseId, caseDataKey, keyVersion: view.keyVersion }));
+                        contractContinued = Boolean(started && started.stage !== "COMPLETE");
+                    }
+                    catch {
+                        contractContinued = false;
+                    }
+                }
+            }
             const previewPlan = pleadingRouted || pleadingContinued
                 ? createDeterministicWorkflowPlan(options.registry, "pisma-procesowe-v3")
-                : contractQuestion ||
-                    pleadingRedaction ||
-                    (routerExecutive !== undefined &&
-                        routerExecutive !== keywordPlan.executionSkill) ||
-                    (materialSkills.length > 0 &&
-                        (!materialSkills.includes(keywordPlan.executionSkill) ||
-                            // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
-                            // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
-                            // to draft, the turn is the analysis, not the pleading pipeline (409).
-                            (materialSkills[0] !== keywordPlan.executionSkill &&
-                                !asksToDraft(turnMessage))))
-                    ? createDeterministicWorkflowPlan(options.registry, null)
-                    : keywordPlan;
+                : contractContinued
+                    ? createDeterministicWorkflowPlan(options.registry, "analizator-umow-v1")
+                    : contractQuestion ||
+                        pleadingRedaction ||
+                        (routerExecutive !== undefined &&
+                            routerExecutive !== keywordPlan.executionSkill) ||
+                        (materialSkills.length > 0 &&
+                            (!materialSkills.includes(keywordPlan.executionSkill) ||
+                                // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
+                                // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
+                                // to draft, the turn is the analysis, not the pleading pipeline (409).
+                                (materialSkills[0] !== keywordPlan.executionSkill &&
+                                    !asksToDraft(turnMessage))))
+                        ? createDeterministicWorkflowPlan(options.registry, null)
+                        : keywordPlan;
             let processContext = null;
             // What the user's chat reply did to the pleading pipeline (accepted start, confirmed step, AUTO).
             let pleadingReplyNote = null;

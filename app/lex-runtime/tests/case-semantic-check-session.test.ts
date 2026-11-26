@@ -23,10 +23,10 @@ class SnOnly extends LegalFederationToolRuntime {
 }
 const WRONG = "Uchwała SN I KZP 3/24 (siedmiu sędziów): każde orzeczenie wydane z udziałem neosędziów jest nieważne.";
 const RIGHT = "Uchwała SN I KZP 3/24 (siedmiu sędziów): udział neosędziów nie powoduje automatycznie nieważności orzeczenia; decyduje ocena okoliczności sprawy.";
-const verdict = (claim: string, quote: string) =>
-  JSON.stringify({ verdicts: [{ signature: "I KZP 3/24", topic: "MATCH", claim, reason: claim === "SUPPORTED" ? "Zgodne z uchwałą." : "Uchwała stwierdza odwrotnie.", quote }] });
+const verdict = (claim: string, quote: string, reason?: string) =>
+  JSON.stringify({ verdicts: [{ signature: "I KZP 3/24", topic: "MATCH", claim, reason: reason ?? (claim === "SUPPORTED" ? "Zgodne z uchwałą." : "Uchwała stwierdza odwrotnie."), quote }] });
 
-async function run(options: { correction: string; secondVerdict: string; firstQuote?: string }) {
+async function run(options: { correction: string; secondVerdict: string; firstQuote?: string; firstReason?: string }) {
   const calls: ProviderStreamParams[] = [];
   const judged: ProviderStreamParams[] = [];
   const providers = new ProviderRegistry();
@@ -37,7 +37,7 @@ async function run(options: { correction: string; secondVerdict: string; firstQu
     async stream(received) {
       if (String(received.systemPrompt).startsWith(SEMANTIC_JUDGE_SYSTEM)) {
         judged.push(received);
-        return { fullText: judged.length === 1 ? verdict("UNSUPPORTED", options.firstQuote ?? "nie powoduje automatycznie nieważności orzeczenia") : options.secondVerdict };
+        return { fullText: judged.length === 1 ? verdict("UNSUPPORTED", options.firstQuote ?? "nie powoduje automatycznie nieważności orzeczenia", options.firstReason) : options.secondVerdict };
       }
       calls.push(received);
       if (calls.length === 1) {
@@ -83,4 +83,13 @@ describe("semantic check of a cited judgment in a turn", () => {
     expect(result.answer).toContain("każde orzeczenie wydane z udziałem neosędziów");
     expect(gate?.status).toBe("OK");
   }, 60_000);
+
+  it("a party's argument given as the court's view: one correcting round on the case-law path too (user 2026-11-26)", async () => {
+    const { calls } = await run({
+      correction: RIGHT,
+      secondVerdict: verdict("SUPPORTED", "konieczna jest ocena okoliczności konkretnej sprawy"),
+      firstReason: "Odpowiedź przypisuje SN argument skarżącego, który Sąd odrzucił."
+    });
+    expect(calls.some((call) => String(call.messages.at(-1)?.content).startsWith("KONTROLA ZGODNOŚCI Z PYTANIEM"))).toBe(true);
+  });
 });
