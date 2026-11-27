@@ -1,3 +1,4 @@
+import { validCaseRegister, type CaseRegister } from "./case-register.js";
 import { validCaseCourt, type CaseCourt } from "./courts/case-court.js";
 import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
 import { type AnswerCorrection, validAnswerCorrections } from "./answer-corrections.js";
@@ -170,6 +171,8 @@ export type CaseMemory = {
   // the documents' text: the next question in the case reads them instead of building them again
   // (task 12.3: ~200 s after a restart or six hours).
   factMatrices?: Record<string, { at: string; value: unknown }>;
+  // Participants, events and facts gathered from the case's documents turn by turn (case-register.ts).
+  register?: CaseRegister;
 };
 
 const FACT_MATRICES_MAX = 8;
@@ -1379,8 +1382,10 @@ export class EncryptedCaseWorkspaceStore {
     const court = validCaseCourt(index.memory?.court);
     const answerDocument = validAnswerDocument(index.memory?.answerDocument);
     const factMatrices = validFactMatrices(index.memory?.factMatrices);
+    const register = validCaseRegister(index.memory?.register);
     return {
       ...(factMatrices ? { factMatrices } : {}),
+      ...(register ? { register } : {}),
       ...(court ? { court } : {}),
       ...(answerDocument ? { answerDocument } : {}),
       ...(work?.length ? { work } : {}),
@@ -1408,9 +1413,16 @@ export class EncryptedCaseWorkspaceStore {
     answerDocument?: AnswerDocument | null;
     // One matrix added (merged with the kept ones, newest first) or null: all removed.
     factMatrix?: { key: string; value: unknown } | null;
+    register?: CaseRegister | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
+    if (args.register !== undefined) {
+      const register = args.register === null ? null : validCaseRegister(args.register);
+      if (args.register !== null && !register) throw new Error("CASE_MEMORY_REGISTER_INVALID");
+      if (register) memory.register = register;
+      else delete memory.register;
+    }
     if (args.factMatrix !== undefined) {
       const merged = args.factMatrix === null
         ? undefined

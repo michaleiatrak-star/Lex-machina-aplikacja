@@ -1,3 +1,4 @@
+import { withoutDocument } from "../case-register.js";
 import { LocalPdfFormFiller, pdfFormValues } from "../pdf-form.js";
 import {
   appendDraftVersion,
@@ -1921,6 +1922,17 @@ export function registerWorkspaceRoutes(
                 documentId
               });
               dependencies.documentService.forget(documentId);
+              // The case register forgets the removed document's participants, events and facts; the
+              // document goes even when the memory cannot be read (the register is rebuilt turn by turn).
+              try {
+                const memory = await dependencies.workspace.getCaseMemory({ caseId, caseDataKey, keyVersion: data.caseView.keyVersion });
+                if (memory.register && (memory.register.documents[documentId] || memory.register.facts.some((item) => item.documentId === documentId))) {
+                  await dependencies.workspace.saveCaseMemory({ caseId, caseDataKey, keyVersion: data.caseView.keyVersion, register: withoutDocument(memory.register, documentId) });
+                }
+              } catch {
+                // The memory could not be read or written: the document is removed all the same and its
+                // register entries stay until the register is cleared (audit: no separate record).
+              }
             }
 
             const target = path.resolve(

@@ -78,6 +78,7 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt } from "./case
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { genderLegend, identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
+import { registerBlock, updateRegister } from "./case-register.js";
 import { factMatrixGoalEvidence, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments } from "./fact-matrix.js";
 import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable } from "./document-register.js";
@@ -2435,6 +2436,30 @@ export class SafeSessionExecutor {
             if (roles)
                 pathSections.push(roles);
             step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
+        }
+        // The case register (case-register.ts): participants, events and facts of the case's documents,
+        // gathered turn by turn without a model call (every model, local ones too), kept encrypted with
+        // the case; an ordinary question gets who is who, when, and the facts it is about.
+        if (legalTurn && request.caseRegisterStore) {
+            try {
+                const stored = await request.caseRegisterStore.read();
+                const labels = new Map(recognisedDocuments.map((document) => [document.documentId, document.label]));
+                const own = attachments.filter((attachment) => attachment.sharedKey && attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE");
+                const register = own.length
+                    ? updateRegister(stored, own.map((attachment) => ({ documentId: attachment.documentId, label: labels.get(attachment.documentId) ?? stored?.documents[attachment.documentId]?.label ?? "dokument sprawy", chunks: attachment.chunks })))
+                    : stored;
+                if (own.length && register)
+                    await request.caseRegisterStore.write(register);
+                const block = register ? registerBlock(register, latestUserTurn(protectedQuery), request.model.startsWith("local/") ? 2_500 : 6_000) : null;
+                if (register && block) {
+                    pathSections.push(block);
+                    audit.record("gate", "CASE_REGISTER", "OK", { participants: register.participants.length, events: register.events.length, facts: register.facts.length, documents: Object.keys(register.documents).length });
+                    step("PREPARE", `rejestr sprawy: ${register.participants.length} uczestników, ${register.events.length} zdarzeń, ${register.facts.length} faktów`);
+                }
+            }
+            catch (error) {
+                audit.record("gate", "CASE_REGISTER", "DEGRADED", { detail: error instanceof Error ? error.message.slice(0, 120) : "błąd" });
+            }
         }
         // A contract pasted into the message, not attached: the same graph of its provisions as
         // for an attached one (contract test 2026-11-07: the pasted contract got no CONTRACT_GRAPH).

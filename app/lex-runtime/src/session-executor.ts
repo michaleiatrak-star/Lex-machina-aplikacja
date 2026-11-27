@@ -222,6 +222,7 @@ import { caseFocus, caseIssue, issuePassages, issuePassagesPrompt, type FilePass
 import { argumentSchemaGaps, isCourtPleading, PLEADING_STANDARD_RESOURCE, pleadingStandardPrompt, refusalOnExplanations, schemaCorrection } from "./pleading-standard.js";
 import { personKeyFacts, requiredPassages, requiredPassagesNote, strengthCorrection, strengthGaps, passageUsed } from "./answer-strength.js";
 import { genderLegend, identityLegendPrompt, personTokens, samePersonGroups } from "./privacy/identity-legend.js";
+import { registerBlock, updateRegister, type CaseRegister } from "./case-register.js";
 import { factMatrixGoalEvidence, factMatrixGoals, factMatrixPrompt, factMatrixRequired, factRows, fullDocumentMatrix, stagedFactMatrix, witnessVersusDocuments, type DocumentCoverage as MatrixCoverage, type FactRow, type MatrixTopic, type ModelCall } from "./fact-matrix.js";
 import { questionGoals, questionTimeline, questionTimelinePrompt } from "./question-goals.js";
 import { buildRegister, registerGaps, registerIds, registerPrompt, registerTable, type RegisterEntry } from "./document-register.js";
@@ -403,10 +404,14 @@ export type SessionDocumentAttachment = {
 
 /** Fact matrices kept with the case (task 12.3); the key is the model and the documents' text. */
 export type CaseMatrixStore = { read(key: string): Promise<unknown | null>; write(key: string, value: unknown): Promise<void> };
+/** The case register kept with the case (case-register.ts). */
+export type CaseRegisterStore = { read(): Promise<CaseRegister | null>; write(register: CaseRegister): Promise<void> };
 
 export type SessionExecutionRequest = {
   // The case's record of fact matrices (encrypted case memory), when the turn belongs to a case (task 12.3).
   caseMatrixStore?: CaseMatrixStore;
+  // The case's register of participants, events and facts (case-register.ts), when the turn belongs to a case.
+  caseRegisterStore?: CaseRegisterStore;
   // The user's choice in the case card (Claude through the account): default medium.
   effort?: "low" | "medium" | "high";
   query: string;
@@ -3540,6 +3545,28 @@ export class SafeSessionExecutor implements SessionExecutor {
       const roles = replyRolesPrompt(request.query, recognisedDocuments);
       if (roles) pathSections.push(roles);
       step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
+    }
+    // The case register (case-register.ts): participants, events and facts of the case's documents,
+    // gathered turn by turn without a model call (every model, local ones too), kept encrypted with
+    // the case; an ordinary question gets who is who, when, and the facts it is about.
+    if (legalTurn && request.caseRegisterStore) {
+      try {
+        const stored = await request.caseRegisterStore.read();
+        const labels = new Map(recognisedDocuments.map((document) => [document.documentId, document.label]));
+        const own = attachments.filter((attachment) => attachment.sharedKey && attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE");
+        const register = own.length
+          ? updateRegister(stored, own.map((attachment) => ({ documentId: attachment.documentId, label: labels.get(attachment.documentId) ?? stored?.documents[attachment.documentId]?.label ?? "dokument sprawy", chunks: attachment.chunks })))
+          : stored;
+        if (own.length && register) await request.caseRegisterStore.write(register);
+        const block = register ? registerBlock(register, latestUserTurn(protectedQuery), request.model.startsWith("local/") ? 2_500 : 6_000) : null;
+        if (register && block) {
+          pathSections.push(block);
+          audit.record("gate", "CASE_REGISTER", "OK", { participants: register.participants.length, events: register.events.length, facts: register.facts.length, documents: Object.keys(register.documents).length });
+          step("PREPARE", `rejestr sprawy: ${register.participants.length} uczestników, ${register.events.length} zdarzeń, ${register.facts.length} faktów`);
+        }
+      } catch (error) {
+        audit.record("gate", "CASE_REGISTER", "DEGRADED", { detail: error instanceof Error ? error.message.slice(0, 120) : "błąd" });
+      }
     }
     // A contract pasted into the message, not attached: the same graph of its provisions as
     // for an attached one (contract test 2026-11-07: the pasted contract got no CONTRACT_GRAPH).

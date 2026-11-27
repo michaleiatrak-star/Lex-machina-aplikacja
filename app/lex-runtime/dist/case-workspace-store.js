@@ -1,3 +1,4 @@
+import { validCaseRegister } from "./case-register.js";
 import { validCaseCourt } from "./courts/case-court.js";
 import { validateProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validAnswerCorrections } from "./answer-corrections.js";
@@ -835,8 +836,10 @@ export class EncryptedCaseWorkspaceStore {
         const court = validCaseCourt(index.memory?.court);
         const answerDocument = validAnswerDocument(index.memory?.answerDocument);
         const factMatrices = validFactMatrices(index.memory?.factMatrices);
+        const register = validCaseRegister(index.memory?.register);
         return {
             ...(factMatrices ? { factMatrices } : {}),
+            ...(register ? { register } : {}),
             ...(court ? { court } : {}),
             ...(answerDocument ? { answerDocument } : {}),
             ...(work?.length ? { work } : {}),
@@ -852,6 +855,15 @@ export class EncryptedCaseWorkspaceStore {
     async saveCaseMemory(args) {
         const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
         const memory = { ...(index.memory ?? {}) };
+        if (args.register !== undefined) {
+            const register = args.register === null ? null : validCaseRegister(args.register);
+            if (args.register !== null && !register)
+                throw new Error("CASE_MEMORY_REGISTER_INVALID");
+            if (register)
+                memory.register = register;
+            else
+                delete memory.register;
+        }
         if (args.factMatrix !== undefined) {
             const merged = args.factMatrix === null
                 ? undefined

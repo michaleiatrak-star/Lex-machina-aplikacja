@@ -7135,6 +7135,17 @@ export function createLexHttpApp(options) {
                         await access.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => memoryStore.saveCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion, factMatrix: { key, value } }));
                     }
                 };
+                request.caseRegisterStore = {
+                    read: async () => {
+                        const caseView = access.openCase(actor, caseId);
+                        const memory = await access.withCaseDataKey(actor, caseId, "ANALYZE", (caseDataKey) => memoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                        return memory.register ?? null;
+                    },
+                    write: async (register) => {
+                        const caseView = access.openCase(actor, caseId);
+                        await access.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => memoryStore.saveCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion, register }));
+                    }
+                };
             }
             // A case's documents name its court (a court's letter, a judgment): found once and kept,
             // the documents of this turn first, then the case's files by a court's head and signature.
