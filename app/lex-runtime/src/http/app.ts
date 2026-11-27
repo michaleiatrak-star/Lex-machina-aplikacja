@@ -832,6 +832,18 @@ export function withEnvelopeWorkflow(query: string, workflow: string): string {
   return `${prefix}${JSON.stringify({ auto: true, manual: [workflow], workflow })}\n${query}`;
 }
 
+/**
+ * A workflow step that stopped only on citations it marked unverified (a source down, a wording not
+ * confirmed): it closes with the warnings in the answer instead of holding the workflow (user
+ * 2026-11-27: "zamiast blocked daj ostrzeżenia przy takich awariach, blokady musimy ograniczyć").
+ */
+export function markedDraftTurn(result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }>; workflow?: { markedDraftOnly?: boolean } }): boolean {
+  if (result.finalization !== "DEGRADED") return false;
+  const checks = result.gateI?.checks ?? [];
+  if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id))) return false;
+  return result.workflow?.markedDraftOnly === true || (result.blockedReferences ?? []).every((reference) => reference.status === "UNVERIFIED_MARKED");
+}
+
 export function contractDraftStepDone(
   result: { finalization?: unknown; gateI?: { checks?: Array<{ id: string; result: string }> }; blockedReferences?: Array<{ status: string }>; workflow?: { markedDraftOnly?: boolean } },
   checkpoints: readonly string[]
@@ -895,7 +907,9 @@ async function persistWorkflowAuditArtifact(
       checkpoint:
         args.checkpoint,
       result:
-        args.result
+        args.result,
+      // Closed as a marked draft (markedDraftTurn): the artifact records the real results.
+      draftStep: markedDraftTurn(args.result)
     });
 
   try {
@@ -12697,22 +12711,21 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (
           result.status ===
             "DRAFT_PRESENTABLE" &&
-          result.finalization ===
-            "PASS" &&
-          result.audit.result ===
-            "PASS" &&
           result.audit.closed ===
             true &&
           result.workflow?.id ===
             orderedCaseContext
               .permit.workflowId &&
-          result.workflow.result ===
-            "PASS" &&
+          (
+            (result.finalization === "PASS" && result.audit.result === "PASS" && result.workflow.result === "PASS") ||
+            markedDraftTurn(result)
+          ) &&
           // A checkpoint that asked the user stays open until the reply.
           result.waitingForUser !== true &&
           // A step refused during the turn: the audit of the checkpoint cannot be closed
           // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
-          blockedAuditSteps(result).length === 0
+          // A marked draft: the workflow gates are red because of its marks, not a refused step.
+          contractStepBlocks(result, markedDraftTurn(result)).length === 0
         ) {
           if (
             !options
@@ -13056,21 +13069,20 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (
           result.status ===
             "DRAFT_PRESENTABLE" &&
-          result.finalization ===
-            "PASS" &&
-          result.audit.result ===
-            "PASS" &&
           result.audit.closed ===
             true &&
           result.workflow?.id ===
             "CHRONOLOGY_V1" &&
-          result.workflow.result ===
-            "PASS" &&
+          (
+            (result.finalization === "PASS" && result.audit.result === "PASS" && result.workflow.result === "PASS") ||
+            markedDraftTurn(result)
+          ) &&
           // A checkpoint that asked the user stays open until the reply.
           result.waitingForUser !== true &&
           // A step refused during the turn: the audit of the checkpoint cannot be closed
           // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
-          blockedAuditSteps(result).length === 0
+          // A marked draft: the workflow gates are red because of its marks, not a refused step.
+          contractStepBlocks(result, markedDraftTurn(result)).length === 0
         ) {
           if (
             !options
@@ -13220,21 +13232,20 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (
           result.status ===
             "DRAFT_PRESENTABLE" &&
-          result.finalization ===
-            "PASS" &&
-          result.audit.result ===
-            "PASS" &&
           result.audit.closed ===
             true &&
           result.workflow?.id ===
             "COURT_ANALYSIS_V1" &&
-          result.workflow.result ===
-            "PASS" &&
+          (
+            (result.finalization === "PASS" && result.audit.result === "PASS" && result.workflow.result === "PASS") ||
+            markedDraftTurn(result)
+          ) &&
           // A checkpoint that asked the user stays open until the reply.
           result.waitingForUser !== true &&
           // A step refused during the turn: the audit of the checkpoint cannot be closed
           // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
-          blockedAuditSteps(result).length === 0
+          // A marked draft: the workflow gates are red because of its marks, not a refused step.
+          contractStepBlocks(result, markedDraftTurn(result)).length === 0
         ) {
           if (
             !options

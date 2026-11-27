@@ -43,18 +43,16 @@ export function buildWorkflowAuditArtifact(args) {
         throw new Error("WORKFLOW_AUDIT_ID_INVALID");
     }
     const result = args.result;
+    const draft = args.draftStep === true;
     if (result.status !==
         "DRAFT_PRESENTABLE" ||
-        result.finalization !==
-            "PASS" ||
-        result.audit.result !==
-            "PASS" ||
+        (result.finalization !== "PASS" && !(draft && result.finalization === "DEGRADED")) ||
+        (result.audit.result !== "PASS" && !(draft && result.audit.result === "BLOCKED")) ||
         result.audit.closed !==
             true ||
         result.workflow?.id !==
             args.workflowId ||
-        result.workflow.result !==
-            "PASS" ||
+        (result.workflow.result !== "PASS" && !(draft && result.workflow.result === "BLOCKED")) ||
         result.workflow
             .missingResources.length !== 0) {
         throw new Error("WORKFLOW_AUDIT_RESULT_NOT_PASS");
@@ -113,10 +111,13 @@ export function buildWorkflowAuditArtifact(args) {
             provider: String(result.provider),
             model: result.model,
             primarySkill: result.primarySkill,
-            finalization: "PASS"
+            finalization: result.finalization === "DEGRADED" ? "DEGRADED" : "PASS"
         },
+        ...(draft && (result.finalization !== "PASS" || result.workflow.result !== "PASS" || result.audit.result !== "PASS")
+            ? { draftStep: { reason: "MARKED_CITATIONS" } }
+            : {}),
         workflow: {
-            result: "PASS",
+            result: result.workflow.result === "BLOCKED" ? "BLOCKED" : "PASS",
             requiredResources: [
                 ...result.workflow
                     .requiredResources
@@ -124,7 +125,7 @@ export function buildWorkflowAuditArtifact(args) {
             missingResources: []
         },
         audit: {
-            result: "PASS",
+            result: result.audit.result === "BLOCKED" ? "BLOCKED" : "PASS",
             eventCount: result.audit
                 .eventCount,
             closed: true
@@ -214,12 +215,8 @@ export function parseWorkflowAuditArtifact(data) {
         payload.execution
             ?.status !==
             "DRAFT_PRESENTABLE" ||
-        payload.execution
-            .finalization !==
-            "PASS" ||
-        payload.workflow
-            ?.result !==
-            "PASS" ||
+        (payload.execution.finalization !== "PASS" && !(payload.draftStep && payload.execution.finalization === "DEGRADED")) ||
+        (payload.workflow?.result !== "PASS" && !(payload.draftStep && payload.workflow?.result === "BLOCKED")) ||
         !Array.isArray(payload.workflow
             .requiredResources) ||
         !Array.isArray(payload.workflow
@@ -227,8 +224,7 @@ export function parseWorkflowAuditArtifact(data) {
         payload.workflow
             .missingResources
             .length !== 0 ||
-        payload.audit
-            ?.result !== "PASS" ||
+        (payload.audit?.result !== "PASS" && !(payload.draftStep && payload.audit?.result === "BLOCKED")) ||
         payload.audit
             .closed !== true ||
         typeof payload.audit

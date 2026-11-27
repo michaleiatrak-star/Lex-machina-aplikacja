@@ -49,15 +49,18 @@ export type WorkflowAuditArtifact = {
     provider: string;
     model: string;
     primarySkill: string;
-    finalization: "PASS";
+    finalization: "PASS" | "DEGRADED";
   };
+  // A step taken as a draft over citations it marked unverified (a source down, a wording not
+  // confirmed): the results below are the turn's real ones; the warnings stay in the answer.
+  draftStep?: { reason: "MARKED_CITATIONS" };
   workflow: {
-    result: "PASS";
+    result: "PASS" | "BLOCKED";
     requiredResources: string[];
     missingResources: [];
   };
   audit: {
-    result: "PASS";
+    result: "PASS" | "BLOCKED";
     eventCount: number;
     closed: true;
   };
@@ -146,6 +149,8 @@ export function buildWorkflowAuditArtifact(
     result:
       SessionExecutionResponse;
     createdAt?: string;
+    // The caller's draft rule passed (marked citations only): DEGRADED/BLOCKED results are recorded.
+    draftStep?: boolean;
   }
 ): Buffer {
   if (
@@ -161,19 +166,17 @@ export function buildWorkflowAuditArtifact(
 
   const result =
     args.result;
+  const draft = args.draftStep === true;
   if (
     result.status !==
       "DRAFT_PRESENTABLE" ||
-    result.finalization !==
-      "PASS" ||
-    result.audit.result !==
-      "PASS" ||
+    (result.finalization !== "PASS" && !(draft && result.finalization === "DEGRADED")) ||
+    (result.audit.result !== "PASS" && !(draft && result.audit.result === "BLOCKED")) ||
     result.audit.closed !==
       true ||
     result.workflow?.id !==
       args.workflowId ||
-    result.workflow.result !==
-      "PASS" ||
+    (result.workflow.result !== "PASS" && !(draft && result.workflow.result === "BLOCKED")) ||
     result.workflow
       .missingResources.length !== 0
   ) {
@@ -285,10 +288,13 @@ export function buildWorkflowAuditArtifact(
         primarySkill:
           result.primarySkill,
         finalization:
-          "PASS"
+          result.finalization === "DEGRADED" ? "DEGRADED" : "PASS"
       },
+      ...(draft && (result.finalization !== "PASS" || result.workflow.result !== "PASS" || result.audit.result !== "PASS")
+        ? { draftStep: { reason: "MARKED_CITATIONS" as const } }
+        : {}),
       workflow: {
-        result: "PASS",
+        result: result.workflow.result === "BLOCKED" ? "BLOCKED" : "PASS",
         requiredResources: [
           ...result.workflow
             .requiredResources
@@ -296,7 +302,7 @@ export function buildWorkflowAuditArtifact(
         missingResources: []
       },
       audit: {
-        result: "PASS",
+        result: result.audit.result === "BLOCKED" ? "BLOCKED" : "PASS",
         eventCount:
           result.audit
             .eventCount,
@@ -438,12 +444,8 @@ export function parseWorkflowAuditArtifact(
     payload.execution
       ?.status !==
       "DRAFT_PRESENTABLE" ||
-    payload.execution
-      .finalization !==
-      "PASS" ||
-    payload.workflow
-      ?.result !==
-      "PASS" ||
+    (payload.execution.finalization !== "PASS" && !(payload.draftStep && payload.execution.finalization === "DEGRADED")) ||
+    (payload.workflow?.result !== "PASS" && !(payload.draftStep && payload.workflow?.result === "BLOCKED")) ||
     !Array.isArray(
       payload.workflow
         .requiredResources
@@ -455,8 +457,7 @@ export function parseWorkflowAuditArtifact(
     payload.workflow
       .missingResources
       .length !== 0 ||
-    payload.audit
-      ?.result !== "PASS" ||
+    (payload.audit?.result !== "PASS" && !(payload.draftStep && payload.audit?.result === "BLOCKED")) ||
     payload.audit
       .closed !== true ||
     typeof payload.audit

@@ -158,3 +158,17 @@ describe("workflow audit artifact", () => {
         expect(() => parseWorkflowAuditArtifact(Buffer.from(JSON.stringify(parsed), "utf8"))).toThrow("WORKFLOW_AUDIT_ARTIFACT_INVALID");
     });
 });
+describe("a step closed as a marked draft (user 2026-11-27: warnings instead of blocks)", () => {
+    it("records the real DEGRADED/BLOCKED results with draftStep, and reads back", () => {
+        const draft = resultFixture();
+        draft.finalization = "DEGRADED";
+        draft.audit.result = "BLOCKED";
+        draft.workflow = { ...draft.workflow, result: "BLOCKED" };
+        expect(() => buildWorkflowAuditArtifact({ caseId: CASE_ID, workflowId: "COURT_ANALYSIS_V1", checkpoint: "SD_VER_COMPLETE", result: draft })).toThrow("WORKFLOW_AUDIT_RESULT_NOT_PASS");
+        const payload = buildWorkflowAuditArtifact({ caseId: CASE_ID, workflowId: "COURT_ANALYSIS_V1", checkpoint: "SD_VER_COMPLETE", result: draft, draftStep: true });
+        const parsed = parseWorkflowAuditArtifact(payload);
+        expect(parsed.draftStep).toEqual({ reason: "MARKED_CITATIONS" });
+        expect(parsed.audit.result).toBe("BLOCKED");
+        expect(parsed.execution.finalization).toBe("DEGRADED");
+    });
+});
