@@ -1281,7 +1281,15 @@ export function markUnverifiedReferences(
   return insertMarkersAfterClaims(text, byLine);
 }
 
-function insertMarkersAfterClaims(text: string, byLine: Map<number, Array<{ claim: string; marker: string }>>): string {
+function insertMarkersAfterClaims(
+  text: string,
+  byLine: Map<number, Array<{ claim: string; marker: string }>>,
+  // The last resort (softenRemainingBlockers): only a ⚠️/🟨 standing right at the claim counts as its
+  // own. A ✅ a few words on belongs to another provision ("art. 6 ustawy lokatorskiej warunkowo ✅
+  // [VER: …]", live test 2026-11-27): read as this claim's marker, nothing was inserted and the turn
+  // stayed blocked.
+  strict = false
+): string {
   if (byLine.size === 0) return text;
   const lines = text.split(/\r?\n/u);
   for (const [line, claims] of byLine) {
@@ -1292,7 +1300,7 @@ function insertMarkersAfterClaims(text: string, byLine: Map<number, Array<{ clai
       done.add(claim);
       // An occurrence another finding already marked ("XII Kp 176/20 🟨" holds "Kp 176/20"): the
       // next one, never a second marker on the same place (2026-11-12).
-      const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
+      const MARKED_AFTER = strict ? /^\s*(?:⚠️|🟨)\s*\[/u : /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
       let at = lineText.indexOf(claim);
       while (
         at >= 0 &&
@@ -1453,7 +1461,7 @@ export function softenRemainingBlockers(
     ]);
     marked.add(finding.reference.claim);
   }
-  return { text: tidyEvidenceMarkers(insertMarkersAfterClaims(lines.join("\n"), byLine)), marked: [...marked] };
+  return { text: tidyEvidenceMarkers(insertMarkersAfterClaims(lines.join("\n"), byLine, true)), marked: [...marked] };
 }
 
 /**

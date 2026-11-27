@@ -1034,7 +1034,12 @@ leadCases = new Set()) {
     }
     return insertMarkersAfterClaims(text, byLine);
 }
-function insertMarkersAfterClaims(text, byLine) {
+function insertMarkersAfterClaims(text, byLine, 
+// The last resort (softenRemainingBlockers): only a ⚠️/🟨 standing right at the claim counts as its
+// own. A ✅ a few words on belongs to another provision ("art. 6 ustawy lokatorskiej warunkowo ✅
+// [VER: …]", live test 2026-11-27): read as this claim's marker, nothing was inserted and the turn
+// stayed blocked.
+strict = false) {
     if (byLine.size === 0)
         return text;
     const lines = text.split(/\r?\n/u);
@@ -1047,7 +1052,7 @@ function insertMarkersAfterClaims(text, byLine) {
             done.add(claim);
             // An occurrence another finding already marked ("XII Kp 176/20 🟨" holds "Kp 176/20"): the
             // next one, never a second marker on the same place (2026-11-12).
-            const MARKED_AFTER = /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
+            const MARKED_AFTER = strict ? /^\s*(?:⚠️|🟨)\s*\[/u : /^\s*(?:\p{L}+\s+){0,4}?(?:⚠️|🟨|✅)\s*\[/u;
             let at = lineText.indexOf(claim);
             while (at >= 0 &&
                 (MARKED_AFTER.test(lineText.slice(at + claim.length, at + claim.length + 60)) ||
@@ -1198,7 +1203,7 @@ export function softenRemainingBlockers(text, report) {
         ]);
         marked.add(finding.reference.claim);
     }
-    return { text: tidyEvidenceMarkers(insertMarkersAfterClaims(lines.join("\n"), byLine)), marked: [...marked] };
+    return { text: tidyEvidenceMarkers(insertMarkersAfterClaims(lines.join("\n"), byLine, true)), marked: [...marked] };
 }
 /**
  * One "brak potwierdzenia w tekście orzeczenia" per line, standing at the quote it concerns
