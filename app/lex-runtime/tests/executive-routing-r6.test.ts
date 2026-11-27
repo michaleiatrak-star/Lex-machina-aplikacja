@@ -67,3 +67,10 @@ describe("series r7 (2026-11-27): files of a civil claim", () => {
     expect(rank("Chcę policzyć odsetki ustawowe od zaległej faktury.")[0]?.skill.startsWith("dr-16-")).toBe(true);
   });
 });
+
+describe("series r8 (2026-11-27)", () => {
+  it("words of every proceeding name no domain by an act map alone", () => {
+    const domains = rankDomains(router.registry, registryFlashRoutes(router.registry), "Przeanalizuj ten wyrok pod kątem apelacji powoda\nwyrok\nwyrok");
+    expect(domains.some((domain) => domain.skill.startsWith("dr-03-"))).toBe(false);
+  });
+});

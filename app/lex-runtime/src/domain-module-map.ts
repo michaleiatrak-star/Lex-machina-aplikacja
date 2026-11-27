@@ -360,11 +360,16 @@ function domainSpread(registry: LexSkillRegistry): Map<string, number> {
 
 // How many different words of the question the matched stems stand for ("pozwol" and
 // "pozwole" are one word; a three-letter stem counts for none).
+// Words of every kind of proceedings ("wyrok", "apelacja", "rozprawa", "protokół"): they name no
+// domain by an act map alone (live test 2026-11-27: "Przeanalizuj ten wyrok pod kątem apelacji" in a
+// civil case was given the Petty Offences Code as its only domain).
+const PROCEDURAL_STEM = /^=?(?:wyrok|apelac|apelu|rozpraw|protok|orzecz|postanowi|zazal|skarg|dowod|swiad|pozew|pozw(?!ol)|sad(?!z)|sedzi|uzasadn|instanc|odwola|wniosk|pism)/u;
+
 function distinctWords(stems: string[], have: string[]): number {
   // Distinct words of the row, not forms of one word ("protokół" and "protokoły" are one word).
   // Stems of one word ("pozwol", "pozwole") count once: a stem that begins another is the same word.
   const words: string[] = [];
-  for (const stem of stems.filter((item) => item.replace(/^=/, "").length >= 4 && hit(item, have)).sort((a, b) => a.length - b.length)) {
+  for (const stem of stems.filter((item) => item.replace(/^=/, "").length >= 4 && hit(item, have) && !PROCEDURAL_STEM.test(item)).sort((a, b) => a.length - b.length)) {
     if (!words.some((word) => stem.startsWith(word))) words.push(stem);
   }
   return words.length;
