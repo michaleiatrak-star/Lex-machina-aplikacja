@@ -8,10 +8,10 @@ function sha256(bytes) {
 }
 function discoveryResult(indexBytes, signatureBytes) {
     return {
-        currentVersion: "0.2.11",
+        currentVersion: "0.2.12",
         status: "AVAILABLE",
         checkedAt: "2026-09-18T09:00:00.000Z",
-        latestVersion: "0.2.12",
+        latestVersion: "0.2.13",
         skillsBundle: {
             name: "LexMachina-Skills-0.2.4.zip",
             url: "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.2.4/LexMachina-Skills-0.2.4.zip",
@@ -40,7 +40,7 @@ function verifiedIndex(args) {
             schemaVersion: 1,
             kind: "LEX_MACHINA_SKILLS_INDEX",
             version: args?.version ??
-                "0.2.12",
+                "0.2.13",
             bundle: {
                 filename: "LexMachina-Skills-0.2.4.zip",
                 sha256: "a".repeat(64),
@@ -48,7 +48,7 @@ function verifiedIndex(args) {
             },
             compatibility: {
                 minAppVersion: args?.minAppVersion ??
-                    "0.2.11",
+                    "0.2.12",
                 ...(args?.maxAppVersion
                     ? {
                         maxAppVersion: args.maxAppVersion

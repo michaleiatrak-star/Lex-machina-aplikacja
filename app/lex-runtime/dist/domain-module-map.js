@@ -516,7 +516,7 @@ function rankByPhrases(registry, rows, text, limit) {
         .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) }))
         .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);
     if (flash.length)
-        return flash;
+        return withoutSubsumedPhrases(flash);
     const have = tokens(subject);
     return [...registry.skills.values()]
         .filter((skill) => isDomainSkill(skill.name))
@@ -530,6 +530,28 @@ function rankByPhrases(registry, rows, text, limit) {
         .filter((row, index, rows) => index === 0 || row.modules[0].score >= 0.75 * rows[0].modules[0].score)
         .slice(0, limit)
         .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0].why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
+}
+// A later domain's phrase that is part of a longer phrase of the first ("umowa na czas określony"
+// inside "umowa najmu na czas określony") is the first domain's matter: it does not count for the
+// later one (live test 2026-11-27: a lease named labour law strong and loaded its act module).
+function withoutSubsumedPhrases(ranked) {
+    // "na czas nieokreślony" is the same notion as "na czas określony".
+    const stems = (phrase) => phraseWords(phrase).map((word) => stemOf(word).replace(/^nie(?=\p{L}{4})/u, ""));
+    const first = (ranked[0]?.matched ?? []).map(stems);
+    return ranked.map((row, index) => {
+        if (index === 0)
+            return row;
+        const subsumed = row.matched.filter((phrase) => {
+            const own = stems(phrase);
+            return own.length > 1 && first.some((other) => other.length > own.length && own.every((stem) => other.includes(stem)));
+        });
+        if (!subsumed.length)
+            return row;
+        const weight = Math.max(0, row.weight - subsumed.reduce((sum, phrase) => sum + phraseWords(phrase).length, 0));
+        // What is left are single words ("wypowiedzenie", "wynagrodzenie"): a domain possibly involved.
+        const phraseLeft = row.matched.some((phrase) => !subsumed.includes(phrase) && phraseWords(phrase).length > 1);
+        return { ...row, weight: phraseLeft ? weight : Math.min(weight, 1.5) };
+    });
 }
 export function domainHintPrompt(domains, loaded = new Set()) {
     // Several domains of one case: the ones its kind or a phrase of its own names are read
