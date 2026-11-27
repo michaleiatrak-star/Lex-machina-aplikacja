@@ -114,11 +114,44 @@ describe("legal gate of a chat turn", () => {
     expect(applyNonLegalChatGate(registry, request, 0, false)).toBe(true);
     expect(request.conversationalOnly).toBe(true);
     expect(request.primarySkill.startsWith("dr-")).toBe(true);
-    for (const [attachments, caseMaterial, primary] of [[1, false, "AUTO"], [0, true, "AUTO"], [0, false, "dr-02-prawo-cywilne-rodzinne-gospodarcze"]] as const) {
+    for (const [attachments, caseMaterial, primary] of [[1, false, "AUTO"], [0, false, "dr-02-prawo-cywilne-rodzinne-gospodarcze"]] as const) {
       const kept = { query: "__LEX_SKILLS_V1__ {\"auto\":true,\"manual\":[]}\nJak upiec sernik?", primarySkill: primary } as SessionExecutionRequest;
       expect(applyNonLegalChatGate(registry, kept, attachments, caseMaterial)).toBe(false);
       expect(kept.conversationalOnly).toBeUndefined();
     }
+  });
+
+  // User 2026-11-27: in a case's chat (its files on by default) a request standing on its own
+  // is still a conversation; one about the files, or a legal question, stays legal.
+  it("in a case's chat, only a standalone non-legal request leaves the legal path", () => {
+    const registry = router.registry;
+    const ask = (text: string) => {
+      const request = { query: `__LEX_SKILLS_V1__ {"auto":true,"manual":[]}\n${text}`, primarySkill: "AUTO" } as SessionExecutionRequest;
+      return applyNonLegalChatGate(registry, request, 0, true);
+    };
+    for (const text of [
+      "Jak upiec sernik?",
+      "Jaka będzie jutro pogoda w Krakowie?",
+      "Przetłumacz na angielski: Dziękuję za szybką odpowiedź.",
+      "Ile to jest 15% z 3200 zł?",
+      "Napisz krótkiego maila do klienta z podziękowaniem za spotkanie",
+      "Zrób listę zadań na jutro: telefon do klienta, faktura, poczta",
+      "Napisz życzenia świąteczne dla zespołu"
+    ]) expect(ask(text), text).toBe(true);
+    for (const text of [
+      "Streść ten dokument w trzech zdaniach",
+      "Przetłumacz to na angielski",
+      "Co wynika z protokołu rozprawy?",
+      "Czy mogę wypowiedzieć umowę najmu?",
+      "Napisz maila do sądu z prośbą o przesunięcie terminu rozprawy",
+      "Jaki jest termin przedawnienia faktury?"
+    ]) expect(ask(text), text).toBe(false);
+  });
+
+  it("a standalone non-legal request after a legal thread leaves the legal path", () => {
+    const thread = "Użytkownik: Pracodawca zwolnił mnie dyscyplinarnie.\n\nAsystent: Kiedy?\n\nUżytkownik: ";
+    expect(isNonLegalMessage(`${thread}Przetłumacz na angielski: Dziękuję za szybką odpowiedź.`, flash)).toBe(true);
+    expect(isNonLegalMessage(`${thread}przetłumacz to`, flash)).toBe(false);
   });
 });
 

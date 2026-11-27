@@ -34,6 +34,12 @@ describe("contract analysis checkpoints over a marked draft", () => {
     expect(contractDraftStepDone({ ...mixed, workflow: { markedDraftOnly: true } }, analysis)).toBe(true);
     expect(contractDraftStepDone({ ...mixed, workflow: { markedDraftOnly: true }, gateI: { checks: [...run7.gateI.checks, { id: "SOURCE_PROVENANCE", result: "BLOCKED" }] } }, analysis)).toBe(false);
   });
+
+  it("a final step closes with warnings only on the workflow's own word (AU-HYBRID held for good, 2026-11-27)", () => {
+    expect(contractDraftStepDone({ ...run7, workflow: { markedDraftOnly: true } }, ["AU-HYBRID"])).toBe(true);
+    expect(contractDraftStepDone({ ...run7, workflow: { markedDraftOnly: false } }, ["AU-HYBRID"])).toBe(false);
+    expect(contractDraftStepDone({ ...run7, workflow: { markedDraftOnly: true }, finalization: "BLOCKED" }, ["AU-HYBRID"])).toBe(false);
+  });
 });
 
 describe("a contract step taken as a marked draft is not held by its own red workflow gates", () => {

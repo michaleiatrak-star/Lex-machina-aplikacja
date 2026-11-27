@@ -96,7 +96,7 @@ const RIGHTS_QUESTION =
 // Fiction and games: a crime in the plot is no criminal matter.
 const FICTION = /(?<![a-z])(?:powiesc\w*|powiesci|opowiadani\w*|bohater\w*|scen\w* (?:procesu|w|z)|rozdzial\w*|gracz\w*|grze\b|rpg|piosenk\w*|refren\w*|kryminal\w*|zabaw\w* w sad)/u;
 const NONLEGAL_TOPIC =
-  /(?<![a-z])(?:python\w*|javascript|typescript|bash\w*|skrypt\w*|excel\w*|arkusz\w* kalkul|github\w*|repo\b|pypi|npm|package\.json|pyproject|docker\w*|kubernetes|request\w*|promise|foreach|petl\w*|kod\w* (?:w|pythona|programu)|program\w* (?:w|czasem)|raspberry|gpio|wordpress|wtyczk\w*|scheduler\w*|modul\w* (?:w|pdf)|merge|powiesc\w*|powiesci|opowiadani\w*|bohater\w*|scen\w* (?:procesu|w|z)|rozdzial\w*|gracz\w*|grze\b|gry (?:planszow|komputer)|planszow\w*|rpg|rzuty? kosc\w*|piosenk\w*|refren\w*|rym\w*|wiersz\w*|teatr\w*|aktorsk\w*|zuch\w*|harcer\w*|przepis\w* na (?!podstaw)|sernik\w*|piekarnik\w*|ugotowa\w*|rosol\w*|jogurt\w*|pizz\w*|drozdz\w*|fermentac\w*|newton\w*|archimedes\w*|coulomb\w*|fizyk\w*|dynamiki|matematyczn\w*|pierwiast\w*|liczb\w* pierwsz\w*|niewymiern\w*|indukcj\w*|elastycznosc\w*|popytu|trener\w*|zawodnik\w*|druzyn\w*|spalon\w*|ligi\b|treningow\w*|plywa\w*|roslin\w*|jablon\w*|pomidor\w*|szklarni\w*|fikus\w*|wkretark\w*|poziomic\w*|zawias\w*|syfon\w*|placu manewrow\w*|parkowani\w* rownoleg\w*|zabaw\w* w sad|repozytori\w* (?:na )?git\w*|egzamin\w* praktyczn\w*|smut\w*|psychoterapi\w*|etf|fundusz\w* indeksow\w*|nocleg\w*|szlak\w*|lewad\w*|warcab\w*|chorze\b|wiedzmin\w*|szach\w*|unity|javie|dysk\w* ssd|linux\w*|gitlab\w*|kanban\w*|scrum\w*|retrospektyw\w*|termodynamik\w*|ohma|jadlospis\w*|refluks\w*|behawiorys\w*|debat\w*|gr\w* slow|kawiarni\w*|ishikaw\w*|amortyzator\w*|wahacz\w*|sprzegl\w*|kursant\w*)/u;
+  /(?<![a-z])(?:z podziekowaniem|zyczeni\w* (?:swiateczn|urodzinow|imieninow|noworoczn|dla)\w*|list\w* zadan|to-?do|literowk\w*|python\w*|javascript|typescript|bash\w*|skrypt\w*|excel\w*|arkusz\w* kalkul|github\w*|repo\b|pypi|npm|package\.json|pyproject|docker\w*|kubernetes|request\w*|promise|foreach|petl\w*|kod\w* (?:w|pythona|programu)|program\w* (?:w|czasem)|raspberry|gpio|wordpress|wtyczk\w*|scheduler\w*|modul\w* (?:w|pdf)|merge|powiesc\w*|powiesci|opowiadani\w*|bohater\w*|scen\w* (?:procesu|w|z)|rozdzial\w*|gracz\w*|grze\b|gry (?:planszow|komputer)|planszow\w*|rpg|rzuty? kosc\w*|piosenk\w*|refren\w*|rym\w*|wiersz\w*|teatr\w*|aktorsk\w*|zuch\w*|harcer\w*|przepis\w* na (?!podstaw)|sernik\w*|piekarnik\w*|ugotowa\w*|rosol\w*|jogurt\w*|pizz\w*|drozdz\w*|fermentac\w*|newton\w*|archimedes\w*|coulomb\w*|fizyk\w*|dynamiki|matematyczn\w*|pierwiast\w*|liczb\w* pierwsz\w*|niewymiern\w*|indukcj\w*|elastycznosc\w*|popytu|trener\w*|zawodnik\w*|druzyn\w*|spalon\w*|ligi\b|treningow\w*|plywa\w*|roslin\w*|jablon\w*|pomidor\w*|szklarni\w*|fikus\w*|wkretark\w*|poziomic\w*|zawias\w*|syfon\w*|placu manewrow\w*|parkowani\w* rownoleg\w*|zabaw\w* w sad|repozytori\w* (?:na )?git\w*|egzamin\w* praktyczn\w*|smut\w*|psychoterapi\w*|etf|fundusz\w* indeksow\w*|nocleg\w*|szlak\w*|lewad\w*|warcab\w*|chorze\b|wiedzmin\w*|szach\w*|unity|javie|dysk\w* ssd|linux\w*|gitlab\w*|kanban\w*|scrum\w*|retrospektyw\w*|termodynamik\w*|ohma|jadlospis\w*|refluks\w*|behawiorys\w*|debat\w*|gr\w* slow|kawiarni\w*|ishikaw\w*|amortyzator\w*|wahacz\w*|sprzegl\w*|kursant\w*)/u;
 
 // Citations: an article or a section, a case number, a Dz.U. reference.
 const CITATION = /\bart\.?\s*\d|§\s*\d|\bsygn\.?|\bdz\.?\s?u\.?|\b[ivx]+\s+[a-z]{1,4}\s+\d+\/\d{2}\b/iu;
@@ -135,9 +135,20 @@ export function isNonLegalMessage(query: string, flash: FlashRoute[]): boolean {
   const lastSentence = latest.trim().split(/(?<=[.!?])\s+/u).pop() ?? "";
   if (!opening(latest) && !opening(requestOf(latest)) && !(NONLEGAL_TOPIC.test(fold(latest)) && opening(lastSentence))) return false;
   if (hasLegalSignal(latest, flash)) return false;
-  // A follow-up in a legal thread ("tak, w maju") belongs to that matter.
-  if (laterTurn(query) && hasLegalSignal(threadUserText(query), flash)) return false;
+  // A follow-up in a legal thread ("tak, w maju", "przetłumacz to") belongs to that matter; a
+  // request standing on its own ("Przetłumacz na angielski: Dziękuję…") does not (user 2026-11-27).
+  if (laterTurn(query) && !standsAlone(latest) && hasLegalSignal(threadUserText(query), flash)) return false;
   return true;
+}
+
+// Back to something earlier in the thread or in the files: "to", "tego", "ten dokument", "powyższe".
+const REFERS_BACK = /(?<![a-z])(?:to|tego|tym|temu|ten|ta|te|tej|tych|powyzsz\w*|ponizsz\w*|poprzedni\w*|wczesniejsz\w*|ostatni\w*|jw|zalaczon\w*|zalacznik\w*|w aktach|z akt|dokument\w*|pism\w*|umow\w*|protokol\w*|wyrok\w*)(?![a-z])/u;
+
+/** A request with its own content, not a follow-up of the thread or a reference to its files. */
+export function standsAlone(message: string): boolean {
+  // "ile to jest", "co to znaczy": an idiom, not a reference back.
+  const text = fold(message.trim()).replace(/(?<![a-z])(?:ile|co|czym|kto|jak) to (?:jest|sa|znaczy|bylo|byl)(?![a-z])/gu, " ");
+  return text.length >= 15 && !REFERS_BACK.test(text);
 }
 
 let flashCache: { file: string; mtimeMs: number; rows: FlashRoute[] } | null = null;

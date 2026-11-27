@@ -234,7 +234,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX
 } from "../skill-selection.js";
 import { isTrivialChatCommand } from "../execution-engine.js";
-import { isFactCorrection, isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
+import { isFactCorrection, isNonLegalMessage, registryFlashRoutes, standsAlone } from "../turn-gate.js";
 import {
   assessMatterComplexity,
   describeMatterComplexity
@@ -849,9 +849,14 @@ export function contractDraftStepDone(
   checkpoints: readonly string[]
 ): boolean {
   if (result.finalization !== "DEGRADED") return false;
-  if (!checkpoints.length || checkpoints.some((checkpoint) => CONTRACT_FINAL_CHECKPOINTS.has(checkpoint))) return false;
+  if (!checkpoints.length) return false;
   const checks = result.gateI?.checks ?? [];
   if (!checks.length || !checks.every((check) => check.result === "PASS" || CONTRACT_DRAFT_CHECKS.has(check.id))) return false;
+  // A final step (AU-HYBRID, AU-STRIP, …) closes with warnings only when the workflow itself says it
+  // stopped on marked citations alone: live test 2026-11-27 (Sonnet) held AU-HYBRID for good, each
+  // "Kontynuuj." 200 s with no step closed, while ELI answered 503. The .docx keeps its own check:
+  // the generator verifies the references in ELI again and asks the user (ZAKAZ-14, acceptUnverified).
+  if (checkpoints.some((checkpoint) => CONTRACT_FINAL_CHECKPOINTS.has(checkpoint))) return result.workflow?.markedDraftOnly === true;
   // The workflow stopped only on marked citations (as a pleading's working step, processStepDone):
   // one provision marked ✅ in one place and ⚠️ in another (STATUS_CONTRADICTS_LEDGER, shown with the
   // warning to take the cautious mark) kept AU-F0 open for good (live test 2026-11-26).
@@ -1748,9 +1753,12 @@ export function applyNonLegalChatGate(
   caseMaterial: boolean
 ): boolean {
   const envelope = parseSkillSelectionEnvelope(request.query);
+  // In a case's chat (its files on by default) a general request standing on its own ("policz",
+  // "przetłumacz na angielski: …") is still a conversation; one about the files stays legal
+  // (user 2026-11-27: non-legal questions must not start the legal path).
   if (
     attachmentCount > 0 ||
-    caseMaterial ||
+    (caseMaterial && !standsAlone(latestUserTurn(envelope.query))) ||
     request.primarySkill !== "AUTO" ||
     !envelope.automatic ||
     envelope.manualSkills.length > 0 ||
