@@ -269,7 +269,7 @@ import {
 } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
-import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules, type DomainModule, type FlashRoute } from "./domain-module-map.js";
+import { domainHintPrompt, parseFlashRouting, PERJURY_CAUTION, rankDomains, suggestDomainModules, type DomainModule, type FlashRoute } from "./domain-module-map.js";
 import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./domain-fallback.js";
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
@@ -3696,7 +3696,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       // "faktura VAT" or "transport" in a document is not the case's act; 2026-11-13: VAT and
       // carriage modules in a dispute over a solar installation, 37k characters in every step).
       const ofQuestion = resolveActModulesWithChecks(this.registry, caseText);
-      const ofDocuments = documentText.trim() ? resolveActModulesWithChecks(this.registry, documentText) : { modules: [], rejected: [] };
+      // The perjury caution of a hearing record names no act of the case (PERJURY_CAUTION).
+      const documentActText = documentText.replace(PERJURY_CAUTION, " ");
+      const ofDocuments = documentActText.trim() ? resolveActModulesWithChecks(this.registry, documentActText) : { modules: [], rejected: [] };
       const named = new Set(ofQuestion.modules.map((module) => module.resource));
       const acts = {
         modules: [...ofQuestion.modules, ...ofDocuments.modules.filter((module) => module.rule !== "NAZWA" && !named.has(module.resource))],
@@ -3735,7 +3737,14 @@ export class SafeSessionExecutor implements SessionExecutor {
       const headingText = documentHeadings(attachments);
       const headingDomains = headingText ? rankDomains(this.registry, this.flashRoutes(), headingText).filter((domain) => domain.strong) : [];
       const questionDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
-      const ownDomains = [...headingDomains, ...questionDomains.filter((domain) => !headingDomains.some((other) => other.skill === domain.skill))];
+      // With the documents naming the matter, a domain the question names only through an act map's
+      // word ("rozprawa", "dowody" -> KPA, "protokół" -> KW) is no second matter (live test
+      // 2026-11-27: a civil construction case listed administrative and petty-offence law).
+      const actMapOnly = (domain: { matched: string[] }) => domain.matched.length > 0 && domain.matched.every((phrase) => phrase.startsWith("mapa aktów:"));
+      const ownDomains = [
+        ...headingDomains,
+        ...questionDomains.filter((domain) => !headingDomains.some((other) => other.skill === domain.skill) && !(headingDomains.length && actMapOnly(domain)))
+      ];
       let domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> =
         ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
           ? ownDomains

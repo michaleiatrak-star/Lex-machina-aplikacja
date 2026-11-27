@@ -30,3 +30,16 @@ describe("the case's own figures", () => {
     expect(other).not.toContain("1234567890Z");
   });
 });
+
+// Live test 2026-11-27 (lease analysis): a period written as an adjective and arithmetic on the
+// contract's own figures are facts of the case, not statutory values to verify.
+describe("contract figures", () => {
+  it("reads \"7-dniowego terminu\" as 7 days and multiples of the contract's amounts as facts", async () => {
+    const { amountKeysIn, factProductKeys } = await import("../src/amount-references.js");
+    const keys = amountKeysIn("Czynsz wynosi 3 200 zł miesięcznie. Podwyżka z zachowaniem 7-dniowego terminu. Kara 50% czynszu za każdy dzień. Kaucja do dwunastokrotności czynszu.");
+    expect(keys).toEqual(expect.arrayContaining(["3200Z", "7D", "50P", "12X"]));
+    const products = factProductKeys(keys);
+    expect(products).toEqual(expect.arrayContaining(["1600Z", "38400Z"]));
+    expect(products).not.toContain("48000Z");
+  });
+});

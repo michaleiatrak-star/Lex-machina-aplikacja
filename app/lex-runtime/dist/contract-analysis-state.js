@@ -372,7 +372,12 @@ export function contractCheckpointsClosedByAnswer(answer, batch) {
     const result = [];
     for (const checkpoint of batch) {
         // Not in the trace: a checkpoint the answer did not report (N/A ones are written as such).
-        if (status.get(checkpoint) === false || (!status.has(checkpoint) && checkpoint !== batch[0] && !impliedDone(checkpoint, status)))
+        // A data gap noted (AU-GAP, AU-POV "⬛ brak danych") while the later checkpoints are done: the
+        // answer went on with stated assumptions, so the gap is a warning, not a hold (live test
+        // 2026-11-27: "AU-GAP ⬛" closed only AU-F0 of nine; user: blokady ograniczyć). A turn that asks
+        // the user (waitingForUser) does not reach this.
+        const gapNoted = status.get(checkpoint) === false && impliedDone(checkpoint, status);
+        if ((status.get(checkpoint) === false && !gapNoted) || (!status.has(checkpoint) && checkpoint !== batch[0] && !impliedDone(checkpoint, status)))
             break;
         result.push(checkpoint);
     }

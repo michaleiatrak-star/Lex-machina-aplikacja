@@ -55,6 +55,11 @@ describe("contract analysis in one turn (contract test 2026-11-07: stage stayed 
         expect(contractCheckpointsClosedByAnswer("Analiza umowy bez tabeli śladu.", batch)).toEqual(["AU-F0"]);
         expect(contractCheckpointsClosedByAnswer("| AU-F0 | ✅ |\n| AU-ROUTE | ✅ |\n| AU-A…AU-F | ✅ |", batch)).toEqual(batch);
         expect(contractCheckpointsClosedByAnswer("| AU-F0 | ✅ |\n| AU-GAP | ⬛ Załączniki 1 i 2 |", batch)).toEqual(["AU-F0"]);
+        // Live test 2026-11-27: the gap noted, the analysis carried on with assumptions, later steps done.
+        const traced = ["| AU-F0 | ✅ |", "| AU-GAP | ⬛ (status konsumenta, załączniki) |", "| AU-POV | — N/A |", "| AU-ROUTE | ✅ |", "| AU-A | ✅ |"].join("\n");
+        expect(contractCheckpointsClosedByAnswer(traced, ["AU-F0", "AU-GAP", "AU-POV", "AU-ROUTE", "AU-A"])).toEqual(["AU-F0", "AU-GAP", "AU-POV", "AU-ROUTE", "AU-A"]);
+        // A later step not done still stops the run there.
+        expect(contractCheckpointsClosedByAnswer("| AU-F0 | ✅ |\n| AU-GAP | ⬛ brak |\n| AU-ROUTE | ⬛ brak |", ["AU-F0", "AU-GAP", "AU-POV", "AU-ROUTE"])).toEqual(["AU-F0"]);
         const done = completeContractExecution(state, requireContractExecutionPermit(state), ["audit://contract/session/all"], batch);
         expect(done.stage).toBe("FINALIZATION");
         expect(requireContractExecutionPermit(done).checkpoints).toEqual(["AU-HYBRID"]);

@@ -502,8 +502,13 @@ const COURT_NAME = /(?<![\p{L}])[sS][aą]d(?:u|zie|em|owi)?\s+(?:[rR]ejonow|[oO]
 const COURT_DIVISION = /(?<![\p{L}])(?:[IVXL]{1,5}\s+)?wydzia[lł]\p{L}*(?:\s+(?!\d)[\p{L}-]+|\s+i){0,6}/giu;
 const STREET_ADDRESS = /(?<![\p{L}])(?:ul\.|ulica|al\.|aleja|pl\.|plac)\s+[^\n,;]{1,60}|\b\d{2}-\d{3}\s+\p{Lu}[\p{L}-]+/gu;
 const COURT_ACTION = /(?<![\p{L}])s[aą]d(?![\p{L}])(?:\s+(?:I|II|pierwszej|drugiej)\s+instancji)?\s+(?:dopu[sś]ci|oddali|odrzuci|zas[aą]dzi|uwzgl[eę]dni|wezwa|postanowi|wyda|umorzy|zawiesi|przes[lł]ucha|zobowi[aą]za|wyznaczy|zarz[aą]dzi|przyzna|ustali|uzna|nakaza|skaza|uniewinni|zwr[oó]ci|pouczy|odroczy|zamkn[aą]|otworzy|odebra|przyj[aą]|stwierdzi|oceni)\p{L}*/giu;
+// The caution a witness or a party gets in every hearing record ("pouczony o odpowiedzialności karnej z
+// art. 233 k.k.") is procedure, not a criminal matter (live test 2026-11-27: a civil construction
+// case loaded the module of crimes against justice and listed DR-03).
+export const PERJURY_CAUTION = /pouczon\p{L}*\s+o\s+(?:treści\s+)?(?:odpowiedzialności\s+karnej|uprawnieniach)[^.\n]{0,80}?art\.?\s*233(?:\s*§\s*\d+)?\s*(?:k\.?\s?k\.?|KK|Kodeksu\s+karnego)/giu;
 export function domainSubject(text) {
     return text
+        .replace(PERJURY_CAUTION, " ")
         .replace(COURT_ACTION, " ")
         .replace(COURT_NAME, " ")
         .replace(COURT_DIVISION, " ")
@@ -518,7 +523,7 @@ function rankByPhrases(registry, rows, text, limit) {
     const subject = domainSubject(text);
     const flash = substanceFirst(withoutBorrowedLabourWords(flashDomains(withoutBareCourt(rows), subject, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
         .filter((row) => registry.get(row.skill))
-        .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) })), subject).sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);
+        .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) })), subject).map((row) => withoutClaimInterest(row, subject)).sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);
     if (flash.length)
         return withoutSubsumedPhrases(flash);
     const have = tokens(subject);
@@ -547,6 +552,16 @@ function withoutBorrowedLabourWords(ranked, text) {
         ? { ...row, weight: Math.min(row.weight, 1.5) }
         : row);
     return out;
+}
+// Statutory interest in a statement of claim or a judgment ("z odsetkami ustawowymi za opóźnienie")
+// is part of the claim, not a calculation asked for: DR-16 (calculators) counts it only when the
+// text asks to count (live test 2026-11-27: a construction claim's files named DR-16 first).
+const CLAIM_INTEREST = new Set(["odsetki ustawowe", "odsetki", "wnioski dowodowe", "wniosek dowodowy"]);
+const COUNT_ASKED = /(?<![a-z])(?:policz\w*|oblicz\w*|wylicz\w*|przelicz\w*|ile (?:wynios|bed|mam|wynos|to)\w*|kalkulator\w*|kwot\w* odsetek)/u;
+function withoutClaimInterest(row, text) {
+    if (!row.skill.startsWith("dr-16-") || !row.matched.length || !row.matched.every((phrase) => CLAIM_INTEREST.has(phrase.toLocaleLowerCase("pl"))))
+        return row;
+    return COUNT_ASKED.test(fold(text)) ? row : { ...row, weight: Math.min(row.weight, 1.5) };
 }
 // A later domain's phrase that is part of a longer phrase of the first ("umowa na czas określony"
 // inside "umowa najmu na czas określony") is the first domain's matter: it does not count for the

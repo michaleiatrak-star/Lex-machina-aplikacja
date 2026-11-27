@@ -55,3 +55,15 @@ describe("the domain of a construction-works claim", () => {
     expect(domains[0]?.skill.startsWith("dr-04-")).toBe(true);
   });
 });
+
+describe("series r7 (2026-11-27): files of a civil claim", () => {
+  const rank = (text: string) => rankDomains(router.registry, registryFlashRoutes(router.registry), text);
+  it("the perjury caution of a hearing record names no criminal matter", () => {
+    const domains = rank("PROTOKÓŁ ROZPRAWY. Świadek, kierownik budowy, pouczony o odpowiedzialności karnej z art. 233 k.k., zeznał: protokół odbioru podpisałem.");
+    expect(domains.some((domain) => domain.skill.startsWith("dr-03-"))).toBe(false);
+  });
+  it("statutory interest of a claim does not make the calculators' domain first; a calculation asked does", () => {
+    expect(rank("POZEW O ZAPŁATĘ. Wnoszę o zasądzenie 48 000 zł z odsetkami ustawowymi. Strony zawarły umowę o roboty budowlane. Pozwany nie zapłacił faktury.")[0]?.skill.startsWith("dr-02-")).toBe(true);
+    expect(rank("Chcę policzyć odsetki ustawowe od zaległej faktury.")[0]?.skill.startsWith("dr-16-")).toBe(true);
+  });
+});

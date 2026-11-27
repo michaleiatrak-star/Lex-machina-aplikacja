@@ -119,6 +119,12 @@ function dateOf(match) {
  * figures of a table without it, and the days between the case's dates (and today), such as
  * the days an invoice is overdue (live C09-062: "84 dni", "48 600 zł" from faktury.xlsx).
  */
+// A period written as an adjective in a contract ("z zachowaniem 7-dniowego terminu", "3-miesięczny
+// okres wypowiedzenia"): the same value as "7 dni" (live test 2026-11-27, a lease marked "7 dni" ⚠️).
+const ADJECTIVE_PERIOD = /(?<![\p{L}\d])(\d{1,4})\s*-?\s*(dniow|tygodniow|miesięczn|miesieczn|letn|roczn)\p{L}*/giu;
+const ADJECTIVE_UNIT = { dniow: "D", tygodniow: "W", miesięczn: "M", miesieczn: "M", letn: "Y", roczn: "Y" };
+const MULTIPLES = { dwu: 2, trzy: 3, cztero: 4, pięcio: 5, sześcio: 6, siedmio: 7, ośmio: 8, dziewięcio: 9, dziesięcio: 10, dwunasto: 12, piętnasto: 15, dwudziesto: 20, trzydziesto: 30 };
+const MULTIPLE = new RegExp(`(?<![\\p{L}])(${Object.keys(MULTIPLES).join("|")})krotn\\p{L}*`, "giu");
 export function amountKeysIn(text, today = new Date()) {
     const keys = new Set();
     for (const sentence of text.split(/(?<=[.?!])\s+|\n+/u)) {
@@ -127,6 +133,14 @@ export function amountKeysIn(text, today = new Date()) {
         AMOUNT.lastIndex = 0;
         for (const match of sentence.matchAll(AMOUNT))
             keys.add(keyOf(match[0]));
+        for (const match of sentence.matchAll(ADJECTIVE_PERIOD))
+            keys.add(`${match[1]}${ADJECTIVE_UNIT[match[2].toLocaleLowerCase("pl")]}`);
+        // "do dwunastokrotności czynszu": a multiple the contract states.
+        for (const match of sentence.matchAll(MULTIPLE)) {
+            const value = MULTIPLES[match[1].toLocaleLowerCase("pl")];
+            if (value)
+                keys.add(`${value}X`);
+        }
         if (!NORMATIVE_CONTEXT.test(sentence)) {
             for (const match of sentence.replace(DATE, " ").matchAll(BARE_MONEY)) {
                 const whole = Number(match[1].replace(/[\s  ]/gu, ""));
@@ -146,6 +160,30 @@ export function amountKeysIn(text, today = new Date()) {
         }
     }
     return [...keys];
+}
+/**
+ * A case amount times the case's own rate or count ("50% czynszu dziennie to 1 600 zł", "kaucja
+ * 12 × 3 200 zł = 38 400 zł"): arithmetic on the case's facts, not a statutory value (live test
+ * 2026-11-27: a lease analysis marked these ⚠️ and held the turn).
+ */
+export function factProductKeys(keys) {
+    const all = [...new Set(keys)];
+    const money = all.filter((key) => /^\d+(?:,\d+)?Z$/u.test(key)).map((key) => Number(key.slice(0, -1).replace(",", "."))).slice(0, 40);
+    const rates = all.filter((key) => /^\d+(?:,\d+)?P$/u.test(key)).map((key) => Number(key.slice(0, -1).replace(",", ".")) / 100);
+    const counts = all.filter((key) => /^\d{1,3}[DWMYX]$/u.test(key)).map((key) => Number(key.slice(0, -1))).filter((value) => value > 1 && value <= 365);
+    const out = new Set();
+    const add = (value) => {
+        const cents = Math.round(value * 100);
+        if (cents > 0)
+            out.add(cents % 100 === 0 ? `${cents / 100}Z` : `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}Z`);
+    };
+    for (const amount of money) {
+        for (const rate of rates)
+            add(amount * rate);
+        for (const count of counts)
+            add(amount * count);
+    }
+    return [...out];
 }
 /** Sums of two or three of the case's own money amounts ("łącznie 71 810 zł"): its own figure too. */
 export function factSumKeys(keys) {
