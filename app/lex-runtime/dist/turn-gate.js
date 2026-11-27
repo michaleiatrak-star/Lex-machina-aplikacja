@@ -48,6 +48,12 @@ const LEGAL_STEMS = [
     "darowizn", "zglasz", "podpis", "nieprawidlowos", "zastrzec", "zastrzez", "esg", "csrd", "antykorupc", "dochodzeni",
     "przewozn", "odpowiada za", "ukrad", "nazw\\w* (?:dla )?(?:mojej |naszej )?(?:marki|firmy|sklepu|produktu)", "praktyk\\w* lekarsk", "zalozyc (?:firm|spolk|fundacj|stowarzysz|dzialalnos|praktyk)",
     "polityk\\w* prywatnosc", "klauzul\\w* informacyjn", "statut", "fundacj", "stowarzyszeni",
+    // Legal notions asked about without another legal word (probe 2026-11-27: "Czym się różni zadatek od
+    // zaliczki?", "Co oznacza pojęcie siły wyższej w prawie polskim?" went the conversational lane).
+    "w prawie (?:polski|cywiln|karn|prac|administrac|podatk|handl|gospodarcz|rodzin|unijn|europejsk|miedzynarod|spadk|autorsk|budowlan|ue\\b)", "w (?:polskim )?prawie\\b(?! (?:nic|wszystk|kazd|zawsze|caly|cala|cale|jak|ze\\b|godzin|minut|rok|tydz|miesiac|dzien))",
+    "zadat", "zaliczk", "sil\\w* wyzsz", "prekluz", "prokur(?!at)", "cesj", "poreczen", "hipotek", "zastaw", "weksl", "sluzebnos", "uzytkowani\\w* wieczyst",
+    "zasiedz", "niewaznos", "bezskutecz", "czynnos\\w* prawn", "osob\\w* prawn", "zdolnos\\w* (?:prawn|do czynnos|sadow|procesow)", "pozorn", "oswiadczeni\\w* woli",
+    "potracen", "kompensat", "solidarn", "subrogac", "przejeci\\w* dlugu", "nienalezn", "bezpodstawn\\w* wzbogac", "naruszeni\\w* posiadani", "posiadani", "dobra osobist",
     "usun\\w* (?:moje |moj )?(?:zdjec|zdjeci|wpis|komentarz|dane)\\w* z (?:internet|sieci|portal|forum|google|facebook|serwis|strony)",
 ];
 const LEGAL_LEXICON = new RegExp(`(?<![a-z0-9])(?:${LEGAL_STEMS.join("|")})`, "u");

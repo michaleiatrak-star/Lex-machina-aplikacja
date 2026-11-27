@@ -1,4 +1,4 @@
-import { caseLawQuestion, statuteQuestion } from "./legal-question-kind.js";
+import { caseLawQuestion, conceptQuestion, differenceQuestion, statuteQuestion } from "./legal-question-kind.js";
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
@@ -378,8 +378,13 @@ export function simpleLetterFirst(decision, question, materials, simpleLetters) 
 // skill's redaction, not the statute analysis a "§" picks (probe 2026-11-26).
 const CONTRACT_EDIT = /(?<![\p{L}])(?:popraw|zmień|zmien|przeredaguj|zredaguj|dodaj|dopisz|usuń|usun|skreśl|wykreśl|uzupełnij|doprecyzuj)\p{L}*/iu;
 const CONTRACT_WORD = /(?<![\p{L}])(?:umow|aneks|porozumieni|regulamin)\p{L}*/iu;
+// przewodnik-prawny-v2 keeps "co to znaczy" and explanations (ACTIVATION-MATRIX: przewodnik, then analizator-przepisow-v2).
+const CONCEPT_YIELDS = new Set(["pisma-proste-v2", "analizator-umow-v1"]);
 export function contractEditFirst(decision, question, known) {
     if (decision && decision.primary !== "analizator-przepisow-v2")
+        return decision;
+    // "wypowiedzenie zmieniające" is a notion, not an edit verb.
+    if (conceptQuestion(question))
         return decision;
     if (!CONTRACT_EDIT.test(question) || !CONTRACT_WORD.test(question) || !known("analizator-umow-v1"))
         return decision;
@@ -399,9 +404,18 @@ export function lawQuestionFirst(decision, question, materials, known) {
         return decision;
     if (decision?.primary === "przesluchanie-swiadkow-v2-min90" && WITNESS_QUESTIONS.test(question) && /(?<![\p{L}])(?:przygotuj|ułóż|napisz)/iu.test(question))
         return decision;
-    if (decision && !YIELDS_TO_LAW_QUESTION.has(decision.primary))
+    // Explaining a notion or a difference (conceptQuestion): no letter, no contract to review (probe
+    // 2026-11-27: "różnica między rozwiązaniem umowy a odstąpieniem" -> pisma-proste-v2, "czym różni się
+    // wypowiedzenie zmieniające od porozumienia" -> analizator-umow-v1, most others -> no skill).
+    const concept = conceptQuestion(question) && !caseLawQuestion(question);
+    if (decision && !YIELDS_TO_LAW_QUESTION.has(decision.primary) && !(concept && CONCEPT_YIELDS.has(decision.primary)))
         return decision;
-    const target = caseLawQuestion(question) ? "orzeczenia-sadowe-v2" : statuteQuestion(question) ? "analizator-przepisow-v2" : null;
+    // One notion explained ("co to jest", "co oznacza pojęcie"): the guide, then the statute skill
+    // (ACTIVATION-MATRIX "co to znaczy" / wyjaśnienie); a comparison of notions: the statute skill.
+    if (concept && !statuteQuestion(question) && !differenceQuestion(question) && known("przewodnik-prawny-v2")) {
+        return { source: decision?.source ?? "ROUTER", primary: "przewodnik-prawny-v2", then: known("analizator-przepisow-v2") ? "analizator-przepisow-v2" : null, reason: "wyjaśnienie pojęcia prawnego (macierz aktywacji: przewodnik, potem analiza przepisów)" };
+    }
+    const target = caseLawQuestion(question) ? "orzeczenia-sadowe-v2" : statuteQuestion(question) || concept ? "analizator-przepisow-v2" : null;
     if (!target || !known(target))
         return decision;
     return {

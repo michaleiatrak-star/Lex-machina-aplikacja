@@ -27,3 +27,22 @@ export function statuteQuestion(question) {
         return false;
     return STATUTE_WORDS.test(text);
 }
+// Explaining a legal notion or the difference between two ("czym różni się zadatek od zaliczki",
+// "wyjaśnij, co to jest przedawnienie", "porównaj spółkę z o.o. i komandytową"): the statute skill
+// (user 2026-11-27). A question about the user's own situation ("czy mogę…", "mój pracodawca") or a
+// request to draft stays where it is.
+const CONCEPT = /\b(?:roznic\w*|czym (?:sie )?rozni\w*|rozni sie|porownaj|porownani\w*|na czym polega\w*|co (?:to jest|to znaczy|oznacza|znaczy)|(?:wyjasnij|objasnij|wytlumacz)\w*,? (?:co to|czym jest|pojeci|termin|instytucj|roznic|na czym))/;
+const OWN_SITUATION = /\b(?:moj\w*|mnie|mi|mam|mamy|moge|mozemy|musze|musimy|dostal\w*|otrzymal\w*|jestem|zostal\w*em|zostalam|nasz\w*|ta umow\w*|tej umow\w*|tego pisma|w zalacz\w*)\b/;
+const DRAFT = /\b(?:napisz|przygotuj|sporzadz|zredaguj|opracuj|stworz|wygeneruj|popraw|przeredaguj)\w*/;
+/** A question explaining a legal notion or the difference between notions, not one's own matter. */
+export function conceptQuestion(question) {
+    const text = fold(question);
+    if (OWN_DOCUMENT.test(text) || OWN_SITUATION.test(text) || DRAFT.test(text))
+        return false;
+    return CONCEPT.test(text);
+}
+const DIFFERENCE = /\b(?:roznic\w*|czym (?:sie )?rozni\w*|rozni sie|porownaj|porownani\w*)\b/;
+/** A comparison of legal notions ("różnica między…", "czym różni się…"), not one notion explained. */
+export function differenceQuestion(question) {
+    return conceptQuestion(question) && DIFFERENCE.test(fold(question));
+}
