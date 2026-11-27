@@ -34,11 +34,11 @@ function discoveryResult(
   signatureBytes: Uint8Array
 ): UpdateDiscoveryResult {
   return {
-    currentVersion: "0.2.14",
+    currentVersion: "0.2.15",
     status: "AVAILABLE",
     checkedAt:
       "2026-09-18T09:00:00.000Z",
-    latestVersion: "0.2.15",
+    latestVersion: "0.2.16",
     skillsBundle: {
       name:
         "LexMachina-Skills-0.2.4.zip",
@@ -87,7 +87,7 @@ function verifiedIndex(args?: {
         "LEX_MACHINA_SKILLS_INDEX",
       version:
         args?.version ??
-        "0.2.15",
+        "0.2.16",
       bundle: {
         filename:
           "LexMachina-Skills-0.2.4.zip",
@@ -98,7 +98,7 @@ function verifiedIndex(args?: {
       compatibility: {
         minAppVersion:
           args?.minAppVersion ??
-          "0.2.14",
+          "0.2.15",
         ...(args?.maxAppVersion
           ? {
               maxAppVersion:
@@ -307,7 +307,7 @@ describe(
         } = service(
           verifiedIndex({
             version:
-              "0.2.16"
+              "0.2.17"
           })
         );
 
