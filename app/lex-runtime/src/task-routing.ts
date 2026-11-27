@@ -420,7 +420,39 @@ export function decideTask(
   if (explicitHandoff(rawQuestion, () => true)) return decision;
   const known = (skill: string) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill || rule.then === skill);
   const request = requestOf(withoutRoutingMarkers(rawQuestion));
-  return contractEditFirst(lawQuestionFirst(pleadingFirst(decision, request, known), request, materials, known), request, known);
+  const simple = simpleLetterFirst(evidenceAnalysisFirst(decision, request, known), request, materials, simpleLetters);
+  return contractEditFirst(lawQuestionFirst(pleadingFirst(simple, request, known), request, materials, known), request, known);
+}
+
+// Asked to assess the evidence ("przeanalizuj materiał dowodowy", "które dowody wspierają powoda",
+// "jakie są luki dowodowe"): the evidence skill, not the court analysis the delivered files point to
+// (live test 2026-11-27, Sonnet: analiza-sadowa-v6 answered).
+const EVIDENCE_ANALYSIS =
+  /(?<![\p{L}])(?:(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|zbadaj|sprawdź|zestaw\p{L}*|porównaj)\s+(?:\p{L}+\s+){0,2}(?:materia\p{L}*\s+dowodow\p{L}*|dowod\p{L}*|dowód)|materia\p{L}*\s+dowodow\p{L}*|któr\p{L}*\s+dowod\p{L}*|luk\p{L}*\s+(?:w\s+)?dowod\p{L}*|luk\p{L}*\s+dowodow\p{L}*|sił\p{L}*\s+dowod\p{L}*)/iu;
+export function evidenceAnalysisFirst(decision: TaskDecision | null, question: string, known: (skill: string) => boolean): TaskDecision | null {
+  const skill = "analizator-dowodow-v3";
+  if (!known(skill) || !EVIDENCE_ANALYSIS.test(question) || asksToDraft(question) || WITNESS_QUESTIONS.test(question) && /świad/iu.test(question)) return decision;
+  if (decision && decision.primary !== "analiza-sadowa-v6") return decision;
+  return { source: decision?.source ?? "ROUTER", primary: skill, then: null, reason: `prośba użytkownika: ocena materiału dowodowego${decision ? ` (zamiast ${decision.primary})` : ""}` };
+}
+
+// A letter of the simple catalogue asked for ("napisz wniosek o odroczenie rozprawy") stays with
+// pisma-proste-v2 when the case's files are on: the delivered pleadings named the court analysis and
+// then the pleading pipeline, which waited for its state (409, live test 2026-11-27). Substantive
+// defences still escalate (decideTaskByRows).
+export function simpleLetterFirst(
+  decision: TaskDecision | null,
+  question: string,
+  materials: DeliveredMaterial[],
+  simpleLetters: { skill: string; entries: SchemaEntry[] } | null
+): TaskDecision | null {
+  if (!simpleLetters || !materials.length || !asksToDraft(question)) return decision;
+  if (decision && decision.primary !== "analiza-sadowa-v6" && decision.primary !== PLEADING_SKILL) return decision;
+  // A reply to a delivered letter or decision, an appeal, a complaint: the pleading pipeline.
+  if (defenceCount(question) >= 2 || PLEADING_NOUN.test(question) || REPLY_REQUEST.test(question) || /odpowied\p{L}*/iu.test(question)) return decision;
+  const named = requestIntent(question, (skill) => skill === simpleLetters.skill);
+  if (named?.primary !== simpleLetters.skill) return decision;
+  return { source: "ROUTER", primary: simpleLetters.skill, then: null, reason: `prośba użytkownika: pismo proste z katalogu ${simpleLetters.skill}${decision ? ` (zamiast ${decision.primary})` : ""}` };
 }
 
 // Editing a contract's clause ("Popraw § 5 tej umowy", "zmień karę umowną w umowie") is the contract

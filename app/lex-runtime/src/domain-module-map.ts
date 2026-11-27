@@ -429,8 +429,12 @@ const CONFLICT_QUESTION =
 const DENMARK_FORMS = /(?<![\p{L}])dani[ęą](?![\p{L}])/iu;
 const DENMARK_NAME = /(?<=[\p{Ll}\d,;:]\s{1,3})Dania(?![\p{L}])/u;
 
+// Someone staying abroad for a while ("bo on jest za granicą") is a fact of the story, not a
+// foreign element of the matter (live test 2026-11-27: a construction case named DR-14).
+const STAYS_ABROAD = /(?<![a-z])(?:jest|byl|byla|bylem|bylam|bedzie|przebywa\w*|wyjechal\w*) (?:wtedy |akurat |obecnie |teraz )?za granic\w*/gu;
+
 export function foreignElement(text: string): boolean {
-  return FOREIGN_ELEMENT.test(fold(text)) || DENMARK_FORMS.test(text) || DENMARK_NAME.test(text);
+  return FOREIGN_ELEMENT.test(fold(text).replace(STAYS_ABROAD, " ")) || DENMARK_FORMS.test(text) || DENMARK_NAME.test(text);
 }
 
 export function rankDomains(
@@ -528,7 +532,9 @@ const PROCEDURE: Record<string, Set<string>> = {
     ].map((phrase) => phrase.toLocaleLowerCase("pl"))
   ),
   // "Orzecznictwo SN w sprawie zachowku": the matter first, case-law research (DR-16) second.
-  "dr-16": new Set(["orzecznictwo SN", "orzecznictwo Sądu Najwyższego"].map((phrase) => phrase.toLocaleLowerCase("pl")))
+  // Evidence motions are the conduct of the case, not its matter
+  // (live test 2026-11-27: a construction works claim named DR-16 first).
+  "dr-16": new Set(["orzecznictwo SN", "orzecznictwo Sądu Najwyższego", "wnioski dowodowe", "wniosek dowodowy"].map((phrase) => phrase.toLocaleLowerCase("pl")))
 };
 
 function substanceFirst<T extends { skill: string; matched: string[]; weight: number }>(ranked: T[]): T[] {
@@ -580,10 +586,12 @@ function rankByPhrases(
   // named the courts-and-legal-professions domain by the one word "sąd" (live test 2026-11-19).
   const subject = domainSubject(text);
   const flash = substanceFirst(
-    flashDomains(withoutBareCourt(rows), subject, (stem) => domainSpread(registry).get(stem)! >= GENERIC_DOMAINS)
-      .filter((row) => registry.get(row.skill))
-      .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) }))
-      .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
+    withoutBorrowedLabourWords(
+      flashDomains(withoutBareCourt(rows), subject, (stem) => domainSpread(registry).get(stem)! >= GENERIC_DOMAINS)
+        .filter((row) => registry.get(row.skill))
+        .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, subject) })),
+      subject
+    ).sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
   ).slice(0, limit);
   if (flash.length) return withoutSubsumedPhrases(flash);
   const have = tokens(subject);
@@ -599,6 +607,21 @@ function rankByPhrases(
     .filter((row, index, rows) => index === 0 || row.modules[0]!.score >= 0.75 * rows[0]!.modules[0]!.score)
     .slice(0, limit)
     .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0]!.why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
+}
+
+// Words labour law shares with civil contracts: the remuneration of a contractor and its reduction
+// for defects (art. 560 k.c.), a site manager, a notice. Without a word of employment they name
+// labour law only possibly (live test 2026-11-27: a construction works case went to DR-04).
+const SHARED_WITH_CIVIL = new Set(["wynagrodzenie", "obniżenie wynagrodzenia", "kierownik", "wypowiedzenie", "umowa na czas określony", "umowa na czas nieokreślony", "kara umowna", "premia", "szef"]);
+const EMPLOYMENT = /(?<![a-z])(?:pracodawc\w*|pracowni\w*|zatrudni\w*|umow\w* o prac\w*|stosun\w* pracy|zakla\w* pracy|kodeks\w* pracy|k\.p\.|zus\w*|etat\w*|urlop\w*|swiadectw\w* pracy|zwolni\w* (?:z pracy|dyscyplinar)\w*|zwolnieni\w* lekarsk\w*|mobbing\w*|nadgodzin\w*|sad\w* pracy|wydzial\w* pracy)/u;
+function withoutBorrowedLabourWords<T extends { skill: string; matched: string[]; weight: number }>(ranked: T[], text: string): T[] {
+  if (EMPLOYMENT.test(fold(text))) return ranked;
+  const out = ranked.map((row) =>
+    row.skill.startsWith("dr-04-") && row.matched.every((phrase) => SHARED_WITH_CIVIL.has(phrase.toLocaleLowerCase("pl")))
+      ? { ...row, weight: Math.min(row.weight, 1.5) }
+      : row
+  );
+  return out;
 }
 
 // A later domain's phrase that is part of a longer phrase of the first ("umowa na czas określony"

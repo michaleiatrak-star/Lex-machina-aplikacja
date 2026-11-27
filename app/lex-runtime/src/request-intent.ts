@@ -115,6 +115,19 @@ const INTENTS: Intent[] = [
     pattern:
       /(?<![a-z])(?:(?:napisz|przygotuj|sporzadz|zredaguj|przeredaguj|popraw(?!n)|skoryguj|napraw|dostosuj|wygeneruj|potrzebuj|przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj)\w*(?: (?:mi|nam|prosze|projekt\w*|wzor\w*|now\w*|nasz\w*|wewnetrzn\w*|kompletn\w*|ten|ta|te|tego|tej|przeglad|tych|bledy w|zapisy|zapisow|poprawnosc|zgodnosc)){0,3} (?:umow|polityk|procedur|regulamin|kodeks\w* etyki|aneks|uchwal\w* (?:zgromadzenia|wspolnik|zarzadu|rady nadzorczej|walnego|akcjonariusz)|statut|protokol\w* (?:z posiedzenia|zgromadzenia|zarzadu|walnego)|klauzul\w* informacyjn)\w*|czy (?:ta |ten |to |te |moja |moj |nasza |nasz )?(?:umowa|aneks|regulamin|porozumienie|klauzula|zapis\w*|statut|polityka)(?: [^.?!]{0,30}?)? (?:jest |sa |bedzie )?(?:zgodn|wazn|poprawn|skuteczn|legaln|abuzywn|niedozwolon)\w*|(?:umow|polityk|procedur|regulamin)\w*[^?!]{0,120}?(?:napisz|przygotuj|sporzadz|zredaguj)\w*(?: mi| nam| prosze)? (?:ja|je|go)(?![a-z]))/u
   },
+  // A report the user names ("raport dla klienta o szansach") is that output, whatever it covers
+  // (live test 2026-11-27: "ocena szans" sent it to the court analysis).
+  {
+    primary: "raport-klienta-v1",
+    reason: "raport dla klienta (ACTIVATION-MATRIX)",
+    pattern:
+      /(?<![a-z])(?:(?:raport|informacj|podsumowani|notatk)\w*(?: [^.?!]{0,50}?)? dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|prezesa)|dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|mamy|taty|rodzicow)(?: [^.?!]{0,40}?)? (?:raport|podsumowani|informacj)\w*|(?:czytelne|przystepne|zrozumiale) podsumowani\w*|raport\w*(?: [^.?!]{0,40}?)? prostym jezykiem|prost\w* (?:zrozumial\w* )?raport\w*)/u
+  },
+  {
+    primary: "raport-sytuacyjny-v2",
+    reason: "raport sytuacyjny (ACTIVATION-MATRIX)",
+    pattern: /(?<![a-z])(?:raport\w* sytuacyjn\w*|(?:raport|podsumowani|informacj|zestawieni)\w*(?: [^.?!]{0,40}?)? dla (?:zarzadu|rady nadzorczej|komitetu|wspolnikow|walnego))/u
+  },
   {
     primary: "analiza-sadowa-v6",
     reason: "analiza orzeczenia, które użytkownik ma (router [2])",
@@ -145,17 +158,6 @@ const INTENTS: Intent[] = [
     reason: "analiza przepisu (router [9], [11])",
     pattern:
       /(?<![a-z])(?:(?:wyjasnij|wyjasnic|wyjasnieni\w*|wytlumacz|omow|przeanalizuj|rozloz)\w*(?: [^.?!]{0,40}?)? (?:przepis|art\.|artykul|pojeci|definicj)\w*|(?:^|[.!?] )(?:wyjasnij|wytlumacz|omow)(?![a-z])(?! (?:mi )?(?:moja|nasza|cala )?sytuacj)|co (?:dokladnie |wlasciwie )?(?:mowi|oznacza|znaczy|stanowi) (?:ten |ta |to |te )?(?:przepis|art|artykul|pojecie|termin|ustawa|konstytucja)\w*|przeslank\w*|wykladni\w*|przytoczon\w*|powolan\w* (?:prawidlowo|dobrze|poprawnie)|czy (?:te |ten )?przepis\w*(?: [^.?!]{0,30}?)? (?:prawidlowo|dobrze|poprawnie|sie zgadzaj))/u
-  },
-  {
-    primary: "raport-klienta-v1",
-    reason: "raport dla klienta (ACTIVATION-MATRIX)",
-    pattern:
-      /(?<![a-z])(?:(?:raport|informacj|podsumowani|notatk)\w*(?: [^.?!]{0,50}?)? dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|prezesa)|dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|mamy|taty|rodzicow)(?: [^.?!]{0,40}?)? (?:raport|podsumowani|informacj)\w*|(?:czytelne|przystepne|zrozumiale) podsumowani\w*|raport\w*(?: [^.?!]{0,40}?)? prostym jezykiem|prost\w* (?:zrozumial\w* )?raport\w*)/u
-  },
-  {
-    primary: "raport-sytuacyjny-v2",
-    reason: "raport sytuacyjny (ACTIVATION-MATRIX)",
-    pattern: /(?<![a-z])(?:raport\w* sytuacyjn\w*|(?:raport|podsumowani|informacj|zestawieni)\w*(?: [^.?!]{0,40}?)? dla (?:zarzadu|rady nadzorczej|komitetu|wspolnikow|walnego))/u
   },
   {
     primary: "pisma-proste-v2",
