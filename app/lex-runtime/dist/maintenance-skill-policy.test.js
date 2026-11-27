@@ -139,7 +139,7 @@ describe("signed skill update compatibility policy", () => {
     });
     it("rejects a signed index whose release version does not match the discovered release before downloading the ZIP", async () => {
         const { maintenance, bundleFetch } = service(verifiedIndex({
-            version: "0.2.13"
+            version: "0.2.14"
         }));
         await expect(maintenance
             .applySkillUpdate()).rejects.toThrow("SKILL_UPDATE_INDEX_RELEASE_VERSION_MISMATCH");
